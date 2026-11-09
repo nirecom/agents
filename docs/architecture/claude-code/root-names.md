@@ -103,6 +103,7 @@ A test that reached a tool through `AGENTS_MAIN_ROOT` would pass against the ins
 | Check | What it rejects |
 |---|---|
 | `residue` | a retired name, in file content or in a file path |
+| `session-terms` | a rejected synonym of session-upstream / session-downstream, in file content or in a file path |
 | `table-match` | a root name the classification table does not allow in that file |
 | `structural` | the agents root joined to a code directory; the checkout root leaving its process; a carrier written outside its source (test files are exempt); an unlisted exit from the decoy |
 | `script-root-form` | a checkout-root assignment that is repeated, conditional, non-standard, of the wrong depth, or too far from the top |
@@ -131,6 +132,11 @@ Exit 1 or 2 is a violation. A missing checker module, a throw, or any other exit
 The emergency bypass is `git commit --no-verify`.
 
 The retired names are listed between the `retired-names:begin` and `retired-names:end` markers of `tests/bin/feature-2561-root-names-residue.sh`. `docs/history*`, `CHANGELOG.md`, `changelog/` and the list file itself are exempt from `residue`.
+
+`session-terms` (#2759) reads its own list from the same markers in `tests/bin/feature-2759-session-terms-residue.sh`, matches it with the `residue` matcher, and exempts the same history files and that list file.
+The one other exception is in `docs/glossary/internal.md`: on the `Definition` line of the `session-upstream` and `session-downstream` entries, the phrase naming that entry's rejected synonym is allowed; anywhere else the word is a violation.
+A missing list or a list without markers is exit 2. `--retired-names-from` replaces only the root-name list.
+The check lives in this gate, whose name stays root-name, so that it reuses the gate's file collection, `--staged` index reading, pre-commit registration and CI step instead of adding another gate.
 
 | Invocation | Input |
 |---|---|

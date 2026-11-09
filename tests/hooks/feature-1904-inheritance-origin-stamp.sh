@@ -3,10 +3,10 @@
 # Tests: hooks/workflow-state/inheritance/apply.js, hooks/workflow-state/state-io/migrations/v1-to-v2.js
 # Tags: session-inherit, provenance, regression-1904, scope:issue-specific, pwsh-not-required, TL1, TL2, regression-2304
 
-# #1904 as revised by #2304: applyInheritance copies the donor's events verbatim (origin, provenance, at)
+# #1904 as revised by #2304: applyInheritance copies the upstream's events verbatim (origin, provenance, at)
 # up to upstream_copy_seq and stamps origin:"session-inherit"/provenance:"backfilled" only on what it
-# appends after the boundary; no event carries inherited_from. Case A uses a donor migrated by
-# migrateV1ToV2 (origin "migration-v1-to-v2"); Case B is the control for an ordinary mark-step donor.
+# appends after the boundary; no event carries inherited_from. Case A uses a upstream migrated by
+# migrateV1ToV2 (origin "migration-v1-to-v2"); Case B is the control for an ordinary mark-step upstream.
 
 set -u
 
@@ -27,26 +27,26 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-# Shared heir check (#2304): events up to upstream_copy_seq equal the donor's normalized events
+# Shared downstream check (#2304): events up to upstream_copy_seq equal the upstream's normalized events
 # verbatim, and only the events after the boundary are session-inherit/backfilled.
 BOUNDARY_CHECK_JS="
-const heirRaw = JSON.parse(require('fs').readFileSync(require('path').join(process.env.WORKFLOW_STATE_DIR, heirSid + '.json'), 'utf8'));
-const b = heirRaw.upstream_copy_seq;
+const downstreamRaw = JSON.parse(require('fs').readFileSync(require('path').join(process.env.WORKFLOW_STATE_DIR, downstreamSid + '.json'), 'utf8'));
+const b = downstreamRaw.upstream_copy_seq;
 if (typeof b !== 'number') problems.push('no-upstream_copy_seq');
-if (heirRaw.upstream_session_id !== donorSid) problems.push('upstream_session_id:' + heirRaw.upstream_session_id);
-const pre = heirRaw.events.filter((e) => e.seq <= b);
-if (donor && JSON.stringify(pre) !== JSON.stringify(donor.events)) problems.push('pre-boundary-not-verbatim:' + JSON.stringify(pre.map((e) => [e.kind, e.step, e.origin])));
-const post = heirRaw.events.filter((e) => !(e.seq <= b));
+if (downstreamRaw.upstream_session_id !== upstreamSid) problems.push('upstream_session_id:' + downstreamRaw.upstream_session_id);
+const pre = downstreamRaw.events.filter((e) => e.seq <= b);
+if (upstream && JSON.stringify(pre) !== JSON.stringify(upstream.events)) problems.push('pre-boundary-not-verbatim:' + JSON.stringify(pre.map((e) => [e.kind, e.step, e.origin])));
+const post = downstreamRaw.events.filter((e) => !(e.seq <= b));
 const badPost = post.filter((e) => e.origin !== 'session-inherit' || e.provenance !== 'backfilled');
 if (badPost.length > 0) problems.push('bad-post:' + JSON.stringify(badPost.map((e) => [e.kind, e.step, e.origin, e.provenance])));
-const named = heirRaw.events.filter((e) => Object.prototype.hasOwnProperty.call(e, 'inherited_from'));
+const named = downstreamRaw.events.filter((e) => Object.prototype.hasOwnProperty.call(e, 'inherited_from'));
 if (named.length > 0) problems.push('inherited_from-present:' + named.length);
 "
 
 # ---------------------------------------------------------------------------
-# run_1904a: v1-shaped donor migrated in-flight via migrateV1ToV2, then
-# inherited. Asserts positive anchors on the donor (migration actually ran and
-# produced the expected origin/kinds) before the heir boundary check.
+# run_1904a: v1-shaped upstream migrated in-flight via migrateV1ToV2, then
+# inherited. Asserts positive anchors on the upstream (migration actually ran and
+# produced the expected origin/kinds) before the downstream boundary check.
 # ---------------------------------------------------------------------------
 run_1904a() {
     local tmp tn out
@@ -64,14 +64,14 @@ fs.mkdirSync(wfDir, { recursive: true });
 const { readState, writeState, createInitialState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const { applyInheritance } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance');
 
-const donorSid = 'donor-1904a';
-const heirSid = 'heir-1904a';
+const upstreamSid = 'upstream-1904a';
+const downstreamSid = 'downstream-1904a';
 
 // Plant a v1-shaped file directly with fs.writeFileSync — writeState cannot be
 // used here because serializeStateForPersist strips the projection key
 // 'steps', which is exactly the v1 shape this case needs to plant.
-const v1Donor = {
-  session_id: donorSid,
+const v1Upstream = {
+  session_id: upstreamSid,
   created_at: '2020-01-01T00:00:00.000Z',
   cwd: '/fixture',
   git_branch: null,
@@ -84,40 +84,40 @@ const v1Donor = {
     },
   },
 };
-fs.writeFileSync(path.join(wfDir, donorSid + '.json'), JSON.stringify(v1Donor), 'utf8');
+fs.writeFileSync(path.join(wfDir, upstreamSid + '.json'), JSON.stringify(v1Upstream), 'utf8');
 
 // readState triggers normalizeStateVersion -> migrateV1ToV2 in memory.
-const donor = readState(donorSid);
+const upstream = readState(upstreamSid);
 
 const problems = [];
-if (donor === null) problems.push('donor-null');
-if (donor) {
-  const statusEvents = donor.events.filter((e) => e.kind === 'step_status');
-  const annotationEvents = donor.events.filter((e) => e.kind === 'step_annotation');
-  if (statusEvents.length < 1) problems.push('donor-no-step-status-events');
+if (upstream === null) problems.push('upstream-null');
+if (upstream) {
+  const statusEvents = upstream.events.filter((e) => e.kind === 'step_status');
+  const annotationEvents = upstream.events.filter((e) => e.kind === 'step_annotation');
+  if (statusEvents.length < 1) problems.push('upstream-no-step-status-events');
   const badOrigin = statusEvents.filter((e) => e.origin !== 'migration-v1-to-v2');
-  if (badOrigin.length > 0) problems.push('donor-status-wrong-origin:' + badOrigin.map((e) => e.step).join(','));
-  if (annotationEvents.length < 1) problems.push('donor-no-annotation-events');
+  if (badOrigin.length > 0) problems.push('upstream-status-wrong-origin:' + badOrigin.map((e) => e.step).join(','));
+  if (annotationEvents.length < 1) problems.push('upstream-no-annotation-events');
 }
 
-const heirCreatedAt = '2026-01-01T00:00:00.000Z';
-writeState(heirSid, createInitialState(heirSid, { cwd: '/heir', git_branch: null }));
-applyInheritance(heirSid, heirCreatedAt, donorSid);
+const downstreamCreatedAt = '2026-01-01T00:00:00.000Z';
+writeState(downstreamSid, createInitialState(downstreamSid, { cwd: '/downstream', git_branch: null }));
+applyInheritance(downstreamSid, downstreamCreatedAt, upstreamSid);
 $BOUNDARY_CHECK_JS
 
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 " 2>&1)
     rm -rf "$tmp" 2>/dev/null || true
     if [ "$out" = "OK" ]; then
-        pass "1904a: v1-shaped donor migrated via migrateV1ToV2 -> migrated events copied verbatim up to upstream_copy_seq, session-inherit only after it"
+        pass "1904a: v1-shaped upstream migrated via migrateV1ToV2 -> migrated events copied verbatim up to upstream_copy_seq, session-inherit only after it"
     else
         fail "1904a: expected 'OK', got '${out:-<err>}'"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# run_1904b: mark-step donor (control group). Same boundary check, using an
-# ordinary origin:"mark-step" donor.
+# run_1904b: mark-step upstream (control group). Same boundary check, using an
+# ordinary origin:"mark-step" upstream.
 # ---------------------------------------------------------------------------
 run_1904b() {
     local tmp tn out
@@ -130,27 +130,27 @@ run_1904b() {
 const { readState, writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const { applyInheritance } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance');
 
-const donorSid = 'donor-1904b';
-const heirSid = 'heir-1904b';
+const upstreamSid = 'upstream-1904b';
+const downstreamSid = 'downstream-1904b';
 
-writeState(donorSid, createInitialState(donorSid, { cwd: '/donor', git_branch: null }));
-markStep(donorSid, 'workflow_init', 'complete');
-markStep(donorSid, 'clarify_intent', 'skipped', { skip_reason: 'docs-only-short-circuit' });
+writeState(upstreamSid, createInitialState(upstreamSid, { cwd: '/upstream', git_branch: null }));
+markStep(upstreamSid, 'workflow_init', 'complete');
+markStep(upstreamSid, 'clarify_intent', 'skipped', { skip_reason: 'docs-only-short-circuit' });
 
-const donor = readState(donorSid);
+const upstream = readState(upstreamSid);
 const problems = [];
-if (donor === null) problems.push('donor-null');
+if (upstream === null) problems.push('upstream-null');
 
-const heirCreatedAt = '2026-01-02T00:00:00.000Z';
-writeState(heirSid, createInitialState(heirSid, { cwd: '/heir', git_branch: null }));
-applyInheritance(heirSid, heirCreatedAt, donorSid);
+const downstreamCreatedAt = '2026-01-02T00:00:00.000Z';
+writeState(downstreamSid, createInitialState(downstreamSid, { cwd: '/downstream', git_branch: null }));
+applyInheritance(downstreamSid, downstreamCreatedAt, upstreamSid);
 $BOUNDARY_CHECK_JS
 
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 " 2>&1)
     rm -rf "$tmp" 2>/dev/null || true
     if [ "$out" = "OK" ]; then
-        pass "1904b: mark-step donor (control) -> mark-step events copied verbatim up to upstream_copy_seq, session-inherit only after it"
+        pass "1904b: mark-step upstream (control) -> mark-step events copied verbatim up to upstream_copy_seq, session-inherit only after it"
     else
         fail "1904b: expected 'OK', got '${out:-<err>}'"
     fi

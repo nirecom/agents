@@ -58,18 +58,18 @@ EOF
 }
 EOF
 )"
-    # Since #1305 the donor comes from the heir's own lineage, so each query
-    # below forks a heir off the branch-matching donor. Branch isolation is now
-    # the context guard (gate E) applied to that donor, not a directory scan.
-    HEIR_5_MAIN="l5mainheir-$(printf '%04x%04x' $RANDOM $RANDOM)"
-    HEIR_5_FEAT="l5featheir-$(printf '%04x%04x' $RANDOM $RANDOM)"
-    write_forked_transcript_line "$HOME_5/.claude/projects/$ENC_5/${HEIR_5_MAIN}.jsonl" \
-        "$HEIR_5_MAIN" "$SID_5_MAIN"
-    write_forked_transcript_line "$HOME_5/.claude/projects/$ENC_5/${HEIR_5_FEAT}.jsonl" \
-        "$HEIR_5_FEAT" "$SID_5_FEAT"
+    # Since #1305 the upstream comes from the downstream's own lineage, so each query
+    # below forks a downstream off the branch-matching upstream. Branch isolation is now
+    # the context guard (gate E) applied to that upstream, not a directory scan.
+    DOWNSTREAM_5_MAIN="l5maindownstream-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    DOWNSTREAM_5_FEAT="l5featdownstream-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    write_forked_transcript_line "$HOME_5/.claude/projects/$ENC_5/${DOWNSTREAM_5_MAIN}.jsonl" \
+        "$DOWNSTREAM_5_MAIN" "$SID_5_MAIN"
+    write_forked_transcript_line "$HOME_5/.claude/projects/$ENC_5/${DOWNSTREAM_5_FEAT}.jsonl" \
+        "$DOWNSTREAM_5_FEAT" "$SID_5_FEAT"
 
-    # L5-a: heir on main → main donor state (outline=pending, not feature/x's complete)
-    RESULT_5A=$(call_resolve_donor "$CWD_5" "main" "$HOME_5" "$HEIR_5_MAIN")
+    # L5-a: downstream on main → main upstream state (outline=pending, not feature/x's complete)
+    RESULT_5A=$(call_resolve_upstream "$CWD_5" "main" "$HOME_5" "$DOWNSTREAM_5_MAIN")
     PLAN_5A=$(get_json_step_status "$RESULT_5A" "outline")
     if [ "$PLAN_5A" = "pending" ]; then
         pass "L5-a. query main → main state (outline=pending, not feature/x outline=complete)"
@@ -77,8 +77,8 @@ EOF
         fail "L5-a. query main — expected outline=pending (main), got: $PLAN_5A (result: $RESULT_5A)"
     fi
 
-    # L5-b: heir on feature/x → feature/x donor state (outline=complete)
-    RESULT_5B=$(call_resolve_donor "$CWD_5" "feature/x" "$HOME_5" "$HEIR_5_FEAT")
+    # L5-b: downstream on feature/x → feature/x upstream state (outline=complete)
+    RESULT_5B=$(call_resolve_upstream "$CWD_5" "feature/x" "$HOME_5" "$DOWNSTREAM_5_FEAT")
     PLAN_5B=$(get_json_step_status "$RESULT_5B" "outline")
     if [ "$PLAN_5B" = "complete" ]; then
         pass "L5-b. query feature/x → feature/x state (outline=complete)"
@@ -92,13 +92,13 @@ EOF
     ENC_5C=$(encode_path "$CWD_5C")
     mkdir -p "$HOME_5C/.claude/projects/$ENC_5C"
     SID_5C="l5c-$(printf '%04x%04x' $RANDOM $RANDOM)"
-    HEIR_5C="l5cheir-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    DOWNSTREAM_5C="l5cdownstream-$(printf '%04x%04x' $RANDOM $RANDOM)"
     write_state "$SID_5C" "$(INHERIT_STATE_JSON "$SID_5C" "main")"
-    write_forked_transcript_line "$HOME_5C/.claude/projects/$ENC_5C/${HEIR_5C}.jsonl" \
-        "$HEIR_5C" "$SID_5C"
-    RESULT_5C=$(call_resolve_donor "$CWD_5C" "null" "$HOME_5C" "$HEIR_5C")
+    write_forked_transcript_line "$HOME_5C/.claude/projects/$ENC_5C/${DOWNSTREAM_5C}.jsonl" \
+        "$DOWNSTREAM_5C" "$SID_5C"
+    RESULT_5C=$(call_resolve_upstream "$CWD_5C" "null" "$HOME_5C" "$DOWNSTREAM_5C")
     expect_not_inherited \
-        "L5-c. detached HEAD (git_branch=null) heir → its main-branch ancestor is refused" \
+        "L5-c. detached HEAD (git_branch=null) downstream → its main-branch ancestor is refused" \
         "$RESULT_5C"
 
     # L5-d: security — CLAUDE_PROJECT_DIR with shell metacharacters → no command injection, no crash

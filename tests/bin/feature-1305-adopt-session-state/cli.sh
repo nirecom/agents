@@ -8,10 +8,10 @@ echo "=== #1305 AD-1..AD-6: bin/workflow/adopt-session-state ==="
 
 # --- AD-1: --list is the discovery surface that replaces automatic inheritance.
 # A recent same-cwd+branch session that is still resumable must be offered.
-AD1_D="ad1donor-$$"; AD1_H="ad1heir-$$"
+AD1_D="ad1upstream-$$"; AD1_H="ad1downstream-$$"
 write_state_v2 "$AD1_D" "$CWD" "$BRANCH" "$STEPS_INHERITABLE"
 write_state_v2 "$AD1_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
-announce_donor "$AD1_D" "$CWD"
+announce_upstream "$AD1_D" "$CWD"
 adopt "$AD1_H" "$REPO" --list
 assert_eq_desc "AD-1a. --list exits 0" "0" "$ADOPT_RC"
 assert_contains "AD-1b. --list names the resumable same-context session" "$AD1_D" "$ADOPT_OUT"
@@ -19,13 +19,13 @@ assert_list_row "AD-1c. the candidate's row carries its branch" "$AD1_D" "$BRANC
 
 # --- AD-2: --list is a *filtered* view, not a raw directory dump. Offering a
 # finished (S1) or plan-less (S3) session would invite the user to adopt state
-# that resolveInheritanceDonor itself would refuse.
-AD2_S1="ad2s1-$$"; AD2_S3="ad2s3-$$"; AD2_OK="ad2ok-$$"; AD2_H="ad2heir-$$"
+# that resolveInheritanceUpstream itself would refuse.
+AD2_S1="ad2s1-$$"; AD2_S3="ad2s3-$$"; AD2_OK="ad2ok-$$"; AD2_H="ad2downstream-$$"
 write_state_v2 "$AD2_S1" "$CWD" "$BRANCH" "$STEPS_DELIVERED"
 write_state_v2 "$AD2_S3" "$CWD" "$BRANCH" "$STEPS_INTENT_DONE"
 write_state_v2 "$AD2_OK" "$CWD" "$BRANCH" "$STEPS_INHERITABLE"
 write_state_v2 "$AD2_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
-announce_donor "$AD2_S1" "$CWD"; announce_donor "$AD2_S3" "$CWD"; announce_donor "$AD2_OK" "$CWD"
+announce_upstream "$AD2_S1" "$CWD"; announce_upstream "$AD2_S3" "$CWD"; announce_upstream "$AD2_OK" "$CWD"
 adopt "$AD2_H" "$REPO" --list
 assert_contains "AD-2a. positive control: the eligible candidate IS listed" "$AD2_OK" "$ADOPT_OUT"
 assert_not_contains_guarded cli_ran "AD-2b. a delivered (merge_to_main complete, S1) session is not offered" "$AD2_S1" "$ADOPT_OUT"
@@ -33,20 +33,20 @@ assert_not_contains_guarded cli_ran "AD-2c. clarify_intent complete without inte
 
 # AD-2d: approval alone does not finish a session — merge_to_main is the
 # step after it, so user_verification complete + merge_to_main pending stays offered.
-AD2D_AP="ad2dap-$$"; AD2D_H="ad2dheir-$$"
+AD2D_AP="ad2dap-$$"; AD2D_H="ad2ddownstream-$$"
 write_state_v2 "$AD2D_AP" "$CWD" "$BRANCH" "$STEPS_APPROVED_NOT_DELIVERED"
 write_state_v2 "$AD2D_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
-announce_donor "$AD2D_AP" "$CWD"
+announce_upstream "$AD2D_AP" "$CWD"
 adopt "$AD2D_H" "$REPO" --list
 assert_eq_desc "AD-2d-rc. --list exits 0" "0" "$ADOPT_RC"
 assert_list_row "AD-2d. an approved-but-not-delivered session IS still offered" "$AD2D_AP" "$BRANCH"
 
 # AD-2e: merge_to_main alone decides S1 — merge_to_main complete without user_verification
 # complete is still a finished session and must not be offered.
-AD2E_DO="ad2edo-$$"; AD2E_H="ad2eheir-$$"
+AD2E_DO="ad2edo-$$"; AD2E_H="ad2edownstream-$$"
 write_state_v2 "$AD2E_DO" "$CWD" "$BRANCH" "$STEPS_DELIVERED_ONLY"
 write_state_v2 "$AD2E_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
-announce_donor "$AD2E_DO" "$CWD"
+announce_upstream "$AD2E_DO" "$CWD"
 adopt "$AD2E_H" "$REPO" --list
 assert_eq_desc "AD-2e-rc. --list exits 0" "0" "$ADOPT_RC"
 assert_not_contains_guarded cli_ran "AD-2e. merge_to_main complete without approval is not offered (merge_to_main alone decides S1)" "$AD2E_DO" "$ADOPT_OUT"
@@ -56,75 +56,75 @@ assert_not_contains_guarded cli_ran "AD-2e. merge_to_main complete without appro
 # inheritance's OWN events (the #772 cleanup triple) carry origin
 # session-inherit / provenance backfilled. research is checked rather than
 # outline: the fixture's unapproved outline is reverted by the #2633 approval check.
-AD3_D="ad3donor-$$"; AD3_H="ad3heir-$$"
+AD3_D="ad3upstream-$$"; AD3_H="ad3downstream-$$"
 write_state_v2 "$AD3_D" "$CWD" "$BRANCH" "$STEPS_INHERITABLE"
 write_state_v2 "$AD3_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
-announce_donor "$AD3_D" "$CWD"
+announce_upstream "$AD3_D" "$CWD"
 adopt "$AD3_H" "$REPO" --from "$AD3_D"
-assert_eq_desc "AD-3a. --from exits 0 on a valid donor" "0" "$ADOPT_RC"
-assert_eq_desc "AD-3b. the heir now has the donor's research completion" "complete" "$(step_status "$AD3_H" research)"
+assert_eq_desc "AD-3a. --from exits 0 on a valid upstream" "0" "$ADOPT_RC"
+assert_eq_desc "AD-3b. the downstream now has the upstream's research completion" "complete" "$(step_status "$AD3_H" research)"
 SIG3="$(event_signature "$AD3_H")"
 assert_contains "AD-3c. the inheritance's own events are marked provenance=backfilled" ":backfilled:" "$SIG3"
 assert_contains "AD-3d. the inheritance's own events are marked origin=session-inherit" ":backfilled:session-inherit" "$SIG3"
 assert_contains "AD-3c2. the copied upstream events keep their original origin" ":observed:test-fixture" "$SIG3"
-assert_eq_desc "AD-3e. the heir records upstream_session_id=<donor> and no per-event inherited_from" "$AD3_D" "$(upstream_link_of "$AD3_H")"
+assert_eq_desc "AD-3e. the downstream records upstream_session_id=<upstream> and no per-event inherited_from" "$AD3_D" "$(upstream_link_of "$AD3_H")"
 
 # --- AD-4: the misfire guard. The CLI is user-invokable, so a stray --from must
 # not be able to bulldoze a session that has already done real work.
-AD4_D="ad4donor-$$"; AD4_H="ad4heir-$$"
+AD4_D="ad4upstream-$$"; AD4_H="ad4downstream-$$"
 write_state_v2 "$AD4_D" "$CWD" "$BRANCH" "$STEPS_INHERITABLE"
 write_state_v2 "$AD4_H" "$CWD" "$BRANCH" '{"research":"complete"}'
-announce_donor "$AD4_D" "$CWD"
+announce_upstream "$AD4_D" "$CWD"
 BEFORE4="$(state_cksum "$AD4_H")"
 adopt "$AD4_H" "$REPO" --from "$AD4_D"
-assert_rc_nonzero "AD-4a. adopting into a non-all-pending heir is refused" "$ADOPT_RC" "$ADOPT_OUT"
-assert_eq_guarded cli_ran "AD-4b. the refused heir's state file is byte-identical" "$BEFORE4" "$(state_cksum "$AD4_H")"
+assert_rc_nonzero "AD-4a. adopting into a non-all-pending downstream is refused" "$ADOPT_RC" "$ADOPT_OUT"
+assert_eq_guarded cli_ran "AD-4b. the refused downstream's state file is byte-identical" "$BEFORE4" "$(state_cksum "$AD4_H")"
 
 # --- AD-5: --from re-validates; being named on the command line is not enough.
-# Since #2297 a donor from another repo is no longer refused — #1305 is kept by
+# Since #2297 a upstream from another repo is no longer refused — #1305 is kept by
 # adopting it degraded: plan-stage steps travel, worktree-dependent ones are
 # reverted to pending. Resumability still refuses outright.
 REPO2="$(setup_repo other)"
 CWD2="$(resolve_path "$REPO2")"
-AD5_MIS="ad5mismatch-$$"; AD5_S1="ad5s1-$$"; AD5_H="ad5heir-$$"; AD5C_H="ad5cheir-$$"
+AD5_MIS="ad5mismatch-$$"; AD5_S1="ad5s1-$$"; AD5_H="ad5downstream-$$"; AD5C_H="ad5cdownstream-$$"
 write_state_v2 "$AD5_MIS" "$CWD2" "other-branch" '{"workflow_init":"complete","research":"complete","write_tests":"complete"}'
 write_state_v2 "$AD5_S1" "$CWD" "$BRANCH" "$STEPS_DELIVERED"
 write_state_v2 "$AD5_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
 write_state_v2 "$AD5C_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
-announce_donor "$AD5_MIS" "$CWD2"; announce_donor "$AD5_S1" "$CWD"
+announce_upstream "$AD5_MIS" "$CWD2"; announce_upstream "$AD5_S1" "$CWD"
 adopt "$AD5_H" "$REPO" --from "$AD5_MIS"
-assert_eq_desc "AD-5a. a donor from another repo is adopted (degraded), not refused" "0" "$ADOPT_RC"
+assert_eq_desc "AD-5a. a upstream from another repo is adopted (degraded), not refused" "0" "$ADOPT_RC"
 assert_eq_guarded cli_ran "AD-5b. the plan-stage research completion travels" "complete" "$(step_status "$AD5_H" research)"
 assert_eq_guarded cli_ran "AD-5b2. the worktree-dependent write_tests is reverted to pending" "pending" "$(step_status "$AD5_H" write_tests)"
-assert_eq_guarded cli_ran "AD-5b3. the heir names the other-repo donor as its upstream" "$AD5_MIS" "$(upstream_link_of "$AD5_H")"
+assert_eq_guarded cli_ran "AD-5b3. the downstream names the other-repo upstream as its upstream" "$AD5_MIS" "$(upstream_link_of "$AD5_H")"
 adopt "$AD5C_H" "$REPO" --from "$AD5_S1"
-assert_rc_nonzero "AD-5c. a non-resumable delivered (S1) donor is refused" "$ADOPT_RC" "$ADOPT_OUT"
-assert_eq_guarded cli_ran "AD-5d. the heir stays untouched after the resumability refusal" "pending" "$(step_status "$AD5C_H" research)"
+assert_rc_nonzero "AD-5c. a non-resumable delivered (S1) upstream is refused" "$ADOPT_RC" "$ADOPT_OUT"
+assert_eq_guarded cli_ran "AD-5d. the downstream stays untouched after the resumability refusal" "pending" "$(step_status "$AD5C_H" research)"
 
-# AD-5e: an approved-but-undelivered donor is adoptable, and the heir can then
+# AD-5e: an approved-but-undelivered upstream is adoptable, and the downstream can then
 # continue to merge_to_main (approval carried over, merge_to_main not already complete).
-AD5E_D="ad5edonor-$$"; AD5E_H="ad5eheir-$$"
+AD5E_D="ad5eupstream-$$"; AD5E_H="ad5edownstream-$$"
 write_state_v2 "$AD5E_D" "$CWD" "$BRANCH" "$STEPS_APPROVED_NOT_DELIVERED"
 write_state_v2 "$AD5E_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
-announce_donor "$AD5E_D" "$CWD"
+announce_upstream "$AD5E_D" "$CWD"
 adopt "$AD5E_H" "$REPO" --from "$AD5E_D"
-assert_eq_desc "AD-5e-rc. adopting an approved-but-undelivered donor exits 0" "0" "$ADOPT_RC"
-assert_eq_guarded cli_ran "AD-5e-uv. the heir carries the donor's user_verification completion" "complete" "$(step_status "$AD5E_H" user_verification)"
-assert_eq_guarded cli_ran "AD-5e-dl. the heir's merge_to_main step is still pending (it can still merge)" "pending" "$(step_status "$AD5E_H" merge_to_main)"
+assert_eq_desc "AD-5e-rc. adopting an approved-but-undelivered upstream exits 0" "0" "$ADOPT_RC"
+assert_eq_guarded cli_ran "AD-5e-uv. the downstream carries the upstream's user_verification completion" "complete" "$(step_status "$AD5E_H" user_verification)"
+assert_eq_guarded cli_ran "AD-5e-dl. the downstream's merge_to_main step is still pending (it can still merge)" "pending" "$(step_status "$AD5E_H" merge_to_main)"
 
 # --- AD-6 (#2297): granularity is decided from where the session runs, so the
 # caller-side switches are gone. Each removed flag exits 2 with the removal
 # notice and adopts nothing.
-AD6_D="ad6donor-$$"
+AD6_D="ad6upstream-$$"
 write_state_v2 "$AD6_D" "$CWD" "$BRANCH" "$STEPS_INHERITABLE"
-announce_donor "$AD6_D" "$CWD"
+announce_upstream "$AD6_D" "$CWD"
 for AD6_FLAG in "--verified-equivalent" "--granularity full"; do
-    AD6_H="ad6heir-${AD6_FLAG//[^a-z]/}-$$"
+    AD6_H="ad6downstream-${AD6_FLAG//[^a-z]/}-$$"
     write_state_v2 "$AD6_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
     BEFORE6="$(state_cksum "$AD6_H")"
     # shellcheck disable=SC2086 # the flag and its value are split on purpose
     adopt "$AD6_H" "$REPO" --from "$AD6_D" $AD6_FLAG
     assert_eq_desc "AD-6a. $AD6_FLAG exits 2" "2" "$ADOPT_RC"
     assert_contains "AD-6b. $AD6_FLAG prints the removal notice" "removed: granularity is decided from where this session runs" "$ADOPT_OUT"
-    assert_eq_guarded cli_ran "AD-6c. $AD6_FLAG leaves the heir byte-identical" "$BEFORE6" "$(state_cksum "$AD6_H")"
+    assert_eq_guarded cli_ran "AD-6c. $AD6_FLAG leaves the downstream byte-identical" "$BEFORE6" "$(state_cksum "$AD6_H")"
 done

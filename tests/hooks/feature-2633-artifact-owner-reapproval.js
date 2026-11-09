@@ -177,7 +177,7 @@ test("downstream outline re-approval", () => noNewFailures(F.failureCount, () =>
   const msg = confirm(D, "outline");
   const rec = approvalOf(D, "outline");
   F.check("artifact_session_id is U", rec && rec.artifact_session_id === U && rec.artifact_hash_status === "recorded", msg + " " + JSON.stringify(rec));
-  F.check("message names the hashed upstream file", msg.includes(`hashed ${U}-outline.md (owned by session upstream)`), msg);
+  F.check("message names the hashed upstream file", msg.includes(`hashed ${U}-outline.md (owned by the session-upstream)`), msg);
   const v = CA().evaluateCompletionApproval(D, "outline", WS().readState(D));
   F.check("evaluation approved", v.approved === true, JSON.stringify(v));
   complete(D, "outline");

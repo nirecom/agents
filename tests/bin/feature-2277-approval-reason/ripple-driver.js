@@ -91,25 +91,25 @@ function modeVerdict() {
 function modeInherit() {
   const { applyInheritance } = require(path.join(F.ROOT, "hooks/workflow-state/inheritance"));
   const WS = require(path.join(F.ROOT, "hooks/workflow-state"));
-  const donor = F.newSid("inh-donor");
-  F.writePlan(donor, "intent");
-  F.writeState(donor, { workflow_init: "complete", clarify_intent: "complete", research: "complete" }, [], TOP);
-  const heir = F.newSid("inh-heir");
-  F.writeState(heir, {}, [], TOP);
+  const upstream = F.newSid("inh-upstream");
+  F.writePlan(upstream, "intent");
+  F.writeState(upstream, { workflow_init: "complete", clarify_intent: "complete", research: "complete" }, [], TOP);
+  const downstream = F.newSid("inh-downstream");
+  F.writeState(downstream, {}, [], TOP);
   let threw = null;
   // #2633-1: the upstream sid is passed; an unapproved clarify_intent is reverted, not refused.
-  try { applyInheritance(heir, new Date().toISOString(), donor, {}); } catch (e) { threw = e.message; }
-  F.check("inheritance: donor with no clarify_intent record is inheritable", threw === null, String(threw));
-  F.check("inheritance: heir clarify_intent reverted to pending",
-    F.readStep(heir, "clarify_intent") === "pending", F.readStep(heir, "clarify_intent"));
-  const why = events(heir, (e) => e.kind === "step_annotation" && e.step === "clarify_intent" && e.key === "inherit_revert_reason").pop();
+  try { applyInheritance(downstream, new Date().toISOString(), upstream, {}); } catch (e) { threw = e.message; }
+  F.check("inheritance: upstream with no clarify_intent record is inheritable", threw === null, String(threw));
+  F.check("inheritance: downstream clarify_intent reverted to pending",
+    F.readStep(downstream, "clarify_intent") === "pending", F.readStep(downstream, "clarify_intent"));
+  const why = events(downstream, (e) => e.kind === "step_annotation" && e.step === "clarify_intent" && e.key === "inherit_revert_reason").pop();
   F.check("inheritance: clarify_intent revert reason is approval:no-approval-record",
     !!why && why.value === "approval:no-approval-record", JSON.stringify(why || null));
-  const audit = events(heir, (e) => e.kind === "plan_approval" && e.step === "clarify_intent" && e.source === "session-inherit");
+  const audit = events(downstream, (e) => e.kind === "plan_approval" && e.step === "clarify_intent" && e.source === "session-inherit");
   F.check("inheritance: clarify_intent gets no session-inherit audit approval", audit.length === 0, JSON.stringify(audit));
   const { evaluateCompletionApproval } = require(path.join(F.ROOT, "hooks/workflow-state/completion-approval"));
-  F.check("inheritance: heir clarify_intent stays unapproved until CONFIRM_INTENT",
-    evaluateCompletionApproval(heir, "clarify_intent", WS.readState(heir)).approved === false, "approved");
+  F.check("inheritance: downstream clarify_intent stays unapproved until CONFIRM_INTENT",
+    evaluateCompletionApproval(downstream, "clarify_intent", WS.readState(downstream)).approved === false, "approved");
 }
 
 function modeReconcile() {

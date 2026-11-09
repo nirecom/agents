@@ -19,7 +19,7 @@ function getClosesIssues(sessionId, opts) {
   // sessionId flows into a path join below; reject traversal-shaped ids.
   assertValidSessionId(sessionId);
   const plansDir = (opts && opts.plansDir) || undefined;
-  // A downstream session reads the intent its upstream owns (#2633).
+  // A session-downstream reads the intent its session-upstream owns (#2633).
   return parseClosesIssues(resolvePlanArtifactOwner(sessionId, "intent", undefined, { plansDir }).path);
 }
 

@@ -57,8 +57,8 @@ function spawnNode(args, extraEnv) {
 function parseOut(run) {
   try { return JSON.parse(run.stdout); } catch (e) { throw new Error(`stdout is not one JSON record (${e.message}): ${show(run.stdout)} stderr=${show(run.stderr)}`); }
 }
-function fromView(up, heir) {
-  const run = spawnNode([CLI, "--from", up], heir ? { CLAUDE_CODE_SESSION_ID: heir } : null);
+function fromView(up, downstream) {
+  const run = spawnNode([CLI, "--from", up], downstream ? { CLAUDE_CODE_SESSION_ID: downstream } : null);
   return { run, d: parseOut(run) };
 }
 
@@ -66,11 +66,11 @@ function fromView(up, heir) {
 // pending: completing it needs a glossary-check record, which this view does not depend on.
 function seedActive(sid) {
   fx.makeState(sid, "/fixture/f2576/repo");
-  fs.writeFileSync(path.join(PLANS_DIR, `${sid}-intent.md`), "**Title:** handoff donor\n");
+  fs.writeFileSync(path.join(PLANS_DIR, `${sid}-intent.md`), "**Title:** handoff upstream\n");
 }
-function seedHeir(sid) {
+function seedDownstream(sid) {
   const io = mod("hooks/workflow-state/state-io");
-  io.writeState(sid, io.createInitialState(sid, { cwd: "/fixture/f2576/repo", git_branch: "feature/donor" }));
+  io.writeState(sid, io.createInitialState(sid, { cwd: "/fixture/f2576/repo", git_branch: "feature/upstream" }));
 }
 const plant = (p, body) => {
   fs.mkdirSync(path.dirname(p), { recursive: true });
@@ -79,5 +79,5 @@ const plant = (p, body) => {
 
 module.exports = {
   cleanup, SCRATCH, ROOT, mod, fx, STATE_DIR, PLANS_DIR, TBASE, CLI, totals,
-  check, show, eq, slash, spawnNode, parseOut, fromView, seedActive, seedHeir, plant,
+  check, show, eq, slash, spawnNode, parseOut, fromView, seedActive, seedDownstream, plant,
 };

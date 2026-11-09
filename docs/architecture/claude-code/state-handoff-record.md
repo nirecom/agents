@@ -145,8 +145,8 @@ Reading is shared; formatting belongs to each reader.
 
 | Reader | Reading session | Session read | Formatting |
 |---|---|---|---|
-| `/resume-session --from` (`bin/lib/resume-session/upstream-view.js`) | session-downstream | The session-upstream it resumes | `renderStateHandoffForResume`: latest entry per `(cls, at_step, record_key)`, the newest 40 plus every overflow mark (`state-handoff:overflow`, `legacy:overflow`), grouped by class, shown as untrusted data |
-| `/resume-session --list` (`hooks/workflow-state/upstream-search.js`) | session-downstream | Each listed session-upstream candidate | None: `state_handoff_records` is the count of reader entries (derived `reset-from` and legacy entries included, so not only state handoff record events); `null` when `errors` is non-empty |
+| `/resume-session --from` (`bin/lib/resume-session/session-upstream-view.js`) | session-downstream | The session-upstream it resumes | `renderStateHandoffForResume`: latest entry per `(cls, at_step, record_key)`, the newest 40 plus every overflow mark (`state-handoff:overflow`, `legacy:overflow`), grouped by class, shown as untrusted data |
+| `/resume-session --list` (`hooks/workflow-state/session-upstream-search.js`) | session-downstream | Each listed session-upstream candidate | None: `state_handoff_records` is the count of reader entries (derived `reset-from` and legacy entries included, so not only state handoff record events); `null` when `errors` is non-empty |
 | Supervisor codex engine (`hooks/lib/supervisor-codex-input/assemble.js`) | The audited session | The same session (transcript basename and wsid) | Every entry, one line each, in time order; no folding, only the 128KiB `SUPERVISOR_HANDOFF_MAX_BYTES` cap, dropping the oldest first |
 
 The `--list` count is taken before the `--from` folding, so both views agree on whether a session-upstream has records. `--list` reads only the candidates on the returned page.
@@ -161,7 +161,7 @@ The `--list` count is taken before the `--from` folding, so both views agree on 
 - With a readable state file, the legacy class E `reset-from` lines are dropped, because the `reset` event already yields them; without a state file they are the only source and stay.
 - A legacy `## Overflow` marker becomes a class B `legacy:overflow` entry. An unknown or missing schema version is returned as one class B `legacy:unknown-schema` entry whose pointer holds the sanitized raw text.
 
-`hooks/workflow-state/upstream-search.js` keeps its own temporary branch that indexes a plans-dir `<sid>-handoff.md` by sid. Removing the migration code makes legacy entries disappear from all three readers at once.
+`hooks/workflow-state/session-upstream-search.js` keeps its own temporary branch that indexes a plans-dir `<sid>-handoff.md` by sid. Removing the migration code makes legacy entries disappear from all three readers at once.
 
 ## Lifecycle
 

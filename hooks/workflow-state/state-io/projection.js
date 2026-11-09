@@ -80,6 +80,38 @@ class StreamIntegrityError extends Error {
 
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
+// --- BEGIN temporary: retired-downstream-field -> downstream_session_id migration added 2026-11-07 ---
+// deletion-condition: remove once 30 days (STATE_RETENTION_DAYS) have passed since merge and a grep of *.json under the state root and the old state dir for LEGACY_DOWNSTREAM_FIELD's value finds nothing; review by 2027-02-05
+const LEGACY_DOWNSTREAM_FIELD = "heir_session_id";
+const ABORT_KINDS_READING_LEGACY = ["workflow_aborted", "workflow_abort_handover"];
+
+// A write may not carry the retired field: as a top-level key, or as a step_annotation's `key`.
+function eventCarriesRetiredDownstreamField(event) {
+  if (!event || typeof event !== "object") return false;
+  return hasOwn(event, LEGACY_DOWNSTREAM_FIELD) ||
+    (event.kind === "step_annotation" && event.key === LEGACY_DOWNSTREAM_FIELD);
+}
+
+function findRetiredKey(value) {
+  if (!value || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some(findRetiredKey);
+  return Object.keys(value).some((k) => k === LEGACY_DOWNSTREAM_FIELD || findRetiredKey(value[k]));
+}
+
+// Only a stored abort event's own top-level field is still read; every other place refuses the write.
+function assertNoRetiredDownstreamKey(record) {
+  const hit = Object.keys(record).some((k) => {
+    if (k === LEGACY_DOWNSTREAM_FIELD) return true;
+    if (k !== "events" || !Array.isArray(record.events)) return findRetiredKey(record[k]);
+    return record.events.some((e) => {
+      if (!e || typeof e !== "object" || !ABORT_KINDS_READING_LEGACY.includes(e.kind)) return findRetiredKey(e);
+      return Object.keys(e).some((ek) => ek !== LEGACY_DOWNSTREAM_FIELD && findRetiredKey(e[ek]));
+    });
+  });
+  if (hit) throw new UnknownStateKeyError(`retired workflow state key: ${LEGACY_DOWNSTREAM_FIELD}`);
+}
+// --- END temporary: retired-downstream-field -> downstream_session_id migration ---
+
 // One of THREE sites that hand-build a step entry (the others: the
 // step_annotations_cleared rebuild below, and applyLegacyV1ReadDefaults in
 // core.js). They are deliberately NOT unified behind a shared helper — the
@@ -164,6 +196,11 @@ function projectState(state) {
   for (let i = 0; i < events.length; i++) {
     const e = events[i];
     if (!e || typeof e !== "object") continue;
+    let downstreamSid = e.downstream_session_id;
+    // --- BEGIN temporary: retired-downstream-field -> downstream_session_id migration added 2026-11-07 ---
+    // deletion-condition: remove once 30 days (STATE_RETENTION_DAYS) have passed since merge and a grep of *.json under the state root and the old state dir for LEGACY_DOWNSTREAM_FIELD's value finds nothing; review by 2027-02-05
+    if (downstreamSid === undefined) downstreamSid = e[LEGACY_DOWNSTREAM_FIELD];
+    // --- END temporary: retired-downstream-field -> downstream_session_id migration ---
     switch (e.kind) {
       case "step_status": {
         const step = canonicalStepName(e.step);
@@ -251,13 +288,13 @@ function projectState(state) {
         break;
       }
       case "workflow_aborted": {
-        // First-wins and never cleared; an event inside the upstream copy is the upstream's, not ours.
+        // First-wins and never cleared; an event inside the session-upstream copy is the session-upstream's, not ours.
         const seq = Number.isInteger(e.seq) ? e.seq : i + 1;
         if (!workflow_aborted && seq > copySeq) {
           workflow_aborted = {
             origin: e.origin,
             reason: e.reason,
-            heir_session_id: e.heir_session_id !== undefined ? e.heir_session_id : null,
+            downstream_session_id: downstreamSid !== undefined ? downstreamSid : null,
             recorded_at: e.at !== undefined ? e.at : null,
             seq,
           };
@@ -265,10 +302,10 @@ function projectState(state) {
         break;
       }
       case "workflow_abort_handover": {
-        // Names the downstream of an abort-sentinel abort once; origin and reason stay first-wins.
+        // Names the session-downstream of an abort-sentinel abort once; origin and reason stay first-wins.
         const seq = Number.isInteger(e.seq) ? e.seq : i + 1;
-        if (workflow_aborted && workflow_aborted.heir_session_id === null && seq > copySeq) {
-          workflow_aborted = Object.assign({}, workflow_aborted, { heir_session_id: e.heir_session_id });
+        if (workflow_aborted && workflow_aborted.downstream_session_id === null && seq > copySeq) {
+          workflow_aborted = Object.assign({}, workflow_aborted, { downstream_session_id: downstreamSid });
         }
         break;
       }
@@ -410,6 +447,10 @@ function serializeStateForPersist(state) {
   }
   if (!Array.isArray(out.events)) out.events = [];
   out.current = projectState(out);
+  // --- BEGIN temporary: retired-downstream-field -> downstream_session_id migration added 2026-11-07 ---
+  // deletion-condition: remove once 30 days (STATE_RETENTION_DAYS) have passed since merge and a grep of *.json under the state root and the old state dir for LEGACY_DOWNSTREAM_FIELD's value finds nothing; review by 2027-02-05
+  assertNoRetiredDownstreamKey(out);
+  // --- END temporary: retired-downstream-field -> downstream_session_id migration ---
   return JSON.stringify(out, null, 2);
 }
 
@@ -426,4 +467,8 @@ module.exports = {
   composeStateView,
   assertProjectionUnmutated,
   serializeStateForPersist,
+  // --- BEGIN temporary: retired-downstream-field -> downstream_session_id migration added 2026-11-07 ---
+  // deletion-condition: remove once 30 days (STATE_RETENTION_DAYS) have passed since merge and a grep of *.json under the state root and the old state dir for LEGACY_DOWNSTREAM_FIELD's value finds nothing; review by 2027-02-05
+  eventCarriesRetiredDownstreamField,
+  // --- END temporary: retired-downstream-field -> downstream_session_id migration ---
 };

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # fix-2279-resume-from-skill-dispatch.sh — S1-S12.
-# Tests: bin/resume-session-detect, bin/lib/resume-session/upstream-view.js, hooks/workflow-state/inheritance/adopt.js, hooks/postuse-step-in-flight-mark.js
-# Tags: resume-session, adoption, skill-dispatch, wi-10-lookahead, regression-2279, scope:issue-specific, pwsh-not-required, TL2
+# Tests: bin/resume-session-detect, bin/lib/resume-session/session-upstream-view.js, hooks/workflow-state/inheritance/adopt.js, hooks/postuse-step-in-flight-mark.js
+# Tags: resume-session, adoption, skill-dispatch, wi-10-lookahead, regression-2279, scope:issue-specific, pwsh-not-required, TL2, test-lang-exception:e2e
 
 # The whole #2279 sentence, with the real hook and the real CLI over real files:
 # a fresh session runs `/resume-session --from <sid>`; Claude Code fires
 # PostToolUse for the Skill call that started it; the lookahead marks `research`
 # in_progress; and the adoption the user asked for is then refused because the
-# heir "has already recorded workflow steps". The heir's only recorded step is
+# downstream "has already recorded workflow steps". The downstream's only recorded step is
 # the one the resume itself caused. S3 runs the same adoption WITHOUT the
 # dispatch, so S6/S7's refusal cannot be blamed on the fixture.
 
@@ -44,8 +44,8 @@ skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
 np() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-DONOR=donor2279
-HEIR=heir2279
+UPSTREAM=upstream2279
+DOWNSTREAM=downstream2279
 
 # build_fixture — a throwaway repo plus a fresh store, and the two sessions the
 # scenario needs. Both sessions' state files are written from INSIDE the repo so
@@ -59,9 +59,9 @@ build_fixture() {
     git -C "$REPO" config core.hooksPath /dev/null >/dev/null 2>&1
     git -C "$REPO" config user.email t@example.com >/dev/null 2>&1
     git -C "$REPO" config user.name t >/dev/null 2>&1
-    seed_donor
-    seed_heir_shell
-    : > "$STORE/$DONOR-intent.md"
+    seed_upstream
+    seed_downstream_shell
+    : > "$STORE/$UPSTREAM-intent.md"
 }
 
 # in_repo <sid> <node-body> — a node one-liner run from the repo with the
@@ -71,23 +71,23 @@ in_repo() {
         AGENTS_MAIN_ROOT="$N" SID="$1" "$RWT" 25 node -e "$2" ) 2>/dev/null
 }
 
-# The donor: a session that genuinely got as far as `research`. Not all-pending
-# (adoption refuses that donor outright) and not user-verified (a closed
+# The upstream: a session that genuinely got as far as `research`. Not all-pending
+# (adoption refuses that upstream outright) and not user-verified (a closed
 # session is not resumable either).
-seed_donor() {
-    in_repo "$DONOR" "
+seed_upstream() {
+    in_repo "$UPSTREAM" "
 const io = require('$SIO');
 io.markStep(process.env.SID, 'workflow_init', 'complete');
 io.markStep(process.env.SID, 'clarify_intent', 'complete');
 io.markStep(process.env.SID, 'research', 'in_progress');" >/dev/null
 }
 
-# The heir: the untouched shell a crash-resume lands in. Written explicitly so
+# The downstream: the untouched shell a crash-resume lands in. Written explicitly so
 # the scenario holds whichever way the fix goes — if the fix stops the Skill
-# dispatch from creating the state file, there must still be a heir to adopt
+# dispatch from creating the state file, there must still be a downstream to adopt
 # INTO, and that is this file, not the lookahead's side effect.
-seed_heir_shell() {
-    in_repo "$HEIR" "require('$SIO').markStep(process.env.SID, 'research', 'pending');" >/dev/null
+seed_downstream_shell() {
+    in_repo "$DOWNSTREAM" "require('$SIO').markStep(process.env.SID, 'research', 'pending');" >/dev/null
 }
 
 # dispatch_skill <sid> <skill> — the REAL PostToolUse hook with the payload
@@ -101,10 +101,10 @@ process.stdout.write(JSON.stringify({ tool_name: 'Skill', session_id: process.en
     HOOK_RC=$?
 }
 
-# run_from <donor> — the user-facing command, exactly as /resume-session runs it.
+# run_from <upstream> — the user-facing command, exactly as /resume-session runs it.
 run_from() {
     FROM_OUT=$( ( cd "$REPO" && WORKFLOW_STATE_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" \
-        CLAUDE_CODE_SESSION_ID="$HEIR" "$RWT" 30 node "$CLI" --from "$1" ) 2>/dev/null )
+        CLAUDE_CODE_SESSION_ID="$DOWNSTREAM" "$RWT" 30 node "$CLI" --from "$1" ) 2>/dev/null )
     FROM_RC=$?
 }
 
@@ -135,24 +135,24 @@ cleanup() { [ -n "${TMP:-}" ] && rm -rf "$TMP" 2>/dev/null; return 0; }
 # ---------------------------------------------------------------------------
 build_fixture
 
-DONOR_STEPS="$(steps_of "$DONOR")"
-case "$DONOR_STEPS" in
+UPSTREAM_STEPS="$(steps_of "$UPSTREAM")"
+case "$UPSTREAM_STEPS" in
     *research=in_progress*workflow_init=complete*|*workflow_init=complete*)
-        pass "S1: the donor session records real progress (workflow_init complete, research in flight)" ;;
+        pass "S1: the upstream session records real progress (workflow_init complete, research in flight)" ;;
     *)
-        fail "S1: fixture — the donor recorded '$DONOR_STEPS'" ;;
+        fail "S1: fixture — the upstream recorded '$UPSTREAM_STEPS'" ;;
 esac
 
-HEIR_STEPS="$(steps_of "$HEIR")"
-case "$HEIR_STEPS" in
-    *=complete*|*=in_progress*) fail "S2: fixture — the heir shell is not untouched: '$HEIR_STEPS'" ;;
-    "") fail "S2: fixture — the heir has no readable state file" ;;
-    *) pass "S2: the heir is an untouched shell before anything is dispatched" ;;
+DOWNSTREAM_STEPS="$(steps_of "$DOWNSTREAM")"
+case "$DOWNSTREAM_STEPS" in
+    *=complete*|*=in_progress*) fail "S2: fixture — the downstream shell is not untouched: '$DOWNSTREAM_STEPS'" ;;
+    "") fail "S2: fixture — the downstream has no readable state file" ;;
+    *) pass "S2: the downstream is an untouched shell before anything is dispatched" ;;
 esac
 
-run_from "$DONOR"
+run_from "$UPSTREAM"
 if [ "$(from_field 'r.ok')" = "true" ] && [ "$FROM_RC" -eq 0 ]; then
-    pass "S3: baseline — --from adopts into the untouched heir (the path works when no dispatch intervenes)"
+    pass "S3: baseline — --from adopts into the untouched downstream (the path works when no dispatch intervenes)"
 else
     fail "S3: baseline adoption already fails without any dispatch (rc=$FROM_RC, ok=$(from_field 'r.ok'), error=$(from_field 'r.error')) — S6/S7 below cannot be attributed to #2279"
 fi
@@ -163,7 +163,7 @@ cleanup
 # it. Only that one call differs from S3.
 # ---------------------------------------------------------------------------
 build_fixture
-dispatch_skill "$HEIR" resume-session
+dispatch_skill "$DOWNSTREAM" resume-session
 
 if [ "$HOOK_RC" -eq 0 ]; then
     pass "S4: the PostToolUse hook survives the Skill(resume-session) payload and exits 0"
@@ -171,9 +171,9 @@ else
     fail "S4: the PostToolUse hook exited $HOOK_RC on a Skill(resume-session) payload; out='$HOOK_OUT'"
 fi
 
-AFTER_DISPATCH="$(steps_of "$HEIR")"
+AFTER_DISPATCH="$(steps_of "$DOWNSTREAM")"
 LOOKAHEAD_ONLY=$(WORKFLOW_STATE_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" "$RWT" 15 node -e "
-process.stdout.write(String(require('$LIFECYCLE').isLookaheadOnlyInFlight('$HEIR', 'research')));" 2>/dev/null)
+process.stdout.write(String(require('$LIFECYCLE').isLookaheadOnlyInFlight('$DOWNSTREAM', 'research')));" 2>/dev/null)
 case "$AFTER_DISPATCH" in
     *research=in_progress*)
         if [ "$LOOKAHEAD_ONLY" = "true" ]; then
@@ -185,11 +185,11 @@ case "$AFTER_DISPATCH" in
         pass "S5: the dispatch recorded no in-flight step at all (the strongest form of the fix)" ;;
 esac
 
-run_from "$DONOR"
+run_from "$UPSTREAM"
 if [ "$(from_field 'r.ok')" = "true" ]; then
     pass "S6: --from still adopts after /resume-session's own Skill dispatch (the #2279 report)"
 else
-    fail "S6: --from refused after the resume's own Skill dispatch — attempted=$(from_field 'r.attempted') error='$(from_field 'r.error')'; the heir's only recorded step is the one the resume itself caused (#2279)"
+    fail "S6: --from refused after the resume's own Skill dispatch — attempted=$(from_field 'r.attempted') error='$(from_field 'r.error')'; the downstream's only recorded step is the one the resume itself caused (#2279)"
 fi
 
 if [ "$FROM_RC" -eq 0 ]; then
@@ -198,28 +198,28 @@ else
     fail "S7a: --from exited $FROM_RC after the dispatch"
 fi
 
-ADOPTED="$(steps_of "$HEIR")"
+ADOPTED="$(steps_of "$DOWNSTREAM")"
 case "$ADOPTED" in
     *workflow_init=complete*)
-        pass "S7b: the heir's own state file carries the donor's completed steps after the resume" ;;
+        pass "S7b: the downstream's own state file carries the upstream's completed steps after the resume" ;;
     *)
-        fail "S7b: the heir recorded '$ADOPTED' — the donor's progress never arrived, so the resume was a no-op for the user" ;;
+        fail "S7b: the downstream recorded '$ADOPTED' — the upstream's progress never arrived, so the resume was a no-op for the user" ;;
 esac
 
 FROM_LIST=$( ( cd "$REPO" && WORKFLOW_STATE_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" \
-    CLAUDE_CODE_SESSION_ID="$HEIR" "$RWT" 30 node "$CLI" --list ) 2>/dev/null )
+    CLAUDE_CODE_SESSION_ID="$DOWNSTREAM" "$RWT" 30 node "$CLI" --list ) 2>/dev/null )
 case "$FROM_LIST" in
-    *"$DONOR"*)
-        pass "S8: --list still offers the donor to a session that has dispatched the resume skill" ;;
+    *"$UPSTREAM"*)
+        pass "S8: --list still offers the upstream to a session that has dispatched the resume skill" ;;
     *)
-        fail "S8: --list no longer offers '$DONOR' after the dispatch; got: $FROM_LIST" ;;
+        fail "S8: --list no longer offers '$UPSTREAM' after the dispatch; got: $FROM_LIST" ;;
 esac
 cleanup
 
 # ---------------------------------------------------------------------------
 # S9-S10 — the SPELLING axis of the same ordering, measured where a dispatch
 # CAN mark: a session settled through write_tests, whose current step is the
-# allowlisted `review_tests`. The heir of S4-S8 is a pre-init shell, where the
+# allowlisted `review_tests`. The downstream of S4-S8 is a pre-init shell, where the
 # D-3 tool narrowing already stops every Skill dispatch — so no spelling could
 # fail there. Here the `control` row proves the pipeline still marks, and the
 # resume-session spellings must be the only ones that do not.
@@ -285,8 +285,8 @@ else
     fail "S9: the skill-dispatch pipeline disagrees with the meta-op exclusion;$S9_PROBLEMS"
 fi
 
-dispatch_skill "$HEIR" personal:resume-session
-run_from "$DONOR"
+dispatch_skill "$DOWNSTREAM" personal:resume-session
+run_from "$UPSTREAM"
 if [ "$(from_field 'r.ok')" = "true" ] && [ "$FROM_RC" -eq 0 ]; then
     pass "S10: --from still adopts after a NAMESPACED resume-session dispatch (S6's ordering is not specific to the bare spelling)"
 else
@@ -346,25 +346,25 @@ else
 fi
 
 if [ -n "$REG_CMD" ]; then
-    dispatch_via_registration "$HEIR" resume-session
+    dispatch_via_registration "$DOWNSTREAM" resume-session
     if [ "$REG_RC" -eq 0 ]; then
         pass "S11b: the registered hook command survives the Skill(resume-session) payload and exits 0"
     else
         fail "S11b: the registered hook command exited $REG_RC on a Skill(resume-session) payload; out='$REG_OUT'"
     fi
 
-    run_from "$DONOR"
-    S11_STEPS="$(steps_of "$HEIR")"
+    run_from "$UPSTREAM"
+    S11_STEPS="$(steps_of "$DOWNSTREAM")"
     S11_PROBLEMS=""
     [ "$(from_field 'r.ok')" = "true" ] ||
         S11_PROBLEMS="$S11_PROBLEMS [--from refused: attempted=$(from_field 'r.attempted') error='$(from_field 'r.error')']"
     [ "$FROM_RC" -eq 0 ] || S11_PROBLEMS="$S11_PROBLEMS [--from exited $FROM_RC]"
     case "$S11_STEPS" in
         *workflow_init=complete*) ;;
-        *) S11_PROBLEMS="$S11_PROBLEMS [the heir recorded '$S11_STEPS' — the donor's progress never arrived]" ;;
+        *) S11_PROBLEMS="$S11_PROBLEMS [the downstream recorded '$S11_STEPS' — the upstream's progress never arrived]" ;;
     esac
     if [ -z "$S11_PROBLEMS" ]; then
-        pass "S11c: after the REGISTERED hook fires for the resume's own Skill dispatch, the real --from CLI still adopts the donor into the fresh heir"
+        pass "S11c: after the REGISTERED hook fires for the resume's own Skill dispatch, the real --from CLI still adopts the upstream into the fresh downstream"
     else
         fail "S11c: the registered-hook path breaks the adoption /resume-session --from was invoked for;$S11_PROBLEMS"
     fi
@@ -375,10 +375,10 @@ cleanup
 
 # ---------------------------------------------------------------------------
 # S12 — idempotency. /resume-session is re-invocable, and a user who does not see
-# the first run land types it again. #2297: while the heir has recorded nothing of
+# the first run land types it again. #2297: while the downstream has recorded nothing of
 # its own since the adoption, the second `--from` of the SAME upstream is allowed
-# and replaces the heir with the same copy — it never appends the donor's event
-# stream twice (S12b/S12c). Once the heir records its own work, the same re-run is
+# and replaces the downstream with the same copy — it never appends the upstream's event
+# stream twice (S12b/S12c). Once the downstream records its own work, the same re-run is
 # refused so that work is not overwritten (S12d).
 # ---------------------------------------------------------------------------
 build_fixture
@@ -391,62 +391,62 @@ const s = require('$SIO').readState(process.env.SID) || {};
 process.stdout.write(String(((s.events) || []).length));" 2>/dev/null
 }
 
-run_from "$DONOR"
+run_from "$UPSTREAM"
 if [ "$(from_field 'r.ok')" = "true" ] && [ "$FROM_RC" -eq 0 ]; then
     pass "S12a: the first --from adoption succeeds (the precondition the re-run is measured against)"
 else
     fail "S12a: the first --from adoption failed (rc=$FROM_RC, error='$(from_field 'r.error')') — S12b/S12c would prove nothing"
 fi
 
-S12_EVENTS_BEFORE="$(event_count "$HEIR")"
-S12_STEPS_BEFORE="$(steps_of "$HEIR")"
+S12_EVENTS_BEFORE="$(event_count "$DOWNSTREAM")"
+S12_STEPS_BEFORE="$(steps_of "$DOWNSTREAM")"
 
-run_from "$DONOR"
+run_from "$UPSTREAM"
 S12_PROBLEMS=""
 [ "$(from_field 'r.attempted')" = "true" ] ||
     S12_PROBLEMS="$S12_PROBLEMS [the re-run never reached the adoption gate: attempted=$(from_field 'r.attempted')]"
 [ "$(from_field 'r.ok')" = "true" ] ||
     S12_PROBLEMS="$S12_PROBLEMS [the idempotent re-run was refused: ok=$(from_field 'r.ok') error='$(from_field 'r.error')']"
 if [ -z "$S12_PROBLEMS" ]; then
-    pass "S12b: re-running the same --from against an heir that recorded nothing since its adoption is allowed (idempotent re-adopt, #2297)"
+    pass "S12b: re-running the same --from against an downstream that recorded nothing since its adoption is allowed (idempotent re-adopt, #2297)"
 else
     fail "S12b: the idempotent --from re-run did not adopt;$S12_PROBLEMS"
 fi
 
 S12_STATE_PROBLEMS=""
-[ "$(event_count "$HEIR")" = "$S12_EVENTS_BEFORE" ] ||
-    S12_STATE_PROBLEMS="$S12_STATE_PROBLEMS [event count moved $S12_EVENTS_BEFORE -> $(event_count "$HEIR"): the inheritance was appended twice]"
-[ "$(steps_of "$HEIR")" = "$S12_STEPS_BEFORE" ] ||
-    S12_STATE_PROBLEMS="$S12_STATE_PROBLEMS [steps moved '$S12_STEPS_BEFORE' -> '$(steps_of "$HEIR")']"
+[ "$(event_count "$DOWNSTREAM")" = "$S12_EVENTS_BEFORE" ] ||
+    S12_STATE_PROBLEMS="$S12_STATE_PROBLEMS [event count moved $S12_EVENTS_BEFORE -> $(event_count "$DOWNSTREAM"): the inheritance was appended twice]"
+[ "$(steps_of "$DOWNSTREAM")" = "$S12_STEPS_BEFORE" ] ||
+    S12_STATE_PROBLEMS="$S12_STATE_PROBLEMS [steps moved '$S12_STEPS_BEFORE' -> '$(steps_of "$DOWNSTREAM")']"
 [ "$FROM_RC" -eq 0 ] ||
     S12_STATE_PROBLEMS="$S12_STATE_PROBLEMS [the re-run exited $FROM_RC]"
 if [ -z "$S12_STATE_PROBLEMS" ]; then
-    pass "S12c: the idempotent re-run replaces the heir with the same copy — no duplicate inheritance events, no re-stamped steps"
+    pass "S12c: the idempotent re-run replaces the downstream with the same copy — no duplicate inheritance events, no re-stamped steps"
 else
-    fail "S12c: the idempotent re-run did not reproduce the same heir;$S12_STATE_PROBLEMS"
+    fail "S12c: the idempotent re-run did not reproduce the same downstream;$S12_STATE_PROBLEMS"
 fi
 
-# S12d — the heir now records its own work (research complete); the same re-run is
-# refused naming that record, and the heir stays byte-identical.
-in_repo "$HEIR" "require('$SIO').markStep(process.env.SID, 'research', 'complete');" >/dev/null
-S12D_BYTES_BEFORE="$(state_bytes "$HEIR")"
-run_from "$DONOR"
+# S12d — the downstream now records its own work (research complete); the same re-run is
+# refused naming that record, and the downstream stays byte-identical.
+in_repo "$DOWNSTREAM" "require('$SIO').markStep(process.env.SID, 'research', 'complete');" >/dev/null
+S12D_BYTES_BEFORE="$(state_bytes "$DOWNSTREAM")"
+run_from "$UPSTREAM"
 S12D_ERROR="$(from_field 'r.error')"
 S12D_PROBLEMS=""
 [ "$(from_field 'r.ok')" = "false" ] ||
-    S12D_PROBLEMS="$S12D_PROBLEMS [the re-run overwrote the heir's own work: ok=$(from_field 'r.ok')]"
+    S12D_PROBLEMS="$S12D_PROBLEMS [the re-run overwrote the downstream's own work: ok=$(from_field 'r.ok')]"
 case "$S12D_ERROR" in
     *"recorded its own work"*step_status*) ;;
     *) S12D_PROBLEMS="$S12D_PROBLEMS [refusal message is '$S12D_ERROR', not the retained-record refusal from adopt.js]" ;;
 esac
-[ "$(state_bytes "$HEIR")" = "$S12D_BYTES_BEFORE" ] ||
-    S12D_PROBLEMS="$S12D_PROBLEMS [the heir's state file changed under a refused re-run]"
+[ "$(state_bytes "$DOWNSTREAM")" = "$S12D_BYTES_BEFORE" ] ||
+    S12D_PROBLEMS="$S12D_PROBLEMS [the downstream's state file changed under a refused re-run]"
 [ "$FROM_RC" -eq 0 ] ||
-    S12D_PROBLEMS="$S12D_PROBLEMS [the re-run exited $FROM_RC; a refused adoption on a KNOWN donor is not the exit-3 unknown-session verdict]"
+    S12D_PROBLEMS="$S12D_PROBLEMS [the re-run exited $FROM_RC; a refused adoption on a KNOWN upstream is not the exit-3 unknown-session verdict]"
 if [ -z "$S12D_PROBLEMS" ]; then
-    pass "S12d: once the heir records its own work, the same --from re-run is refused and the heir stays byte-identical"
+    pass "S12d: once the downstream records its own work, the same --from re-run is refused and the downstream stays byte-identical"
 else
-    fail "S12d: the re-run over the heir's own work is not the documented refusal;$S12D_PROBLEMS"
+    fail "S12d: the re-run over the downstream's own work is not the documented refusal;$S12D_PROBLEMS"
 fi
 cleanup
 

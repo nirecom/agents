@@ -26,11 +26,13 @@ delete require.cache[require.resolve(MODULE)];
 const { run } = require(MODULE);
 cp.execFileSync = realExecFileSync;
 
+const F = require("./feature-2820-retired-tokens/fixture");
 const restore = isolate();
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "f2507-migr-"));
 after(() => {
   restore();
   fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  F.finish();
 });
 
 const ENV = { ...process.env };
@@ -125,5 +127,60 @@ test("4 without readStaged the git show path stays and reaches the same output",
   const viaRead = check(dir, ["a.js", "b.js"], fromMap({ "a.js": BAD, "b.js": GOOD }));
   assert.deepStrictEqual([viaGit.rc, viaGit.out, viaGit.err], [viaRead.rc, viaRead.out, viaRead.err]);
   assert.strictEqual(viaGit.rc, 1);
+});
+caseEnd();
+
+// #2759: the retired-token axis reaches tests/ and rules/*.md at commit time; the format axes do not.
+const scopeRegistry = (extra = []) => F.demoRegistry([`# scope ${F.DEMO_ID} tests/**`, ...extra]);
+const TOKEN_LINE = "const value = OLD_TOKEN;\n";
+const MARK = (word) => `// --- ${word} temporary: fixture shim ---\n`;
+const SCOPE_PATHS = ["tests/x.js", "rules/x.md"];
+const assertBoth = (runs, rc, what) => {
+  assert.strictEqual(runs.staged.rc, rc, `${what} staged: ${F.show(runs.staged)}`);
+  assert.strictEqual(runs.all.rc, rc, `${what} all: ${F.show(runs.all)}`);
+};
+
+caseBegin("retired-token-reaches-tests-and-rules", "bin/lib/check-migration-blocks.js");
+test("5 a token in tests/ or rules/*.md alone exits 1 in both modes", () => {
+  for (const rel of SCOPE_PATHS) {
+    const runs = F.both(F.makeRepo({ [rel]: TOKEN_LINE }, { registry: scopeRegistry() }));
+    assertBoth(runs, 1, rel);
+    assert.match(runs.staged.stdout, /outside its temporary block/, F.show(runs.staged));
+    assert.match(runs.all.stdout, /outside its temporary block/, F.show(runs.all));
+  }
+});
+caseEnd();
+
+caseBegin("except-is-the-commit-time-exit", "bin/lib/check-migration-blocks.js");
+test("6 an except entry for that path exits 0 and names the exception", () => {
+  for (const rel of SCOPE_PATHS) {
+    const reg = scopeRegistry([`# except ${F.DEMO_ID} ${rel} fixture reason`]);
+    const runs = F.both(F.makeRepo({ [rel]: TOKEN_LINE }, { registry: reg }));
+    assertBoth(runs, 0, rel);
+    assert.ok(runs.staged.stdout.includes(`EXCEPTED ${rel}: fixture reason`), F.show(runs.staged));
+    assert.ok(runs.all.stdout.includes(`EXCEPTED ${rel}: fixture reason`), F.show(runs.all));
+  }
+});
+caseEnd();
+
+caseBegin("format-axes-hold-back-tests-and-rules", "bin/lib/check-migration-blocks.js");
+for (const [label, body] of [
+  ["a block with BEGIN alone", `${MARK("BEGIN")}const x = 1;\n`],
+  ["a block with END alone", `const x = 1;\n${MARK("END")}`],
+  ["a block with no arrow", `${MARK("BEGIN")}const x = 1;\n${MARK("END")}`],
+]) {
+  test(`7 ${label} passes in tests/ and rules/*.md and fails with the same content in bin/`, () => {
+    for (const rel of SCOPE_PATHS) assertBoth(F.both(F.makeRepo({ [rel]: body }, { registry: scopeRegistry() })), 0, rel);
+    assertBoth(F.both(F.makeRepo({ "bin/x.js": body }, { registry: scopeRegistry() })), 1, "bin/x.js");
+  });
+}
+caseEnd();
+
+caseBegin("registered-block-in-tests", "bin/lib/check-migration-blocks.js");
+test("8 a token inside a registered block in tests/ exits 0, and that block without a deletion-condition exits 1", () => {
+  const good = F.both(F.makeRepo({ "tests/x.js": F.block(["const value = OLD_TOKEN;"]) }, { registry: scopeRegistry() }));
+  assertBoth(good, 0, "with the condition");
+  const bad = F.both(F.makeRepo({ "tests/x.js": F.block(["const value = OLD_TOKEN;"], { cond: false }) }, { registry: scopeRegistry() }));
+  assertBoth(bad, 1, "without the condition");
 });
 caseEnd();
