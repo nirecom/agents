@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 "use strict";
-// Tests: hooks/lib/state-handoff-record/legacy-handoff-md.js, bin/lib/resume-session/upstream-view.js, bin/resume-session-detect, bin/lib/resume-session/render.js
+// Tests: hooks/lib/state-handoff-record/legacy-handoff-md.js, bin/lib/resume-session/session-upstream-view.js, bin/resume-session-detect, bin/lib/resume-session/render.js
 // Tags: TL2, session, resume, handoff, state-handoff-record, input-validation, path-traversal, security, symlink, regression-2576, regression-2302, regression-2652, regression-2920, workflow-abort, scope:issue-specific, pwsh-not-required
 // #2576/#2652: `--from` shows the session-upstream's state handoff records (and, during the
 // migration, its pre-#2652 <sid>.control/handoff.md) through the state handoff reader, not an
@@ -25,35 +25,35 @@ after(() => {
   C.cleanup();
 });
 
-caseBegin("from-renders-state-handoff-record", "bin/lib/resume-session/upstream-view.js");
+caseBegin("from-renders-state-handoff-record", "bin/lib/resume-session/session-upstream-view.js");
 test("from-renders-state-handoff-record", () => noNewFailures(fails, fromView.rendersStateRecord));
 caseEnd();
 
-caseBegin("from-legacy-handoff-only-is-artifacts-only", "bin/lib/resume-session/upstream-view.js");
+caseBegin("from-legacy-handoff-only-is-artifacts-only", "bin/lib/resume-session/session-upstream-view.js");
 test("from-legacy-handoff-only-is-artifacts-only", () => noNewFailures(fails, fromView.legacyOnlyIsArtifactsOnly));
 caseEnd();
 
-caseBegin("from-state-and-legacy-in-time-order", "bin/lib/resume-session/upstream-view.js");
+caseBegin("from-state-and-legacy-in-time-order", "bin/lib/resume-session/session-upstream-view.js");
 test("from-state-and-legacy-in-time-order", () => noNewFailures(fails, fromView.stateAndLegacyInTimeOrder));
 caseEnd();
 
-caseBegin("from-nothing-is-none", "bin/lib/resume-session/upstream-view.js");
+caseBegin("from-nothing-is-none", "bin/lib/resume-session/session-upstream-view.js");
 test("from-nothing-is-none", () => noNewFailures(fails, fromView.nothingIsNone));
 caseEnd();
 
-caseBegin("from-reads-the-reader-once", "bin/lib/resume-session/upstream-view.js");
+caseBegin("from-reads-the-reader-once", "bin/lib/resume-session/session-upstream-view.js");
 test("from-reads-the-reader-once", () => noNewFailures(fails, fromView.readsTheReaderOnce));
 caseEnd();
 
-caseBegin("from-invalid-sid-is-unknown-session", "bin/lib/resume-session/upstream-view.js");
+caseBegin("from-invalid-sid-is-unknown-session", "bin/lib/resume-session/session-upstream-view.js");
 test("from-invalid-sid-is-unknown-session", () => noNewFailures(fails, validation.invalidSidIsUnknownSession));
 caseEnd();
 
-caseBegin("upstream-view-entry-validation", "bin/lib/resume-session/upstream-view.js");
+caseBegin("upstream-view-entry-validation", "bin/lib/resume-session/session-upstream-view.js");
 test("upstream-view-entry-validation", () => noNewFailures(fails, validation.entryValidation));
 caseEnd();
 
-caseBegin("artifacts-for-per-kind-resolution", "bin/lib/resume-session/upstream-view.js");
+caseBegin("artifacts-for-per-kind-resolution", "bin/lib/resume-session/session-upstream-view.js");
 test("artifacts-for-per-kind-resolution", () => noNewFailures(fails, validation.artifactsPerKind));
 caseEnd();
 
@@ -69,19 +69,19 @@ test("handoff-symlink-is-not-a-handoff", async (t) => {
 });
 caseEnd();
 
-caseBegin("from-corrupt-state-names-state-error", "bin/lib/resume-session/upstream-view.js");
+caseBegin("from-corrupt-state-names-state-error", "bin/lib/resume-session/session-upstream-view.js");
 test("from-corrupt-state-names-state-error", () => noNewFailures(fails, errors.corruptStateNamesState));
 caseEnd();
 
-caseBegin("from-reader-exception-is-reader-error", "bin/lib/resume-session/upstream-view.js");
+caseBegin("from-reader-exception-is-reader-error", "bin/lib/resume-session/session-upstream-view.js");
 test("from-reader-exception-is-reader-error", () => noNewFailures(fails, errors.readerExceptionIsReaderError));
 caseEnd();
 
-caseBegin("from-error-and-no-error-views", "bin/lib/resume-session/upstream-view.js");
+caseBegin("from-error-and-no-error-views", "bin/lib/resume-session/session-upstream-view.js");
 test("from-error-and-no-error-views", () => noNewFailures(fails, errors.errorAndNoErrorViews));
 caseEnd();
 
-caseBegin("from-marks-an-aborted-upstream", "bin/lib/resume-session/upstream-view.js");
+caseBegin("from-marks-an-aborted-upstream", "bin/lib/resume-session/session-upstream-view.js");
 test("from-marks-an-aborted-upstream", () => noNewFailures(fails, workflowAborted.abortedMarker));
 caseEnd();
 

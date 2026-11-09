@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 "use strict";
-// Tests: hooks/workflow-state/plan-artifact-owner.js, bin/plan-artifact-path, hooks/lib/presentation-receipt.js, bin/lib/glossary-provenance.js, hooks/lib/plan-artifact-lang.js, bin/lib/resume-session/upstream-view.js
+// Tests: hooks/workflow-state/plan-artifact-owner.js, bin/plan-artifact-path, hooks/lib/presentation-receipt.js, bin/lib/glossary-provenance.js, hooks/lib/plan-artifact-lang.js, bin/lib/resume-session/session-upstream-view.js
 // Tags: TL2, regression-2748, scope:issue-specific, plan-artifact, pwsh-not-required
 // #2748 U1-U7: every generation of a session chain reads and writes the plan artifacts under the
 // first_session_id name. The chain here has three generations (first, session-upstream,
@@ -318,11 +318,11 @@ caseBegin("receipt-mark-race-with-consume-or-replace", "hooks/lib/presentation-r
 }
 caseEnd();
 
-caseBegin("upstream-view-intent-is-first-session-path", "bin/lib/resume-session/upstream-view.js");
+caseBegin("upstream-view-intent-is-first-session-path", "bin/lib/resume-session/session-upstream-view.js");
 {
   check("U7: buildUpstreamView with a session-upstream that is itself a downstream names <first>-intent.md", () => {
     const { firstSid, upstreamSid, downstreamSid } = needChain();
-    const view = F.mod("bin/lib/resume-session/upstream-view").buildUpstreamView({ heirSid: downstreamSid, upstreamSid });
+    const view = F.mod("bin/lib/resume-session/session-upstream-view").buildUpstreamView({ downstreamSid: downstreamSid, upstreamSid });
     const got = view && view.artifacts ? view.artifacts.intent : undefined;
     return samePath(got, planOf(firstSid, "intent")) ? undefined : `artifacts.intent=${show(got)} availability=${show(view && view.availability)}`;
   });

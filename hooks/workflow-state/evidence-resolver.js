@@ -77,7 +77,7 @@ function hasPlanArtifact(step, sessionId) {
   if (!suffix) return false;
   if (!sessionId || !SESSION_ID_VALID_RE.test(sessionId)) return false;
   try {
-    // Owner-resolved: a downstream session's artifact is its upstream's file (#2633).
+    // Owner-resolved: a session-downstream's artifact is its session-upstream's file (#2633).
     const { resolvePlanArtifactOwner } = require("./plan-artifact-owner");
     return resolvePlanArtifactOwner(sessionId, suffix).exists;
   } catch (e) {

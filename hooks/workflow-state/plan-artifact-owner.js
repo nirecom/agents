@@ -3,7 +3,7 @@
 // reads and writes a plan artifact at (#2633, #2748). Plan artifacts are named after
 // first_session_id (hooks/workflow-state/state-ancestry.js), so a session-downstream adopted via
 // resume-session keeps reading and writing <first_session_id>-<kind>.md, however many generations
-// later. No other name is a candidate: the own sid, the approval record and the upstream all
+// later. No other name is a candidate: the own sid, the approval record and the session-upstream all
 // point at that one file once the session chain is migrated (CPR-SSOT).
 
 const fs = require("fs");

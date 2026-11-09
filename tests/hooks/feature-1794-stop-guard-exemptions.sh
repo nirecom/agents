@@ -3,7 +3,7 @@
 # Tests: hooks/stop-premature-stop-guard.js, hooks/supervisor-guard.js, hooks/supervisor-guard/detect.js, hooks/lib/stop-exemption-policy.js, hooks/lib/session-markers.js, hooks/lib/sentinel-patterns.js, hooks/workflow-state/lifecycle.js, hooks/workflow-state/state-io/zombie-cleanup.js, hooks/workflow-mark/enforce-override-handlers.js, bin/workflow/lib/next-step/verdict.js, hooks/session-start.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/effective-state.js, settings.json, hooks/user-prompt-submit-mechanism-check.js
 # Tags: stop-hook, supervisor-guard, exemption, session-marker, session-inherit, provenance, regression-1794, prompt-notify, regression-2169, scope:issue-specific, pwsh-not-required, TL1, TL2
 
-# Issues #1794 (isWorkflowStarted + C4_EXEMPTIONS/C2 pre-workflow-init gate), #1665 (background-work marker removal, replaced by state-derived write-code-in-flight), and #2169 (the promptNotify column) — the Stop-guard exemption layer. X/T/Z are TL2 real hook/next-step runs; M/N is TL1 plus a TL2 cross-check of EXEMPTION_MATRIX; Z1 is the marker-suffix sweep-containment/resilience row; I1-I14 are the #1794 session-inheritance adoption regression (real session-start.js against a donor state + transcript), with I4/I7/I8/I12 as over-suppression guards and I10/I10b/I11/I13/I14 as the TL1 predicate and idempotency tables.
+# Issues #1794 (isWorkflowStarted + C4_EXEMPTIONS/C2 pre-workflow-init gate), #1665 (background-work marker removal, replaced by state-derived write-code-in-flight), and #2169 (the promptNotify column) — the Stop-guard exemption layer. X/T/Z are TL2 real hook/next-step runs; M/N is TL1 plus a TL2 cross-check of EXEMPTION_MATRIX; Z1 is the marker-suffix sweep-containment/resilience row; I1-I14 are the #1794 session-inheritance adoption regression (real session-start.js against a upstream state + transcript), with I4/I7/I8/I12 as over-suppression guards and I10/I10b/I11/I13/I14 as the TL1 predicate and idempotency tables.
 
 # TL3 gap: real Claude Code Stop/PostToolUse/SessionStart/UserPromptSubmit hook wiring and a real stop_hook_active auto-resume round trip are not exercised here. Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight, bin/check-verification-gate.sh category: hook-registration
 
@@ -69,7 +69,7 @@ require_defined \
     make_tmp node_path seed_started seed_preinit seed_raw_state seed_corrupt_state \
     seed_sup_armed seed_sup_error seed_write_code_in_flight seed_pause_marker age_file \
     run_c4 run_c2 run_mark run_next_step hostile_sid_probe no_new_finding \
-    mk_fixture_repo inh_node seed_donor_and_inherit seed_recording_only \
+    mk_fixture_repo inh_node seed_upstream_and_inherit seed_recording_only \
     inh_wf inh_guard inh_probe inh_anchor write_hang_transcript pred_eval \
     run_X1 run_X2 run_X3 run_X4 run_X5 run_X6 run_X7 run_T17 run_T18 run_Z1 \
     run_M1a run_M1b run_M1c run_M1d run_M1e run_M2 run_M3a run_M3b run_M3c \

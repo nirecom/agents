@@ -65,7 +65,7 @@ function handle(ctx) {
       artifactSessionId: owner.ownerSid,
     });
     const ownerNote = owner.ownerSid !== sessionId
-      ? ` hashed ${path.basename(owner.path)} (owned by session upstream).`
+      ? ` hashed ${path.basename(owner.path)} (owned by the session-upstream).`
       : "";
     pushMessage(
       `workflow-mark: ${stage} approval recorded (source: confirm-sentinel, ` +

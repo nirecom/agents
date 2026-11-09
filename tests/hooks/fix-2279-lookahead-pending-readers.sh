@@ -6,7 +6,7 @@
 # The WI-10 lookahead writes `research=in_progress` with origin
 # `postuse-in-flight` to keep the C4 Stop guard quiet during a dispatch. It is a
 # statement about a TOOL CALL, not about work the user performed. Two readers
-# nonetheless treat it as progress: adopt.js's isAllPending (an heir with
+# nonetheless treat it as progress: adopt.js's isAllPending (an downstream with
 # "progress" may not adopt) and resume-session-detect's detect (a session with
 # an in_progress step is mid-step, so there is nothing to resume). Both must
 # discount a lookahead-only mark; both must keep honouring a real one.
@@ -112,9 +112,9 @@ run_L1() {
     if [ "$anchor" != "true" ]; then
         fail "L1: fixture anchor — isLookaheadOnlyInFlight said '$anchor', so the state under test is not a lookahead-only one"
     elif [ "$got" = "true" ]; then
-        pass "L1: isAllPending treats a lookahead-only in_progress mark as no progress at all (the heir may still adopt)"
+        pass "L1: isAllPending treats a lookahead-only in_progress mark as no progress at all (the downstream may still adopt)"
     else
-        fail "L1: isAllPending returned '$got' — the WI-10 lookahead's own mark is being read as the heir's work, which is what makes /resume-session --from a no-op (#2279)"
+        fail "L1: isAllPending returned '$got' — the WI-10 lookahead's own mark is being read as the downstream's work, which is what makes /resume-session --from a no-op (#2279)"
     fi
     rm -rf "$tmp" 2>/dev/null || true
 }
@@ -133,7 +133,7 @@ run_L2() {
     if [ "$anchor" != "false" ]; then
         fail "L2: fixture anchor — isLookaheadOnlyInFlight said '$anchor' for a mark-step origin"
     elif [ "$got" = "false" ]; then
-        pass "L2: isAllPending still refuses an heir carrying a genuine in_progress step"
+        pass "L2: isAllPending still refuses an downstream carrying a genuine in_progress step"
     else
         fail "L2: isAllPending returned '$got' — real recorded work would be overwritten by an adoption"
     fi

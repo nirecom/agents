@@ -152,6 +152,25 @@ boundaries. Append-only records (history, changelog) and the test archive are ou
 the data file's `[TOMBSTONE_EXEMPT]` section names the few files that must still spell the names. No inline
 waiver excuses a match: the names are retired, so no legitimate use exists to waive.
 
+## Session inheritance identifiers
+
+Session inheritance names its two generations session-upstream (the generation a `--from`
+resume reads from) and session-downstream (the generation that resumes); prose uses those two
+terms only.
+
+- **Inside one module** an identifier for either generation is `upstreamSid` / `downstreamSid`
+  (and the matching `upstream...` / `downstream...` forms).
+- **Outside a module** — a state file field, a CLI output key, a refusal code, an environment
+  variable, a setting, a CLI flag, a file name — the name contains `session`, for example
+  `downstream_session_id`, `downstream_session_cwd`, `session_upstream_aborts`.
+- **Exception: `upstream_copy_seq`.** The state handoff record's raw reader does not go through
+  a migration and a finished session-upstream's file is never rewritten, so any rename keeps a
+  permanent read of the old key, and a revert stops the hook. The name carries no rejected
+  synonym, so only naming consistency would be gained; the key keeps its name.
+
+`bin/check-root-names.sh` (check `session-terms`) rejects the rejected synonyms in the tracked
+tree; the list and its exemptions are in [root-names.md](root-names.md).
+
 ## Known limitations and follow-up candidates
 
 - **No bash bridge for the workflow-session-id family.** `resolveSessionId()` has

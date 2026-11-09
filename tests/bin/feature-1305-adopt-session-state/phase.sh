@@ -18,19 +18,19 @@ echo_driver_action() { get_kv "$DRIVER_OUT" ACTION; }
 REPO6="$(setup_repo six)"
 CWD6="$(resolve_path "$REPO6")"
 BRANCH6="$(git -C "$REPO6" rev-parse --abbrev-ref HEAD)"
-AD6_H="ad6heir-$$"
+AD6_H="ad6downstream-$$"
 write_state_v2 "$AD6_H" "$CWD6" "$BRANCH6" "$STEPS_ALL_PENDING"
 run_driver "$AD6_H" "$REPO6" --phase adopt-prior-state
 assert_eq_desc "AD-6a. with no candidates the driver runs straight through" "done" "$(echo_driver_action)"
 assert_eq_desc "AD-6b. no-candidate run exits 0" "0" "$DRIVER_RC"
-assert_eq_guarded phase_ran "AD-6c. the heir's state is left all-pending" "pending" "$(step_status "$AD6_H" outline)"
+assert_eq_guarded phase_ran "AD-6c. the downstream's state is left all-pending" "pending" "$(step_status "$AD6_H" outline)"
 
 # --- AD-7: with a candidate, the interactive route asks — and `fresh` (the
 # default) must leave the session exactly as it was. Adoption is opt-IN.
-AD7_D="ad7donor-$$"; AD7_H="ad7heir-$$"
+AD7_D="ad7upstream-$$"; AD7_H="ad7downstream-$$"
 write_state_v2 "$AD7_D" "$CWD" "$BRANCH" "$STEPS_INHERITABLE"
 write_state_v2 "$AD7_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
-announce_donor "$AD7_D" "$CWD"
+announce_upstream "$AD7_D" "$CWD"
 run_driver "$AD7_H" "$REPO" --phase adopt-prior-state
 assert_eq_desc "AD-7a. a candidate raises an ask_user directive" "ask_user" "$(echo_driver_action)"
 assert_contains "AD-7b. the question names the candidate session" "$AD7_D" "$(printf '%s' "$DRIVER_OUT" | tr '%' ' ')"
@@ -39,27 +39,27 @@ run_driver "$AD7_H" "$REPO" --resume "$CKPT7" --answer fresh
 assert_eq_desc "AD-7c. answering 'fresh' completes the pipeline" "done" "$(echo_driver_action)"
 assert_eq_guarded phase_ran "AD-7d. answering 'fresh' leaves the state all-pending" "pending" "$(step_status "$AD7_H" outline)"
 
-# --- AD-8: the opt-in half of the same gate. The donor's gated completions carry
+# --- AD-8: the opt-in half of the same gate. The upstream's gated completions carry
 # valid approvals, so the #2633 copy keeps outline complete.
-AD8_D="ad8donor-$$"; AD8_H="ad8heir-$$"
+AD8_D="ad8upstream-$$"; AD8_H="ad8downstream-$$"
 write_state_v2 "$AD8_D" "$CWD" "$BRANCH" "$STEPS_INHERITABLE"
-approve_donor "$AD8_D" outline detail
+approve_upstream "$AD8_D" outline detail
 write_state_v2 "$AD8_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
-announce_donor "$AD8_D" "$CWD"
+announce_upstream "$AD8_D" "$CWD"
 run_driver "$AD8_H" "$REPO" --phase adopt-prior-state
 CKPT8="$(get_kv "$DRIVER_OUT" CHECKPOINT)"
 run_driver "$AD8_H" "$REPO" --resume "$CKPT8" --answer adopt
 assert_eq_desc "AD-8a. answering 'adopt' completes the pipeline" "done" "$(echo_driver_action)"
-assert_eq_desc "AD-8b. answering 'adopt' inherits the donor's steps" "complete" "$(step_status "$AD8_H" outline)"
-assert_eq_desc "AD-8c. the adoption is attributed to the chosen donor (upstream_session_id)" "$AD8_D" "$(upstream_link_of "$AD8_H")"
+assert_eq_desc "AD-8b. answering 'adopt' inherits the upstream's steps" "complete" "$(step_status "$AD8_H" outline)"
+assert_eq_desc "AD-8c. the adoption is attributed to the chosen upstream (upstream_session_id)" "$AD8_D" "$(upstream_link_of "$AD8_H")"
 
 # --- AD-9: non-interactive must not hard-fail. This phase's value is optional
 # recovery and its default (`fresh`) is always safe, so blocking /workflow-init
 # would be a plain regression for `/loop` and `claude -p`.
-AD9_D="ad9donor-$$"; AD9_H="ad9heir-$$"
+AD9_D="ad9upstream-$$"; AD9_H="ad9downstream-$$"
 write_state_v2 "$AD9_D" "$CWD" "$BRANCH" "$STEPS_INHERITABLE"
 write_state_v2 "$AD9_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
-announce_donor "$AD9_D" "$CWD"
+announce_upstream "$AD9_D" "$CWD"
 # Exported and unset explicitly (not as a `VAR=x fn` prefix, which bash leaks
 # past the call) so the next case cannot inherit it.
 export CLAUDE_NON_INTERACTIVE=1
@@ -73,11 +73,11 @@ assert_eq_guarded phase_ran "AD-9d. nothing is adopted silently" "pending" "$(st
 # --- AD-10: "not adopted" must never mean "not told". The printed recovery
 # command has to be genuinely runnable — a NOTICE that does not work is worse
 # than none (CPR-E2E), so the test runs the emitted command verbatim.
-AD10_D="ad10donor-$$"; AD10_H="ad10heir-$$"
+AD10_D="ad10upstream-$$"; AD10_H="ad10downstream-$$"
 write_state_v2 "$AD10_D" "$CWD" "$BRANCH" "$STEPS_INHERITABLE"
-approve_donor "$AD10_D" outline detail
+approve_upstream "$AD10_D" outline detail
 write_state_v2 "$AD10_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
-announce_donor "$AD10_D" "$CWD"
+announce_upstream "$AD10_D" "$CWD"
 export CI=1
 run_driver "$AD10_H" "$REPO" --phase adopt-prior-state
 unset CI
@@ -103,11 +103,11 @@ fi
 # --- AD-11: one execution point (CPR-SSOT / CPR-ORTH). Interactive `adopt` and
 # a direct non-interactive CLI call are two routes to the SAME function, so the
 # streams they append must be indistinguishable.
-AD11_D="ad11donor-$$"; AD11_CLI="ad11cli-$$"; AD11_UI="ad11ui-$$"
+AD11_D="ad11upstream-$$"; AD11_CLI="ad11cli-$$"; AD11_UI="ad11ui-$$"
 write_state_v2 "$AD11_D" "$CWD" "$BRANCH" "$STEPS_INHERITABLE"
 write_state_v2 "$AD11_CLI" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
 write_state_v2 "$AD11_UI" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
-announce_donor "$AD11_D" "$CWD"
+announce_upstream "$AD11_D" "$CWD"
 adopt "$AD11_CLI" "$REPO" --from "$AD11_D"
 run_driver "$AD11_UI" "$REPO" --phase adopt-prior-state
 CKPT11="$(get_kv "$DRIVER_OUT" CHECKPOINT)"

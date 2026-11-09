@@ -47,23 +47,23 @@ const evs = V.convertV1AnnotationsToEvents(
 );
 console.log("D3.keys=" + evs.map((e) => e.key).join(","));
 
-// D4 — inheritance must RE-DERIVE the heir seq, never carry the donor value.
-// Donor and heir stream orders are deliberately different so a carried value is
+// D4 — inheritance must RE-DERIVE the downstream seq, never carry the upstream value.
+// Upstream and downstream stream orders are deliberately different so a carried value is
 // numerically distinguishable from a re-derived one.
-const donor = "seq1665-d4donor";
-const heir = "seq1665-d4heir";
-S.markStep(donor, "research", "complete", { skip_reason: "r" });
-S.markStep(donor, "workflow_init", "complete");
-require(process.env.M_FIX).approveLive(donor, "clarify_intent"); // #2277 gated complete
-S.markStep(donor, "clarify_intent", "complete");
-const d = S.readState(donor);
-console.log("D4.donor_seq=" + JSON.stringify(d.steps.research.updated_seq));
-A.applyInheritance(heir, "2026-02-01T00:00:00.000Z", d);
-const h = S.readState(heir);
+const upstream = "seq1665-d4upstream";
+const downstream = "seq1665-d4downstream";
+S.markStep(upstream, "research", "complete", { skip_reason: "r" });
+S.markStep(upstream, "workflow_init", "complete");
+require(process.env.M_FIX).approveLive(upstream, "clarify_intent"); // #2277 gated complete
+S.markStep(upstream, "clarify_intent", "complete");
+const d = S.readState(upstream);
+console.log("D4.upstream_seq=" + JSON.stringify(d.steps.research.updated_seq));
+A.applyInheritance(downstream, "2026-02-01T00:00:00.000Z", d);
+const h = S.readState(downstream);
 const lastSeq = {};
 for (const e of h.events) if (e.kind === "step_status") lastSeq[e.step] = e.seq;
-console.log("D4.heir_seq=" + JSON.stringify(h.steps.research.updated_seq));
-console.log("D4.heir_stream_seq=" + JSON.stringify(lastSeq.research));
+console.log("D4.downstream_seq=" + JSON.stringify(h.steps.research.updated_seq));
+console.log("D4.downstream_stream_seq=" + JSON.stringify(lastSeq.research));
 console.log("D4.leaked_annotations=" + h.events.filter((e) => e.kind === "step_annotation" && e.key === "updated_seq").length);
 '
 
@@ -78,10 +78,10 @@ if require_js_ok "D: reserved-key probe"; then
     assert_js "D2 markStep emitted only the real annotation" D2.ann_keys "skip_reason"
     assert_js "D2 sanctioned extraField still lands (CPR-ORTH)" D2.skip_reason '"keep"'
     assert_js "D3 v1 converter drops every structure key" D3.keys "skip_reason"
-    assert_js "D4 donor seq (fixture precondition)" D4.donor_seq "1"
-    assert_js "D4 heir re-derives its own seq" D4.heir_seq "3"
-    assert_js "D4 heir projection agrees with the heir stream" D4.heir_stream_seq "3"
-    assert_js "D4 no updated_seq annotation leaked into the heir" D4.leaked_annotations "0"
+    assert_js "D4 upstream seq (fixture precondition)" D4.upstream_seq "1"
+    assert_js "D4 downstream re-derives its own seq" D4.downstream_seq "3"
+    assert_js "D4 downstream projection agrees with the downstream stream" D4.downstream_stream_seq "3"
+    assert_js "D4 no updated_seq annotation leaked into the downstream" D4.leaked_annotations "0"
 fi
 
 finish

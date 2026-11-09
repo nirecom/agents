@@ -5,7 +5,7 @@
 # Issue #2594 stage 3 — the supervisor's codex input carries session-progress.md in a PROGRESS block
 # between HANDOFF and USER UTTERANCES. The block is headed as model-written (not evidence),
 # capped like HANDOFF (the handoff artifact's MAX_BYTES), and read from the first generation's
-# session-progress.md, so an heir session's supervisor sees what earlier generations wrote.
+# session-progress.md, so an downstream session's supervisor sees what earlier generations wrote.
 # TDD (write_code has not run): the PROGRESS cases are expected to FAIL.
 set -uo pipefail
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -84,17 +84,17 @@ seed pw2
 pci_run pw2 pw2 pw2
 pci_eq "PC2 no session-progress.md -> the block is (none)" "$(pci_block PROGRESS | tr -d '[:space:]')" "(none)"
 
-echo "=== PROGRESS block: heir reads the first generation's file ==="
+echo "=== PROGRESS block: downstream reads the first generation's file ==="
 seed pw3a
 seed pw3b pw3a
 printf '## Current state\nwritten-by-generation-one\n' > "$PLANS/pw3a-session-progress.md"
-printf 'heir-own-file-must-not-win\n' > "$PLANS/pw3b-session-progress.md"
+printf 'downstream-own-file-must-not-win\n' > "$PLANS/pw3b-session-progress.md"
 pci_run pw3b pw3b pw3b
 PB="$(pci_block PROGRESS)"
-pci_has "PC3 the heir's block carries the root generation's session-progress.md" "$PB" "written-by-generation-one"
+pci_has "PC3 the downstream's block carries the root generation's session-progress.md" "$PB" "written-by-generation-one"
 case "$PB" in
-  *heir-own-file-must-not-win*) fail "PC3 the path is not built from the heir's own sid" "${PB:0:300}" ;;
-  *) pass "PC3 the path is not built from the heir's own sid" ;;
+  *downstream-own-file-must-not-win*) fail "PC3 the path is not built from the downstream's own sid" "${PB:0:300}" ;;
+  *) pass "PC3 the path is not built from the downstream's own sid" ;;
 esac
 
 echo "=== PROGRESS block: capped like HANDOFF, defanged ==="

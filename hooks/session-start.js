@@ -6,7 +6,7 @@ const path = require("path");
 const os = require("os");
 const { spawnSync } = require("child_process");
 const { cleanupZombies, createInitialState, writeState, readState,
-        getCurrentContext, resolveInheritanceDonor, listRecentContextCandidates,
+        getCurrentContext, resolveInheritanceUpstream, listRecentContextCandidates,
         reconcileEffectiveState, getStatePath, VALID_STEPS } = require("./workflow-state");
 const { applyInheritance } = require("./workflow-state/inheritance/apply");
 const { decideInheritanceGranularity } = require("./workflow-state/inheritance/granularity");
@@ -75,13 +75,13 @@ if (sessionId) {
       catch (e) { ctx = { cwd: process.cwd(), git_branch: null }; }
 
       // #1305: inheritance is keyed on PROVABLE DESCENT, not on cwd+branch.
-      // resolveInheritanceDonor owns every gate; this hook only reports.
+      // resolveInheritanceUpstream owns every gate; this hook only reports.
       let inherited = null;
       try {
-        const verdict = resolveInheritanceDonor({
+        const verdict = resolveInheritanceUpstream({
           sessionId, source: sessionSource, transcriptPath, ctx, agentId,
         });
-        inherited = verdict.donor;
+        inherited = verdict.upstream;
         inheritDecision = verdict.decision;
         inheritCandidateSid = verdict.candidateSessionId;
       } catch (e) { inherited = null; }

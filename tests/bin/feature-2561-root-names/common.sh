@@ -36,15 +36,16 @@ std_js() {
 }
 
 # make_kit <name> — private copy of the gate under $T; sets KIT. The copy reads its
-# classification table and its default retired-name list from its own checkout, so a
-# fixture table never touches the real one. No gate yet => the copy is absent and
-# every run reports "not found", which fails the exit-code assertions.
+# classification table, its default retired-name list and the session-term list from its
+# own checkout, so a fixture table never touches the real one. No gate yet => the copy is
+# absent and every run reports "not found", which fails the exit-code assertions.
 make_kit() {
   KIT="$T/kits/$1"
   mkdir -p "$KIT/bin" "$KIT/tests/bin"
   if [[ -f "$REAL_GATE" ]]; then cp "$REAL_GATE" "$KIT/bin/"; fi
   if [[ -d "${REAL_GATE%.sh}" ]]; then cp -r "${REAL_GATE%.sh}" "$KIT/bin/"; fi
   cp "$RETIRED_LIST" "$KIT/tests/bin/"
+  cp "${REAL_GATE%/bin/check-root-names.sh}/tests/bin/feature-2759-session-terms-residue.sh" "$KIT/tests/bin/"
 }
 
 # write_table <kit> [<exception-json>...] — the fixture classification table.

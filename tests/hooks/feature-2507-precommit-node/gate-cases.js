@@ -15,7 +15,7 @@ const GATES = [
   ["bin/lib/check-migration-blocks.js", "agents-repo-gate-check-migration-blocks", "migration block format violations", ""],
   ["bin/check-plans-artifacts", "agents-repo-gate-check-plans-artifacts", "plans-dir names that are not registered artifacts", "docs/architecture/claude-code/state-dirs.md"],
   ["bin/check-plans-dir-isolation/main.js", "agents-repo-gate-check-plans-dir-isolation", "test fixture isolation violations", "rules/test/fixture-isolation.md"],
-  ["bin/check-root-names/main.js", "agents-repo-gate-check-root-names", "root-name violations", "docs/architecture/claude-code/root-names.md"],
+  ["bin/check-root-names/main.js", "agents-repo-gate-check-root-names", "root-name and session-term violations", "docs/architecture/claude-code/root-names.md"],
 ];
 const FAIL_CLOSED = "Commit blocked: the agents-repo gate fails closed. Emergency bypass: git commit --no-verify";
 
@@ -70,7 +70,7 @@ function agentsRepoGates(F) {
     assert.deepStrictEqual(args[0].argv.slice().sort(), ["--staged", "hooks/lib/rules-injection-policy.js", "rules/a.md", "rules/sub/b.md"].sort());
     assert.strictEqual(args[0].argv[0], "--staged");
     assert.deepStrictEqual(args[1].argv, ["--staged"]);
-    assert.deepStrictEqual(args[2].argv.slice(1).sort(), ["bin/tool", "hooks/lib/rules-injection-policy.js"]);
+    assert.deepStrictEqual(args[2].argv.slice(1).sort(), ["bin/tool", "hooks/lib/rules-injection-policy.js", "rules/a.md", "rules/sub/b.md", "tests/t.sh"]);
     assert.strictEqual(args[2].argv[0], "--staged");
     assert.deepStrictEqual(args[3].argv, ["--source"]);
     assert.deepStrictEqual(args[4].argv, ["--staged"]);
@@ -83,7 +83,7 @@ function agentsRepoGates(F) {
       assert.strictEqual(r.verdict, "block");
       const out = r.messages.filter((m) => m.stream === "stdout").map((m) => m.text).join("\n");
       const iOut = out.indexOf("gate-out-5");
-      const iBlk = out.indexOf(`Commit blocked: root-name violations (checker rc=${rc}).`);
+      const iBlk = out.indexOf(`Commit blocked: root-name and session-term violations (checker rc=${rc}).`);
       const iSee = out.indexOf("See docs/architecture/claude-code/root-names.md.");
       assert.ok(iOut >= 0 && iBlk > iOut && iSee > iBlk, out);
       assert.match(out.slice(iOut, iBlk), /\n\s*\n/, "an empty line precedes the block line");

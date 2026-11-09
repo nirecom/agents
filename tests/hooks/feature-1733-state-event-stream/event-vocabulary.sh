@@ -39,10 +39,10 @@ const SAMPLE = {
   // #2652: this kind's origin is a closed vocabulary (ORIGINS), so the row carries its own.
   state_handoff_record: { cls: "A", origin: "auto-record", at_step: "-", record_key: "voc:k1", summary: "s", pointer: "p" },
   cycle_boundary: { closed_cycle: 1, reason: "reinit-entry" },
-  // #2920: origin is a closed vocabulary (ABORT_ORIGINS); abort-sentinel carries no heir_session_id.
+  // #2920: origin is a closed vocabulary (ABORT_ORIGINS); abort-sentinel carries no downstream_session_id.
   workflow_aborted: { reason: "user stopped", origin: "abort-sentinel" },
-  // #2920: only the heir-naming origins (adopt-auto / abort-cli) may record a handover.
-  workflow_abort_handover: { heir_session_id: "heir-fixture", origin: "adopt-auto" },
+  // #2920: only the downstream-naming origins (adopt-auto / abort-cli) may record a handover.
+  workflow_abort_handover: { downstream_session_id: "downstream-fixture", origin: "adopt-auto" },
 };
 const KINDS = Object.keys(SAMPLE);
 const mk = (kind, over) => Object.assign({ kind: kind, provenance: "observed", origin: "vocab-test" }, SAMPLE[kind] || {}, over || {});
