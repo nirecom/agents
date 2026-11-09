@@ -37,7 +37,7 @@ function matrixFor(step) {
 
   s = F.setupStep(`stale-${step}`, step, F.TERM);
   recordOk(`${step} stale`, F.drift(s.sid, step, s.repo), 0);
-  F.touchGlossary(s.repo);
+  F.addDriftingEntry(s.repo);
   expectRefused(`${step} glossary changed after record`, F.completeInProcess(s.sid, step, s.repo),
     "glossary-check-stale", s.sid, step);
 

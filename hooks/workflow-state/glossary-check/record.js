@@ -5,7 +5,10 @@
 // Every input comes from scope.js (invariant I-FP); this module never reads an input itself.
 
 const { GLOSSARY_STEPS, RA_STEPS, RS_STEPS, loadStepInputs, fingerprintOf } = require("./scope");
-const { CARRY_ROLES, grantCarry, retainedExpired, staleOutlook, termsText, causeText, reacceptText, termIn } = require("./grant-carry");
+const {
+  CARRY_ROLES, grantCarry, sameTermFields, retainedExpired, staleOutlook, termsText, causeText, reacceptText, termIn,
+} = require("./grant-carry");
+const { rescanVerdict } = require("./rescan");
 
 const RECORD_KEY = "glossary_check";
 const PROVENANCE_KEY = "glossary_provenance";
@@ -36,7 +39,8 @@ function recoveryFor(sid, step, code, detail) {
   if (code === "glossary-check-stale") {
     const changed = asArray(d.changed).join(", ");
     const granted = asArray(d.granted_terms);
-    const head = `the ${step} glossary_check record is older than its inputs (changed: ${changed}). run: ${run}; `;
+    const terms = asArray(d.terms).length > 0 ? `; terms: ${termsText(d.terms)}` : "";
+    const head = `the ${step} glossary_check record is older than its inputs (changed: ${changed}${terms}). run: ${run}; `;
     if (granted.length === 0) return `${head}then complete the step again.`;
     if (d.carry === "possible") {
       return `${head}the grants for ${termsText(granted)} carry over when their variants did not change; then complete the step again.`;
@@ -74,32 +78,51 @@ function expiredField(prev, carry, open) {
 }
 
 const variantsOf = (findings, norm) => asArray(findings).filter((f) => f && f.norm === norm).map((f) => f.variant);
-const entriesOf = (blocked, norm) => asArray(blocked).filter((b) => b && b.norm === norm)
-  .map((b) => JSON.stringify([b.term, b.operation, b.category, b.definition === undefined ? null : b.definition]));
+const DEFINITION_ONLY = "definition-only";
+// A basis grant (#2962) is keyed without the Definition text, so a later Definition edit keeps it.
+const entriesOf = (blocked, norm, g) => asArray(blocked).filter((b) => b && b.norm === norm)
+  .map((b) => JSON.stringify(g && g.basis
+    ? [b.term, b.operation, b.category, b.fields_changed === undefined ? null : b.fields_changed]
+    : [b.term, b.operation, b.category, b.definition === undefined ? null : b.definition]));
+const coversEntry = (g, b) => !!g && g.norm === b.norm && g.operation === b.operation && g.category === b.category &&
+  (g.basis !== DEFINITION_ONLY || (b.operation === "redefine" && b.fields_changed === false));
+
+// termFieldsFor(findings, grants, termFields) -> { norm: sha | null } for every found or granted norm.
+function termFieldsFor(findings, grants, termFields) {
+  const tf = termFields || {};
+  const out = Object.create(null); // a norm such as "__proto__" stays an own key
+  for (const x of findings.concat(grants)) {
+    if (x && typeof x.norm === "string") out[x.norm] = Object.prototype.hasOwnProperty.call(tf, x.norm) ? tf[x.norm] : null;
+  }
+  return out;
+}
 
 // checkRecordEvents(current, step, fpResult, findings, origin) -> [step_annotation event].
 // current: the step's previous glossary_check value (or null). Grants survive at the same
-// fingerprint, or move to the new one when only the artifact or the rules changed and the granted
-// norm shows no variant it did not show before; any other grant of the old fingerprint goes to
+// fingerprint, or move to the new one when only the artifact or the rules changed, or only the
+// glossary changed and the granted norm's term_fields did not move (#2962), and the granted norm
+// shows no variant it did not show before; any other grant of the old fingerprint goes to
 // expired_grants (grant-carry.js). ledger_grants are bound to a concern and always carry.
 function checkRecordEvents(current, step, fpResult, findings, origin) {
   const prev = current || {};
   const next = asArray(findings).map((f) => ({
     source: "deterministic", class: "spelling", term: f.term, norm: f.norm, variant: f.variant, where: f.where,
   }));
-  const r = grantCarry(prev, fpResult, CARRY_ROLES.check, variantsOf, prev.findings, next, (n) => termIn(prev.findings, n));
+  const guard = prev.term_fields && typeof prev.term_fields === "object"
+    ? (g) => sameTermFields(prev.term_fields, fpResult.termFields, g.norm) : undefined;
+  const r = grantCarry(prev, fpResult, CARRY_ROLES.check, variantsOf, prev.findings, next, (n) => termIn(prev.findings, n), guard);
   const grants = sameFp(prev.grants, fpResult.fingerprint).concat(r.carried);
   const open = next.filter((f) => !grants.some((g) => g && g.norm === f.norm));
   const value = Object.assign({
     v: 1, step, fingerprint: fpResult.fingerprint, inputs: fpResult.inputs, findings: next, grants,
-    ledger_grants: asArray(prev.ledger_grants),
+    ledger_grants: asArray(prev.ledger_grants), term_fields: termFieldsFor(next, grants, fpResult.termFields),
   }, expiredField(prev, r, open));
   return [annotation(step, RECORD_KEY, value, origin || "check-glossary-drift")];
 }
 
 // provenanceRecordEvents(current, fpResult, sessionSource, unmatched, origin) -> [event].
 // unmatched: every operation the intent does not cover, before grants ({ term, norm, operation,
-// category, reason, definition }). blocked is what no grant covers. A grant moves to the new
+// category, reason, definition, fields_changed }). blocked is what no grant covers. A grant moves to the new
 // fingerprint when only ops or rules changed and its norm's unmatched entries (definition included)
 // did not grow or change, else it goes to expired_grants; a record written before #2770 has no
 // unmatched, so its blocked stands in.
@@ -109,8 +132,7 @@ function provenanceRecordEvents(current, fpResult, sessionSource, unmatched, ori
   const before = Array.isArray(prev.unmatched) ? prev.unmatched : prev.blocked;
   const r = grantCarry(prev, fpResult, CARRY_ROLES.provenance, entriesOf, before, all, (n) => termIn(before, n));
   const grants = sameFp(prev.grants, fpResult.fingerprint).concat(r.carried);
-  const blocked = all.filter((b) => !grants.some((g) =>
-    g && g.norm === b.norm && g.operation === b.operation && g.category === b.category));
+  const blocked = all.filter((b) => !grants.some((g) => coversEntry(g, b)));
   const value = Object.assign({
     v: 1, fingerprint: fpResult.fingerprint, inputs: fpResult.inputs, session_source: sessionSource,
     blocked, unmatched: all, grants,
@@ -142,11 +164,17 @@ function evaluateGlossaryCheck(sid, step, projection, opts) {
   }
   const rec = recordOf(projection, step);
   if (!rec || typeof rec.fingerprint !== "string" || rec.fingerprint === "") return fail("glossary-check-missing", {});
-  const now = fingerprintOf(loaded || loadStepInputs(sid, step, scopeOpts));
+  const inputs = loaded || loadStepInputs(sid, step, scopeOpts);
+  const now = fingerprintOf(inputs);
   if (!now.ok) return fail("glossary-fingerprint-unavailable", { error: now.error, cause: now.detail || null });
   if (now.fingerprint !== rec.fingerprint) {
     const changed = changedComponents(rec.inputs, now.inputs);
-    return fail("glossary-check-stale", Object.assign({ changed }, staleOutlook(rec, changed, CARRY_ROLES.check)));
+    const re = rescanVerdict(rec, changed, inputs, now.termFields);
+    if (re.error) return fail("glossary-fingerprint-unavailable", { error: "rescan-failed", cause: re.error });
+    if (!re.current) {
+      return fail("glossary-check-stale", Object.assign({ changed }, staleOutlook(rec, changed, CARRY_ROLES.check, now.termFields),
+        re.terms ? { terms: re.terms } : {}));
+    }
   }
   const grants = sameFp(rec.grants, rec.fingerprint);
   const open = asArray(rec.findings).filter((f) => !grants.some((g) => g.norm === f.norm));

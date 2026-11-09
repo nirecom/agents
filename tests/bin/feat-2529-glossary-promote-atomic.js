@@ -78,8 +78,9 @@ caseEnd();
 caseBegin("promote-atomic-cli-two-file-promotion-leaves-no-temp", "bin/glossary-promote");
 test("promote-atomic-cli-two-file-promotion-leaves-no-temp", () => noNewFailures(fails, () => {
   check("a promotion changing user and internal writes both and leaves no temp", () => {
-    const s = L.session("atomic-cli", [["beta", "user", "add", "A fresh fixture term."], ["lima", "internal", "add", "A new internal term."]]);
-    const r = L.promote(s.intent, s.repo);
+    const ROWS = [["beta", "user", "add", "A fresh fixture term."], ["lima", "internal", "add", "A new internal term."]];
+    const s = L.session("atomic-cli", ROWS);
+    const r = L.promote(s.intent, s.repo, L.relatedFor(ROWS));
     eq(r.code, 0, `exit (${r.all})`);
     eq(L.userTerms(s.repo).beta, "A fresh fixture term.", "user beta");
     eq(L.internalTerms(s.repo).lima, "A new internal term.", "internal lima");
@@ -87,4 +88,31 @@ test("promote-atomic-cli-two-file-promotion-leaves-no-temp", () => noNewFailures
     eq(leftovers(s.repo), [], "temp files");
   });
 }));
+caseEnd();
+
+// #2962: the --related pairs of a promotion (part: feat-2529-glossary-promote/related.js).
+const related = require("./feat-2529-glossary-promote/related");
+
+caseBegin("#2962 promote writes each --related link into the new entry", "bin/glossary-promote");
+test("#2962 promote writes each --related link into the new entry", () => noNewFailures(fails, related.writesLink));
+caseEnd();
+
+caseBegin("#2962 an add without --related stops promote before any write", "bin/glossary-promote");
+test("#2962 an add without --related stops promote before any write", () => noNewFailures(fails, related.missingRelated));
+caseEnd();
+
+caseBegin("#2962 a --related link of the wrong form stops promote", "bin/glossary-promote");
+test("#2962 a --related link of the wrong form stops promote", () => noNewFailures(fails, related.malformedLink));
+caseEnd();
+
+caseBegin("#2962 a redefine keeps the existing Related line", "bin/glossary-promote");
+test("#2962 a redefine keeps the existing Related line", () => noNewFailures(fails, related.redefineKeepsRelated));
+caseEnd();
+
+caseBegin("#2962 malformed --related pairs are usage (exit 2)", "bin/glossary-promote");
+test("#2962 malformed --related pairs are usage (exit 2)", () => noNewFailures(fails, related.usage));
+caseEnd();
+
+caseBegin("#2962 a --related term matches its add row case-insensitively", "bin/glossary-promote");
+test("#2962 a --related term matches its add row case-insensitively", () => noNewFailures(fails, related.caseInsensitiveTerm));
 caseEnd();

@@ -13,6 +13,7 @@ const { caseBegin, caseEnd } = require("../lib/harness");
 const { noNewFailures } = require("../lib/case-verdict");
 const { totals } = require("./feat-2529-glossary-provenance/common");
 const gate = require("./feat-2529-glossary-provenance/gate");
+const batchGrant = require("./feat-2529-glossary-provenance/batch-grant");
 
 const fails = () => totals.failed;
 after(() => process.stdout.write(`Total: ${totals.passed} passed, ${totals.failed} failed\n`));
@@ -31,4 +32,8 @@ caseEnd();
 
 caseBegin("t3-4-session-wiring-in-source", "hooks/workflow-gate/commit-gate-steps.js");
 test("t3-4-session-wiring-in-source", () => noNewFailures(fails, gate.staticWiring));
+caseEnd();
+
+caseBegin("t2962-batch-grant-consumed-at-commit", "hooks/workflow-mark/glossary-accept-handler.js");
+test("t2962-batch-grant-consumed-at-commit", () => noNewFailures(fails, batchGrant.batchGrantConsumedAtCommit));
 caseEnd();

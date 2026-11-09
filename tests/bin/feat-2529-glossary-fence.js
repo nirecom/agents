@@ -145,3 +145,60 @@ test("glossary-heading-forbidden-character", () => noNewFailures(fails, () => {
   }
 }));
 caseEnd();
+
+// #2962: the Related value rule (exactly one Markdown link) is relatedErrors(value), exported from
+// entries.js and re-exported by the glossary-format entry, so glossary-promote checks a --related
+// link by the same rule; checkGlossaryFile keeps judging an entry as before (one bullet, one link).
+const relatedFile = (rels) => ["# Glossary — user terms", "", "### alpha", "", "- **Definition**: A fixture term.",
+  ...rels.map((v) => `- **Related**: ${v}`), ""].join("\n");
+const RELATED_CASES = [
+  { name: "one link", rels: ["[README.md](../../README.md)"], bad: false },
+  { name: "no link", rels: ["see the README"], bad: true },
+  { name: "TODO", rels: ["TODO"], bad: true },
+  { name: "two links", rels: ["[README.md](../../README.md) [docs](../README.md)"], bad: true },
+  { name: "two bullets", rels: ["[README.md](../../README.md)", "[docs](../README.md)"], bad: true, fileOnly: true },
+];
+caseBegin("related-errors-shared-by-check-and-promote", "bin/lib/glossary-format/entries.js");
+test("related-errors-shared-by-check-and-promote", () => noNewFailures(fails, () => {
+  check("relatedErrors is exported by entries.js and re-exported by bin/lib/glossary-format.js", () => {
+    ok(typeof entries().relatedErrors === "function", "entries.js relatedErrors");
+    ok(mod("bin/lib/glossary-format.js").relatedErrors === entries().relatedErrors, "glossary-format re-export");
+  });
+  for (const rc of RELATED_CASES) {
+    check(`Related ${rc.name}: checkGlossaryFile ${rc.bad ? "reports a Related error" : "passes"}`, () => {
+      const errs = entries().checkGlossaryFile(relatedFile(rc.rels));
+      const rel = errs.filter((e) => /Related/.test(e));
+      if (rc.bad) ok(rel.length > 0, `errors ${JSON.stringify(errs)}`);
+      else eq(JSON.stringify(errs), "[]", "errors");
+    });
+    if (rc.fileOnly) continue;
+    check(`Related ${rc.name}: relatedErrors(value) ${rc.bad ? "is non-empty" : "is empty"}, as checkGlossaryFile judges`, () => {
+      const { relatedErrors } = entries();
+      ok(typeof relatedErrors === "function", "relatedErrors exported");
+      const errs = relatedErrors(rc.rels[0]);
+      ok(Array.isArray(errs), `array result: ${JSON.stringify(errs)}`);
+      eq(errs.length > 0, rc.bad, `relatedErrors(${JSON.stringify(rc.rels[0])}) = ${JSON.stringify(errs)}`);
+    });
+  }
+}));
+caseEnd();
+
+// #2962: a control character in a Related value (a line break above all) is refused, even around
+// an otherwise valid single link, so promote cannot inject a line into the entry.
+const CONTROL_CASES = [
+  ["trailing tab", "[a](b)\t"], ["line feed then a bullet", "[a](b)\n- **Definition**: injected"],
+  ["carriage return", "[a](b)\r"], ["NUL", "[a](b)\u0000"], ["DEL", "[a](b)\u007f"], ["escape", "\u001b[a](b)"],
+];
+caseBegin("related-errors-control-character", "bin/lib/glossary-format/entries.js");
+test("related-errors-control-character", () => noNewFailures(fails, () => {
+  check("relatedErrors(\"[a](b)\") (control): one link, no control character is empty", () => {
+    eq(JSON.stringify(entries().relatedErrors("[a](b)")), "[]", "errors");
+  });
+  for (const [name, value] of CONTROL_CASES) {
+    check(`relatedErrors with a ${name}: non-empty, names the control character`, () => {
+      const errs = entries().relatedErrors(value);
+      ok(errs.length > 0 && errs.some((e) => /control character|line break/.test(e)), `relatedErrors(${JSON.stringify(value)}) = ${JSON.stringify(errs)}`);
+    });
+  }
+}));
+caseEnd();

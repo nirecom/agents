@@ -105,12 +105,10 @@ function main(argv) {
   const fp = provenanceFingerprint({ ops: prov.opsFingerprint(ops), approvalSha: verdict.approvalSha });
   let pending = verdict.blocked;
   let expired = [];
-  const definitionOf = (b) => {
-    const op = ops.find((o) => o.term === b.term && o.category === b.category && o.operation === b.operation);
-    return op ? op.definition : "";
-  };
+  const opOf = (b) => ops.find((o) => o.term === b.term && o.category === b.category && o.operation === b.operation);
   const unmatched = verdict.blocked.map((b) => ({ term: b.term, norm: normalizeTerm(b.term), operation: b.operation,
-    category: b.category, reason: b.reason, definition: definitionOf(b) }));
+    category: b.category, reason: b.reason, definition: opOf(b) ? opOf(b).definition : "",
+    fields_changed: opOf(b) ? opOf(b).fieldsChanged === true : true }));
   try {
     appendEvents(resolved.sid, (_events, current) => {
       const entry = (current && current.steps && current.steps[PROVENANCE_STEP]) || {};
@@ -138,7 +136,8 @@ function main(argv) {
         b.term + " op=" + b.operation + " cat=" + b.category + " — <reason>>>\"";
     const e = expired.find((x) => x && x.norm === b.norm && x.operation === b.operation && x.category === b.category);
     const lapse = e ? " (the grant lapsed: " + causeText(e) + ")" : "";
-    process.stdout.write("  BLOCK: " + b.term + " " + b.operation + " " + b.category + ": " + b.reason + lapse + remedy + "\n");
+    const defOnly = b.operation === "redefine" && b.fields_changed === false ? " (definition-only)" : "";
+    process.stdout.write("  BLOCK: " + b.term + " " + b.operation + " " + b.category + defOnly + ": " + b.reason + lapse + remedy + "\n");
   }
   return 1;
 }

@@ -74,6 +74,18 @@ function parseGlossaryFile(text) {
   return { entries, errors, h2, h1, deep, firstContentIsH1: firstContentIsH1 === true };
 }
 
+// relatedErrors(value) -> [] when a Related value holds exactly one Markdown link (#2962: shared
+// with glossary-promote's --related check), else the one error. A control character (a line break
+// above all) is refused first: promote writes the value into the entry as is, so a break would
+// inject lines the term-set check does not see.
+function relatedErrors(value) {
+  const text = String(value === undefined || value === null ? "" : value);
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(text)) return ["Related must not hold a line break or control character"];
+  const links = (text.match(LINK_RE) || []).length;
+  return links === 1 ? [] : ["Related must hold exactly one Markdown link (found " + links + ")"];
+}
+
 function checkEntry(e) {
   const out = [];
   const at = "line " + e.lineNumber + ": '" + e.term + "'";
@@ -89,10 +101,7 @@ function checkEntry(e) {
     out.push(at + " Definition spans " + defs[0].lines + " lines (max " + MAX_DEFINITION_LINES + ")");
   }
   if (rels.length !== 1) out.push(at + " needs exactly one '- **Related**:' (found " + rels.length + ")");
-  else {
-    const links = (rels[0].value.match(LINK_RE) || []).length;
-    if (links !== 1) out.push(at + " Related must hold exactly one Markdown link (found " + links + ")");
-  }
+  else out.push(...relatedErrors(rels[0].value).map((m) => at + " " + m));
   for (const o of others) out.push("line " + o.lineNumber + ": '" + e.term + "' has a disallowed bullet '" + o.key + "'");
   for (const n of e.stray) out.push("line " + n + ": '" + e.term + "' has a line that is not a Definition/Identifier/Short forms/Related bullet");
   return out;
@@ -228,6 +237,7 @@ module.exports = {
   compareTerms,
   parseGlossaryFile,
   checkGlossaryFile,
+  relatedErrors,
   insertEntry,
   removeEntry,
   replaceDefinition,
