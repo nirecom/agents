@@ -152,3 +152,7 @@ Changes: Fixed `run-tests-baseline` missing a test rename that was only staged, 
 ### FEATURE: PR #2964 (2026-11-09)
 Background: feat(#2759): unify session-inheritance terms on session-upstream / session-downstream
 Changes: Session-inheritance terms are now session-upstream / session-downstream everywhere; donor / heir are retired.
+
+### FEATURE: PR #2965 (2026-11-09)
+Background: feat(#2764): route AskUserQuestion dialogs to Jev only by a fixed dia...
+Changes: Jev auto-answers only clarification dialogs whose dialog ID is listed as `low` in `hooks/lib/askuser-dialog-levels.json`; approval and publishing dialogs always reach you.;Renamed `JEV_AUTO_SKIP_ASKUSER` to `JEV_AUTO_CLARIFICATIONS` (migrated automatically).;Added `bin/check-askuser-dialog-ids` and per-dialog routing counts in `jev-report`.
