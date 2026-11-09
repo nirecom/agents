@@ -87,6 +87,8 @@ function malformedWhy(root) {
   if (!RS.isMalformedDoc(doc)) return null;
   const v = RS.validateDoc(doc);
   const bad = ["tests", "migrate"].filter((sec) => (v[sec].errors || []).length);
+  const verr = bad.map((sec) => v[sec].errors.find((e) => e.startsWith("version: "))).find(Boolean);
+  if (verr) return `has an invalid ${verr}`;
   return `has an invalid ${bad.join(" and ")} section: ${v[bad[0]].errors[0]}`;
 }
 

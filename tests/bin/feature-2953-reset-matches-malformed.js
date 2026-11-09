@@ -108,7 +108,8 @@ test("RM-reset-names-section: the reset message names the backup file and the in
   const rows = [
     { settings: { tests: { categorization: "bogus" } }, part: /has an invalid tests section: tests\./ },
     { settings: { migrate: { tracker: "no" } }, part: /has an invalid migrate section: migrate\./ },
-    { settings: { version: "1" }, part: /has an invalid tests and migrate section: version:/ },
+    { settings: { version: "1" }, part: /has an invalid version: must be an integer from 1 \(got "1"\)/ },
+    { settings: { version: 0 }, part: /has an invalid version: / },
     { settings: { tests: { categorization: "bogus" }, migrate: { tracker: "no" } }, part: /has an invalid tests and migrate section: tests\./ },
   ];
   for (const { settings, part } of rows) {
