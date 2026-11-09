@@ -226,6 +226,56 @@ test("RS-version-load: load(root) on a version 2 file reports both sections unsu
 });
 caseEnd();
 
+// #2953 — isMalformedDoc(doc): true when validateDoc reports the tests or migrate section malformed.
+// An unsupported (newer) version and an absent section are not malformed.
+const MALFORMED_DOC_CASES = [
+  { name: "empty object", doc: {}, want: false },
+  { name: "version 1 alone", doc: { version: 1 }, want: false },
+  { name: "version 1 with valid sections", doc: { version: 1, tests: FLAT, migrate: { tracker: "done" } }, want: false },
+  { name: "tests section merely absent", doc: { migrate: { tracker: "done" } }, want: false },
+  { name: "version string \"1\"", doc: { version: "1" }, want: true },
+  { name: "version 1.5", doc: { version: 1.5 }, want: true },
+  { name: "version 0", doc: { version: 0 }, want: true },
+  { name: "version -1", doc: { version: -1 }, want: true },
+  { name: "version null", doc: { version: null }, want: true },
+  { name: "version 2 (unsupported)", doc: { version: 2 }, want: false },
+  { name: "version 2 over an invalid tests value (unsupported wins)", doc: { version: 2, tests: "x" }, want: false },
+  { name: "tests bogus categorization", doc: { tests: { categorization: "bogus" } }, want: true },
+  { name: "tests is an array", doc: { tests: [] }, want: true },
+  { name: "migrate invalid value", doc: { migrate: { tracker: "no" } }, want: true },
+  { name: "migrate unknown key", doc: { migrate: { x: "done" } }, want: true },
+  { name: "non-object array", doc: [], want: true },
+  { name: "non-object null", doc: null, want: true },
+  { name: "non-object string", doc: "x", want: true },
+];
+
+caseBegin("RS-isMalformedDoc-table", "hooks/lib/repo-settings.js");
+test("RS-isMalformedDoc-table: true only for a malformed version, tests or migrate section or a non-object doc", () => {
+  assert.equal(typeof rs().isMalformedDoc, "function", "isMalformedDoc is exported");
+  for (const { name, doc, want } of MALFORMED_DOC_CASES) {
+    assert.equal(rs().isMalformedDoc(doc), want, name);
+  }
+});
+caseEnd();
+
+caseBegin("RS-isMalformedDoc-agrees-with-validateDoc", "hooks/lib/repo-settings.js");
+test("RS-isMalformedDoc-agrees-with-validateDoc: equals 'a section is malformed' for every version and section row", () => {
+  assert.equal(typeof rs().isMalformedDoc, "function", "isMalformedDoc is exported");
+  for (const { name, doc } of [...VERSION_CASES, ...MALFORMED_DOC_CASES]) {
+    const v = rs().validateDoc(doc);
+    assert.equal(rs().isMalformedDoc(doc), v.tests.state === "malformed" || v.migrate.state === "malformed", name);
+  }
+});
+caseEnd();
+
+caseBegin("RS-isMalformedDoc-reexport", "hooks/lib/repo-settings.js");
+test("RS-isMalformedDoc-reexport: repo-settings.js re-exports the validate.js function itself", () => {
+  const V = require(path.join(ROOT, "hooks", "lib", "repo-settings", "validate.js"));
+  assert.equal(typeof V.isMalformedDoc, "function", "validate.js exports isMalformedDoc");
+  assert.equal(rs().isMalformedDoc, V.isMalformedDoc);
+});
+caseEnd();
+
 caseBegin("RS-agents-own", ".agents.json");
 test("RS-agents-own: the agents repo carries by-target with 6 categories, _archive/lib support, all migrate done", () => {
   const got = rs().load(ROOT);

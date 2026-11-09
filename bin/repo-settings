@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 "use strict";
 // bin/repo-settings — read or write the repo settings file (<root>/.agents.json) for non-Node callers.
-//
 // Read: --format shell (tab-separated, what bin/lib/repo-settings.sh reads without eval) or json.
 // Write: --set-migrate <tracker|issues|tests> marks that migrate key done; --write-tests <json>
 // replaces the tests section. A write lands only when the written section passes the reader's
 // validation, and never on a file that is not JSON or not an object. Repair: --reset-malformed
-// (only with --root) copies such a file byte for byte to .agents.json.malformed and leaves `{}`.
+// (only with --root) copies a file that is not JSON, not an object, or malformed in version or a
+// section (the bin/migrate-needs MALFORMED=1 set) byte for byte to .agents.json.malformed and leaves `{}`.
 // A file whose schema version is newer than this release (unsupported) is never written or reset;
 // every write puts `version` first. Nothing is ever committed. Exit: 0 ok (read: the tests section
 // is ok), 1 missing, malformed or unsupported (or a refused write), 2 bad arguments. Schema: docs/architecture/claude-code/repo-settings-file.md.
@@ -70,13 +70,26 @@ function read(o) {
 const firstLine = (e) => String(e.message).split("\n")[0];
 const isObject = (d) => d !== null && typeof d === "object" && !Array.isArray(d);
 
-// malformedWhy — null when the file is absent (readDoc gives {}) or holds an object, else why not.
-function malformedWhy(root) {
+// unreadableWhy — null when the file is absent (readDoc gives {}) or holds an object, else why not.
+function unreadableWhy(root) {
   try {
     return isObject(RS.readDoc(root)) ? null : "does not hold an object";
   } catch (e) {
     return `is not JSON (${firstLine(e)})`;
   }
+}
+
+// malformedWhy — null unless RS.isMalformedDoc holds (the MALFORMED=1 set of bin/migrate-needs), else why.
+function malformedWhy(root) {
+  const why = unreadableWhy(root);
+  if (why !== null) return why;
+  const doc = RS.readDoc(root);
+  if (!RS.isMalformedDoc(doc)) return null;
+  const v = RS.validateDoc(doc);
+  const bad = ["tests", "migrate"].filter((sec) => (v[sec].errors || []).length);
+  const verr = bad.map((sec) => v[sec].errors.find((e) => e.startsWith("version: "))).find(Boolean);
+  if (verr) return `has an invalid ${verr}`;
+  return `has an invalid ${bad.join(" and ")} section: ${v[bad[0]].errors[0]}`;
 }
 
 function resetMalformed(o) {
@@ -110,7 +123,7 @@ function applyAndValidate(o, doc) {
 }
 
 function write(o) {
-  const why = malformedWhy(o.root);
+  const why = unreadableWhy(o.root);
   if (why !== null) {
     process.stderr.write(`repo-settings: ${RS.fileOf(o.root)} ${why}; nothing written; repair it with --root <dir> --reset-malformed (the original is saved to ${RS.FILE_NAME}.malformed)\n`);
     return 1;

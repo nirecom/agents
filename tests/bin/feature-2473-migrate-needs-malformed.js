@@ -1,8 +1,9 @@
 "use strict";
 // Tests: bin/migrate-needs, bin/lib/migrate-needs.js
 // Tags: TL2, bin, migrate, repo-settings, scope:issue-specific
-// #2473 — MALFORMED of bin/migrate-needs / collect(root): 1 when .agents.json exists and is not a
-// JSON object, else 0; it is a pure fs read and adds no git, gh or glab start.
+// #2473 / #2953 — MALFORMED of bin/migrate-needs / collect(root): 1 when .agents.json is unparsable, not a
+// JSON object, or fails the reader's validation (version, tests or migrate section), else 0; a newer
+// version (unsupported) is 0. It is a pure fs read and adds no git, gh or glab start.
 // Split from feature-2473-migrate-needs.js so each part stays under the per-test time cap.
 // TL3 gap: a real GitHub / GitLab remote; here origin is a local bare repo that is never a forge.
 const { caseBegin, caseEnd, isolate, gitInit } = require("../lib/harness");
@@ -86,15 +87,32 @@ function tracked(name, settings = { tests: TESTS_OK, migrate: DONE }) {
   return d;
 }
 
-// MALFORMED: 1 when .agents.json exists and is not a JSON object (unparsable or non-object), else 0.
+// MALFORMED: 1 when .agents.json is unparsable, not an object, or fails the reader's validation in
+// version / tests / migrate (#2953); else 0.
 const MALFORMED_ROWS = [
   { id: "not JSON", settings: "{ not json\n", want: "1" },
   { id: "JSON array", settings: "[]\n", want: "1" },
+  { id: "JSON null", settings: "null\n", want: "1" },
+  { id: "JSON string", settings: "\"x\"\n", want: "1" },
+  { id: "JSON number", settings: "42\n", want: "1" },
   { id: "absent", settings: null, want: "0" },
   { id: "valid object", settings: { tests: TESTS_OK, migrate: DONE }, want: "0" },
-  // A newer schema version is a valid object: unsupported, never offered for reset.
+  // A newer schema version is unsupported, not malformed: never offered for reset.
   { id: "version 2 object", settings: { version: 2 }, want: "0" },
+  { id: "version 2 over an invalid tests value", settings: { version: 2, tests: "x" }, want: "0" },
   { id: "version 1 object", settings: { version: 1, tests: TESTS_OK, migrate: DONE }, want: "0" },
+  { id: "empty object", settings: {}, want: "0" },
+  { id: "version 1 alone", settings: { version: 1 }, want: "0" },
+  // An invalid version fails the reader's validation (#2953).
+  { id: "version string \"1\"", settings: { version: "1" }, want: "1" },
+  { id: "version 1.5", settings: { version: 1.5 }, want: "1" },
+  { id: "version 0", settings: { version: 0 }, want: "1" },
+  { id: "version -1", settings: { version: -1 }, want: "1" },
+  { id: "version null", settings: { version: null }, want: "1" },
+  { id: "tests bogus categorization", settings: { tests: { categorization: "bogus" } }, want: "1" },
+  { id: "tests is an array", settings: { tests: [] }, want: "1" },
+  { id: "migrate invalid value", settings: { migrate: { tracker: "no" } }, want: "1" },
+  { id: "migrate unknown key", settings: { migrate: { x: "done" } }, want: "1" },
 ];
 
 caseBegin("MN-malformed-table", "bin/migrate-needs");
@@ -121,5 +139,9 @@ test("MN-malformed-no-extra-process: MALFORMED is a pure fs read and adds no git
   const bad = spy(() => collect(tracked("malformed-budget-bad", "{ not json\n")));
   assert.deepEqual(bad.seen, ["git", "git"], `malformed, in sync: status + host lookup only: ${JSON.stringify(bad.seen)}`);
   assert.equal(String(bad.value.malformed), "1");
+  // Invalid version (#2953): judged by the same fs read, no extra process.
+  const badVersion = spy(() => collect(tracked("malformed-budget-version", { version: "1" })));
+  assert.deepEqual(badVersion.seen, ["git", "git"], `invalid version, in sync: status + host lookup only: ${JSON.stringify(badVersion.seen)}`);
+  assert.equal(String(badVersion.value.malformed), "1");
 });
 caseEnd();

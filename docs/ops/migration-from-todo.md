@@ -36,7 +36,7 @@ A fresh run stops with `WARNING: UNCOMMITTED_ALLOWLIST` when an allowlist file h
 | Commit the `/migrate-issues` artifacts | `bash bin/github-issues/migration/commit-migration-artifacts.sh <repo_dir> --skill migrate-issues [--no-push]` |
 | Commit `.agents.json` after `/migrate-tracker`, `/migrate-tests` or a `/migrate` recovery | `bash bin/github-issues/migration/commit-migration-artifacts.sh <repo_dir> --skill migrate-tracker\|migrate-tests\|migrate [--no-push]` |
 | Record one migration done by hand | `node bin/repo-settings --root <repo_dir> --set-migrate tracker\|issues\|tests` |
-| Repair a `.agents.json` that is not a JSON object (`MALFORMED=1`) | `node bin/repo-settings --root <repo_dir> --reset-malformed` (the original is kept as `.agents.json.malformed`) |
+| Repair a `.agents.json` that is unparsable, not an object, or fails the reader's validation (`MALFORMED=1`) | `node bin/repo-settings --root <repo_dir> --reset-malformed` (the original is kept as `.agents.json.malformed`) |
 
 Starting the orchestrator with `--from-step N` warns about every earlier step that never ran; pass `--ack-skipped-steps` to skip them on purpose.
 The live stages also need the dry-run snapshot variables that `skills/migrate-issues/scripts/preview-and-capture.sh` prints; `/migrate-issues` explains them.
