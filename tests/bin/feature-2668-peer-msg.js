@@ -15,12 +15,13 @@ const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
 const cp = require("node:child_process");
-const { agentsListText, uuid, makeFixtures, load, tmpRoot } = require("./feature-2668-find-peer/fixtures");
+const { agentsListText, realAgentsListText, REAL_OWN_LINE, REAL_OWN_LINE_NO_SUFFIX, uuid, makeFixtures, load, tmpRoot } = require("./feature-2668-find-peer/fixtures");
 
 // TL3 gap: a real SendMessage carrying the header to a peer and the peer's real ack are not
 // exercised (model tools). Closest-to-action mitigation: verification (a)(b) of the detail plan,
 // run by hand before release and recorded in docs/architecture/cross-session-messaging.md.
-// The ListAgents text of selfList() is a placeholder shape until verification (b) saves real output (C1).
+// selfList() depends on the --agents-file row shape only; the real shape of the own-session line is
+// produced by realAgentsListText (fixtures.js), which the real-dump cases below use.
 
 const restore = isolate();
 const tmp = tmpRoot();
@@ -89,9 +90,9 @@ function withPolicy(kind, fromVerified) {
   fs.mkdirSync(path.dirname(f), { recursive: true });
   fs.writeFileSync(f, `"use strict";\nmodule.exports = { DESTINATION_KIND: ${JSON.stringify(kind)}, FROM_REPLY_VERIFIED: ${fromVerified} };\n`);
 }
-function headerAt(args) {
+function headerAt(args, env = asSelf) {
   const file = path.join(CO, "bin", "peer-msg").replace(/\\/g, "/");
-  const r = cp.spawnSync("bash", ["-c", '"$0" "$@"', file, "header", ...args], { cwd: tmp, env: P.childEnv(asSelf), encoding: "utf8", timeout: 60000 });
+  const r = cp.spawnSync("bash", ["-c", '"$0" "$@"', file, "header", ...args], { cwd: tmp, env: P.childEnv(env), encoding: "utf8", timeout: 60000 });
   return { code: r.status, out: r.stdout || "", err: `${r.stderr || ""}${r.error ? String(r.error) : ""}` };
 }
 const HEADER_RE = /^\[peer-msg v1\] from-session=(\S+) msg-id=(\S+) reply-to=(.*) reply-kind=(\S+)$/;
@@ -138,12 +139,47 @@ test("PM2 header on a verified name policy with the own session missing from the
 });
 test("PM2 header on the production policy and a real ListAgents dump (own session only on the header line) -> name destination", () => {
   withPolicy("name", true);
-  const dump = P.writeFile("agents-real.txt", `This session is "${SELF_NAME}" [c0ffee].\nPeer sessions (1):\n  #1 Other [${PEER.slice(0, 8)}] [d4e5f6]  ·  interactive  ·  idle  ·  started 7h ago\n`);
+  const dump = P.writeFile("agents-real.txt", realAgentsListText([{ ref: "d4e5f6", name: `#1 Other [${PEER.slice(0, 8)}]` }], { name: SELF_NAME, ref: "c0ffee" }));
   const r = headerAt(["--agents-file", dump]);
   assert.strictEqual(r.code, 0, `${r.out}${r.err}`);
   const m = (headerLine(r.out) || "").match(HEADER_RE);
   assert.ok(m, r.out);
   assert.strictEqual(m[3], `${SELF_NAME} [c0ffee]`);
+  assert.strictEqual(m[4], "name");
+});
+// Real-format own line cases: [label, own, exit, reason, reply-to]. Peer row is fixed.
+const REAL_SID = uuid("4f6187e3");
+const peerRow = [{ ref: "d4e5f6", name: `#1 Other [${PEER.slice(0, 8)}]` }];
+const peerBlock = `Peer sessions (1):\n  #1 Other [${PEER.slice(0, 8)}] [d4e5f6]  ·  interactive  ·  idle  ·  started 7h ago\n`;
+for (const [label, text, withVerified, code, reason, replyTo] of [
+  ["the verbatim real own line", `${REAL_OWN_LINE}\n${peerBlock}`, true, 0, null, "[PM] #2728 #2927 PM infra / sentinel issues [4f6187e3] [42d2bd]"],
+  ["the legacy quoted own line", realAgentsListText(peerRow, { name: `#2668 Peer [${REAL_SID.slice(0, 8)}]`, ref: "c0ffee", quoted: true }), true, 0, null, `#2668 Peer [${REAL_SID.slice(0, 8)}] [c0ffee]`],
+  ["an own line without the 8-digit suffix (no fallback to reply-kind=from)", realAgentsListText(peerRow, { raw: REAL_OWN_LINE_NO_SUFFIX }), true, 5, "not-in-list", null],
+  ["an unreadable This-session-is line", realAgentsListText(peerRow, { raw: "This session is [PM] x [42d2bd]" }), true, 2, "agents-list-unparsable", null],
+]) {
+  test(`PM2 header real dump: ${label} -> exit ${code}${reason ? ` ${reason}` : ""}`, () => {
+    withPolicy("name", withVerified);
+    const r = headerAt(["--agents-file", P.writeFile("agents-real2.txt", text)], { CLAUDE_CODE_SESSION_ID: REAL_SID });
+    assert.strictEqual(r.code, code, `${r.out}${r.err}`);
+    if (code !== 0) {
+      assert.ok(new RegExp(`^REASON=${reason}$`, "m").test(r.out), r.out);
+      assert.strictEqual(headerLine(r.out), null, r.out);
+      return;
+    }
+    const m = (headerLine(r.out) || "").match(HEADER_RE);
+    assert.ok(m, r.out);
+    assert.strictEqual(m[1], REAL_SID);
+    assert.strictEqual(m[3], replyTo);
+    assert.strictEqual(m[4], "name");
+  });
+}
+test("PM2 header real dump with FROM_REPLY_VERIFIED=false: same reply-to as when verified", () => {
+  withPolicy("name", false);
+  const r = headerAt(["--agents-file", P.writeFile("agents-real3.txt", `${REAL_OWN_LINE}\n${peerBlock}`)], { CLAUDE_CODE_SESSION_ID: REAL_SID });
+  assert.strictEqual(r.code, 0, `${r.out}${r.err}`);
+  const m = (headerLine(r.out) || "").match(HEADER_RE);
+  assert.ok(m, r.out);
+  assert.strictEqual(m[3], "[PM] #2728 #2927 PM infra / sentinel issues [4f6187e3] [42d2bd]");
   assert.strictEqual(m[4], "name");
 });
 test("PM2 header --role pm --pm-issues adds the PM suffix", () => {

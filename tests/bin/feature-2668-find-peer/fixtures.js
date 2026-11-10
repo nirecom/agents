@@ -20,11 +20,24 @@ function agentsListText(entries) {
   return `${entries.map((e) => `- [${e.ref}] ${e.name}${e.sessionId ? ` session=${e.sessionId}` : ""}`).join("\n")}\n`;
 }
 
-// realAgentsListText(entries) renders the ListAgents dump observed on Claude Code 2.1.319: two header
+// The clause that ends the own-session line of a real ListAgents dump (shared by the two constants below).
+const OWN_CLAUSE = "the name other sessions use to message it (it is not listed below; a message to it would be a message to yourself).";
+// The own-session line captured verbatim from a PM session (no quotes around the name; ends with " — <clause>").
+const REAL_OWN_LINE = `This session is [PM] #2728 #2927 PM infra / sentinel issues [4f6187e3] [42d2bd] — ${OWN_CLAUSE}`;
+// The same shape with no 8-digit suffix on the name (a PM name the hook did not suffix).
+const REAL_OWN_LINE_NO_SUFFIX = `This session is [PM] #2728 #2927 PM [42d2bd] — ${OWN_CLAUSE}`;
+
+// realAgentsListText(entries, own) renders the ListAgents dump observed on Claude Code 2.1.319: two header
 // lines, then per peer "  <name> [<ref6>]  ·  <kind>  ·  <state>  ·  started 7h ago"; e.raw replaces a row.
+// The first line is the real shape `This session is <name> [<ref6>] — <clause>`; own.quoted renders the
+// older `This session is "<name>" [<ref6>].`; own.raw replaces the whole line.
 function realAgentsListText(entries, own = { name: "#1 Self [00000000]", ref: "000000" }) {
   const rows = entries.map((e) => (e.raw !== undefined ? e.raw : `  ${e.name} [${e.ref}]  ·  ${e.kind || "interactive"}  ·  ${e.state || "idle"}  ·  started 7h ago`));
-  return `This session is "${own.name}" [${own.ref}].\nPeer sessions (${entries.length}):\n${rows.join("\n")}\n`;
+  let head;
+  if (own.raw !== undefined) head = own.raw;
+  else if (own.quoted === true) head = `This session is "${own.name}" [${own.ref}].`;
+  else head = `This session is ${own.name} [${own.ref}] — ${OWN_CLAUSE}`;
+  return `${head}\nPeer sessions (${entries.length}):\n${rows.join("\n")}\n`;
 }
 
 // uuid(prefix8) ->a lower-case UUID that starts with prefix8 (8 hex digits); the rest is fixed so
@@ -118,4 +131,4 @@ function load(rel) {
   }
 }
 
-module.exports = { ROOT, agentsListText, realAgentsListText, uuid, parseKv, makeFixtures, load, tmpRoot: () => fs.mkdtempSync(path.join(os.tmpdir(), "find-peer-")) };
+module.exports = { ROOT, agentsListText, realAgentsListText, OWN_CLAUSE, REAL_OWN_LINE, REAL_OWN_LINE_NO_SUFFIX, uuid, parseKv, makeFixtures, load, tmpRoot: () => fs.mkdtempSync(path.join(os.tmpdir(), "find-peer-")) };
