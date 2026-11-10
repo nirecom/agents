@@ -1,12 +1,13 @@
 "use strict";
 // Tests: bin/lib/migrate-forge-type.js, bin/lib/migrate-needs.js, bin/detect-forge-type
 // Tags: TL2, bin, migrate, gitlab, forge, table-driven, scope:issue-specific
-// #2960 — migrate judges the origin host with the forge resolver (a GITLAB_HOSTNAME from the effective
-// .env, exact host match) and, only when the resolver says unknown but read a project path, guesses
-// gitlab for a host with a `gitlab.` label. It never reclassifies to github. bin/detect-forge-type
-// keeps its default output and applies the guess only with --guess-unconfigured-host, which none of
-// its existing callers passes. Contract: the #2960 detail plan S1-S3 and S8.
-// TL3 gap: a real self-managed GitLab origin; here every origin is a URL string never contacted.
+// #2960 — migrate judges the origin host with the forge resolver (GITLAB_HOSTNAME from the effective .env,
+// exact host match); only when it says unknown but read a project path does it guess gitlab for a host
+// with a `gitlab.` label, or github for the plan-sync alias ssh.github.com with an exact owner/repo project.
+// bin/detect-forge-type applies the guess only with --guess-unconfigured-host, which no existing caller
+// passes. Contract: the #2960 detail plan S1-S3 and S8.
+// TL3 gap: a real self-managed GitLab origin; every origin here is a URL string never contacted.
+// Closest-to-action mitigation: none — no bin/check-verification-gate.sh category covers the host judgment.
 const { caseBegin, caseEnd, isolate, gitInit } = require("../lib/harness");
 const { test, after } = require("node:test");
 const assert = require("node:assert/strict");
@@ -57,7 +58,9 @@ const CASES = [
   { name: "gitlab-label-suffix", origin: "https://example.gitlabx.com/grp/proj.git", want: "unknown", plain: "unknown" },
   { name: "gitlab-in-path-only", origin: "https://example.com/gitlab.x/proj.git", want: "unknown", plain: "unknown" },
   { name: "github", origin: "git@github.com:o/r.git", want: "github", plain: "github" },
-  { name: "ssh-github", origin: "git@ssh.github.com:o/r.git", want: "unknown", plain: "unknown" },
+  { name: "ssh-github", origin: "git@ssh.github.com:o/r.git", want: "github", plain: "unknown" },
+  { name: "ssh-github-https", origin: "https://ssh.github.com/o/r.git", want: "github", plain: "unknown" },
+  { name: "ssh-github-subgroup", origin: "git@ssh.github.com:o/r/x.git", want: "unknown", plain: "unknown" },
   { name: "poisoned-path", origin: "https://gitlab.example.com/grp/../proj.git", want: "unknown", plain: "unknown" },
   { name: "scp-no-user", origin: "gitlab.example.com:grp/proj.git", want: "unknown", plain: "unknown" },
   { name: "ssh-host-configured", origin: "git@ssh.git.example.com:grp/proj.git", sshLocal: "ssh.git.example.com", want: "gitlab", plain: "gitlab" },
@@ -91,7 +94,7 @@ function cli(args) {
 }
 
 caseBegin("MFT-guess-pure", "bin/lib/migrate-forge-type.js");
-test("MFT-guess-pure: only an unknown result with a host and a project is guessed, and only toward gitlab", () => {
+test("MFT-guess-pure: only an unknown result with a host and a project is guessed, toward gitlab or the github alias", () => {
   const { guessUnconfiguredType } = lib();
   const cases = [
     { name: "github passes through", res: { type: "github", host: "github.com", project: "o/r" }, want: "github" },
@@ -101,8 +104,14 @@ test("MFT-guess-pure: only an unknown result with a host and a project is guesse
     { name: "inner gitlab label", res: { type: "unknown", host: "git.gitlab.internal", project: "g/s/p" }, want: "gitlab" },
     { name: "gitlab.* without project", res: { type: "unknown", host: "gitlab.example.com", project: null }, want: "unknown" },
     { name: "no host", res: { type: "unknown", host: null, project: null }, want: "unknown" },
-    { name: "ssh.github.com never becomes github", res: { type: "unknown", host: "ssh.github.com", project: "o/r" }, want: "unknown" },
+    { name: "ssh.github.com is the github alias", res: { type: "unknown", host: "ssh.github.com", project: "o/r" }, want: "github" },
+    { name: "ssh.github.com in upper case", res: { type: "unknown", host: "SSH.GitHub.com", project: "o/r" }, want: "github" },
+    { name: "ssh.github.com with a subgroup-shaped path", res: { type: "unknown", host: "ssh.github.com", project: "o/r/x" }, want: "unknown" },
+    { name: "ssh.github.com without project", res: { type: "unknown", host: "ssh.github.com", project: null }, want: "unknown" },
     { name: "github look-alike", res: { type: "unknown", host: "github.com.evil.example", project: "o/r" }, want: "unknown" },
+    { name: "alias key as a label suffix", res: { type: "unknown", host: "notssh.github.com", project: "o/r" }, want: "unknown" },
+    { name: "alias key with a prefixed letter", res: { type: "unknown", host: "xssh.github.com", project: "o/r" }, want: "unknown" },
+    { name: "alias key as a host prefix", res: { type: "unknown", host: "ssh.github.com.evil.example", project: "o/r" }, want: "unknown" },
     { name: "gitlab as a substring of a label", res: { type: "unknown", host: "notgitlab.example.com", project: "g/p" }, want: "unknown" },
     { name: "gitlab as a label prefix", res: { type: "unknown", host: "gitlab-ci.example.com", project: "g/p" }, want: "unknown" },
     { name: "gitlab as a label stem", res: { type: "unknown", host: "example.gitlabx.com", project: "g/p" }, want: "unknown" },
@@ -213,6 +222,35 @@ test("MFT-global-env-host: a GITLAB_HOSTNAME in AGENTS_MAIN_ROOT/.env alone make
     const r = cp.spawnSync(process.execPath, [CLI, "--repo-dir", root, "--field", "type", ...extra], { encoding: "utf8", env, timeout: 60000 });
     assert.equal(r.status, 0, `CLI ${extra.join(" ")}: rc ${r.stderr}`);
     assert.equal(String(r.stdout).trim(), "gitlab", `CLI ${extra.join(" ") || "default"}: type`);
+  }
+});
+caseEnd();
+
+caseBegin("MFT-global-env-ssh-host", "bin/lib/migrate-forge-type.js");
+test("MFT-global-env-ssh-host: a GITLAB_SSH_HOSTNAME in AGENTS_MAIN_ROOT/.env alone makes every judge answer gitlab", () => {
+  const GLOBAL = path.join(TMP, "global-root-ssh");
+  fs.mkdirSync(GLOBAL, { recursive: true });
+  fs.writeFileSync(path.join(GLOBAL, ".env"), "GITLAB_SSH_HOSTNAME=ssh.git.example.com\n");
+  const origin = "git@ssh.git.example.com:grp/proj.git";
+  const root = repo({ name: "global-env-ssh-configured", origin });
+  assert.ok(!fs.existsSync(path.join(root, ".env.local")), "fixture: no .env.local");
+  const { migrateForgeType } = lib();
+  const { hostOf } = require(NEEDS);
+  assert.equal(migrateForgeType(origin, root).type, "unknown", "empty global root: migrateForgeType");
+  assert.equal(hostOf(origin, root), "unknown", "empty global root: hostOf");
+  process.env.AGENTS_MAIN_ROOT = GLOBAL;
+  try {
+    assert.equal(migrateForgeType(origin, root).type, "gitlab", "migrateForgeType");
+    assert.equal(hostOf(origin, root), "gitlab", "hostOf");
+  } finally {
+    process.env.AGENTS_MAIN_ROOT = MAIN;
+  }
+  for (const [label, env, want] of [["empty global root", CHILD_ENV, "unknown"], ["global .env", { ...CHILD_ENV, AGENTS_MAIN_ROOT: GLOBAL }, "gitlab"]]) {
+    for (const extra of [[], [FLAG]]) {
+      const r = cp.spawnSync(process.execPath, [CLI, "--repo-dir", root, "--field", "type", ...extra], { encoding: "utf8", env, timeout: 60000 });
+      assert.equal(r.status, 0, `${label} CLI ${extra.join(" ")}: rc ${r.stderr}`);
+      assert.equal(String(r.stdout).trim(), want, `${label} CLI ${extra.join(" ") || "default"}: type`);
+    }
   }
 });
 caseEnd();
