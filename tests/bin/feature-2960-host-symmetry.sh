@@ -2,11 +2,12 @@
 # tests/bin/feature-2960-host-symmetry.sh
 # Tests: bin/github-issues/lib/host-adapter.sh, bin/lib/migrate-needs.js
 # Tags: TL2, bin, migrate, gitlab, forge, table-driven, scope:issue-specific, test-lang-exception:symmetry
-# Issue #2960: hia_host (bash) and hostOf (JS) judge one origin the same way, both through
-# bin/detect-forge-type --guess-unconfigured-host: a GITLAB_HOSTNAME in the root's .env.local counts,
-# an unconfigured gitlab.* host is guessed gitlab, ssh.github.com and a poisoned path stay unknown.
-# hia_host falls back to unknown when the CLI is missing. Contract: the #2960 detail plan S4 / S9.
-# TL3 gap: a real self-managed GitLab origin; here every origin is a URL string never contacted.
+# Issue #2960: hia_host (bash) and hostOf (JS) judge one origin alike, both through bin/detect-forge-type
+# --guess-unconfigured-host: a GITLAB_HOSTNAME in the root's .env.local counts, an unconfigured gitlab.*
+# host is guessed gitlab, ssh.github.com follows the plan-sync alias to github, a poisoned path stays
+# unknown, and hia_host falls back to unknown without the CLI. Contract: the #2960 detail plan S4 / S9.
+# TL3 gap: a real self-managed GitLab origin; every origin here is a URL string never contacted.
+# Closest-to-action mitigation: none — no bin/check-verification-gate.sh category covers the host judgment.
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -56,7 +57,9 @@ ROWS=(
   "gitlab-label-suffix|https://example.gitlabx.com/grp/proj.git||unknown"
   "gitlab-in-path-only|https://example.com/gitlab.x/proj.git||unknown"
   "github|git@github.com:o/r.git||github"
-  "ssh-github|git@ssh.github.com:o/r.git||unknown"
+  "ssh-github|git@ssh.github.com:o/r.git||github"
+  "ssh-github-https|https://ssh.github.com/o/r.git||github"
+  "ssh-github-subgroup|git@ssh.github.com:o/r/x.git||unknown"
   "poisoned-path|https://gitlab.example.com/grp/../proj.git||unknown"
   "scp-no-user|gitlab.example.com:grp/proj.git||unknown"
   "ssh-host-configured|git@ssh.git.example.com:grp/proj.git||gitlab|ssh.git.example.com"
