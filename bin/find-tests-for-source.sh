@@ -2,9 +2,9 @@
 # bin/find-tests-for-source.sh — read-only. Answers "does this source set already
 # have a test file to append to?" for write-tests (WT-5) and review-tests (RT-1a).
 # Usage: find-tests-for-source.sh --sources <path>[,<path>...] [--sources ...] | --test-file <path>
-#                                 [--root <repo-root>] [--hard-max <n>] [--with-language]
-# One TSV row per query, no header (--with-language adds the last two columns):
-#   query verdict reason target target_lines candidates viable excluded [languages shapes]
+#                                 [--root <repo-root>] [--hard-max <n>] [--with-language] [--with-time]
+# One TSV row per query, no header; --with-language adds two columns, --with-time a last one:
+#   query verdict reason target target_lines candidates viable excluded [languages shapes] [time]
 # Exit 0 = a decision was made (`new` / `skipped` are decisions, not failures),
 # 2 = usage error, 3 = environment error, 4 = no host test lane freed within the
 # wait cap (see docs/architecture/claude-code/test-host-lanes.md). The criteria
@@ -24,7 +24,7 @@ source "$_FTS_DIR/lib/test-host-lanes.sh"
 
 usage_error() {
   printf 'ERROR: %s\n' "$1" >&2
-  printf 'Usage: find-tests-for-source.sh --sources <csv> [--sources ...] | --test-file <path> [--root <dir>] [--hard-max <n>] [--with-language]\n' >&2
+  printf 'Usage: find-tests-for-source.sh --sources <csv> [--sources ...] | --test-file <path> [--root <dir>] [--hard-max <n>] [--with-language] [--with-time]\n' >&2
   exit 2
 }
 
@@ -38,6 +38,7 @@ declare -a QKEYS=() QCOLS=()
 ROOT_OPT=""
 HARD_MAX="$TRD_HARD_MAX_DEFAULT"
 WITH_LANGUAGE=0
+WITH_TIME=0
 
 # split_csv <csv> — splits on every `,`, KEEPING empty elements so `a,,b`, `,a`
 # and `a,` stay usage errors instead of silently shrinking the query set.
@@ -76,6 +77,9 @@ while [[ "$#" -gt 0 ]]; do
       shift 2 ;;
     --with-language)
       WITH_LANGUAGE=1
+      shift ;;
+    --with-time)
+      WITH_TIME=1
       shift ;;
     *)
       usage_error "unknown option: $1" ;;
@@ -131,16 +135,23 @@ fi
 cd "$ROOT" || env_error "could not enter $ROOT"
 
 tcc_load_corpus_cached "$ROOT"
+if [[ "$WITH_TIME" -eq 1 ]]; then
+  # shellcheck source=lib/test-route-destination/time.sh
+  source "$_FTS_DIR/lib/test-route-destination/time.sh" || env_error "time judge not readable"
+  trd_time_prepare "$ROOT"
+fi
 
-# lang_columns <languages> <shapes> — the two --with-language columns; nothing without the flag.
+# lang_columns <languages> <shapes> [<time>] — the --with-language and --with-time columns
+# (each only under its flag), then the row's LF.
 lang_columns() {
   [[ "$WITH_LANGUAGE" -eq 1 ]] && printf '\t%s\t%s' "${1:-unsupported}" "${2:--}"
+  [[ "$WITH_TIME" -eq 1 ]] && printf '\t%s' "${3:--}"
   printf '\n'
 }
 
 emit_flat() {
   printf '%s\t%s\t%s\t-\t-\t-\t-\t-' "$1" "$2" "$3"
-  lang_columns "" ""
+  lang_columns "" "" ""
 }
 
 # emit_row <escaped-query> — the row of the last trd_decide.
@@ -148,7 +159,8 @@ emit_row() {
   local line
   line="$(trd_row "$1")"
   printf '%s' "$line"
-  lang_columns "$TRL_LANGS" "$TRL_SHAPES"
+  [[ "$WITH_TIME" -eq 1 ]] && trd_time_column TRD_CANDIDATES >/dev/null
+  lang_columns "$TRL_LANGS" "$TRL_SHAPES" "${TRD_TIME_COLUMN:--}"
 }
 
 for _i in "${!QKEYS[@]}"; do

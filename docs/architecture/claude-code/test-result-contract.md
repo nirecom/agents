@@ -32,6 +32,18 @@ A test file (or a language wrapper standing in for its runner) exits with one of
 | 77 | otherwise | SKIP | `SKIP` |
 | other | — | FAIL | `FAIL` |
 
+A **file result** is the triple (verdict, termination, duration) the duration ledger records per test file (#2932); `run_all_dur_file_result` in `bin/lib/run-all-durations.sh` maps the unit state by this table:
+
+| Unit state | Verdict | Termination |
+|---|---|---|
+| PASS / FAIL / SKIP | same name | `completed` |
+| TIMEOUT | `-` | `timeout` |
+| UNRUNNABLE | `-` | `unrunnable` |
+| UNSUPPORTED | `-` | `unsupported` |
+| anything else | `?` | `?` |
+
+How `runContract.hits` enters this triple is decided in #2727.
+
 - **Valid label**: depends on who could have written the marker. Before the launch (the launcher's own marker): the entry's `launch.requires` (`pwsh`, `uv`, `node`), or the executable its `launch.prepare` or `launch.command` starts with. After the launch (a wrapper's marker): only the entry's minimum-version label `<runtime>>=<version>` (`Pester>=5.0`, `pytest>=7.0`, `node>=20.0`). Test code runs only after the launch and a wrapper hides the result directory from it, so a test cannot turn its failure into "runtime missing" — a bash test that writes `bash` and exits 79 stays a FAIL.
 - **Effective timeout**: the smaller of the entry's `launch.timeoutSeconds` and a positive-integer `RUN_ALL_TIMEOUT_SECONDS`; either alone when the other is absent (`rac_effective_timeout`). Empty means no per-file kill. Without the `timed-out` marker, 124 / 137 / 142 / 143 are an ordinary FAIL — a test that exits 124 by itself is not a TIMEOUT, whatever the elapsed time.
 - `bash` has `timeoutSeconds: null`: in a normal run a single hung bash test is stopped only by the suite `--deadline` (a per-test bash limit is deferred, #2557); only a caller that sets `RUN_ALL_TIMEOUT_SECONDS`, such as `bin/run-tests-baseline`, gives it a file-level limit.

@@ -15,7 +15,11 @@ const EXPECTED = {
   code: [300, 500, "lines"], prompt: [100, 200, "lines"], docs: [300, 500, "lines"],
   history: [500, 800, "lines"], intent: [100, 200, "lines"], outline: [100, 200, "lines"],
   detail: [300, 500, "lines"], progress: [400, 600, "chars"],
+  "test-time": [60, 150, "seconds"],
 };
+// #2932: the heavy test judge's parameters (TEST_TIME export, `--test-time-params` line).
+const TEST_TIME = { samples: 5, minHardSamples: 3, ratio: { warn: 5, hard: 10 }, floor: { warn: 30, hard: 60 } };
+const TEST_TIME_PARAMS = "samples=5 min_hard=3 ratio_warn=5 ratio_hard=10 floor_warn=30 floor_hard=60";
 
 let failures = 0;
 const clip = (s) => String(s).replace(/[\r\n]+/g, " ").slice(0, 400);
@@ -102,6 +106,6 @@ function commitAll(dir, msg) {
 }
 
 module.exports = {
-  ROOT, EXPECTED, check, run, failureCount, clip, load, newSid, work, codeLines, proseLines,
+  ROOT, EXPECTED, TEST_TIME, TEST_TIME_PARAMS, check, run, failureCount, clip, load, newSid, work, codeLines, proseLines,
   progressDoc, writeStartedState, writeMarker, startedSanity, configRoot, nodeCli, git, commitAll,
 };

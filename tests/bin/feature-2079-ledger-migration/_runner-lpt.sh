@@ -39,7 +39,8 @@ for f in "$(fx_ledger_dir)"/dur.*; do
   # The runner closes its segment on exit (#2079 S7b); old-format names never had a state.
   case "$tail" in *.closed.log) tail="${tail%.closed.log}.log" ;; esac
   dest="$(fx_ledger_dir)/dur.1.$oldtok.$tail"
-  grep -v '^#' "$f" > "$f.tmp"
+  # v3 rows `rid|secs|verdict|termination|key` back to the legacy `rid|secs|key` (#2932).
+  awk -F'|' '/^#/ { next } NF >= 5 { k = $5; for (i = 6; i <= NF; i++) k = k "|" $i; print $1 "|" $2 "|" k; next } { print }' "$f" > "$f.tmp"
   rm -f "$f"
   mv "$f.tmp" "$dest"
   t=$(( $(date +%s) - 7200 ))

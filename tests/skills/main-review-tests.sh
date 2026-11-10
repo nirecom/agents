@@ -291,6 +291,42 @@ if [ -f "$SKILL" ]; then
   fi
 fi
 
+# P9 (#2932): RT-1c heavy test gate and the RT-1a time-hard-limit / tier-`?` rules.
+# rt_block <label> — the step's lines, from `<label>.` up to the next top-level `RT-` step.
+rt_block() { awk -v l="$1." 'index($0, l) == 1 { f = 1; print; next } f && /^RT-[0-9]/ { exit } f { print }' "$SKILL"; }
+# rt_has <name> <block> <ERE> — pass when some line of the block matches the ERE.
+rt_has() { if printf '%s\n' "$2" | grep -qE -- "$3"; then pass "$1"; else fail "$1" "block=${2:0:300}"; fi; }
+RT1C="$(rt_block RT-1c)"
+RT1A="$(rt_block RT-1a)"
+
+case_begin "rt1c-names-check-heavy-tests" "skills/review-tests/SKILL.md"
+rt_has "P9a RT-1c exists and runs scripts/check-heavy-tests.sh" "$RT1C" 'check-heavy-tests\.sh'
+case_end
+
+case_begin "rt1c-hard-gap-rt5c-without-codex" "skills/review-tests/SKILL.md"
+rt_has "P9b RT-1c counts HARD as a gap" "$RT1C" 'HARD.*gap|gap.*HARD'
+rt_has "P9b RT-1c counts it directly in RT-5c" "$RT1C" 'RT-5c'
+rt_has "P9b RT-1c keeps HARD out of the codex input" "$RT1C" '(not|never|without|no)[^.]*(codex|RT-3)'
+case_end
+
+case_begin "rt1c-warn-advisory" "skills/review-tests/SKILL.md"
+rt_has "P9c RT-1c reports WARN as advisory only" "$RT1C" 'WARN[^.]*advisory|advisory[^.]*WARN'
+case_end
+
+case_begin "rt1c-exit-warnings-accepted" "skills/review-tests/SKILL.md"
+rt_has "P9d RT-1c's exit is WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED" "$RT1C" 'WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED'
+case_end
+
+case_begin "rt1a-time-hard-limit-tag" "skills/review-tests/SKILL.md"
+rt_has "P9e RT-1a accepts dup-group-keep:time-hard-limit backed by reason time-hard-limit" "$RT1A" \
+  'dup-group-keep:time-hard-limit.*reason[^.]*time-hard-limit|reason[^.]*time-hard-limit.*dup-group-keep:time-hard-limit'
+case_end
+
+case_begin "rt1a-tier-unknown-unverifiable" "skills/review-tests/SKILL.md"
+rt_has "P9f RT-1a reports an append target of tier ? as unverifiable" "$RT1A" '`\?`.*[Uu]nverifiable|[Uu]nverifiable.*`\?`'
+rt_has "P9f RT-1a does not count tier ? as a gap" "$RT1A" '`\?`.*(not|never)[^.]*gap|(not|never)[^.]*gap.*`\?`'
+case_end
+
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
 [ "$FAIL" -eq 0 ]

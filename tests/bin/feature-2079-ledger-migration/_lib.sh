@@ -14,6 +14,10 @@ LM_PARTS="$__LIB_SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2079-ledger-migration"
 LM_W26300="MINGW64_NT-10.0-26300"
 LM_M26300="MSYS_NT-10.0-26300"
 LM_M26200="MSYS_NT-10.0-26200"
+# The current ledger format's name prefix (v3, #2932). The parent side never sources the
+# library, so it is fixed here; dur.1 / dur.2 stay literal where a case plants a legacy file.
+LM_CUR="dur.3"
+LM_CUR_RE='dur\.3'
 
 if [ "${LM_CHILD:-0}" != "1" ]; then
   LM_TMP="$(mktemp -d)"
@@ -87,13 +91,30 @@ lm_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 
 lm_sum() { if [ -f "$1" ]; then cksum < "$1"; else echo none; fi; }
 
 # lm_plant_dur <name> <age-min> <header|-> <secs:key>... — one segment in this repo's ledger.
+# The row shape follows the name: a legacy dur.1 / dur.2 file gets `rid|secs|key`, any other
+# (the current format) the v3 `rid|secs|PASS|completed|key`.
 lm_plant_dur() {
-  local name="$1" age="$2" hdr="$3" rid f kv; shift 3
+  local name="$1" age="$2" hdr="$3" rid f kv mid="PASS|completed|"; shift 3
   rid="$(lm_rid)"; f="$(lm_dur_dir)/$name"
+  case "$name" in dur.1.*|dur.2.*) mid="" ;; esac
   mkdir -p "$(lm_dur_dir)"
   : > "$f"
   [ "$hdr" = "-" ] || printf '#os %s\n' "$hdr" >> "$f"
-  for kv in "$@"; do printf '%s|%s|%s\n' "$rid" "${kv%%:*}" "${kv#*:}" >> "$f"; done
+  for kv in "$@"; do printf '%s|%s|%s%s\n' "$rid" "${kv%%:*}" "$mid" "${kv#*:}" >> "$f"; done
+  lm_age "$f" "$age"
+}
+
+# lm_plant_v3 <name> <age-min> <header|-> <secs:verdict:termination:key>... — current-format
+# rows with an explicit verdict and termination.
+lm_plant_v3() {
+  local name="$1" age="$2" hdr="$3" rid f it s v t; shift 3
+  rid="$(lm_rid)"; f="$(lm_dur_dir)/$name"
+  mkdir -p "$(lm_dur_dir)"; : > "$f"
+  [ "$hdr" = "-" ] || printf '#os %s\n' "$hdr" >> "$f"
+  for it in "$@"; do
+    s="${it%%:*}"; it="${it#*:}"; v="${it%%:*}"; it="${it#*:}"; t="${it%%:*}"; it="${it#*:}"
+    printf '%s|%s|%s|%s|%s\n' "$rid" "$s" "$v" "$t" "$it" >> "$f"
+  done
   lm_age "$f" "$age"
 }
 

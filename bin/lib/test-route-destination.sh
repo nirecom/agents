@@ -291,7 +291,7 @@ _trd_rank_before() {
 }
 
 # trd_viable_candidates <out-array> <ranked-array> <hard-max> — the SOLE
-# `S ⊆ T and lines < hard-max` predicate. It is computed independently of the
+# `S ⊆ T and lines < hard-max` (and, under --with-time, not time HARD) predicate. It is computed independently of the
 # verdict so review-tests can read it as a gap signal (C1).
 # Bash-3.2-compatible: writes via `eval` indirection instead of `local -n`
 # (namerefs are Bash-4.3+ and crash on macOS stock bash, #1486's class of
@@ -308,13 +308,16 @@ trd_viable_candidates() {
   for e in "${_trd_src_cur[@]+"${_trd_src_cur[@]}"}"; do
     lines="${e#*$'\t'}"
     lines="${lines%%$'\t'*}"
-    if [[ "$lines" -le "$hardmax" ]]; then
+    if [[ "$lines" -le "$hardmax" ]] && ! _trd_time_hard "$e"; then
       entry="$e"
       eval "$_trd_viable_name+=(\"\$entry\")"
     fi
   done
   return 0
 }
+
+# _trd_time_hard <entry> — the time HARD exclusion; never true unless time.sh prepared it.
+_trd_time_hard() { [[ "${TRD_TIME_READY:-0}" -eq 1 ]] && trd_time_is_hard "${1##*$'\t'}"; }
 
 # trd_decide <query-key> <self-exclude> <hard-max> — fills TRD_VERDICT /
 # TRD_REASON / TRD_TARGET / TRD_TARGET_LINES and keeps all three lists.
@@ -331,11 +334,12 @@ trd_decide() {
   trl_filter_candidates TRD_CANDIDATES "$qkey"
   trd_rank TRD_CANDIDATES
   trd_viable_candidates TRD_VIABLE TRD_CANDIDATES "$hardmax"
-  local e lines head extra
+  local e lines head extra size_ex=0
   for e in "${TRD_CANDIDATES[@]+"${TRD_CANDIDATES[@]}"}"; do
     lines="${e#*$'\t'}"
     lines="${lines%%$'\t'*}"
-    [[ "$lines" -gt "$hardmax" ]] && TRD_EXCLUDED+=("$e")
+    if [[ "$lines" -gt "$hardmax" ]]; then TRD_EXCLUDED+=("$e"); size_ex=1
+    elif _trd_time_hard "$e"; then TRD_EXCLUDED+=("$e"); fi
   done
   if [[ "${#TRD_VIABLE[@]}" -gt 0 ]]; then
     head="${TRD_VIABLE[0]}"
@@ -350,6 +354,7 @@ trd_decide() {
   elif [[ "${#TRD_CANDIDATES[@]}" -gt 0 ]]; then
     TRD_VERDICT="new"
     TRD_REASON="size-hard-limit"
+    [[ "$size_ex" -eq 0 ]] && TRD_REASON="time-hard-limit"
   else
     TRD_VERDICT="new"
     TRD_REASON="no-candidate"

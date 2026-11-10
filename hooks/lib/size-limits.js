@@ -13,6 +13,16 @@ const LIMITS = Object.freeze({
   outline: Object.freeze({ unit: "lines", warn: 100, hard: 200 }),
   detail: Object.freeze({ unit: "lines", warn: 300, hard: 500 }),
   progress: Object.freeze({ unit: "chars", warn: 400, hard: 600 }),
+  "test-time": Object.freeze({ unit: "seconds", warn: 60, hard: 150, role: "budget" }),
+});
+
+// Heavy test judgment parameters (#2932), read by bin/lib/test-heavy-judge.sh through
+// `print-size-limits --test-time-params`. samples must equal RUN_ALL_DUR_KEEP_PER_SERIES.
+const TEST_TIME = Object.freeze({
+  samples: 5,
+  minHardSamples: 3,
+  ratio: Object.freeze({ warn: 5, hard: 10 }),
+  floor: Object.freeze({ warn: 30, hard: 60 }),
 });
 
 const SCOPES = Object.freeze({
@@ -24,6 +34,7 @@ const SCOPES = Object.freeze({
   outline: "Plan artifact `<sid>-outline.md`",
   detail: "Plan artifact `<sid>-detail.md`",
   progress: "The `## Current state` section of `<sid>-session-progress.md`",
+  "test-time": "Median wall time of one top-level test file in the duration ledger — budget, judged by `bin/lib/test-heavy-judge.sh`",
 });
 
 const CURRENT_STATE_HEADING = /^## Current state[ \t]*$/;
@@ -61,6 +72,7 @@ function currentStateChars(text) {
 function measure(kind, text) {
   const limit = LIMITS[kind];
   if (!limit) throw new Error(`size-limits: unknown kind: ${kind}`);
+  if (limit.unit === "seconds") throw new Error(`size-limits: ${kind} is measured from the duration ledger, not from text`);
   return limit.unit === "chars" ? currentStateChars(text) : countLines(text);
 }
 
@@ -107,5 +119,5 @@ function isExemptRepoPath(rel) {
 }
 
 module.exports = {
-  LIMITS, SCOPES, countLines, currentStateChars, measure, judge, newlineDelta, codePointDelta, isExemptRepoPath,
+  LIMITS, SCOPES, TEST_TIME, countLines, currentStateChars, measure, judge, newlineDelta, codePointDelta, isExemptRepoPath,
 };

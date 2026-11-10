@@ -23,7 +23,7 @@ run_all_dur_counts() {
     run_all_dur_host_token >/dev/null
     run_all_dur_segments_into "$(run_all_dur_dir)" "$RUN_ALL_DUR_HOST_TOKEN"
     [ "${#RUN_ALL_DUR_SEGMENTS_OUT[@]}" -gt 0 ] || return 0
-    awk -v RID="$RUN_ALL_DUR_REPO_ID" -v MAXREC="$RUN_ALL_DUR_MAX_RECORDS" -v TOTAL="$radc_total" '
+    awk -v RID="$RUN_ALL_DUR_REPO_ID" -v MAXREC="$RUN_ALL_DUR_MAX_RECORDS" -v TOTAL="$radc_total" "$RUN_ALL_DUR_AWK_PARSE"'
 function close_seg(   k) {
     if (nseg > 0 && nseg * 2 < TOTAL) for (k in seen) cnt[k]++
     split("", seen)
@@ -32,13 +32,8 @@ function close_seg(   k) {
 {
     if (++nline > MAXREC) exit
     if (FILENAME != pf) { close_seg(); pf = FILENAME }
-    p1 = index($0, "|")
-    if (p1 == 0 || substr($0, 1, p1 - 1) != RID) next
-    r = substr($0, p1 + 1)
-    p2 = index(r, "|")
-    if (p2 == 0) next
-    k = substr(r, p2 + 1)
-    if (k == "" || index(k, "|") > 0) next
+    if (!dur_parse($0) || P_RID != RID) next
+    k = P_KEY
     if (!(k in seen)) { seen[k] = 1; nseg++ }
 }
 END {

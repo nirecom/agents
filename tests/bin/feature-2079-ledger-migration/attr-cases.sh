@@ -37,10 +37,14 @@ ca_report() {
 # ---- parent side --------------------------------------------------------------
 
 run_attr_cross_cases() {
-  local c r b body1 body3 snap
+  local c r b body1 body2 body3 snap
   dc_lib_ck n18/16; c="$(lm_cache)"
-  b="dur.2.T.${DC_D}"
-  body1="#os $CA_OLD;#run ${DC_D}T010000-11;R|1|o.sh;#os $DC_W;#run ${DC_D}T020000-12;R|2|c.sh;R|9|k.sh;"
+  b="$LM_CUR.T.${DC_D}"
+  body1="#os $CA_OLD;#run ${DC_D}T010000-11;R|1|PASS|completed|o.sh;#os $DC_W;#run ${DC_D}T020000-12;R|2|PASS|completed|c.sh;R|9|PASS|completed|k.sh;"
+  # A series keeps RUN_ALL_DUR_KEEP_PER_SERIES (5) records: the older o.sh row of ca_older stays
+  # beside the newer one (the reader still takes the newest), while k.sh rows of the losing
+  # attribute are never carried into the winner's base.
+  body2="#os $CA_OLD;#run ${DC_D}T000000-10;R|7|PASS|completed|o.sh;#run ${DC_D}T010000-11;R|1|PASS|completed|o.sh;#os $DC_W;#run ${DC_D}T020000-12;R|2|PASS|completed|c.sh;R|9|PASS|completed|k.sh;"
   lm_run "$c" ca_round1; lm_run "$c" dc_cons
   r="$(lm_run "$c" ca_report)"
   ck "n18/16/newest-provenance-wins-across-attributes" "9 1 2" "$(lm_v "$r" vals)"
@@ -51,14 +55,14 @@ run_attr_cross_cases() {
   lm_run "$c" ca_older; lm_run "$c" dc_cons
   r="$(lm_run "$c" ca_report)"
   ck "n18/16/round2-older-input-no-regression" "9 1 2" "$(lm_v "$r" vals)"
-  ck "n18/16/round2-bases-unchanged" "$body1|${b}T020000-01.log ${b}T020000-02.log" \
+  ck "n18/16/round2-bases-unchanged" "$body2|${b}T020000-01.log ${b}T020000-02.log" \
     "$(lm_v "$r" body)|$(lm_v "$r" ls)"
 
   lm_run "$c" ca_newer_old
   ck "n18/16/round3-reader-before-consolidation" "4 1 2" "$(lm_v "$(lm_run "$c" ca_report)" vals)"
   lm_run "$c" dc_cons
   r="$(lm_run "$c" ca_report)"
-  body3="#os $CA_OLD;#run ${DC_D}T010000-11;R|1|o.sh;#run ${DC_D}T030000-13;R|4|k.sh;#os $DC_W;#run ${DC_D}T020000-12;R|2|c.sh;"
+  body3="#os $CA_OLD;#run ${DC_D}T000000-10;R|7|PASS|completed|o.sh;#run ${DC_D}T010000-11;R|1|PASS|completed|o.sh;#run ${DC_D}T030000-13;R|4|PASS|completed|k.sh;#os $DC_W;#run ${DC_D}T020000-12;R|2|PASS|completed|c.sh;"
   ck "n18/16/round3-newer-old-attribute-wins" "4 1 2" "$(lm_v "$r" vals)"
   ck "n18/16/round3-key-moves-to-old-attribute-base" "$body3" "$(lm_v "$r" body)"
   ck "n18/16/round3-no-duplicate-no-loss" "1|${b}T030000-01.log ${b}T030000-02.log" \
@@ -72,6 +76,6 @@ run_attr_cross_cases() {
   lm_run "$c" ca_reversed; lm_run "$c" dc_cons
   r="$(lm_run "$c" ca_report)"
   ck "n18/16/reversed-newer-old-attribute-wins" "9 - -" "$(lm_v "$r" vals)"
-  ck "n18/16/reversed-loser-attribute-gets-no-base" "#os $CA_OLD;#run ${DC_D}T020000-22;R|9|k.sh;|${b}T020000-01.log" \
+  ck "n18/16/reversed-loser-attribute-gets-no-base" "#os $CA_OLD;#run ${DC_D}T020000-22;R|9|PASS|completed|k.sh;|${b}T020000-01.log" \
     "$(lm_v "$r" body)|$(lm_v "$r" ls)"
 }

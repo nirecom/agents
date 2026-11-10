@@ -11,7 +11,7 @@
 c21_close_twice() {
   local seg closed
   run_all_dur_writer_init "$LM_REPO"
-  run_all_dur_append "a.sh" 3
+  run_all_dur_append "a.sh" 3 PASS completed
   seg="$RUN_ALL_DUR_SEGMENT"
   if ! command -v run_all_dur_close >/dev/null 2>&1; then say have no; return 0; fi
   say have yes
@@ -22,7 +22,7 @@ c21_close_twice() {
   say write_ok "${RUN_ALL_DUR_WRITE_OK:-unset}"
   local before; before="$(lm_ls)|$(lm_sum "$closed")"
   run_all_dur_close; say second_rc "$?"
-  run_all_dur_append "b.sh" 4
+  run_all_dur_append "b.sh" 4 PASS completed
   say after_same "$([ "$before" = "$(lm_ls)|$(lm_sum "$closed")" ] && echo 1 || echo 0)"
   say vals "$(lm_get a.sh b.sh)"
 }

@@ -40,7 +40,8 @@ fi
 
 # A finished run's segment carries the closed marker (#2079 S7b); either state is one run's own.
 SEG_RE='^dur\.[0-9]+\.[A-Za-z0-9]{16}\.[0-9]{8}T[0-9]{6}-[0-9]{1,10}(\.closed)?\.log$'
-REC_RE='^[A-Za-z0-9]{16}\|[0-9]{1,4}\|[^|]+$'
+# v3 record (#2932): rid|secs|verdict|termination|key.
+REC_RE='^[A-Za-z0-9]{16}\|[0-9]{1,4}\|[A-Za-z0-9?_-]{1,16}\|[A-Za-z0-9?_-]{1,16}\|[^|]+$'
 
 seg_names() {
     local f
@@ -136,7 +137,7 @@ plant_old() {
     fx_ledger_clear
     mkdir -p "$(fx_ledger_dir)"
     for ((i = 1; i <= $1; i++)); do
-        printf '#os %s\n%s|%s|closed/%s.sh\n' "$N7_ATTR" "$N7_RID" "$i" "$i" > "$(old_seg "$i" .closed)"
+        printf '#os %s\n%s|%s|PASS|completed|closed/%s.sh\n' "$N7_ATTR" "$N7_RID" "$i" "$i" > "$(old_seg "$i" .closed)"
     done
     return 0
 }
@@ -156,7 +157,7 @@ else
     for ((i = 1; i <= PLANT; i++)); do
         [ -e "$(old_seg "$i" .closed)" ] && LEFT=$((LEFT + 1))
     done
-    READABLE="$(fx_ledger_cat | awk -F'|' -v n="$PLANT" 'NF == 3 && $3 ~ /^closed\// { k = $3; sub(/^closed\//, "", k); sub(/\.sh$/, "", k); if (k + 0 >= 1 && k + 0 <= n && $2 == k) seen[k] = 1 } END { c = 0; for (k in seen) c++; print c + 0 }')"
+    READABLE="$(fx_ledger_cat | awk -F'|' -v n="$PLANT" 'NF == 5 && $5 ~ /^closed\// { k = $5; sub(/^closed\//, "", k); sub(/\.sh$/, "", k); if (k + 0 >= 1 && k + 0 <= n && $2 == k) seen[k] = 1 } END { c = 0; for (k in seen) c++; print c + 0 }')"
     if [ "$BASES" = "1" ] && [ "$READABLE" = "$PLANT" ]; then
         fx_pass "N7. $PLANT closed segments became exactly one base holding all $PLANT keys"
     else
@@ -220,8 +221,8 @@ C_CLASS="$(fx_ledger_cat | grep -cE "$REC_RE" || true)"
 C_DISTINCT="$(seg_names | LC_ALL=C sort -u | grep -c . || true)"
 # Exactly two writers x three tests: any key seen a number of times other than 2 means a
 # record was lost or duplicated, which a class-only assertion would report as healthy.
-C_BADKEYS="$(fx_ledger_cat | awk -F'|' 'NF == 3 { n[$3]++ } END { c = 0; for (k in n) if (n[k] != 2) c++; print c + 0 }')"
-C_KEYS="$(fx_ledger_cat | awk -F'|' 'NF == 3 { n[$3] = 1 } END { c = 0; for (k in n) c++; print c + 0 }')"
+C_BADKEYS="$(fx_ledger_cat | awk -F'|' 'NF == 5 { n[$5]++ } END { c = 0; for (k in n) if (n[k] != 2) c++; print c + 0 }')"
+C_KEYS="$(fx_ledger_cat | awk -F'|' 'NF == 5 { n[$5] = 1 } END { c = 0; for (k in n) c++; print c + 0 }')"
 
 if dur_missing "N10. two concurrent runners write two disjoint segments"; then :
 elif [ "$C_SEGS" = "2" ] && [ "$C_DISTINCT" = "2" ] && [ "$C_LINES" = "6" ] && \
@@ -249,7 +250,7 @@ SP_OUT="$FX_TMP_ROOT/sp.out"; SP_ERR="$FX_TMP_ROOT/sp.err"
 fx_ledger_clear
 fx_exec "$SP" 90 "$SP_OUT" "$SP_ERR" -j 2 --all
 SP_EXEC="$(fx_contract_field "$SP_OUT" EXECUTED)"
-SP_KEY="$(fx_ledger_cat | awk -F'|' 'NF == 3 && $3 ~ /with space\.sh$/ { print $3 }' | head -n 1)"
+SP_KEY="$(fx_ledger_cat | awk -F'|' 'NF == 5 && $5 ~ /with space\.sh$/ { print $5 }' | head -n 1)"
 
 if dur_missing "N15. a path with a space is keyed verbatim"; then :
 elif [ "$SP_EXEC" = "2" ] && [ -n "$SP_KEY" ]; then
