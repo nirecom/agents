@@ -40,11 +40,17 @@ OUT="$ROOT/counts.tsv"
 
 seg() { printf '%s/dur.%s.%s.20200101T%06d-1.log\n' "$LEDGER" "$RUN_ALL_DUR_SCHEMA" "${2:-$TOK}" "$1"; }
 fresh() { rm -rf "$LEDGER"; mkdir -p "$LEDGER"; }
-# rec <file> <rid> <key>... — one documented `repo_id|secs|key` record per key.
+# rec <file> <rid> <key>... — one documented v3 `repo_id|secs|verdict|termination|key` record per key.
 rec() {
   local f="$1" r="$2" k
   shift 2
-  for k in "$@"; do printf '%s|1|%s\n' "$r" "$k" >>"$f"; done
+  for k in "$@"; do printf '%s|1|PASS|completed|%s\n' "$r" "$k" >>"$f"; done
+}
+# rec_vt <file> <rid> <verdict> <termination> <key>... — v3 records with an explicit verdict/termination.
+rec_vt() {
+  local f="$1" r="$2" v="$3" t="$4" k
+  shift 4
+  for k in "$@"; do printf '%s|1|%s|%s|%s\n' "$r" "$v" "$t" "$k" >>"$f"; done
 }
 
 counts_ready() {
@@ -140,6 +146,19 @@ if counts_ready "pipeless-lines-ignored"; then
 fi
 case_end
 
+case_begin "counts-key-is-fifth-field" "bin/lib/run-all-duration-counts.sh"
+if counts_ready "counts-key-is-fifth-field"; then
+  fresh
+  if [ "${RUN_ALL_DUR_SCHEMA:-}" = "3" ]; then pass "counts-key-is-fifth-field: ledger schema is v3"
+  else fail "counts-key-is-fifth-field" "RUN_ALL_DUR_SCHEMA=[${RUN_ALL_DUR_SCHEMA:-}] want 3 (v3 not implemented)"; fi
+  rec_vt "$(seg 1)" "$RID" FAIL completed k1
+  rec_vt "$(seg 1)" "$RID" - timeout k1 k2
+  rec_vt "$(seg 2)" "$RID" '?' '?' k1
+  run_counts 100
+  expect_counts "counts-key-is-fifth-field: verdict/termination fields are never a key; a key per segment counts once" "k1=2 k2=1"
+fi
+case_end
+
 case_begin "no-ledger-dir-is-empty" "bin/lib/run-all-duration-counts.sh"
 if counts_ready "no-ledger-dir-is-empty"; then
   rm -rf "$LEDGER"
@@ -176,7 +195,7 @@ case_begin "record-cap" "bin/lib/run-all-duration-counts.sh"
 if counts_ready "record-cap"; then
   fresh
   rec "$(seg 1)" "$RID" beyond/cutoff.sh
-  awk -v n=$((MAX_REC + 50)) -v rid="$RID" 'BEGIN { for (i = 0; i < n; i++) printf "%s|1|pad/%d.sh\n", rid, i }' >"$(seg 2)"
+  awk -v n=$((MAX_REC + 50)) -v rid="$RID" 'BEGIN { for (i = 0; i < n; i++) printf "%s|1|PASS|completed|pad/%d.sh\n", rid, i }' >"$(seg 2)"
   run_counts $((MAX_REC * 10))
   case " $GOT " in
     *" beyond/cutoff.sh="*) fail "record-cap" "a key reachable only past RUN_ALL_DUR_MAX_RECORDS=$MAX_REC was counted" ;;
@@ -189,7 +208,7 @@ case_end
 case_begin "writer-segments-counted" "bin/lib/run-all-duration-counts.sh"
 if counts_ready "writer-segments-counted"; then
   fresh
-  W='. "$1"; . "$2"; run_all_dur_writer_init "$3"; shift 3; for k in "$@"; do run_all_dur_append "$k" 2; done'
+  W='. "$1"; . "$2"; run_all_dur_writer_init "$3"; shift 3; for k in "$@"; do run_all_dur_append "$k" 2 PASS completed; done'
   bash -c "$W" _ "$PAR_LIB" "$DUR_LIB" "$REPO" w/a.sh w/b.sh
   bash -c "$W" _ "$PAR_LIB" "$DUR_LIB" "$REPO" w/a.sh
   run_counts 100
@@ -236,10 +255,10 @@ plant_lookalikes() {
   while [ "$i" -le $((MAX_SEG + 3)) ]; do rec "$(seg "$i")" "$RID" "filler/$i"; i=$((i + 1)); done
   rec "$(seg 1)" "$RID" edge/out
   rec "$(seg $((MAX_SEG + 3)))" "$RID" edge/newest
-  printf '%s|9|edge/newest\n' "$RID" >"$(seg 9999 "$OTHER_TOK")"
-  printf '%s|9|edge/newest\n' "$RID" >"$LEDGER/dur.$((RUN_ALL_DUR_SCHEMA + 1)).$TOK.20200101T999999-1.log"
+  printf '%s|9|PASS|completed|edge/newest\n' "$RID" >"$(seg 9999 "$OTHER_TOK")"
+  printf '%s|9|PASS|completed|edge/newest\n' "$RID" >"$LEDGER/dur.$((RUN_ALL_DUR_SCHEMA + 1)).$TOK.20200101T999999-1.log"
   mkdir -p "$LEDGER/dur.$RUN_ALL_DUR_SCHEMA.$TOK.29991231T000000-1.log"
-  printf '%s|9|edge/newest\n' "$RID" >"$LEDGER/dur.$RUN_ALL_DUR_SCHEMA.$TOK.20200101T999999-1.txt"
+  printf '%s|9|PASS|completed|edge/newest\n' "$RID" >"$LEDGER/dur.$RUN_ALL_DUR_SCHEMA.$TOK.20200101T999999-1.txt"
 }
 # want_segment_names — the newest MAX_SEG own segment basenames, newest first.
 want_segment_names() {

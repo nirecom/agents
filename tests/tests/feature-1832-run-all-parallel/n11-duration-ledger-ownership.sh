@@ -53,7 +53,7 @@ V_EXEC="$(fx_contract_field "$V_OUT" EXECUTED)"
 
 # owners_of <segment> — the sorted, unique owner letters present in that file.
 owners_of() {
-    awk -F'|' 'NF == 3 { n = split($3, a, /[\/\\]/); print substr(a[n], 1, 1) }' "$1" |
+    awk -F'|' 'NF == 5 { n = split($5, a, /[\/\\]/); print substr(a[n], 1, 1) }' "$1" |
         LC_ALL=C sort -u | tr -d '\n'
 }
 
@@ -73,7 +73,7 @@ done
 OWNER_SET="$(printf '%s' "$OWNER_SET" | fold -w1 | LC_ALL=C sort -u | tr -d '\n')"
 
 LINES="$(fx_ledger_lines)"
-KEYS="$(fx_ledger_cat | awk -F'|' 'NF == 3 { k[$3] = 1 } END { c = 0; for (x in k) c++; print c + 0 }')"
+KEYS="$(fx_ledger_cat | awk -F'|' 'NF == 5 { k[$5] = 1 } END { c = 0; for (x in k) c++; print c + 0 }')"
 
 # ===========================================================================
 # N39 — the fixture actually put two concurrent runners on the same ledger
@@ -103,8 +103,8 @@ if dur_missing "N40. the ownership helper reports a mixed segment as mixed"; the
 else
     MIX="$FX_TMP_ROOT/mixed-segment.log"
     {
-        printf 'AAAAAAAAAAAAAAAA|1|tests/u9.sh\n'
-        printf 'AAAAAAAAAAAAAAAA|2|tests/v9.sh\n'
+        printf 'AAAAAAAAAAAAAAAA|1|PASS|completed|tests/u9.sh\n'
+        printf 'AAAAAAAAAAAAAAAA|2|PASS|completed|tests/v9.sh\n'
     } > "$MIX"
     MIX_O="$(owners_of "$MIX")"
     if [ "$MIX_O" = "uv" ]; then

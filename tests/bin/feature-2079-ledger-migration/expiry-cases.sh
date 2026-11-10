@@ -82,7 +82,7 @@ run_expiry_winner_cases() {
   c="$(lm_cache)"
   lm_run "$c" c20_layout; lm_run "$c" dc_cons
   ck "n20/3/one-run-per-provenance-oldest-first" \
-    "#os $DC_L;#run ${DC_D}T010000-1;R|1|a.sh;#run ${DC_D}T020000-2;R|2|b.sh;#run ${DC_D}T030000-3;R|3|c.sh;" \
+    "#os $DC_L;#run ${DC_D}T010000-1;R|1|PASS|completed|a.sh;#run ${DC_D}T020000-2;R|2|PASS|completed|b.sh;#run ${DC_D}T030000-3;R|3|PASS|completed|c.sh;" \
     "$(lm_run "$c" dc_body)"
   c="$(lm_cache)"
   lm_run "$c" c20_layout_shared; lm_run "$c" dc_cons

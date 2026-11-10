@@ -2,12 +2,13 @@
 "use strict";
 // bin/print-size-limits — render the size limits out of their SSOT, hooks/lib/size-limits.js.
 // --markdown-table prints the body of the size-limits generated block in rules/coding/file-split.md;
-// --get <kind> prints "<warn> <hard>" for shell and Python callers.
+// --get <kind> prints "<warn> <hard>" for shell and Python callers;
+// --test-time-params prints the heavy test judgment parameters as one `name=value` line.
 
 const path = require("path");
-const { LIMITS, SCOPES } = require(path.join(__dirname, "..", "hooks", "lib", "size-limits.js"));
+const { LIMITS, SCOPES, TEST_TIME } = require(path.join(__dirname, "..", "hooks", "lib", "size-limits.js"));
 
-const USAGE = "usage: print-size-limits --markdown-table | --get <kind>";
+const USAGE = "usage: print-size-limits --markdown-table | --get <kind> | --test-time-params";
 
 function main(argv) {
   if (argv.length === 1 && argv[0] === "--markdown-table") {
@@ -25,6 +26,11 @@ function main(argv) {
       return 2;
     }
     process.stdout.write(`${l.warn} ${l.hard}\n`);
+    return 0;
+  }
+  if (argv.length === 1 && argv[0] === "--test-time-params") {
+    const t = TEST_TIME;
+    process.stdout.write(`samples=${t.samples} min_hard=${t.minHardSamples} ratio_warn=${t.ratio.warn} ratio_hard=${t.ratio.hard} floor_warn=${t.floor.warn} floor_hard=${t.floor.hard}\n`);
     return 0;
   }
   process.stderr.write(USAGE + "\n");

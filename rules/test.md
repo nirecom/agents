@@ -45,6 +45,9 @@ Skip path: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"` symmetrically 
 ## Test Execution Timeout
 
 Always run tests with a timeout (default **120 seconds**). Tests that hang block the entire workflow.
+`tests/run-all.sh` kills a JS test file at its registry `timeoutSeconds` (180 s).
+A test file's time budget is the `test-time` row of [coding/file-split.md](coding/file-split.md); its numbers live there only.
+Keep the budget's HARD below the kill limit, so the design budget fires before the hang stop.
 
 See [test/macos-timeout.md](test/macos-timeout.md) for the portable `run_with_timeout` wrapper (macOS-compatible).
 

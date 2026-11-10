@@ -39,5 +39,7 @@ STE-4. Only when case-marker embedding is requested: run `bash "$AGENTS_MAIN_ROO
 - `--stale-months N` (default 3) moves the delete-time staleness boundary only.
 - `--dup-groups` is read-only; combining it with explicit `--apply`, `--fix-headers`, or `--format json` exits 2.
 - `--dup-groups` covers the whole corpus and emits the same TSV from either entrypoint, so call one.
+- `--heavy` lists every test file's heavy test tier from this host's duration ledger (HARD, then WARN, median descending); it is read-only, follows the same combination rule as `--dup-groups`, and either entrypoint emits the same TSV.
+- How to split a heavy test file: `skills/_shared/test-design/append-vs-new.md`.
 - Missing, duplicated, late, and format-invalid headers become `skip` rows by reason; they never join a group.
 - `key` and `files` are escaped; the decoding rule is in the `bin/lib/test-dup-group.sh` header.

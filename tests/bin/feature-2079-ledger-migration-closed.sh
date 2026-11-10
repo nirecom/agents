@@ -29,6 +29,10 @@ case_begin "n21-close-direct" "bin/lib/run-all-durations.sh"
 run_closed_direct_cases
 case_end
 
+case_begin "n23-harvest-verdict-termination" "tests/run-all.sh"
+run_v3_harvest_cases
+case_end
+
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -6,7 +6,7 @@
 # Raw seconds are stored and the tier is a READ-time classification, so re-cutting the tier
 # granularity must NOT bump RUN_ALL_DUR_SCHEMA — only a record structure change does.
 
-RUN_ALL_DUR_SCHEMA=2
+RUN_ALL_DUR_SCHEMA=3
 RUN_ALL_DUR_DIRNAME="durations"
 # Invariant: parallel runners' open segments + segments closed since the last start +
 # abandoned ones (<= 6h) + consolidating leftovers + bases (one per OS attribute) stay
@@ -19,6 +19,28 @@ RUN_ALL_DUR_MAX_SECS_DIGITS=4
 RUN_ALL_DUR_TOKEN_WIDTH=16
 RUN_ALL_DUR_TIER_UNMEASURED=99
 
+# The one row parser every ledger awk program is prefixed with: a v3 row is
+# `<rid16>|<secs>|<verdict>|<termination>|<key>`; on success it sets P_RID, P_SECS, P_VERDICT,
+# P_TERM and P_KEY. An unknown verdict/termination token passes (forward compatible).
+RUN_ALL_DUR_AWK_PARSE='
+function dur_tok(t) { return length(t) >= 1 && length(t) <= '"$RUN_ALL_DUR_TOKEN_WIDTH"' && t ~ /^[A-Za-z0-9?_-]+$/ }
+function dur_parse(l,   p, r) {
+    if (length(l) > '"$RUN_ALL_DUR_MAX_LINE_BYTES"') return 0
+    p = index(l, "|"); if (p == 0) return 0
+    P_RID = substr(l, 1, p - 1); r = substr(l, p + 1)
+    p = index(r, "|"); if (p == 0) return 0
+    P_SECS = substr(r, 1, p - 1); r = substr(r, p + 1)
+    p = index(r, "|"); if (p == 0) return 0
+    P_VERDICT = substr(r, 1, p - 1); r = substr(r, p + 1)
+    p = index(r, "|"); if (p == 0) return 0
+    P_TERM = substr(r, 1, p - 1); P_KEY = substr(r, p + 1)
+    if (length(P_RID) != '"$RUN_ALL_DUR_TOKEN_WIDTH"' || P_RID !~ /^[A-Za-z0-9]+$/) return 0
+    if (P_SECS !~ /^[0-9]+$/ || length(P_SECS) > '"$RUN_ALL_DUR_MAX_SECS_DIGITS"') return 0
+    if (!dur_tok(P_VERDICT) || !dur_tok(P_TERM)) return 0
+    return P_KEY != "" && index(P_KEY, "|") == 0
+}
+'
+
 # Outputs; declared so a `set -u` caller may read them even after a failed call.
 RUN_ALL_DUR_REASON=""
 RUN_ALL_DUR_REPO_ID=""
@@ -30,6 +52,9 @@ RUN_ALL_DUR_TIER_OUT=""
 RUN_ALL_DUR_SEGMENTS_READ=0
 RUN_ALL_DUR_KEY_OUT=""
 RUN_ALL_DUR_SEGMENTS_OUT=()
+RUN_ALL_DUR_FR_VERDICT="?"
+RUN_ALL_DUR_FR_TERM="?"
+_RADT_OUT=""
 
 # --- identity ---------------------------------------------------------------
 
@@ -197,7 +222,7 @@ run_all_dur_lookup() {
     fi
 
     # Only the 16-alnum repo id and a numeric cap cross into awk; segment text never does.
-    if LC_ALL=C awk -v RID="$RUN_ALL_DUR_REPO_ID" -v MAXREC="$RUN_ALL_DUR_MAX_RECORDS" '
+    if LC_ALL=C awk -v RID="$RUN_ALL_DUR_REPO_ID" -v MAXREC="$RUN_ALL_DUR_MAX_RECORDS" "$RUN_ALL_DUR_AWK_PARSE"'
 function merge(   z) {
     for (z in cur) if (!(z in secs)) secs[z] = cur[z]
     split("", cur)
@@ -215,16 +240,8 @@ NR == FNR {
     if (++nline > MAXREC) exit
     if (FILENAME != pf) { merge(); pf = FILENAME }
     if (substr($0, 1, 1) == "#") next
-    p1 = index($0, "|")
-    if (p1 == 0 || substr($0, 1, p1 - 1) != RID) next
-    r = substr($0, p1 + 1)
-    p2 = index(r, "|")
-    if (p2 == 0) next
-    s = substr(r, 1, p2 - 1)
-    if (s !~ /^[0-9][0-9]?[0-9]?[0-9]?$/) next
-    k = substr(r, p2 + 1)
-    if (k == "" || index(k, "|") > 0 || !(k in want)) next
-    cur[k] = s
+    if (!dur_parse($0) || P_RID != RID || !(P_KEY in want)) next
+    cur[P_KEY] = P_SECS
 }
 END {
     merge()
@@ -285,9 +302,41 @@ run_all_dur_close() {
     return 0
 }
 
-# run_all_dur_append <key> <secs> — one `<repo_id>|<secs>|<key>` line, or nothing at all.
+# run_all_dur_file_result <state> — `<verdict> <termination>` of a run-all file state; the table's
+# SSOT is docs/architecture/claude-code/test-result-contract.md (the "file result" section).
+# The `_into` form is fork-free: RUN_ALL_DUR_FR_VERDICT / RUN_ALL_DUR_FR_TERM.
+run_all_dur_file_result_into() {
+    RUN_ALL_DUR_FR_VERDICT="-"
+    case "${1:-}" in
+        PASS|FAIL|SKIP) RUN_ALL_DUR_FR_VERDICT="$1"; RUN_ALL_DUR_FR_TERM=completed ;;
+        TIMEOUT) RUN_ALL_DUR_FR_TERM=timeout ;;
+        UNRUNNABLE) RUN_ALL_DUR_FR_TERM=unrunnable ;;
+        UNSUPPORTED) RUN_ALL_DUR_FR_TERM=unsupported ;;
+        *) RUN_ALL_DUR_FR_VERDICT="?"; RUN_ALL_DUR_FR_TERM="?" ;;
+    esac
+    return 0
+}
+run_all_dur_file_result() {
+    run_all_dur_file_result_into "${1:-}"
+    printf '%s %s\n' "$RUN_ALL_DUR_FR_VERDICT" "$RUN_ALL_DUR_FR_TERM"
+}
+
+# _run_all_dur_token_into <value> — fork-free: the value when it is a valid row token, else
+# `?`, in _RADT_OUT.
+_run_all_dur_token_into() {
+    _RADT_OUT="?"
+    case "${1:-}" in ''|*[!A-Za-z0-9?_-]*) return 0 ;; esac
+    [ "${#1}" -le "$RUN_ALL_DUR_TOKEN_WIDTH" ] && _RADT_OUT="$1"
+    return 0
+}
+
+# run_all_dur_append <key> <secs> [<verdict> <termination>] — one
+# `<repo_id>|<secs>|<verdict>|<termination>|<key>` line, or nothing at all; an invalid
+# verdict or termination is recorded as `?` rather than dropping the row.
 run_all_dur_append() {
-    local key="${1:-}" secs="${2:-}" LC_ALL=C LC_CTYPE=C
+    local key="${1:-}" secs="${2:-}" v t LC_ALL=C LC_CTYPE=C
+    _run_all_dur_token_into "${3:-}"; v="$_RADT_OUT"
+    _run_all_dur_token_into "${4:-}"; t="$_RADT_OUT"
     [ "$RUN_ALL_DUR_WRITE_OK" -eq 1 ] || return 0
     [ -n "$RUN_ALL_DUR_SEGMENT" ] || return 0
     case "$secs" in ''|*[!0-9]*) return 0 ;; esac
@@ -298,7 +347,7 @@ run_all_dur_append() {
     [ "${#RUN_ALL_DUR_REPO_ID}" -eq "$RUN_ALL_DUR_TOKEN_WIDTH" ] || return 0
     # A consolidation round may have taken an abandoned-looking segment; restart it headed.
     [ -f "$RUN_ALL_DUR_SEGMENT" ] || printf '#os %s\n' "$RUN_ALL_DUR_OS_ATTR" >"$RUN_ALL_DUR_SEGMENT" 2>/dev/null
-    printf '%s|%s|%s\n' "$RUN_ALL_DUR_REPO_ID" "$secs" "$key" \
+    printf '%s|%s|%s|%s|%s\n' "$RUN_ALL_DUR_REPO_ID" "$secs" "$v" "$t" "$key" \
         >>"$RUN_ALL_DUR_SEGMENT" 2>/dev/null || true
     return 0
 }

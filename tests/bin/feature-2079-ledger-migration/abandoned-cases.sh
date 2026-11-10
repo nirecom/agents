@@ -31,14 +31,14 @@ c19_misjudged() {
   RUN_ALL_DUR_WRITE_OK=1; RUN_ALL_DUR_OS_ATTR="$DC_L"
   dc_cons
   say renamed "$([ -e "$RUN_ALL_DUR_SEGMENT" ] && echo 0 || echo 1)"
-  run_all_dur_append "late.sh" 6
+  run_all_dur_append "late.sh" 6 PASS completed
   say head "$(head -n 1 "$RUN_ALL_DUR_SEGMENT" 2>/dev/null)"
 }
 
 c19_late_line() { dc_plant "${DC_D}T010000-31.closed" 30 "#os $DC_L" 1:a.sh; }
 c19_cons_seam() {
   run_all_dur_before_delete() {
-    case "$1" in *-31.consolidating.log) printf '%s|7|late.sh\n' "$(lm_rid)" >> "$1" ;; esac
+    case "$1" in *-31.consolidating.log) printf '%s|7|PASS|completed|late.sh\n' "$(lm_rid)" >> "$1" ;; esac
     return 0
   }
   dc_cons
@@ -109,7 +109,7 @@ run_abandon_boundary_cases() {
   lm_run "$c" c19_boundary; lm_run "$c" dc_cons
   r="$(lm_run "$c" dc_report a.sh b.sh)"
   ck "n19/1/365-min-open-consolidated-355-kept" \
-    "dur.2.T.${DC_D}T010000-01.log dur.2.T.${DC_D}T020000-22.log|1 2" "$(lm_v "$r" ls)|$(lm_v "$r" vals)"
+    "$LM_CUR.T.${DC_D}T010000-01.log $LM_CUR.T.${DC_D}T020000-22.log|1 2" "$(lm_v "$r" ls)|$(lm_v "$r" vals)"
   c="$(lm_cache)"
   r="$(lm_run "$c" c19_misjudged)"
   # The header check below only means something once the round really took the segment.
@@ -126,7 +126,7 @@ run_abandon_tight_boundary_cases() {
   lm_run "$c" dc_cons
   r="$(lm_run "$c" dc_report c.sh d.sh)"
   ck "n19/1b/361-min-open-consolidated-359-kept" \
-    "dur.2.T.${DC_D}T030000-01.log dur.2.T.${DC_D}T040000-25.log|1|3 4" "$(lm_v "$r" ls)|$(lm_v "$r" nb)|$(lm_v "$r" vals)"
+    "$LM_CUR.T.${DC_D}T030000-01.log $LM_CUR.T.${DC_D}T040000-25.log|1|3 4" "$(lm_v "$r" ls)|$(lm_v "$r" nb)|$(lm_v "$r" vals)"
   ck "n19/1b/359-min-open-unchanged" "$before" "$(lm_v "$(lm_run "$c" c19_tight_sum)" sum)"
   [ "$before" != "none" ] || fail "n19/1b/fixture-planted" "359-min segment missing before the round"
 }

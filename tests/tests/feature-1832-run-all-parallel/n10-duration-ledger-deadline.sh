@@ -26,7 +26,7 @@ dur_missing() {
 # key_secs <basename> — the seconds recorded for that test, "(none)" when unrecorded.
 key_secs() {
     fx_ledger_cat | awk -F'|' -v b="$1" '
-        NF == 3 { n = split($3, a, /[\/\\]/)
+        NF == 5 { n = split($5, a, /[\/\\]/)
                   if (a[n] == b) { print $2; found = 1; exit } }
         END { if (!found) print "(none)" }'
 }

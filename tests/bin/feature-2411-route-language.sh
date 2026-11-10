@@ -154,14 +154,15 @@ RT_SRC_Q=(src/r.ps1 "src/rm.sh,src/rm.ps1" docs/r.md)
 RT_TF_Q=("$T/rt-probe.sh" "$T/rtm.sh" "$T/rtd.sh")
 
 # run_q <flag> <query>... — one helper run. Sets Q_RC Q_OUT Q_ERR. Q_PATH replaces PATH;
-# Q_WITH=1 adds --with-language.
-Q_RC=0; Q_OUT=""; Q_ERR=""; Q_PATH=""; Q_WITH=0
+# Q_WITH=1 adds --with-language; Q_TIME=1 adds --with-time.
+Q_RC=0; Q_OUT=""; Q_ERR=""; Q_PATH=""; Q_WITH=0; Q_TIME=0
 run_q() {
   local flag="$1" q
   shift
   local -a args=(--root "$REPO")
   for q in "$@"; do args+=("$flag" "$q"); done
   [ "$Q_WITH" = 1 ] && args+=(--with-language)
+  [ "$Q_TIME" = 1 ] && args+=(--with-time)
   Q_RC=0
   (
     cd "$NEUTRAL_CWD" || exit 99
@@ -226,7 +227,11 @@ run_q --test-file "${TF_Q[@]}"; N_TF="$Q_OUT"; N_TF_RC="$Q_RC"; N_TF_ERR="$Q_ERR
 Q_WITH=1
 run_q --sources "${SRC_Q[@]}"; F_SRC="$Q_OUT"; F_SRC_RC="$Q_RC"
 run_q --test-file "${TF_Q[@]}"; F_TF="$Q_OUT"; F_TF_RC="$Q_RC"
+Q_TIME=1
+run_q --sources "${SRC_Q[@]}"; TL_SRC="$Q_OUT"; TL_SRC_RC="$Q_RC"
 Q_WITH=0
+run_q --sources "${SRC_Q[@]}"; T_SRC="$Q_OUT"; T_SRC_RC="$Q_RC"
+Q_TIME=0
 PWSH_STUB_DIR="$(stub_dir "$TMPBASE/pwsh-stub" pwsh)"
 RP_SRC=""; RP_RC=""; R_SRC=""; R_TF=""; R_RC=""; R_ERR=""; R_RAN=0
 if [ -n "$BASE_PATH" ]; then

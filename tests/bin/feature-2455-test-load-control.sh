@@ -86,7 +86,7 @@ else
     fail "GRP1 case file set mismatch — present-but-unsourced: [${GRP_UNSOURCED:-none}] sourced-but-missing: [${GRP_ABSENT:-none}]"
 fi
 # PLAN1 — the entries' CASE1 lists together still cover every planned case id.
-CASE_PLANNED="FC1 FC2 FC3 FC4 EQ1 C1 C2 C3 C3b C4 C5 C6 C7 C8 C9 C10 C11 C12 C13 \
+CASE_PLANNED="FC1 FC2 FC3 FC4 FC5 EQ1 C1 C2 C3 C3b C4 C5 C6 C7 C8 C9 C10 C11 C12 C13 \
 L1 L2 L3 L4 L5 L6 L7 L8 L9 L10 L11 L12 L13 L14 L15 L16 L17 L18 LS1 LS2 LS3 LS4 LS5 \
 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 CPU1 CPU2 CPU3 CPU5 CPU7 AC1 AC2 AC3 AC7 AC8 RF1 RF2"
 CASE_CLAIMED=" $(sed -n 's/^entry_finish "[^"]*" "[^"]*" "\(.*\)"$/\1/p' "${SPLIT_ENTRIES[@]}" | tr '\n' ' ') "
@@ -104,4 +104,4 @@ else
 fi
 case_end
 
-entry_finish "${BASH_SOURCE[0]}" "bin/find-tests-for-source.sh" "FC1 FC2 FC3 FC4 RF1 RF2"
+entry_finish "${BASH_SOURCE[0]}" "bin/find-tests-for-source.sh" "FC1 FC2 FC3 FC4 FC5 RF1 RF2"

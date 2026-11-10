@@ -38,7 +38,7 @@ lib_missing() {
     return 0
 }
 
-SCHEMA="${RUN_ALL_DUR_SCHEMA:-2}"
+SCHEMA="${RUN_ALL_DUR_SCHEMA:-1}"
 HOST_TOK=""; RID=""; ATTR=""
 AG="$FX_TMP_ROOT/agents-under-test"
 mkdir -p "$AG"
@@ -59,12 +59,15 @@ seg() { printf '%s/dur.%s.%s.%s.log\n' "$(fx_ledger_dir)" "$SCHEMA" "$HOST_TOK" 
 plant_closed() {
     local i
     for ((i = 1; i <= $2; i++)); do
-        printf '#os %s\n%s|%s|shared/%s.sh\n%s|%s|%s/%s.sh\n' "$ATTR" "$RID" "$3" "$i" "$RID" "$i" "$1" "$i" \
+        printf '#os %s\n%s|%s|PASS|completed|shared/%s.sh\n%s|%s|PASS|completed|%s/%s.sh\n' "$ATTR" "$RID" "$3" "$i" "$RID" "$i" "$1" "$i" \
             > "$(seg "${1}T0000$(printf '%02d' "$i")-$i.closed")"
     done
 }
 
 # state — "<bases> <other-entries> <shared-wins> <old-only> <cur-only>" over the whole ledger.
+# A series keeps RUN_ALL_DUR_KEEP_PER_SERIES (5) records, oldest first, so a shared key may
+# keep its older row beside the newer one: a win is a shared key whose last row holds the
+# newer value 7, written exactly once.
 state() {
     local f b=0 o=0
     for f in "$(fx_ledger_dir)"/dur.*; do
@@ -76,12 +79,12 @@ state() {
         esac
     done
     printf '%s %s %s\n' "$b" "$o" "$(fx_ledger_cat | awk -F'|' -v od="$OLD_DAY" -v cd="$CUR_DAY" '
-        NF == 3 { n[$3]++; v[$3] = $2 }
+        NF == 5 { n[$5]++; v[$5] = $2; if ($2 == 7) w[$5]++ }
         END {
             s = 0; ol = 0; cu = 0
             for (k in n) {
+                if (k ~ /^shared\// && v[k] == 7 && w[k] == 1) s++
                 if (n[k] != 1) continue
-                if (k ~ /^shared\// && v[k] == 7) s++
                 if (index(k, od "/") == 1) ol++
                 if (index(k, cd "/") == 1) cu++
             }
@@ -103,7 +106,7 @@ else
     A_PLANTED="$(fx_ledger_segments)"
     run_all_dur_consolidate "$(fx_ledger_dir)" "$NOW"
     read -r A_B A_O A_S A_OL A_CU <<<"$(state)"
-    A_OLD_SHARED="$(fx_ledger_cat | awk -F'|' '$3 ~ /^shared\/[56]\.sh$/ && $2 == 1' | grep -c '' || true)"
+    A_OLD_SHARED="$(fx_ledger_cat | awk -F'|' 'NF == 5 && $5 ~ /^shared\/[56]\.sh$/ && $2 == 1' | grep -c '' || true)"
     if [ "$A_PLANTED" = "10" ]; then
         fx_pass "N47a. the fixture is real: 10 closed segments planted across two generations"
     else
@@ -134,7 +137,7 @@ else
     OLD_BASE="$(seg "${OLD_DAY}T000006-01")"
     {
         printf '#os %s\n#run %sT000006-6\n' "$ATTR" "$OLD_DAY"
-        for i in 1 2 3 4 5 6; do printf '%s|1|shared/%s.sh\n%s|%s|%s/%s.sh\n' "$RID" "$i" "$RID" "$i" "$OLD_DAY" "$i"; done
+        for i in 1 2 3 4 5 6; do printf '%s|1|PASS|completed|shared/%s.sh\n%s|%s|PASS|completed|%s/%s.sh\n' "$RID" "$i" "$RID" "$i" "$OLD_DAY" "$i"; done
     } > "$OLD_BASE"
     plant_closed "$CUR_DAY" 4 7
     run_all_dur_consolidate "$(fx_ledger_dir)" "$NOW"

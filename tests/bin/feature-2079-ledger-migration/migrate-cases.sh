@@ -4,7 +4,7 @@
 # Tags: tests, bin, ledger, migration, scope:issue-specific, TL2
 # TL3 gap (what this test does NOT catch): owned by the dispatcher headers, tests/bin/feature-2079-ledger-migration-*.sh.
 # n17 (1)-(8) (#2079 S7): the writer's init folds pre-#2079 `dur.1.*` segments into
-# `dur.2.<current token>` outputs, one per OS attribute, without losing a key or the
+# `$LM_CUR.<current token>` outputs, one per OS attribute, without losing a key or the
 # newest-first order, and never touches new-format or (off Windows) foreign-token files.
 
 W_KEYS="a1 a2 a3 a4 a5 a6 a7 a8 b1 b2 b3 b4 b5 b6 c1 c2 c3 c4 d1 d2"
@@ -39,11 +39,11 @@ c_report() {
   say vals "$(lm_get $keys)"
   say old "$(lm_count 'dur.1.*')"
   say mig "$(lm_count '*.migrating')"
-  for f in "$dir"/dur.2."$tok".*-0*.log; do
+  for f in "$dir"/"$LM_CUR"."$tok".*-0*.log; do
     [ -f "$f" ] || continue
     outs="$outs ${f##*/}"; sums="$sums $(lm_sum "$f")"
     hdr="$(head -n 1 "$f")"; hdrs="$hdrs,$hdr"
-    k="$(grep -v '^#' "$f" | cut -d'|' -f3 | LC_ALL=C sort | tr '\n' ' ')"
+    k="$(grep -v '^#' "$f" | cut -d'|' -f5 | LC_ALL=C sort | tr '\n' ' ')"
     case "$hdr" in
       "#os Windows/10.0.26300") cur="$cur$k" ;;
       *unknown-migrated) unk="$unk$k" ;;
@@ -60,8 +60,8 @@ c_report() {
 c_plant_order() {
   local t; t="$(lm_tok)"
   lm_plant_dur "dur.1.$(lm_oldtok "$LM_W26300").${LM_DAY}T000020-50.log" 120 - "5:x" "2:y" "9:z"
-  lm_plant_dur "dur.2.$t.${LM_DAY}T000010-40.log" 120 "Windows/10.0.26300" "3:x"
-  lm_plant_dur "dur.2.$t.${LM_DAY}T000030-60.log" 120 "Windows/10.0.26300" "7:y"
+  lm_plant_dur "$LM_CUR.$t.${LM_DAY}T000010-40.log" 120 "Windows/10.0.26300" "3:x"
+  lm_plant_dur "$LM_CUR.$t.${LM_DAY}T000030-60.log" 120 "Windows/10.0.26300" "7:y"
 }
 
 # c_plant_i <plain|mig|mig12> — three old segments, as files or as interrupted claims.
@@ -82,15 +82,15 @@ c_foreign_sums() {
   local f mine; mine="$(lm_tok)"
   for f in "$(lm_dur_dir)"/$1; do
     [ -f "$f" ] || continue
-    case "${f##*/}" in dur.2."$mine".*|dur.1."$mine".*) continue ;; esac
+    case "${f##*/}" in "$LM_CUR"."$mine".*|dur.2."$mine".*|dur.1."$mine".*) continue ;; esac
     printf '%s:%s ' "${f##*/}" "$(lm_sum "$f")"
   done
   echo
 }
 
 c_plant_new_foreign() {
-  lm_plant_dur "dur.2.0123456789abcdef.${LM_DAY}T000001-5.log" 120 "Linux/6.8.0" "1:q1"
-  lm_plant_dur "dur.2.$(lm_oldtok Linux).${LM_DAY}T000002-6.log" 120 "Linux/6.8.0" "2:q2"
+  lm_plant_dur "$LM_CUR.0123456789abcdef.${LM_DAY}T000001-5.log" 120 "Linux/6.8.0" "1:q1"
+  lm_plant_dur "$LM_CUR.$(lm_oldtok Linux).${LM_DAY}T000002-6.log" 120 "Linux/6.8.0" "2:q2"
   lm_plant_dur "dur.1.$(lm_oldtok "$LM_W26300").${LM_DAY}T000003-7.log" 120 - "3:w1"
 }
 
@@ -106,7 +106,7 @@ c_plant_nonwin() {
 
 c_report_nonwin() {
   local cur f outs="" hdrs=""; cur="$(lm_tok)"
-  for f in "$(lm_dur_dir)"/dur.2."$cur".*-0*.log; do
+  for f in "$(lm_dur_dir)"/"$LM_CUR"."$cur".*-0*.log; do
     [ -f "$f" ] || continue
     outs="$outs ${f##*/}"; hdrs="$hdrs$(head -n 1 "$f");"
   done
@@ -120,7 +120,7 @@ c_report_nonwin() {
 c_plant_cur_segs() {
   local i tok; tok="$(lm_tok)"
   for i in $(seq 1 16); do
-    lm_plant_dur "dur.2.$tok.$1T0000$(printf '%02d' "$i")-$((300 + i))${2:-}.log" 120 "Windows/10.0.26300" "$((40 + i)):cur$i"
+    lm_plant_dur "$LM_CUR.$tok.$1T0000$(printf '%02d' "$i")-$((300 + i))${2:-}.log" 120 "Windows/10.0.26300" "$((40 + i)):cur$i"
   done
 }
 
@@ -129,9 +129,9 @@ c_plant_cur_segs() {
 c_seg_report() {
   local f n=0 tok; tok="$(lm_tok)"
   say vals "$(lm_get "$@")"
-  say segs "$(lm_count "dur.2.$tok.*.log")"
-  say closed "$(lm_count "dur.2.$tok.*.closed.log")"
-  for f in "$(lm_dur_dir)"/dur.2."$tok".*-0*.log; do
+  say segs "$(lm_count "$LM_CUR.$tok.*.log")"
+  say closed "$(lm_count "$LM_CUR.$tok.*.closed.log")"
+  for f in "$(lm_dur_dir)"/"$LM_CUR"."$tok".*-0*.log; do
     [ -f "$f" ] || continue
     case "$f" in *.consolidating.log) continue ;; esac
     [ "$(head -n 1 "$f")" = "#os Windows/10.0.26300" ] && n=$((n + 1))
@@ -155,7 +155,7 @@ run_migrate_bulk_cases() {
   outs="$(lm_v "$r1" outs)"; n=0
   for seg2 in $outs; do
     n=$((n + 1))
-    printf '%s\n' "$seg2" | grep -qE "^dur\\.2\\.[A-Za-z0-9]{16}\\.$W_S-0[0-9]+\\.log\$" || bad="$bad $seg2"
+    printf '%s\n' "$seg2" | grep -qE "^$LM_CUR_RE\\.[A-Za-z0-9]{16}\\.$W_S-0[0-9]+\\.log\$" || bad="$bad $seg2"
   done
   ck "n17/1/two-outputs-named-by-max-stamp" "2:" "$n:$bad"
   ck "n17/2/attribute-headers" "#os Windows/10.0.26300,#os Windows/unknown-migrated" "$(lm_v "$r1" hdrs)"
@@ -249,12 +249,12 @@ run_migrate_foreign_new_cases() {
   local c before after r
   lm_win; c="$(lm_cache)"
   lm_run "$c" c_plant_new_foreign
-  before="$(lm_run "$c" c_foreign_sums 'dur.2.*')"
+  before="$(lm_run "$c" c_foreign_sums "$LM_CUR.*")"
   lm_run "$c" c_init >/dev/null
-  after="$(lm_run "$c" c_foreign_sums 'dur.2.*')"
+  after="$(lm_run "$c" c_foreign_sums "$LM_CUR.*")"
   r="$(lm_run "$c" c_report "w1")"
   ck "n17/7/migration-ran" "3:0" "$(lm_v "$r" vals):$(lm_v "$r" old)"
-  if [ -n "$before" ] && [ "$before" = "$after" ] && [ "$(printf '%s' "$before" | grep -o 'dur\.2\.' | wc -l)" -eq 2 ]; then
+  if [ -n "$before" ] && [ "$before" = "$after" ] && [ "$(printf '%s' "$before" | grep -oF "$LM_CUR." | wc -l)" -eq 2 ]; then
     pass "n17/7/new-format-foreign-untouched"
   else
     fail "n17/7/new-format-foreign-untouched" "before=[$before] after=[$after]"

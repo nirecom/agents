@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Duration-ledger consolidation (#2079 S7b): closed, abandoned and leftover segments of this
-# host fold into one base segment per OS attribute, `dur.2.<tok>.<S>-0<k>.log`. Each
-# (repo, key) keeps the record with the newest provenance (`#run <stamp>-<pid>`, else the
-# file name), and a record whose provenance is older than the retention window is dropped.
+# host fold into one base segment per OS attribute, `dur.<schema>.<tok>.<S>-0<k>.log`. Each
+# series (repo, key, verdict, termination) keeps its RUN_ALL_DUR_KEEP_PER_SERIES records of the
+# newest provenances (`#run <stamp>-<pid>`, else the file name; within one provenance the last
+# row wins) under the attribute of its (repo, key)'s newest record only, so one key never
+# spans two bases; a record older than the retention window is dropped, and a base over
+# RUN_ALL_DUR_BASE_MAX_RECORDS loses its oldest-provenance records first.
 # Publish-then-delete: an input is deleted only after every base is published and verified
 # and only when it is byte-identical to what was read, so every interruption converges on
 # the next round. Sourced only, by run-all-durations.sh (after run-all-parallelism.sh).
@@ -10,13 +13,17 @@
 RUN_ALL_DUR_RETENTION_DAYS=30
 RUN_ALL_DUR_ABANDON_MIN=360
 RUN_ALL_DUR_LOCK_STALE_MIN=10
+# Equal to TEST_TIME.samples in hooks/lib/size-limits.js (consolidation starts no node);
+# tests/hooks/feature-2631-size-limits.js pins the two together.
+RUN_ALL_DUR_KEEP_PER_SERIES=5
+RUN_ALL_DUR_BASE_MAX_RECORDS=40000
 _RADS_STATE=""
 _RADS_SP=""
 
 # _run_all_dur_seg_state <name> — fork-free, by name only, into _RADS_STATE (open, closed,
 # consolidating, base, other) and _RADS_SP (`<stamp>-<pid>`).
 _run_all_dur_seg_state() {
-    local r="${1#dur.2.*.}" sp st pid
+    local r="${1#dur."$RUN_ALL_DUR_SCHEMA".*.}" sp st pid
     _RADS_STATE=other
     _RADS_SP=""
     case "$r" in *.log) ;; *) return 0 ;; esac
@@ -54,7 +61,7 @@ _run_all_dur_unlock() { rmdir "$1/.ledger.lock" 2>/dev/null; return 0; }
 # so a consolidated ledger costs one glob per start.
 _run_all_dur_needs_round() {
     local dir="$1" tok="$2" f s bs="" open=0
-    for f in "$dir"/dur.2."$tok".*.log; do
+    for f in "$dir"/dur."$RUN_ALL_DUR_SCHEMA"."$tok".*.log; do
         [ -f "$f" ] || continue
         _run_all_dur_seg_state "${f##*/}"
         case "$_RADS_STATE" in
@@ -71,7 +78,7 @@ _run_all_dur_needs_round() {
     while IFS= read -r f; do
         _run_all_dur_seg_state "${f##*/}"
         [ "$_RADS_STATE" = open ] && return 0
-    done < <(find "$dir" -maxdepth 1 -type f -name "dur.2.$tok.*.log" -mmin +"$RUN_ALL_DUR_ABANDON_MIN" 2>/dev/null)
+    done < <(find "$dir" -maxdepth 1 -type f -name "dur.$RUN_ALL_DUR_SCHEMA.$tok.*.log" -mmin +"$RUN_ALL_DUR_ABANDON_MIN" 2>/dev/null)
     return 1
 }
 
@@ -79,7 +86,7 @@ _run_all_dur_needs_round() {
 # segments to their consolidating name; a taken target or a refused rename waits a round.
 _run_all_dur_take() {
     local f n
-    for f in "$1"/dur.2."$2".*.closed.log; do
+    for f in "$1"/dur."$RUN_ALL_DUR_SCHEMA"."$2".*.closed.log; do
         [ -f "$f" ] || continue
         _run_all_dur_seg_state "${f##*/}"
         [ "$_RADS_STATE" = closed ] || continue
@@ -91,17 +98,20 @@ _run_all_dur_take() {
         [ "$_RADS_STATE" = open ] || continue
         n="${f%.log}.consolidating.log"
         [ -e "$n" ] || mv "$f" "$n" 2>/dev/null
-    done < <(find "$1" -maxdepth 1 -type f -name "dur.2.$2.*.log" -mmin +"$RUN_ALL_DUR_ABANDON_MIN" 2>/dev/null)
+    done < <(find "$1" -maxdepth 1 -type f -name "dur.$RUN_ALL_DUR_SCHEMA.$2.*.log" -mmin +"$RUN_ALL_DUR_ABANDON_MIN" 2>/dev/null)
     return 0
 }
 
-# _run_all_dur_fold <list> <now> <tmp-prefix> <inputs>... — winners per (repo, key), one
+# _run_all_dur_fold <list> <now> <tmp-prefix> <inputs>... — the kept records per series, one
 # `<prefix>.<i>` per attribute; prints `<i>\t<lines>` per file, then `E\t<S>` on success.
+# A <list> file (a migration claim) may hold legacy 3-field rows, read as `?|?` v3 rows,
+# and an attribute `-` there means "take it from the file's `#os` header".
 _run_all_dur_fold() {
     local list="$1" now="$2" tmpp="$3"
     shift 3
     LC_ALL=C awk -v LIST="$list" -v NOW="$now" -v DAYS="$RUN_ALL_DUR_RETENTION_DAYS" \
-        -v ATTRRE="$RUN_ALL_OS_ATTR_CLASS" -v FAM="${RUN_ALL_DUR_OS_ATTR%%/*}" '
+        -v ATTRRE="$RUN_ALL_OS_ATTR_CLASS" -v FAM="${RUN_ALL_DUR_OS_ATTR%%/*}" \
+        -v SCH="$RUN_ALL_DUR_SCHEMA" -v KEEP="$RUN_ALL_DUR_KEEP_PER_SERIES" "$RUN_ALL_DUR_AWK_PARSE"'
 function secs(t,   y, m, d, era, yoe, doy) {
     y = substr(t, 1, 4) + 0; m = substr(t, 5, 2) + 0; d = substr(t, 7, 2) + 0
     if (m <= 2) y--
@@ -111,41 +121,63 @@ function secs(t,   y, m, d, era, yoe, doy) {
         + substr(t, 10, 2) * 3600 + substr(t, 12, 2) * 60 + substr(t, 14, 2)
 }
 function okprov(sp) { return index(sp, "-") == 16 && substr(sp, 1, 15) ~ ST && substr(sp, 17) ~ /^[0-9]+$/ }
+function hdrattr(a) { return (a !~ ATTRRE || length(a) > 97) ? FAM "/unknown" : a }
+function legacy3(l,   p, r, q) {
+    p = index(l, "|"); r = substr(l, p + 1); q = index(r, "|")
+    if (p == 0 || q == 0 || index(substr(r, q + 1), "|") > 0) return l
+    return substr(l, 1, p) substr(r, 1, q) "?|?|" substr(r, q + 1)
+}
 BEGIN {
     D = "[0-9]"; ST = "^" D D D D D D D D "T" D D D D D D "$"
     while ((getline l < LIST) > 0) { split(l, f, "\t"); LSP[f[3]] = f[1]; LAT[f[3]] = f[2] }
     cut = secs(NOW) - DAYS * 86400
 }
 FNR == 1 {
-    if (FILENAME in LSP) { prov = LSP[FILENAME]; at = LAT[FILENAME] }
+    hdr = (substr($0, 1, 4) == "#os ") ? substr($0, 5) : ""
+    mig = (FILENAME in LSP)
+    if (mig) { prov = LSP[FILENAME]; at = LAT[FILENAME]; if (at == "-") at = hdrattr(hdr) }
     else {
-        b = FILENAME; sub(/.*\//, "", b); sub(/^dur\.2\.[^.]*\./, "", b)
-        sub(/\.log$/, "", b); sub(/\.(closed|consolidating)$/, "", b); prov = b; at = ""
-        if (substr($0, 1, 4) == "#os ") at = substr($0, 5)
-        if (at !~ ATTRRE || length(at) > 97) at = FAM "/unknown"
+        b = FILENAME; sub(/.*\//, "", b); sub("^dur\\." SCH "\\.[^.]*\\.", "", b)
+        sub(/\.log$/, "", b); sub(/\.(closed|consolidating)$/, "", b); prov = b; at = hdrattr(hdr)
     }
 }
 substr($0, 1, 5) == "#run " { r = substr($0, 6); if (okprov(r)) prov = r; next }
 substr($0, 1, 1) == "#" { next }
 {
-    if (length($0) > 512 || index($0, "|") != 17 || !okprov(prov)) next
-    rid = substr($0, 1, 16)
-    if (rid !~ /^[A-Za-z0-9]+$/) next
-    r = substr($0, 18); p = index(r, "|")
-    if (p < 2 || p > 5) next
-    s = substr(r, 1, p - 1); k = substr(r, p + 1)
-    if (s !~ /^[0-9]+$/ || k == "" || index(k, "|") > 0) next
-    t = substr(prov, 1, 15); pd = substr(prov, 17) + 0; id = rid "|" k
-    if ((id in BT) && (t < BT[id] || (t == BT[id] && pd < BP[id]))) next
-    BT[id] = t; BP[id] = pd; BSP[id] = prov; BA[id] = at; L[id] = $0
+    l = mig ? legacy3($0) : $0
+    if (!okprov(prov) || !dur_parse(l)) next
+    pk = substr(prov, 1, 15) sprintf("%015d", substr(prov, 17) + 0)
+    id = P_RID SUBSEP P_KEY SUBSEP P_VERDICT SUBSEP P_TERM
+    if (!((id, pk) in L)) { NP[id]++; PK[id, NP[id]] = pk }
+    L[id, pk] = l; A[id, pk] = at; SP[id, pk] = prov
+    kk = P_RID SUBSEP P_KEY; KK[id] = kk
+    if (!(kk in WP) || pk >= WP[kk]) { WP[kk] = pk; WA[kk] = at }
 }
 END {
-    for (id in L) {
-        if (secs(BT[id]) < cut) continue
-        printf "%s\t%s\t%015d\t%s\t%s\n", BA[id], BT[id], BP[id], BSP[id], L[id]; n++
+    for (id in NP) {
+        n = NP[id]
+        for (i = 2; i <= n; i++) {
+            v = PK[id, i]
+            for (j = i - 1; j >= 1 && PK[id, j] < v; j--) PK[id, j + 1] = PK[id, j]
+            PK[id, j + 1] = v
+        }
+        kept = 0
+        for (i = 1; i <= n && kept < KEEP; i++) {
+            pk = PK[id, i]
+            if (secs(substr(pk, 1, 15)) < cut) break
+            if (A[id, pk] != WA[KK[id]]) continue
+            printf "%s\t%s\t%s\t%s\n", pk, A[id, pk], SP[id, pk], L[id, pk]; m++; kept++
+        }
     }
-    print "~END\t" (n + 0)
-}' "$@" 2>/dev/null | LC_ALL=C sort | LC_ALL=C awk -v P="$tmpp" '
+    print "!N\t" (m + 0)
+}' "$@" 2>/dev/null | LC_ALL=C sort | LC_ALL=C awk -v MAX="$RUN_ALL_DUR_BASE_MAX_RECORDS" '
+NR == 1 { if (substr($0, 1, 3) != "!N\t") exit; drop = substr($0, 4) - MAX; ok = 1; next }
+drop > 0 { drop--; next }
+{
+    p = index($0, "\t"); pk = substr($0, 1, p - 1); r = substr($0, p + 1)
+    printf "%s\t%s\t%s\n", substr(r, 1, index(r, "\t") - 1), substr(pk, 1, 15) "\t" substr(pk, 16), substr(r, index(r, "\t") + 1); c++
+}
+END { if (ok) print "~END\t" (c + 0) }' 2>/dev/null | LC_ALL=C sort | LC_ALL=C awk -v P="$tmpp" '
 substr($0, 1, 5) == "~END\t" { want = substr($0, 6) + 0; done = 1; next }
 {
     r = $0; for (j = 1; j <= 4; j++) { p = index(r, "\t"); F[j] = substr(r, 1, p - 1); r = substr(r, p + 1) }
@@ -191,7 +223,7 @@ run_all_dur_consolidate() {
 
     # Every base moves aside first, so publishing never overwrites one; a refused move
     # (Windows: held open) ends the round before anything else changed.
-    for f in "$dir"/dur.2."$tok".*.log; do
+    for f in "$dir"/dur."$RUN_ALL_DUR_SCHEMA"."$tok".*.log; do
         [ -f "$f" ] || continue
         _run_all_dur_seg_state "${f##*/}"
         [ "$_RADS_STATE" = base ] || continue
@@ -210,7 +242,7 @@ run_all_dur_consolidate() {
         run_all_ledger_migrate_durations "$dir" "$list"
     fi
     # Bases first, raw segments after: on a provenance tie the later read wins.
-    for f in "$dir"/dur.2."$tok".*.consolidating.log; do
+    for f in "$dir"/dur."$RUN_ALL_DUR_SCHEMA"."$tok".*.consolidating.log; do
         [ -f "$f" ] || continue
         _run_all_dur_seg_state "${f##*/}"
         [ "$_RADS_STATE" = consolidating ] || continue
@@ -243,7 +275,7 @@ run_all_dur_consolidate() {
         [ "$ok" -eq 1 ] || break
         k=$((k + 1))
         while :; do
-            n="$dir/dur.2.$tok.$S-0$k.log"
+            n="$dir/dur.$RUN_ALL_DUR_SCHEMA.$tok.$S-0$k.log"
             if [ -e "$n" ]; then k=$((k + 1)); continue; fi
             if [ -e "${n%.log}.consolidating.log" ] &&
                ! _run_all_dur_in "${n%.log}.consolidating.log" ${own[@]+"${own[@]}"}; then
