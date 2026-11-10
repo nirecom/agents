@@ -301,4 +301,8 @@ Changes: #2953 [BUGFIX] `malformedOf` in migrate-needs only checked that `.agent
 
 ### FEATURE: PR #2980 — feature/2962-glossary-workflow-glossary-accepted-step (2026-11-10, 75b52fb2a90f5c9bd1189b110f64439214fdbffe, #2980)
 Background: feat(#2962): carry glossary grants across glossary-only edits
-Changes: #2962: A glossary edit no longer forces a fresh `WORKFLOW_GLOSSARY_ACCEPTED` for every step. <!-- compose-doc-append-sentinel: branch=feature/2962-glossary-workflow-glossary-accepted-step pr=#2980 -->
+Changes: #2962: A glossary edit no longer forces a fresh `WORKFLOW_GLOSSARY_ACCEPTED` for every step. <!-- compose-doc-append-sentinel: branch=feature/2962-glossary-workflow-glossary-accepted-step pr=#2980 -->
+
+### FEATURE: PR #2981 — feature/2668-find-peer-listagents-own-session (2026-11-10, 0ab7146918bbb98386bb8d3dde4c9324448e405b, #2981)
+Background: fix(#2668): accept the unquoted own-session line of ListAgents in find-peer
+Changes: #2668 reopen: the own-session parser in `bin/find-peer.d/agents-list.js` accepted only the quoted form `This session is "<name>" [<ref6>].`, but real ListAgents prints `This session is <name> [<ref6>] — <clause>` without quotes. The line was silently skipped, so `find-peer --session self --agents-file` returned `not-in-list` (exit 5) and `peer-msg header` could not build the header. Both forms are now accepted; any other unreadable `This session is` line fails with `agents-list-unparsable` (exit 2) instead of being skipped. Tests use a fixture sampled from real output. Names without an 8-hex suffix still resolve to `not-in-list` (fixed in #2941, out of scope). The security-scanner subagent has no Write tool and cannot write its report, so the security review of this change was done in the main conversation. <!-- compose-doc-append-sentinel: branch=feature/2668-find-peer-listagents-own-session pr=#2981 -->

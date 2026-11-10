@@ -168,3 +168,7 @@ Changes: The 8 run-tests / workflow tests that were failing on main pass again (
 ### FEATURE: PR #2980 (2026-11-10)
 Background: feat(#2962): carry glossary grants across glossary-only edits
 Changes: Editing a glossary Definition or Related no longer asks you to re-approve `WORKFLOW_GLOSSARY_ACCEPTED` at every workflow step; one `term=* batch=definition-only` grant covers all definition-only redefines (#2962).;`/update-docs` now passes each new glossary term's Related link to `glossary-promote` with `--related`, instead of leaving `Related: TODO` (#2962).
+
+### FEATURE: PR #2981 (2026-11-10)
+Background: fix(#2668): accept the unquoted own-session line of ListAgents in find-peer
+Changes: Fixed `find-peer --session self` failing with "not-in-list" when given a real ListAgents output; the session's own line is now recognized with or without quotes around its name, and an unreadable own line is now reported as an error instead of being ignored.
