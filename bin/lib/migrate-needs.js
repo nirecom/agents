@@ -13,6 +13,7 @@
 const cp = require("child_process");
 const path = require("path");
 const { nativePath, readDoc, isMalformedDoc } = require(path.join(__dirname, "..", "..", "hooks", "lib", "repo-settings"));
+const { migrateForgeType } = require(path.join(__dirname, "migrate-forge-type"));
 
 const SKILLS_DIR = path.join(__dirname, "..", "..", "skills");
 const ORDER = ["tracker", "issues", "tests"];
@@ -26,11 +27,9 @@ function git(root, args) {
   return r;
 }
 
-function hostOf(url) {
-  const u = String(url || "").trim().toLowerCase();
-  if (/(^|[@/.])gitlab\.[^:/]+[:/]/.test(u)) return "gitlab";
-  if (/(^|[@/.])github\.com[:/]/.test(u)) return "github";
-  return "unknown";
+// hostOf(url, root) — the migrate forge type of an origin URL, with root's .env.local in view.
+function hostOf(url, root) {
+  return migrateForgeType(String(url || "").trim(), root).type;
 }
 
 function collect(rootArg) {
@@ -46,7 +45,7 @@ function collect(rootArg) {
   let host = "";
   if (needed.some((k) => HOST_KEYS.has(k))) {
     const r = originOf();
-    host = r.status === 0 ? hostOf(r.stdout) : "unknown";
+    host = r.status === 0 ? hostOf(r.stdout, root) : "unknown";
   }
   return { needed, uncommitted, unpushed, host, malformed: malformedOf(root) };
 }

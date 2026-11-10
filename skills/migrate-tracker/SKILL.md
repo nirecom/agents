@@ -17,13 +17,13 @@ Initialize a target repo's issue tracker: sync its label set, create/link its bo
 - Read `rules/github-issues.md` — on-demand-only, never auto-injected; it owns the Labels section (`sync-labels.sh`, `.github/labels.yml`) and the Projects v2 `project` scope requirement.
 - `AGENTS_MAIN_ROOT` must be set.
 - GitHub: `gh` must be authenticated with the `project` scope; if absent, tell the user to run `gh auth refresh -s project` and stop. GitLab: `glab` must be authenticated.
-- `HOST=unknown` (neither github.com nor GitLab): exit 0 with a notice.
+- `HOST=unknown` (neither github.com nor GitLab): exit 0 with a notice; for self-managed GitLab, tell the user to set `GITLAB_HOSTNAME` in the agents `.env` or the target repo's `.env.local` and rerun.
 
 ## Procedure
 
 MT-1. Resolve the target. Called from `/migrate`: take `ROOT` / `HOST` as given and ask nothing. Otherwise AskUserQuestion (`metadata.source=migrate-tracker.target-select`):
 - `current`: `ROOT` = `git rev-parse --show-toplevel` of the CWD; `TARGET_REPO` from its origin.
-- `other`: ask for `OWNER/REPO` and its local checkout path, or "no local checkout" (then `ROOT` stays unset).
+- `other`: ask for `OWNER/REPO` (GitLab also takes `GROUP/.../PROJECT`, which needs the local checkout) and its local checkout path, or "no local checkout" (then `ROOT` stays unset).
 - When `ROOT` is set, run `node "$AGENTS_MAIN_ROOT/skills/migrate-tracker/scripts/needs.js" --root "<ROOT>"`; exit 0 means already done — report success and end.
 
 MT-2. Sync labels (no confirmation — automatic): run `run-issue-setup.sh --step labels --repo "$TARGET_REPO"` (add `--root "<ROOT>"` whenever `ROOT` is set, in every step).

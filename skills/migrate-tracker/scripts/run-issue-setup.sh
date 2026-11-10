@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # run-issue-setup.sh — orchestration backend for the /migrate-tracker skill.
-# Usage: run-issue-setup.sh --step labels|check-project|ensure-project|record-done --repo OWNER/REPO
-#                           [--root DIR] [--no-push] [--dry-run]
+# Usage: run-issue-setup.sh --step labels|check-project|ensure-project|record-done [--root DIR] [--no-push]
+#   [--dry-run] --repo OWNER/REPO | GROUP/.../PROJECT (GitLab, with --root). A --root host of unknown:
+#   for self-managed GitLab set GITLAB_HOSTNAME in the agents .env or the target repo's .env.local.
 #   labels / check-project / ensure-project: sync labels, check (rc=0 present, rc=1 absent) or
 #     create the board. With --root on a gitlab origin they go through glab (gitlab-tracker.sh).
 #   record-done: needs --root whose origin path is --repo (else exit 2); re-checks the board (absent or
@@ -68,9 +69,16 @@ esac
 if [ "$REPO_SET" -ne 1 ] || [ -z "$REPO" ]; then
     echo "Error: --repo required (OWNER/REPO)" >&2; exit 2
 fi
-if ! [[ "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+# Segment rule of extractProjectPath (hooks/lib/parse-remote-url.js); the depth is checked once HOST is known.
+if ! [[ "$REPO" =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+$ ]]; then
     echo "Error: invalid --repo value: $REPO" >&2; exit 2
 fi
+IFS=/ read -r -a REPO_SEGS <<<"$REPO"
+for seg in "${REPO_SEGS[@]}"; do
+    if [[ "$seg" == . || "$seg" == .. ]]; then
+        echo "Error: invalid --repo value: $REPO" >&2; exit 2
+    fi
+done
 
 if [ "$ROOT_SET" -eq 1 ]; then
     if [ -z "$ROOT" ] || ! ROOT="$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null)"; then
@@ -92,6 +100,10 @@ if [ "$ROOT_SET" -eq 1 ]; then
         # shellcheck source=gitlab-tracker.sh
         . "$SCRIPT_DIR/gitlab-tracker.sh"
     fi
+fi
+
+if [[ "${#REPO_SEGS[@]}" -gt 2 && "$HOST" != gitlab ]]; then
+    echo "Error: invalid --repo value: $REPO (a group/subgroup/project path needs --root on a GitLab checkout; GitHub takes OWNER/REPO)" >&2; exit 2
 fi
 
 check_project() {

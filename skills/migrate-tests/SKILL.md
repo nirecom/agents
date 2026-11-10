@@ -16,6 +16,7 @@ Records how the target repo's tests are laid out, so the test gates and `tests/r
 
 MTS-1. Run `node "$AGENTS_MAIN_ROOT/skills/migrate-tests/scripts/needs.js" --root "<ROOT>"`; exit 0 means the tests section is already valid — report done and end.
 MTS-2. Run `node "$AGENTS_MAIN_ROOT/skills/migrate-tests/scripts/detect.js" --root "<ROOT>"`, read its JSON proposal and confirm through AskUserQuestion (`metadata.source=migrate-tests.proposal-confirm`): `categorization` among `candidates` (first one recommended) with its `categories` / `supportDirs` from `sections[<choice>]`, then `testHarness` / `caseMarker` as proposed (off whenever an existing test does not source the agents harness).
+   When `uncoveredTests` is non-empty, show each path to the user and say the current tests section cannot cover it.
 MTS-3. Run `bash "$AGENTS_MAIN_ROOT/skills/migrate-tests/scripts/apply-section.sh" "<ROOT>" '<json>'` (plus `--no-push`), where `<json>` is `sections[<choice>]` with the confirmed answers applied; then report the written section and the commit to the user.
    Exit 3 means the settings file is not JSON or does not hold an object: confirm through AskUserQuestion (`metadata.source=migrate-tests.reset-malformed`; "Reset, keeping the original as `.agents.json.malformed`" / "Stop"); on reset, run `node "$AGENTS_MAIN_ROOT/bin/repo-settings" --root "<ROOT>" --reset-malformed`, then re-run the same write.
    Any other non-zero exit: show the error and stop.
