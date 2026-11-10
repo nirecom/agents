@@ -39,7 +39,7 @@ test("LIMITS", () => noNewFailures(F.failureCount, () => F.run("LIMITS", () => {
     F.check(`LIMITS.${kind} = ${warn}/${hard} ${unit}`, l.warn === warn && l.hard === hard && l.unit === unit, JSON.stringify(l));
   }
   F.check("LIMITS.history carries role rotation", (LIMITS.history || {}).role === "rotation", JSON.stringify(LIMITS.history));
-  F.check("LIMITS has exactly the 8 kinds", Object.keys(LIMITS).sort().join(",") === Object.keys(F.EXPECTED).sort().join(","),
+  F.check("LIMITS has exactly the 9 kinds", Object.keys(LIMITS).sort().join(",") === Object.keys(F.EXPECTED).sort().join(","),
     Object.keys(LIMITS).join(","));
 })));
 caseEnd();
@@ -300,6 +300,54 @@ test("print-size-limits", () => noNewFailures(F.failureCount, () => F.run("print
   }
   const bad = F.nodeCli("bin/print-size-limits", ["--get", "nosuchkind"]);
   F.check("--get with an unknown kind is a non-zero exit", bad.status !== 0 && bad.status !== null && !/Cannot find module/.test(bad.stderr), `${bad.status} ${bad.stderr}`);
+})));
+caseEnd();
+
+// #2932 stage 2: test-time is a seconds budget read by the heavy judge, never measured from text.
+caseBegin("test-time-budget-kind", "hooks/lib/size-limits.js");
+test("test-time kind", () => noNewFailures(F.failureCount, () => F.run("test-time kind", () => {
+  const sl = SL();
+  F.check("LIMITS.test-time carries role budget", (sl.LIMITS["test-time"] || {}).role === "budget", JSON.stringify(sl.LIMITS["test-time"]));
+  let threw = false;
+  try { sl.measure("test-time", "a\nb\n"); } catch (e) { threw = true; }
+  F.check("measure(test-time) throws (seconds are not measurable from text)", threw === true, "measure returned");
+  F.check("judge(test-time, 0, 151) is hard", (sl.judge("test-time", 0, 151) || {}).verdict === "hard", JSON.stringify(sl.judge("test-time", 0, 151)));
+  F.check("TEST_TIME export carries the judge parameters", JSON.stringify(sl.TEST_TIME) === JSON.stringify(F.TEST_TIME), JSON.stringify(sl.TEST_TIME));
+})));
+caseEnd();
+
+caseBegin("test-time-params-cli", "bin/print-size-limits");
+test("--test-time-params", () => noNewFailures(F.failureCount, () => F.run("--test-time-params", () => {
+  const r = F.nodeCli("bin/print-size-limits", ["--test-time-params"]);
+  F.check("--test-time-params exits 0", r.status === 0, `${r.status} ${r.stderr}`);
+  F.check("--test-time-params prints the one-line parameter set", r.stdout.replace(/\r?\n$/, "") === F.TEST_TIME_PARAMS, r.stdout);
+  const g = F.nodeCli("bin/print-size-limits", ["--get", "test-time"]);
+  F.check('--get test-time prints "60 150"', g.status === 0 && g.stdout.trim() === "60 150", `${g.status} ${g.stdout} ${g.stderr}`);
+  const t = F.nodeCli("bin/print-size-limits", ["--markdown-table"]);
+  F.check("--markdown-table carries a test-time row in seconds", /^\| test-time \|.*\| seconds \| 60 \| 150 \|$/m.test(t.stdout), t.stdout.slice(-300));
+})));
+caseEnd();
+
+// The consolidation keeps RUN_ALL_DUR_KEEP_PER_SERIES records per series without starting node,
+// so it holds its own copy of TEST_TIME.samples; the two must agree.
+caseBegin("keep-per-series-matches-samples", "hooks/lib/size-limits.js");
+test("keep-per-series", () => noNewFailures(F.failureCount, () => F.run("keep-per-series", () => {
+  const { spawnSync } = require("child_process");
+  const lib = (rel) => path.join(F.ROOT, rel).replace(/\\/g, "/");
+  const script = `. "${lib("bin/lib/run-all-parallelism.sh")}"; . "${lib("bin/lib/run-all-durations.sh")}"; printf '%s' "\${RUN_ALL_DUR_KEEP_PER_SERIES:-unset}"`;
+  const r = spawnSync("bash", ["-c", script], { encoding: "utf8", timeout: 60000, cwd: F.work() });
+  const { TEST_TIME } = SL();
+  F.check("RUN_ALL_DUR_KEEP_PER_SERIES equals TEST_TIME.samples",
+    TEST_TIME != null && String(r.stdout) === String(TEST_TIME.samples), `keep=${r.stdout} samples=${TEST_TIME && TEST_TIME.samples} ${r.stderr}`);
+})));
+caseEnd();
+
+// Stage 6: rules/test.md points at the test-time row; the budget numbers stay in the SSOT only.
+caseBegin("rules-test-md-no-budget-number", "rules/coding/file-split.md");
+test("rules/test.md", () => noNewFailures(F.failureCount, () => F.run("rules/test.md", () => {
+  const src = fs.readFileSync(path.join(F.ROOT, "rules", "test.md"), "utf8").replace(/\r\n/g, "\n");
+  const stray = src.split("\n").filter((l) => /(WARN|HARD)[^\n]*\b\d{3}\b/.test(l));
+  F.check("rules/test.md states no WARN/HARD threshold number", stray.length === 0, stray.join(" | "));
 })));
 caseEnd();
 

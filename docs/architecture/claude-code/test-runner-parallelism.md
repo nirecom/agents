@@ -348,9 +348,9 @@ records from a different machine or a different checkout of a same-named repo
 can never be misread as this one's history, mirroring the measured record's
 own host-digest discipline (Section 5).
 
-Segments are named `dur.2.<host-token>.<stamp>-<pid>.log`; the schema in the name
+Segments are named `dur.3.<host-token>.<stamp>-<pid>.log`; the schema in the name
 lets a reader pass over other formats unread. Schema 2 replaced 1 when the Windows
-host identity changed (Section 5). The first line of a segment is an attribute line,
+host identity changed (Section 5); schema 3 added the file result to each line (#2932). The first line of a segment is an attribute line,
 `#os <family>/<version>`, written at creation; readers skip `#` lines, so it records
 which OS version produced the durations without splitting history by version.
 
@@ -365,7 +365,7 @@ Legacy files touched within the last 60 minutes are left to a pre-#2079 writer t
 may still be appending; each taken file is renamed to `.migrating` and re-checked by
 `cksum` before deletion, so a crash loses nothing. The baseline ledger is carried
 into `v2.` segments the same way, under the same `.ledger.lock`. The calibrator
-never migrates.
+never migrates. Schema-2 segments of the current token (open, closed, consolidating and base alike) are taken the same way after the same 60-minute window, their attribute read from each file's `#os` line; their 3-field lines (and those carried from `dur.1`) are read as 5-field lines with verdict and termination `?`, and only in taken files, never in a live `dur.3` segment.
 
 **Read path (before the sort).** For every test in the plan, `init_tiers`
 looks up its key's most recent duration across the newest
@@ -385,17 +385,17 @@ semantics in Section 3 are positional.
 harvest that observes `.rc` always finds a finished `.dur` beside it. On
 harvest, `ledger_record` lazily creates this process's own segment file on the
 first completed test (a run that executes nothing leaves no ledger behind) and
-appends one `<repo_id>|<seconds>|<key>` line. Segments are one-per-writer-process
+appends one `<repo_id>|<seconds>|<verdict>|<termination>|<key>` line — the file result of [test-result-contract.md](test-result-contract.md), an invalid token written as `?`, the key everything after the fourth `|`; one awk parser, `RUN_ALL_DUR_AWK_PARSE`, splits it for every reader. Segments are one-per-writer-process
 and append-only — never rewritten in place — so concurrent `run-all` invocations
 (nested suites, parallel sessions) cannot corrupt each other's history.
 
 **Retention.** Each writer start runs one consolidation round. Its inputs are closed
 segments (renamed `.closed.log` by `cleanup_all` on exit), **abandoned segments** (no mark
 and untouched for 6 hours, `RUN_ALL_DUR_ABANDON_MIN`, longer than any observed run), and the existing base segments.
-They fold into one base segment per OS attribute, keeping the record with the newest
-provenance per (repo, key), so a long run that closes late cannot overwrite newer
-results. A record not measured in 30 days (`RUN_ALL_DUR_RETENTION_DAYS`, counted from
-its provenance stamp, carried on `#run` lines; schema stays 2) is an **expired record**: consolidation does not write it. A `mkdir` lock
+They fold into one base segment per OS attribute, keeping the newest `RUN_ALL_DUR_KEEP_PER_SERIES` (5) records by provenance per (repo, key, verdict, termination) — within one provenance the last line wins — so a long run that closes late cannot overwrite newer
+results, and the heavy test judgment has samples for a median. A base over `RUN_ALL_DUR_BASE_MAX_RECORDS` (40000) records drops the oldest provenance first, leaving room under the reader's `RUN_ALL_DUR_MAX_RECORDS` for raw segments.
+A record not measured in 30 days (`RUN_ALL_DUR_RETENTION_DAYS`, counted from
+its provenance stamp, carried on `#run` lines) is an **expired record**: consolidation does not write it. A `mkdir` lock
 `.ledger.lock` (stale after 10 minutes; a round takes seconds) admits one round, and a
 loser does nothing. A round publishes new bases before deleting any input and deletes
 only inputs still byte-identical to what it read, so an interrupted round converges on

@@ -128,8 +128,10 @@ ec_not_unknown_arg() { [[ "$ERR" != *"unknown argument"* ]]; }
 
 # ec_ledger_segment <root> <stamp> <key>... — one run-all duration segment for the
 # repo identity of <root>, written with the ledger's own identity helpers.
+# Rows follow the v3 contract `<rid>|<secs>|PASS|completed|<key>` (5 s each);
+# EC_LEDGER_SECS overrides the seconds for heavy-judge fixtures.
 ec_ledger_segment() {
-  local root="$1" stamp="$2"
+  local root="$1" stamp="$2" secs="${EC_LEDGER_SECS:-5}"
   shift 2
   (
     # shellcheck source=../../../bin/lib/run-all-parallelism.sh
@@ -141,8 +143,9 @@ ec_ledger_segment() {
     dir="$(run_all_dur_dir)"
     mkdir -p "$dir"
     seg="$dir/dur.$RUN_ALL_DUR_SCHEMA.$RUN_ALL_DUR_HOST_TOKEN.${stamp}-1.log"
+    [ -f "$seg" ] || printf '#os %s\n' "$RUN_ALL_DUR_OS_ATTR" >"$seg"
     for k in "$@"; do
-      printf '%s|%s|%s\n' "$RUN_ALL_DUR_REPO_ID" 5 "$k" >>"$seg"
+      printf '%s|%s|PASS|completed|%s\n' "$RUN_ALL_DUR_REPO_ID" "$secs" "$k" >>"$seg"
     done
   )
 }

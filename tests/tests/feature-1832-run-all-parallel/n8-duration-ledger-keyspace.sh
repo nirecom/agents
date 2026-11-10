@@ -77,9 +77,9 @@ D_EXEC="$(fx_contract_field "$D_OUT" EXECUTED)"
 fx_exec "$D" 60 "$DP_OUT" "$DP_ERR" --print-plan "$D_TOP" "$D_SUB"
 FX_LEDGER_KEEP=0
 
-D_KEYS="$(fx_ledger_cat | awk -F'|' 'NF == 3 && $3 ~ /a\.sh$/ { n[$3] = 1 } END { c = 0; for (k in n) c++; print c + 0 }')"
-D_SUB_S="$(fx_ledger_cat | awk -F'|' 'NF == 3 && index($3, "sub/") { v = $2 } END { print v }')"
-D_TOP_S="$(fx_ledger_cat | awk -F'|' 'NF == 3 && $3 ~ /a\.sh$/ && !index($3, "sub/") { v = $2 } END { print v }')"
+D_KEYS="$(fx_ledger_cat | awk -F'|' 'NF == 5 && $5 ~ /a\.sh$/ { n[$5] = 1 } END { c = 0; for (k in n) c++; print c + 0 }')"
+D_SUB_S="$(fx_ledger_cat | awk -F'|' 'NF == 5 && index($5, "sub/") { v = $2 } END { print v }')"
+D_TOP_S="$(fx_ledger_cat | awk -F'|' 'NF == 5 && $5 ~ /a\.sh$/ && !index($5, "sub/") { v = $2 } END { print v }')"
 D_ROWS="$(grep -c '^plan	' "$DP_OUT" || true)"
 D_T_SUB="$(tier_at "$DP_OUT" "/sub/a.sh")"
 D_T_TOP="$(tier_sole "$DP_OUT" "a.sh" "/sub/")"

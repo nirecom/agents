@@ -2,11 +2,11 @@
 # audit-tests-common.sh — Retire checker for common (non-issue-specific) tests.
 # Usage: bin/audit-tests-common.sh [--dry-run] [--apply] [--offline]
 #                                  [--stale-months N] [--format text|json]
-#                                  [--fix-headers] [--dup-groups]
+#                                  [--fix-headers] [--dup-groups] [--heavy]
 #        bin/audit-tests-common.sh --embed-cases [--band-size N] [--order frequency|priority] [--only-file <relpath>]
 # Exit:  0 = orphans found, 1 = no orphans, 2 = error. Writes by default: a flagless
-# run DELETES orphans (git rm); --dry-run reports only. --dup-groups: read-only TSV
-# (bin/lib/test-dup-group.sh). --embed-cases: docs/architecture/claude-code/sweep-tests-embed-cases.md.
+# run DELETES orphans (git rm); --dry-run reports only. --dup-groups / --heavy: read-only TSV
+# (bin/lib/test-dup-group.sh / test-heavy-judge.sh). --embed-cases: docs/architecture/claude-code/sweep-tests-embed-cases.md.
 # Scans tests/<category>/*.{sh,Tests.ps1} and test_*.py EXCEPT feature-<N>-*;
 # unit=case (refcount 0 git rm, partial-orphan excises dead blocks, else file).
 
@@ -33,6 +33,7 @@ FORMAT=text
 FIX_HEADERS=0
 FIX_APPLY=0
 DUP_GROUPS=0
+HEAVY=0
 sweep_write_mode_init
 
 while [[ $# -gt 0 ]]; do
@@ -48,6 +49,7 @@ while [[ $# -gt 0 ]]; do
     --offline) OFFLINE=1; shift ;;
     --fix-headers) FIX_HEADERS=1; shift ;;
     --dup-groups) DUP_GROUPS=1; shift ;;
+    --heavy) HEAVY=1; shift ;;
     --apply) sweep_write_mode_apply; FIX_APPLY=1; shift ;;
     --dry-run) sweep_write_mode_dry_run; shift ;;
     --format)
@@ -98,7 +100,14 @@ fi
 
 # Read-only inventory mode. Placed before gh init and cutoff computation: it
 # needs neither, so it stays offline-safe and timeout-free. in_common_scope is
-# defined below and deliberately NOT applied — the inventory is corpus-wide (S3).
+# defined below and deliberately NOT applied — the inventory is corpus-wide (S3). Same for --heavy.
+if [[ "$HEAVY" -eq 1 ]]; then
+  # shellcheck source=lib/test-heavy-judge.sh
+  source "$SCRIPT_DIR/lib/test-heavy-judge.sh"
+  thj_mode_guard "$FIX_APPLY" "$FIX_HEADERS" "$FORMAT" "$DUP_GROUPS" || exit 2
+  thj_audit_heavy "$REPO_ROOT" && exit 0
+  exit 2
+fi
 if [[ "$DUP_GROUPS" -eq 1 ]]; then
   tdg_mode_guard "$DUP_GROUPS" "$FIX_APPLY" "$FIX_HEADERS" "$FORMAT" || exit 2
   tdg_run "$REPO_ROOT" && exit 0

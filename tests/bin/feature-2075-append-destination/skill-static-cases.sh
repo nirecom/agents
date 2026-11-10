@@ -386,4 +386,33 @@ else
 fi
 case_end
 
+# ── #2932: the time HARD exception joins the size one ──────────────────────
+# lines_with <text> <ere>... — the lines of <text> matching every <ere>.
+lines_with() {
+    local out="$1" e
+    shift
+    for e in "$@"; do out="$(printf '%s\n' "$out" | grep -E -- "$e")"; done
+    printf '%s' "$out"
+}
+
+case_begin "skill-static-wt5-passes-with-time" "skills/write-tests/SKILL.md"
+assert_match "T1 the WT-5 helper call passes --with-time" '.' \
+    "$(lines_with "$WT5_BLOCK" 'find-tests-for-source\.sh' '--with-time')"
+case_end
+
+case_begin "skill-static-wt5-names-both-hard-limit-reasons" "skills/write-tests/SKILL.md"
+_t2="$(lines_with "$WT5_BLOCK" 'sole permitted new file')"
+assert_match "T2 the WT-5 sole-new-file sentence names size-hard-limit" '`size-hard-limit`' "$_t2"
+assert_match "T2 the WT-5 sole-new-file sentence names time-hard-limit" '`time-hard-limit`' "$_t2"
+case_end
+
+case_begin "skill-static-append-vs-new-time-hard-limit-tag" "skills/_shared/test-design/append-vs-new.md"
+_av="$(cat "$TD_APPEND" 2>/dev/null)"
+assert_match "T3 append-vs-new.md lists dup-group-keep:time-hard-limit" 'dup-group-keep:time-hard-limit' "$_av"
+assert_match "T3 the time-hard-limit tag is a justified new-file value" '.' \
+    "$(lines_with "$_av" 'dup-group-keep:time-hard-limit' '[Nn]ew file|justif')"
+assert_match "T3 a time WARN only advises and leaves append unchanged" '.' \
+    "$(lines_with "$_av" 'WARN' '[Aa]dvis' '[Aa]ppend')"
+case_end
+
 grp_done "skill-static-cases.sh"

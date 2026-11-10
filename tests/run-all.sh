@@ -309,7 +309,7 @@ ledger_record() {
     LEDGER_INITED=1
     run_all_dur_writer_init "$SCRIPT_CHECKOUT_ROOT"
   fi
-  run_all_dur_append "${KEY[$i]}" "$secs"
+  _rar_state "${JOB_RC[$i]:-}" "${JOB_ST[$i]:--}"; run_all_dur_file_result_into "$RAR_STATE"; run_all_dur_append "${KEY[$i]}" "$secs" "$RUN_ALL_DUR_FR_VERDICT" "$RUN_ALL_DUR_FR_TERM"
   return 0
 }
 

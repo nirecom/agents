@@ -8,15 +8,19 @@
 - **Same-set rule.** A candidate qualifies only when `S ⊆ T`, T being that candidate's own `# Tests:` set — appending to a file that overlaps S partially is prohibited.
 - **Appending never widens T**, so the orphan premise of `bin/lib/test-retire-predicate.sh` survives the append untouched.
 - **HARD limit.** A new file is created, tagged `dup-group-keep:size-hard-limit` in `# Tags:`, when: (a) every candidate already exceeds the HARD limit, or (b) appending the planned cases would push the best candidate past the HARD limit (`rules/coding/file-split.md`).
+- **Time HARD limit.** Under `--with-time` a candidate the duration ledger judges a HARD heavy test (the `test-time` row) is excluded like an over-size one; when time alone empties the viable set the reason is `time-hard-limit` and the new file is tagged `dup-group-keep:time-hard-limit`.
+- A time WARN only advises: the candidate stays viable and the append verdict does not change.
+- A split made for time must be a new top-level test file that run-all runs as its own job; fragments under `<stem>/` save no time, since the ledger measures per dispatcher (`thj_dispatcher_of`).
 - **Candidate ranking.** Exact match first, then the superset with fewer extra tokens, then the smaller line count, then the path ascending.
 - **Frontmatter on append.** Do not rewrite the target's `# Tests:` line: an appended case adds coverage, never a new protected source.
 - `# Tags:` may only be added to — removing or replacing an existing tag is out of scope for an append.
 
 ## `dup-group-keep:<reason>` is not an opt-out
 
-- `dup-group-keep:size-hard-limit` is the only value that can justify a new file while an appendable target exists.
+- `dup-group-keep:size-hard-limit` and `dup-group-keep:time-hard-limit` are the only values that can justify a new file while an appendable target exists.
 - `dup-group-keep:cross-hook` and `dup-group-keep:distinct-layer` stay valid vocabulary for the post-hoc consolidation judgement of `bash "$AGENTS_MAIN_ROOT/bin/audit-tests.sh" --dup-groups`, but they are **not** a waiver of the append rule and never justify a new file on their own.
 - `size-hard-limit` is a claim, not an indulgence: name it only when an over-limit candidate existed, or when appending the planned cases would exceed the HARD limit.
+- `time-hard-limit` likewise: name it only when the helper's `--with-time` row says `time-hard-limit`.
 - Tagging a file where neither condition applies is a false claim — review-tests disproves it from the helper's `excluded` and `reason` columns.
 - The sole human-discretion exception is the `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED` sentinel, set explicitly by the user.
 
@@ -37,3 +41,4 @@
 - `unsupported` and the target is not code (a document, a prompt file, data): follow the verdict as usual.
 - Reason `runtime-unavailable` (verdict `new`): do not create the file; tell the user that the language's runtime is not installed here.
 - Name a new file by the `shapes` entry of the chosen language.
+- Pass `--with-time`: the row gains a last `time` column, one `path:tier:basis:samples` per candidate (tier `-`, `WARN`, `HARD`, or `?` when this host's ledger has no answer).

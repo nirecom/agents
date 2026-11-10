@@ -33,6 +33,7 @@ The `history` row is the rotation threshold `bin/doc-rotate.py` uses, not a spli
 | outline | Plan artifact `<sid>-outline.md` | lines | 100 | 200 |
 | detail | Plan artifact `<sid>-detail.md` | lines | 300 | 500 |
 | progress | The `## Current state` section of `<sid>-session-progress.md` | chars | 400 | 600 |
+| test-time | Median wall time of one top-level test file in the duration ledger — budget, judged by `bin/lib/test-heavy-judge.sh` | seconds | 60 | 150 |
 <!-- END GENERATED: size-limits -->
 
 ## Pattern A — Code files

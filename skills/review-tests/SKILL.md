@@ -42,16 +42,18 @@ RT-1. Identify staged test file(s) and source file(s):
   - Select test file(s) and source file(s) from `$STAGED` or from the user's manual input.
 RT-1a. Check each newly added test file for a missed append target:
   - Run `bash "$AGENTS_MAIN_ROOT/skills/review-tests/scripts/select-staged-files.sh" --added-only` (Bash, single standalone command); its stdout is `ADDED`. Exit 3 / exit 4 are handled exactly as in RT-1.
-  - Collect every `ADDED` entry under `tests/` and pass them all to one call of `bash "$AGENTS_MAIN_ROOT/bin/find-tests-for-source.sh" --with-language --test-file <path> --root <WORKTREE>`, repeating `--test-file` per entry (Bash, standalone command with timeout 600000; split rule and language columns in `skills/_shared/test-design/append-vs-new.md`; omit `--root` when `WORKTREE` is empty). On exit 4 or a tool timeout, HALT and surface the stderr. The helper itself returns `skipped`/`not-top-level` for nested part files — do not pre-filter by eye.
-  - The gap predicate is the row's `viable` column alone, never the `verdict` column: a non-`-` `viable` column means an append target under the HARD limit existed for this file's `# Tests:` set.
-  - A non-`-` `viable` column is a HIGH gap "append candidate existed but a new file was created". A `# Tags:` `dup-group-keep:size-hard-limit` does NOT waive it — the same row disproves the tag by showing a sub-HARD target. No `dup-group-keep:<reason>` value waives anything; the only escape is the WARNINGS_ACCEPTED sentinel.
-  - Validate the tag's claim, not its presence: when the file's `# Tags:` carries `dup-group-keep:size-hard-limit`, the row corroborates it only if `excluded` is non-`-` and `reason` is `size-hard-limit`. A tag on a row with `excluded` = `-` (`reason=no-candidate` — no append candidate ever existed) is an unvalidated opt-out: report it as a HIGH gap, like a missed append target.
+  - Collect every `ADDED` entry under `tests/` and pass them all to one call of `bash "$AGENTS_MAIN_ROOT/bin/find-tests-for-source.sh" --with-language --with-time --test-file <path> --root <WORKTREE>`, repeating `--test-file` per entry (Bash, standalone command with timeout 600000; split rule, language and time columns in `skills/_shared/test-design/append-vs-new.md`; omit `--root` when `WORKTREE` is empty). On exit 4 or a tool timeout, HALT and surface the stderr. The helper itself returns `skipped`/`not-top-level` for nested part files — do not pre-filter by eye.
+  - The gap predicate is the row's `viable` column alone, never the `verdict` column: a non-`-` `viable` column (an append target under the HARD limits existed for this file's `# Tests:` set) is a HIGH gap "append candidate existed but a new file was created"; no `dup-group-keep:<reason>` value waives it, the same row disproves the tag, and the only escape is the WARNINGS_ACCEPTED sentinel.
+  - Validate the tag's claim, not its presence: the row corroborates `dup-group-keep:size-hard-limit` only if `excluded` is non-`-` and `reason` is `size-hard-limit`, and `dup-group-keep:time-hard-limit` only if `excluded` is non-`-` and `reason` is `time-hard-limit`. A tag on a row with `excluded` = `-` (`reason=no-candidate` — no append candidate ever existed) is an unvalidated opt-out: report it as a HIGH gap, like a missed append target.
+  - An append target whose time-column tier is `?` (no usable ledger samples) is unverifiable for time: report it as unverifiable, never count it as a gap.
   - Feed the gaps into RT-3's review input and count them in RT-5c.
-RT-1b. Check new test files for missing case markers (deterministic gate, no codex review needed):
-  - For each file in ADDED that lives under `tests/`, run `bash "$AGENTS_MAIN_ROOT/bin/check-case-markers.sh" <file>` (Bash, one standalone command per file).
+RT-1b. Check new test files for missing case markers (deterministic gate, no codex review needed): for each file in ADDED that lives under `tests/`, run `bash "$AGENTS_MAIN_ROOT/bin/check-case-markers.sh" <file>` (Bash, one standalone command per file).
   - Any `HIGH:` output line is a HIGH gap "multi-path `Tests:` header with missing or malformed case markers" (notation: the language's registry `notationDoc`).
-  - These gaps are deterministic — do not feed them into RT-3 codex input. Count them directly in RT-5c.
-  - If any RT-1b violations exist, RT-5 must emit WARNINGS regardless of codex exit code.
+  - These gaps are deterministic — do not feed them into RT-3 codex input; count them directly in RT-5c, and if any exist, RT-5 must emit WARNINGS regardless of codex exit code.
+RT-1c. Check the staged test files for heavy tests (deterministic gate, no codex review needed): run `bash "$AGENTS_MAIN_ROOT/skills/review-tests/scripts/check-heavy-tests.sh" --root <WORKTREE>` (Bash, one standalone command; omit `--root` when `WORKTREE` is empty; output format in the script's usage).
+  - Each `HEAVY: … tier=HARD` line is a HIGH gap "heavy test over the time HARD limit", never fed into RT-3 codex input: count it directly in RT-5c — unless the line says `shrinks=yes` (the change removes more lines than it adds), when the HARD line is advisory only.
+  - Each `tier=WARN` line is advisory only: report it, never count it; report a `HEAVY-SKIP:` line as-is.
+  - To accept a HARD gap, the exit is `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>"` with a reason naming the file.
 RT-2. Select the review scope: run `node "$AGENTS_MAIN_ROOT/bin/select-review-scope.js" --session <CC session id> --worktree <WORKTREE-or-empty>` as one standalone command with timeout 600000; exit 4 → HALT and surface its stderr.
   Assemble review input via the Write tool only into `<PLANS_DIR>/<session-id>-test-review.md` as four separate sections: `## Review targets` (each REVIEW absolute path with its contents), `## Deleted tests (paths only, do not Read)` (DELETED), `## Test inventory (paths only)` (INVENTORY), `## Sources` (SOURCE contents). Do not substitute Bash-based assembly for the Write tool call in RT-2 — see `rules/shell-commands.md` Tool Selection Priority for what counts as shell-based writing. Resolve `<PLANS_DIR>` via `skills/_shared/resolve-plans-dir.md`. Initialize `EXTENSIONS_USED=0`.
   Show the user `SCOPE` and `REASON` in one line (REASON vocabulary: `hooks/workflow-gate/review-scope-delta.js`).
@@ -86,14 +88,12 @@ RT-6. Record the returned sentinel line as `--class E --step review_tests --key 
 
 ## Rules
 
-The Test Case Categories checklist lives in `skills/_shared/test-design.md` — do not duplicate it here.
-The append-vs-new criteria live in `skills/_shared/test-design/append-vs-new.md` — do not restate them here.
+The Test Case Categories checklist (`skills/_shared/test-design.md`) and the append-vs-new criteria (`skills/_shared/test-design/append-vs-new.md`) live there — do not restate them here.
 WARNINGS is BLOCKING: `hooks/workflow-gate/review-tests-checker.js` blocks `/write-code` while `warnings_summary` is recorded.
 Return exactly one RUN-IN-MAIN line per run: COMPLETE on pass, WARNINGS on any gap or warning.
 Invariant: RT-5 returns exactly one RUN-IN-MAIN line, COMPLETE or WARNINGS; never both, never zero (except exit 4, exit 7, exit 8 and a stop before RT-3 — each HALTs with neither sentinel).
 Scan scope is limited to files changed in the current PR diff (soft scope). Pre-existing gaps outside the PR diff are excluded.
-To accept documented gaps and unblock /write-code, or to stop after a write_code reopen (review_tests pending), emit the sentinel below.
-`echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>"`
+To accept documented gaps and unblock /write-code, or to stop after a write_code reopen (review_tests pending), emit `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>"`.
 `{reason}` must not contain `( ) ; | & >` or a backtick.
 Which gaps block COMPLETE: the test-gap item of `skills/_shared/severity.md`.
 Session-id resolution is delegated to `bin/resolve-session-id` and its value passed on as `--session`; worktree resolution is delegated to `bin/resolve-worktree-path` (SSOT: `hooks/workflow-state/resolve-worktree-path.js`); staged file selection is delegated to `scripts/select-staged-files.sh` — do not re-implement inside the skill.

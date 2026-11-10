@@ -42,6 +42,10 @@ export PATH="$EC_TMP/fakebin:$PATH"
 . "$GROUP_DIR/exclusivity-table.sh"
 # shellcheck source=bin-audit-tests-embed-cases/exclusivity-help-common-cases.sh
 . "$GROUP_DIR/exclusivity-help-common-cases.sh"
+# shellcheck source=bin-audit-tests-embed-cases/heavy-helpers.sh
+. "$GROUP_DIR/heavy-helpers.sh"
+# shellcheck source=bin-audit-tests-embed-cases/heavy-common-cases.sh
+. "$GROUP_DIR/heavy-common-cases.sh"
 
 case_begin "suite-integrity-flags-common" "bin/lib/test-embed-cases.sh"
 ec_suite_integrity "${BASH_SOURCE[0]}"

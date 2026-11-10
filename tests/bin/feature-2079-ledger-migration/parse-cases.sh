@@ -54,10 +54,10 @@ cp_names() {
     rm -rf "$(lm_dur_dir)"
     dc_plant "${DC_D}T090000-50.closed" 30 "#os $DC_L" 9:comp.sh
     p="$(cp_seg_path "$tail")"
-    printf '#os %s\n%s|5|row.sh\n' "$DC_L" "$(lm_rid)" > "$p"; lm_age "$p" "$age"
-    sum="$(lm_sum "$p")"; rec="$(lm_rid)|5|row.sh"
+    printf '#os %s\n%s|5|PASS|completed|row.sh\n' "$DC_L" "$(lm_rid)" > "$p"; lm_age "$p" "$age"
+    sum="$(lm_sum "$p")"; rec="$(lm_rid)|5|PASS|completed|row.sh"
     dc_cons
-    if ! cp_in_base - "$(lm_rid)|9|comp.sh"; then got="no-round"
+    if ! cp_in_base - "$(lm_rid)|9|PASS|completed|comp.sh"; then got="no-round"
     elif [ ! -e "$p" ] && cp_in_base "$p" "$rec"; then got=consumed
     elif [ "$(lm_sum "$p")" = "$sum" ] && ! cp_in_base "$p" "$rec"; then got=kept
     else got="odd:$([ -e "$p" ] && echo exists || echo gone)"; fi
@@ -141,8 +141,8 @@ open-abandoned-400min           ; ${DC_D}T010000-11                             
 open-young-30min                ; ${DC_D}T010000-11                                  ; 30  ; kept/5
 base-pid-01                     ; ${DC_D}T010000-01                                  ; 30  ; consumed/5
 aside-base                      ; ${DC_D}T010000-01.consolidating                    ; 30  ; consumed/5
-foreign-token-closed            ; dur.2.0123456789abcdef.${DC_D}T010000-11.closed.log ; 30  ; kept/-
-not-dot-log-suffix              ; dur.2.TOK.${DC_D}T010000-11.closed.txt             ; 30  ; kept/-
+foreign-token-closed            ; $LM_CUR.0123456789abcdef.${DC_D}T010000-11.closed.log ; 30  ; kept/-
+not-dot-log-suffix              ; $LM_CUR.TOK.${DC_D}T010000-11.closed.txt             ; 30  ; kept/-
 malformed-stamp-7-digit-date    ; 2026030T010000-11.closed                           ; 30  ; kept/5
 malformed-stamp-no-t            ; ${DC_D}X010000-11.closed                           ; 30  ; kept/5
 malformed-stamp-letter-in-time  ; ${DC_D}T01a000-11.closed                           ; 30  ; kept/5
@@ -162,23 +162,34 @@ run_parse_line_cases() {
   dc_lib_ck n22/lines
   cat > "$t" <<'TABLE'
 # name                   ; line                         ; reader key     ; want (in-base[/reader after])
-well-formed              ; RID|5|ok.sh                  ; ok.sh          ; in/5
-secs-zero                ; RID|0|zero.sh                ; zero.sh        ; in/0
-secs-four-digits         ; RID|9999|max4.sh             ; max4.sh        ; in/9999
-secs-leading-zero        ; RID|007|lz.sh                ; lz.sh          ; in/007
-key-with-space           ; RID|3|a b.sh                 ; a b.sh         ; in/3
-key-with-path            ; RID|4|tests/bin/x.sh         ; tests/bin/x.sh ; in/4
-other-repo-id-kept       ; ffffffffffffffff|3|other.sh  ; other.sh       ; in/-
-secs-five-digits         ; RID|12345|five.sh            ; five.sh        ; out/-
-secs-non-numeric         ; RID|x|nn.sh                  ; nn.sh          ; out/-
-secs-empty               ; RID||es.sh                   ; es.sh          ; out/-
-secs-negative            ; RID|-1|neg.sh                ; neg.sh         ; out/-
-key-empty                ; RID|3|                       ; -              ; out
-extra-field              ; RID|3|a|b                    ; -              ; out
-too-few-fields           ; RID|3                        ; -              ; out
-repo-id-short            ; abc|3|short.sh               ; short.sh       ; out/-
-repo-id-non-alnum        ; ffffffffffffff-f|3|dash.sh   ; dash.sh        ; out/-
-line-over-512-bytes      ; RID|5|LONG                   ; -              ; out
+well-formed              ; RID|5|PASS|completed|ok.sh                  ; ok.sh          ; in/5
+secs-zero                ; RID|0|PASS|completed|zero.sh                ; zero.sh        ; in/0
+secs-four-digits         ; RID|9999|PASS|completed|max4.sh             ; max4.sh        ; in/9999
+secs-leading-zero        ; RID|007|PASS|completed|lz.sh                ; lz.sh          ; in/007
+key-with-space           ; RID|3|PASS|completed|a b.sh                 ; a b.sh         ; in/3
+key-with-path            ; RID|4|PASS|completed|tests/bin/x.sh         ; tests/bin/x.sh ; in/4
+other-repo-id-kept       ; ffffffffffffffff|3|PASS|completed|other.sh  ; other.sh       ; in/-
+question-tokens          ; RID|6|?|?|qq.sh                             ; qq.sh          ; in/6
+timeout-termination      ; RID|7|-|timeout|to.sh                       ; -              ; in
+unknown-verdict-passes   ; RID|5|WEIRD|completed|uv.sh                 ; uv.sh          ; in/5
+key-not-third-field      ; RID|8|K3|completed|k5.sh                    ; K3             ; in/-
+key-after-fourth-pipe    ; RID|8|K3|completed|k5.sh                    ; k5.sh          ; in/8
+secs-five-digits         ; RID|12345|PASS|completed|five.sh            ; five.sh        ; out/-
+secs-non-numeric         ; RID|x|PASS|completed|nn.sh                  ; nn.sh          ; out/-
+secs-empty               ; RID||PASS|completed|es.sh                   ; es.sh          ; out/-
+secs-negative            ; RID|-1|PASS|completed|neg.sh                ; neg.sh         ; out/-
+key-empty                ; RID|3|PASS|completed|                       ; -              ; out
+legacy-three-field       ; RID|3|old.sh                                ; old.sh         ; out/-
+four-fields              ; RID|3|PASS|f4.sh                            ; -              ; out
+too-few-fields           ; RID|3                                       ; -              ; out
+verdict-bad-character    ; RID|3|PA SS|completed|bt.sh                 ; bt.sh          ; out/-
+termination-bad-dot      ; RID|3|PASS|comp.leted|bd.sh                 ; bd.sh          ; out/-
+verdict-over-16-chars    ; RID|3|ABCDEFGHIJKLMNOPQ|completed|vl.sh     ; vl.sh          ; out/-
+verdict-empty            ; RID|3||completed|ve.sh                      ; ve.sh          ; out/-
+termination-empty        ; RID|3|PASS||te.sh                           ; te.sh          ; out/-
+repo-id-short            ; abc|3|PASS|completed|short.sh               ; short.sh       ; out/-
+repo-id-non-alnum        ; ffffffffffffff-f|3|PASS|completed|dash.sh   ; dash.sh        ; out/-
+line-over-512-bytes      ; RID|5|PASS|completed|LONG                   ; -              ; out
 garbage-text             ; hello world                  ; -              ; out
 os-line-mid-file         ; #os Windows/1.0              ; -              ; out
 run-line-malformed       ; #run bogus                   ; -              ; out
@@ -190,7 +201,7 @@ TABLE
     [ "$rkey" = "-" ] && continue
     ck "n22/lines/$name-reader-before" "${want#*/}" "$(lm_v "$r" "before\\.$name")"
   done < <(cp_rows "$t")
-  ck "n22/lines/base-holds-exactly-the-in-rows" "7" "$(lm_v "$r" nrec)"
+  ck "n22/lines/base-holds-exactly-the-in-rows" "11" "$(lm_v "$r" nrec)"
 }
 
 run_parse_header_cases() {

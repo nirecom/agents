@@ -19,8 +19,8 @@ c_leftovers() {
   say n "$(lm_ls | wc -w | tr -d ' ')"
 }
 
-c_leftovers_new() { c_leftovers "$1" "dur.2.$(lm_tok).${LM_DAY}T000001-5.log"; }
-c_plant_cur_new() { lm_plant_dur "dur.2.$(lm_tok).${LM_DAY}T000001-5.log" 120 "Windows/10.0.26300" "1:n1"; }
+c_leftovers_new() { c_leftovers "$1" "$LM_CUR.$(lm_tok).${LM_DAY}T000001-5.log"; }
+c_plant_cur_new() { lm_plant_dur "$LM_CUR.$(lm_tok).${LM_DAY}T000001-5.log" 120 "Windows/10.0.26300" "1:n1"; }
 c_plant_old() { lm_plant_dur "dur.1.$(lm_oldtok "$LM_W26300").${LM_DAY}T000001-21.log${3:-}" "$1" - "$2"; }
 c_age_old() { lm_age "$(lm_dur_dir)/dur.1.$(lm_oldtok "$LM_W26300").${LM_DAY}T000001-21.log${2:-}" "$1"; }
 
@@ -32,10 +32,10 @@ c_state() {
   old="$(lm_dur_dir)/dur.1.$(lm_oldtok "$LM_W26300").${LM_DAY}T000001-21.log"
   say vals "$(lm_get $1)"
   say lock "$([ -e "$(lm_dur_dir)/.ledger.lock" ] && echo 1 || echo 0)"
-  say outs "$(lm_count "dur.2.$(lm_tok).*-0*.log")"
+  say outs "$(lm_count "$LM_CUR.$(lm_tok).*-0*.log")"
   say mig "$(lm_count '*.migrating')"
   say oldsum "$(lm_sum "$old")"
-  say body "$(for f in "$(lm_dur_dir)"/dur.2."$(lm_tok)".*-0*.log; do [ -f "$f" ] && grep -v '^#' "$f"; done | tr '\n' ';')"
+  say body "$(for f in "$(lm_dur_dir)"/"$LM_CUR"."$(lm_tok)".*-0*.log; do [ -f "$f" ] && grep -v '^#' "$f"; done | tr '\n' ';')"
   say rid "$(lm_rid)"
 }
 
@@ -118,14 +118,14 @@ run_migrate_line_cases() {
   lm_run "$c" c_plant_raw "RID|4|mine/k" "ffffffffffffffff|8|other/key"
   lm_run "$c" c_init >/dev/null
   r="$(lm_run "$c" c_state mine/k)"; rid="$(lm_v "$r" rid)"
-  ck "n17/12/other-repo-rows-kept" "4|$(semi_sort "$rid|4|mine/k;ffffffffffffffff|8|other/key;")" \
+  ck "n17/12/other-repo-rows-kept" "4|$(semi_sort "$rid|4|?|?|mine/k;ffffffffffffffff|8|?|?|other/key;")" \
     "$(lm_v "$r" vals)|$(semi_sort "$(lm_v "$r" body)")"
   long="$(printf 'k%.0s' $(seq 1 600))"
   c="$(lm_cache)"
   lm_run "$c" c_plant_raw "RID|4|ok/key" "RID|12345|bad/a" "RID|x|bad/b" "abc|3|bad/c" "RID|3|" "RID|3|a|b" "RID|5|$long"
   lm_run "$c" c_init >/dev/null
   r="$(lm_run "$c" c_state ok/key)"
-  ck "n17/13/only-reader-valid-lines-carried" "4|$(lm_v "$r" rid)|4|ok/key;:0" "$(lm_v "$r" vals)|$(lm_v "$r" body):$(lm_v "$r" mig)"
+  ck "n17/13/only-reader-valid-lines-carried" "4|$(lm_v "$r" rid)|4|?|?|ok/key;:0" "$(lm_v "$r" vals)|$(lm_v "$r" body):$(lm_v "$r" mig)"
 }
 
 # Review C5, table-driven: each row is `label:expected:key-suffix:line`; KEY in the line is

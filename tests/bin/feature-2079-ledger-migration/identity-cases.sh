@@ -27,7 +27,7 @@ c_ident() {
 c_writer() {
   local seg
   run_all_dur_writer_init "$LM_REPO"
-  run_all_dur_append "id/a.sh" 7
+  run_all_dur_append "id/a.sh" 7 PASS completed
   seg="$RUN_ALL_DUR_SEGMENT"
   say name "${seg##*/}"
   say first "$(head -n 1 "$seg" 2>/dev/null)"
@@ -125,10 +125,10 @@ run_identity_writer_cases() {
   local out tok LM_S="$LM_W26300" LM_HOST=stubhost LM_R="3.5.4-0.x86_64" LM_LIBSET=dur
   out="$(lm_run "$(lm_cache)" c_writer)"
   tok="$(lm_v "$out" tok)"
-  if [ -n "$tok" ] && printf '%s\n' "$(lm_v "$out" name)" | grep -qE "^dur\\.2\\.$tok\\.[0-9]{8}T[0-9]{6}-[0-9]+\\.log\$"; then
-    pass "n16/6/segment-named-dur-2"
+  if [ -n "$tok" ] && printf '%s\n' "$(lm_v "$out" name)" | grep -qE "^$LM_CUR_RE\\.$tok\\.[0-9]{8}T[0-9]{6}-[0-9]+\\.log\$"; then
+    pass "n16/6/segment-named-current-schema"
   else
-    fail "n16/6/segment-named-dur-2" "name=$(lm_v "$out" name) tok=$tok"
+    fail "n16/6/segment-named-current-schema" "name=$(lm_v "$out" name) tok=$tok"
   fi
   ck "n16/6/segment-header" "#os Windows/10.0.26300" "$(lm_v "$out" first)"
   ck "n16/6/reader-skips-header" "7" "$(lm_v "$out" val)"
