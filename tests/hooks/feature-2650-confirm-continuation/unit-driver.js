@@ -56,7 +56,7 @@ for (const stage of X.ARTIFACTS) {
   const S = stage.toUpperCase();
   const c = call("continueReason", stage);
   check(`continueReason(${stage}) — exact wording`,
-    c === `[confirm-plan] continue: as your next message, emit only echo "<<WORKFLOW_CONFIRM_${S}: {one-line summary}>>" — the approval dialog follows.`, show(c));
+    c === `[confirm-plan] continue: as your next message, emit only echo "<<WORKFLOW_CONFIRM_${S}: {one-line summary}>>" — the presentation is recorded, so the approval dialog follows.`, show(c));
   check(`continueReason(${stage}) — no URL, path, sid or error/fail/missing word`,
     typeof c === "string" && !/https?:\/\/|[\\/]\.workflow-plans|\.md\b/.test(c) && !c.includes(sid) && !/error|fail|missing/i.test(c), show(c));
   for (const cause of ["no-receipt", "not-last", "unpublished"]) {

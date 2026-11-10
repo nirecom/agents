@@ -1,11 +1,11 @@
 "use strict";
-// hooks/stop-confirm-plan-guard/block-reasons.js — the Stop guard's block reasons, ranked by
+// hooks/lib/presentation-turn/block-reasons.js — the presentation turn's block reasons, ranked by
 // firstBlock: layer 2, plan-link, close-on-link, unpublished, plan-size / plan-lang.
 
 const fs = require("fs");
 const path = require("path");
-const SP = require("../lib/sentinel-patterns");
-const { PLAN_ARTIFACT_NAMES, rowFor, stepForSuffix } = require("../workflow-state/plan-step-table");
+const SP = require("../sentinel-patterns");
+const { PLAN_ARTIFACT_NAMES, rowFor, stepForSuffix } = require("../../workflow-state/plan-step-table");
 
 // The table's next skill for a plan artifact name; detail may also branch straight to BRANCHING_COMPLETE.
 function nextSkillFor(stage) {
@@ -29,11 +29,11 @@ function resultIsError(entries, id) {
 // The stage's plan is over HARD (#2631) or violates PLAN_LANG (#2278): Layer 2 and the
 // presentation share it. -> {kind: "plan-size"|"plan-lang", reason} | null, size first.
 function planRelintReason(sid, stage) {
-  const { relintPlanArtifact, formatPlanLangViolations } = require("../lib/plan-artifact-lang");
+  const { relintPlanArtifact, formatPlanLangViolations } = require("../plan-artifact-lang");
   const relint = relintPlanArtifact(sid, stage);
   if (relint.skipped !== null) return null;
   const size = relint.size;
-  if (size && size.verdict === "hard" && require("../lib/size-session-gate").sizeCheckState(sid) !== "exempt") {
+  if (size && size.verdict === "hard" && require("../size-session-gate").sizeCheckState(sid) !== "exempt") {
     return { kind: "plan-size", reason: "[confirm-plan] Layer 2/plan-size: " + path.basename(relint.artifactPath) + " is " +
       size.value + " " + size.unit + ", over HARD " + size.hard + " — compress it below HARD (send it back to the planner) before CONFIRM_" +
       stage.toUpperCase() + "; limits: rules/coding/file-split.md" };
@@ -87,7 +87,7 @@ function filesOf(sid, markers, plansDir, stage) {
   }
   if (named.length > 0) return named;
   try {
-    return [require("../workflow-state/plan-artifact-owner").resolvePlanArtifactOwner(sid, stage, undefined, { plansDir }).path];
+    return [require("../../workflow-state/plan-artifact-owner").resolvePlanArtifactOwner(sid, stage, undefined, { plansDir }).path];
   } catch (_) {
     return [];
   }
@@ -95,7 +95,7 @@ function filesOf(sid, markers, plansDir, stage) {
 
 function planLinkReason(ctx) {
   const { sid, markers, tail, plansDir, gateFor, linkFor } = ctx;
-  const tc = require("../lib/plan-link-turn-check");
+  const tc = require("../plan-link-turn-check");
   // Stop judges only the stages this turn wrote; a CONFIRM turn is judged at PreToolUse.
   const stages = tc.stagesToCheck({ markers, includeConfirm: false });
   for (const stage of stages) {
@@ -117,10 +117,10 @@ function planLinkReason(ctx) {
 // link appears there is judged, so a re-quoted earlier plan followed by prose blocks too.
 function closeOnLinkReason(ctx) {
   const { sid, markers, tail, plansDir, gateFor, linkFor } = ctx;
-  const tc = require("../lib/plan-link-turn-check");
-  const CC = require("../lib/confirm-continuation");
-  const { checkPlanApproval } = require("../workflow-state/plan-approval-check");
-  const { approvalArtifactPath } = require("../lib/presentation-receipt");
+  const tc = require("../plan-link-turn-check");
+  const CC = require("../confirm-continuation");
+  const { checkPlanApproval } = require("../../workflow-state/plan-approval-check");
+  const { approvalArtifactPath } = require("../presentation-receipt");
   const lastText = tail.lastTextBlock || "";
   for (const stage of PLAN_ARTIFACT_NAMES) {
     const step = stepForSuffix(stage);
@@ -144,12 +144,12 @@ function closeOnLinkReason(ctx) {
 function unpublishedReason(presented) {
   const hit = presented.find((p) => !p.receiptLink);
   if (!hit) return null;
-  return { kind: "unpublished", reason: require("../lib/confirm-continuation").presentAgainReason(hit.stage, "unpublished") };
+  return { kind: "unpublished", reason: require("../confirm-continuation").presentAgainReason(hit.stage, "unpublished") };
 }
 
 // Wrapped here, not in the reason builders: planRelintReason is reused inside layer2Reason.
 function convLang(reason) {
-  try { return require("../lib/conv-lang").withConvLang(reason); } catch (_) { return reason; /* the bare reason still blocks */ }
+  try { return require("../conv-lang").withConvLang(reason); } catch (_) { return reason; /* the bare reason still blocks */ }
 }
 
 // firstBlock(ctx, presented) -> {kind, reason} | null, in the order the reasons are ranked.

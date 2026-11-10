@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // tests/hooks/feature-2820-receipt-step-boundary.js
-// Tests: hooks/lib/presentation-receipt.js, hooks/stop-confirm-plan-guard.js, hooks/confirm-checkpoint.js, hooks/stop-confirm-plan-guard/block-reasons.js, hooks/stop-confirm-plan-guard/undecidable.js, hooks/lib/confirm-continuation.js, hooks/lib/plan-link-turn-check.js, hooks/lib/confirm-sentinel.js, hooks/lib/temporary-migrations/stage-to-step/index.js
+// Tests: hooks/lib/presentation-receipt.js, hooks/stop-confirm-plan-guard.js, hooks/confirm-checkpoint.js, hooks/lib/presentation-turn/block-reasons.js, hooks/stop-confirm-plan-guard/undecidable.js, hooks/lib/confirm-continuation.js, hooks/lib/plan-link-turn-check.js, hooks/lib/confirm-sentinel.js, hooks/lib/temporary-migrations/stage-to-step/index.js
 // Tags: TL2, hooks, confirm-plan, presentation-receipt, stop-guard, workflow-step, plan-artifact-name, compat-layer, scope:issue-specific, glossary, migration
 // TL3 gap: the real host's Stop -> PreToolUse ordering of one presentation and its CONFIRM echo;
 // mitigated by bin/check-verification-gate.sh (category: hook-registration).
@@ -181,11 +181,11 @@ test("undecidable-marker-artifacts-picks-intent", () => {
 });
 caseEnd();
 
-caseBegin("gate-lookup-receives-the-step", "hooks/stop-confirm-plan-guard/block-reasons.js");
+caseBegin("gate-lookup-receives-the-step", "hooks/lib/presentation-turn/block-reasons.js");
 // outline and detail are spelled the same as artifact and step, and intent's gate is ON whether it is
 // looked up or not, so only a spy on the lookup key tells a missed conversion apart.
 test("plan-link-reason-gate-key", () => {
-  const BR = req("hooks/stop-confirm-plan-guard/block-reasons");
+  const BR = req("hooks/lib/presentation-turn/block-reasons");
   const s = R.sessionAt("intent", { tag: 7031 });
   const gateFor = spyGate("ON");
   // The link line is in the last text block, so planLinkReason passes and its gate lookup is recorded.
@@ -194,7 +194,7 @@ test("plan-link-reason-gate-key", () => {
   assert.ok(stepKeyed(gateFor.seen), JSON.stringify(gateFor.seen));
 });
 test("close-on-link-reason-gate-key", () => {
-  const BR = req("hooks/stop-confirm-plan-guard/block-reasons");
+  const BR = req("hooks/lib/presentation-turn/block-reasons");
   const s = R.sessionAt("intent", { tag: 7032 });
   const gateFor = spyGate("ON");
   // planLinkReason finds the link in the last text block, then closeOnLinkReason judges the prose after it.

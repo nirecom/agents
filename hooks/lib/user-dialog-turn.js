@@ -13,13 +13,19 @@ const { readTurnTail, parseLines, splitTurns, isRealUserPrompt } = require("./tr
 // read-only. The codegraph name is environment-specific; an exact-name match is inert where absent.
 const READ_ONLY_TOOL_NAMES = Object.freeze(new Set(["Read", "Grep", "Glob", "mcp__codegraph__codegraph_explore"]));
 
+// readTurnTail reads a bounded tail (#2936), so each read mode keeps its own memo: the current turn
+// for classify, and per iso the tail grown back to a human prompt stamped at or before it.
 const memo = new WeakMap();
+const sinceMemo = new WeakMap();
+
+function entriesOf(tail) {
+  return Array.isArray(tail.entries) ? tail.entries : parseLines(tail.lines);
+}
 
 function readOnce(input) {
   if (memo.has(input)) return memo.get(input);
   const tail = readTurnTail({ input });
-  const entries = parseLines(tail.lines);
-  const r = { tail, entries };
+  const r = { tail, entries: entriesOf(tail) };
   memo.set(input, r);
   return r;
 }
@@ -29,6 +35,16 @@ function isHumanPrompt(entry) {
   if (!isRealUserPrompt(entry)) return false;
   const origin = entry.origin;
   return origin == null || (typeof origin === "object" && origin.kind === "human");
+}
+
+function readSince(input, t) {
+  if (!sinceMemo.has(input)) sinceMemo.set(input, new Map());
+  const byT = sinceMemo.get(input);
+  if (byT.has(t)) return byT.get(t);
+  const tail = readTurnTail({ input, reachedBy: (e) => isHumanPrompt(e) && Date.parse(e.timestamp) <= t });
+  const r = { tail, entries: entriesOf(tail) };
+  byT.set(t, r);
+  return r;
 }
 
 const contentOf = (entry) => {
@@ -80,7 +96,7 @@ function countHumanPromptsSince(input, iso) {
     const t = Date.parse(iso);
     if (typeof iso !== "string" || !Number.isFinite(t)) return null;
     if (!input || typeof input !== "object" || typeof input.transcript_path !== "string" || !input.transcript_path) return null;
-    const { entries } = readOnce(input);
+    const { entries } = readSince(input, t);
     if (entries.length === 0) return null;
     const prompts = entries.filter(isHumanPrompt).map((e) => Date.parse(e.timestamp));
     let k = -1;
