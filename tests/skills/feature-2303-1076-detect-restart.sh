@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/skills/feature-2303-1076-detect-restart.sh
 # Tests: skills/worktree-end/scripts/detect-restart.sh, install/deployed-sources.txt
-# Tags: scope:issue-specific, TL2, worktree-end, detect-restart, post-merge, settings, skill-md, deployed-sources, pwsh-not-required
+# Tags: scope:issue-specific, TL2, worktree-end, detect-restart, post-merge, settings, skill-md, deployed-sources, pwsh-not-required, rules-injection
 #
 # #2303: any settings(-extension).json change → cc_restart and installer_rerun both required; Stage C
 # reads install/deployed-sources.txt. #1076: a SKILL.md add/delete/frontmatter change → cc_restart
@@ -40,9 +40,9 @@ chmod +x "$STUB_BIN/gh"
 # the SKILL.md helper when present) at its real relative path; the declaration is copied, absent, or a dir.
 fixture_tree() {
   local fx="$_ISOLATION_TMP_ROOT/fx-$1"
-  mkdir -p "$fx/skills/worktree-end/scripts" "$fx/install"
+  mkdir -p "$fx/skills/worktree-end/scripts" "$fx/install" "$fx/hooks/lib"
   cp "$REAL_SCRIPTS/detect-restart.sh" "$fx/skills/worktree-end/scripts/"
-  [ -f "$REAL_SCRIPTS/detect-restart-skill-md.js" ] && cp "$REAL_SCRIPTS/detect-restart-skill-md.js" "$fx/skills/worktree-end/scripts/"
+  for h in detect-restart-skill-md.js detect-restart-rules.js; do [ -f "$REAL_SCRIPTS/$h" ] && cp "$REAL_SCRIPTS/$h" "$fx/skills/worktree-end/scripts/"; done; cp "$SCRIPT_CHECKOUT_ROOT"/hooks/lib/rules-{policy-reader,injection-policy}.js "$fx/hooks/lib/"
   case "$2" in
     none) ;;
     dir) mkdir -p "$fx/install/deployed-sources.txt" ;;
@@ -164,7 +164,7 @@ run_detect() {
   RUN_RC=0
   RUN_OUT="$(cd "$_ISOLATION_TMP_ROOT" && run_with_timeout 60 env PATH="$STUB_BIN:$PATH" \
     STUB_GH_LOG="$GH_LOG" STUB_GH_FILES="$files_file" STUB_GH_DIFF="$diff" STUB_GH_FAIL="$failmode" \
-    bash "$fx/skills/worktree-end/scripts/detect-restart.sh" 999 2>/dev/null)" || RUN_RC=$?
+    bash "$fx/skills/worktree-end/scripts/detect-restart.sh" 999 "$fx" 2>/dev/null)" || RUN_RC=$?
 }
 
 # line_of <key> — the output line for one category.
@@ -249,7 +249,7 @@ case_begin "existing-rows-still-required" "skills/worktree-end/scripts/detect-re
 run_detect "$FX_STD" "CLAUDE.md" "$EMPTY"
 check_eq "CLAUDE.md row unchanged" "cc_restart=required|CLAUDE.md modified in PR" "$(line_of cc_restart)"
 run_detect "$FX_STD" "rules/workflow-off.md" "$EMPTY"
-check_eq "rules/ row unchanged" "cc_restart=required|rules/ modified in PR (rules/ content loads into the effective CLAUDE.md ruleset)" "$(line_of cc_restart)"
+check_eq "rules/ row unchanged" "cc_restart=required|rules/ unconditional rule modified in PR (loaded at session start, no paths: key)" "$(line_of cc_restart)"
 run_detect "$FX_STD" "install.sh" "$EMPTY"
 check_eq "install.sh row unchanged" "installer_rerun=required|install.sh modified in PR" "$(line_of installer_rerun)"
 run_detect "$FX_STD" "install/lib/settings-assembly.js" "$EMPTY"
