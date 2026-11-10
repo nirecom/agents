@@ -19,7 +19,7 @@ SPLIT_GROUPS=(
     "wip-state-migration.sh"
     "issue-create-phase0a.sh"
     "issue-create-preflight.sh"
-    "run-issue-setup.sh"
+    "run-issue-setup.sh" "run-issue-setup-subgroup.sh"
 )
 # Groups share no state (each owns its mktemp fixture root), so they run in
 # parallel; logs are buffered per group and printed in SPLIT_GROUPS order.
