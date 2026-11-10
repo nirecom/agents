@@ -9,12 +9,16 @@
 # hia_issue_closing_merge_shas <n>  (reads; non-zero on failure)
 # An empty <repo> omits --repo, so the CLI resolves the project from HIA_ROOT itself.
 
+_HIA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 _hia_origin() { git -C "${1:-${HIA_ROOT:-.}}" remote get-url origin 2>/dev/null; }
 
+# hia_host judges with the migrate rule (bin/lib/migrate-forge-type.js); no CLI or a failure → unknown.
 hia_host() {
-    case "$(_hia_origin "${1:-}")" in
-        *gitlab.com[:/]*|*gitlab.*[:/]*) echo gitlab ;;
-        *github.com[:/]*) echo github ;;
+    local t
+    t="$(node "$_HIA_DIR/../../detect-forge-type" --repo-dir "${1:-${HIA_ROOT:-.}}" --field type --guess-unconfigured-host 2>/dev/null)" || t=""
+    case "$t" in
+        github|gitlab) echo "$t" ;;
         *) echo unknown ;;
     esac
 }
