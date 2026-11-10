@@ -76,11 +76,11 @@ else
     fx_ledger_clear
     mkdir -p "$(fx_ledger_dir)"
     # Newer NAME, written FIRST and then back-dated as far as touch allows.
-    printf '%s|2|shared/x.sh\n' "$RID" > "$(seg_path "$NEW_NAME")"
+    printf '%s|2|PASS|completed|shared/x.sh\n' "$RID" > "$(seg_path "$NEW_NAME")"
     touch -t 202001010000 "$(seg_path "$NEW_NAME")" 2>/dev/null || true
     sleep 1
     # Older NAME, written LAST, so it is unambiguously the newest file on disk.
-    printf '%s|9|shared/x.sh\n' "$RID" > "$(seg_path "$OLD_NAME")"
+    printf '%s|9|PASS|completed|shared/x.sh\n' "$RID" > "$(seg_path "$OLD_NAME")"
     touch "$(seg_path "$OLD_NAME")" 2>/dev/null || true
 
     NEWEST_FILE="$(newest_by_mtime)"
@@ -110,10 +110,10 @@ elif [ -z "$RID" ] || [ -z "$HOST_TOK" ]; then
 else
     fx_ledger_clear
     mkdir -p "$(fx_ledger_dir)"
-    printf '%s|9|shared/x.sh\n' "$RID" > "$(seg_path "$NEW_NAME")"
+    printf '%s|9|PASS|completed|shared/x.sh\n' "$RID" > "$(seg_path "$NEW_NAME")"
     touch -t 202001010000 "$(seg_path "$NEW_NAME")" 2>/dev/null || true
     sleep 1
-    printf '%s|2|shared/x.sh\n' "$RID" > "$(seg_path "$OLD_NAME")"
+    printf '%s|2|PASS|completed|shared/x.sh\n' "$RID" > "$(seg_path "$OLD_NAME")"
     touch "$(seg_path "$OLD_NAME")" 2>/dev/null || true
 
     run_all_dur_lookup "$AG" "$KEYS" "$OUT"

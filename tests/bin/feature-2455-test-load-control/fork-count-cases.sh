@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/bin/feature-2455-test-load-control/fork-count-cases.sh — FC1-FC4.
+# tests/bin/feature-2455-test-load-control/fork-count-cases.sh — FC1-FC5.
 # Counts process launches, never wall time: a fork count is deterministic on every
 # host, while a timing bound is either flaky or too loose to catch O(N) regressions.
 
@@ -9,6 +9,14 @@ FC_R30="$(mk_repo)"; synth_corpus "$FC_R30" 30
 FC_R120="$(mk_repo)"; synth_corpus "$FC_R120" 120
 FC_C30="$TMPDIR_BASE/fc-cache-30"
 FC_C120="$TMPDIR_BASE/fc-cache-120"
+# Pinned empty (#2932): a duration ledger under the cache would let the heavy test judge start
+# its awk pass and break the FC1 hit awk=0 premise, so the fixture caches start with no ledger.
+mkdir -p "$FC_C30" "$FC_C120"
+if [ ! -e "$FC_C30/durations" ] && [ ! -e "$FC_C120/durations" ]; then
+    pass "FC1 premise: the fixture cache roots hold no duration ledger"
+else
+    fail "FC1 premise: a duration ledger exists under the fixture cache roots"
+fi
 # Host limit and AUTO_CONFIG_TEST_MAX_JOBS pinned in the environment: a valid env value
 # skips its .env resolver, so no host-dependent launch is added to the tally.
 FC_ENV=(TEST_MAX_JOBS_PER_HOST=4 AUTO_CONFIG_TEST_MAX_JOBS=on)
@@ -126,6 +134,52 @@ for _f in "$CORPUS_LIB" "$LANES_LIB" "$AGENTS_ROOT/bin/lib/test-host-lanes-share
     fi
 done
 case_ran FC4
+
+# ── FC5 the heavy test judge: one awk pass whatever the rows and queries (#2932) ──
+FC5_DRV="$TMPDIR_BASE/fc5-drv.sh"
+printf '%s\n' '#!/usr/bin/env bash' 'set -u' \
+    '. "$DRV_PAR_LIB" || exit 90' '. "$DRV_DUR_LIB" || exit 90' \
+    '[ -f "$DRV_THJ_LIB" ] || exit 91' '. "$DRV_THJ_LIB" || exit 91' \
+    'run_all_dur_repo_id "$DRV_REPO" >/dev/null' 'run_all_dur_host_token >/dev/null' \
+    'd="$(run_all_dur_dir)"' 'mkdir -p "$d"' \
+    'f="$d/dur.$RUN_ALL_DUR_SCHEMA.$RUN_ALL_DUR_HOST_TOKEN.20200101T000001-1.log"' \
+    'printf "#os %s\n" "${RUN_ALL_DUR_OS_ATTR:-fixture}" >"$f"' \
+    'i=0' 'while [ "$i" -lt "$DRV_ROWS" ]; do i=$((i + 1))' \
+    '  printf "%s|%s|PASS|completed|tests/bin/t%s.sh\n" "$RUN_ALL_DUR_REPO_ID" $((i % 7 + 1)) $(((i - 1) % 30 + 1)) >>"$f"' \
+    'done' ': >"$FORK_LOG"' 'PATH="$DRV_SHIM:$PATH"' \
+    'thj_judge "$DRV_REPO" "$DRV_PATHS" "$DRV_OUT"' > "$FC5_DRV"
+# fc5_judge <rows> <queries> — judges <queries> paths over a fresh <rows>-row ledger; sets FC_TALLY / RC.
+fc5_judge() {
+    local cache="$TMPDIR_BASE/fc5-cache-$1-$2" pf="$TMPDIR_BASE/fc5-paths-$2" i
+    : > "$pf"
+    for ((i = 1; i <= $2; i++)); do printf 'tests/bin/t%s.sh\n' "$i" >> "$pf"; done
+    : > "$FORK_LOG_FILE"
+    (
+        cd "$NEUTRAL_DIR" || exit 2
+        bash "$RUN_TIMEOUT" 60 env "RUN_ALL_CACHE_DIR=$cache" "FORK_LOG=$FORK_LOG_FILE" \
+            "DRV_PAR_LIB=$PAR_LIB" "DRV_DUR_LIB=$AGENTS_ROOT/bin/lib/run-all-durations.sh" \
+            "DRV_THJ_LIB=$AGENTS_ROOT/bin/lib/test-heavy-judge.sh" "DRV_REPO=$FC_R30" "DRV_ROWS=$1" \
+            "DRV_PATHS=$pf" "DRV_OUT=$cache/judge.tsv" "DRV_SHIM=$SHIM_DIR" bash "$FC5_DRV"
+    ) >/dev/null 2>&1
+    RC=$?
+    FC_TALLY="$(LC_ALL=C sort "$FORK_LOG_FILE" | uniq -c | awk '{ printf "%s=%s ", $2, $1 }')"
+}
+fc5_judge 30 2; _a="$FC_TALLY"; _arc="$RC"; _awk_a="$(fc_count awk)"
+fc5_judge 30 10; _b="$FC_TALLY"; _brc="$RC"; _awk_b="$(fc_count awk)"
+fc5_judge 300 10; _c="$FC_TALLY"; _crc="$RC"; _awk_c="$(fc_count awk)"
+if [ "$_arc" = "91" ]; then
+    fail "FC5 bin/lib/test-heavy-judge.sh missing (not implemented) — the judge's launches cannot be counted"
+elif [ "$_arc" -eq 0 ] && [ "$_brc" -eq 0 ] && [ "$_crc" -eq 0 ] && [ "$_awk_a" = "1" ] && [ "$_awk_b" = "1" ] && [ "$_awk_c" = "1" ]; then
+    pass "FC5 thj_judge launches awk exactly once for 2 and 10 queries over 30 and 300 rows"
+else
+    fail "FC5 thj_judge awk launches — rc=$_arc/$_brc/$_crc awk=$_awk_a/$_awk_b/$_awk_c"
+fi
+if [ "$_arc" -eq 0 ] && [ "$_a" = "$_b" ] && [ "$_b" = "$_c" ]; then
+    pass "FC5 thj_judge launch counts independent of the query and row counts [$_a]"
+else
+    fail "FC5 thj_judge launch counts vary — q2=[$_a] q10=[$_b] rows300=[$_c] rc=$_arc/$_brc/$_crc"
+fi
+case_ran FC5
 
 case_end
 

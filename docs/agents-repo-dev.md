@@ -109,7 +109,7 @@ changes wording is a case that silently stopped being the case it was.
 **Deciding not to consolidate is a recordable decision.**
 `bin/audit-tests.sh --dup-groups` lists files sharing a `# Tests:` group; tag a
 file that stays separate on purpose with `dup-group-keep:<reason>` (`cross-hook`,
-`distinct-layer`, `size-hard-limit`). Scope and tag vocabulary:
+`distinct-layer`, `size-hard-limit`, `time-hard-limit`). Scope and tag vocabulary:
 `skills/_shared/test-design.md`.
 
 ## Where shared on-demand md files live

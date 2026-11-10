@@ -1,6 +1,8 @@
 # --with-language: column 9 (the language set of the query) and column 10 (the new file
 # name shape per language) (#2411). Sourced by tests/bin/feature-2411-route-language.sh.
 # shellcheck shell=bash
+# Tests: bin/find-tests-for-source.sh, bin/lib/test-route-destination/language.sh
+# Tags: TL2, scope:issue-specific
 
 echo ""
 echo "=== columns: --with-language ==="
@@ -68,5 +70,27 @@ if [ -n "$F_TF" ] && [ "$(printf '%s\n' "$F_TF" | cut -f 1-8)" = "$N_TF" ]; then
   pass "--test-file: columns 1-8 equal the run without the flag"
 else
   fail "--test-file columns 1-8" "differ from the run without the flag"
+fi
+case_end
+
+# nf_set <output> — the distinct field counts of its rows, comma-joined.
+nf_set() { printf '%s\n' "$1" | awk -F'\t' '{print NF}' | sort -u | paste -sd, -; }
+
+case_begin "with-time-adds-exactly-one-last-column" "bin/find-tests-for-source.sh"
+assert_eq "--with-time rc=$T_SRC_RC" "--with-time rc=0"
+assert_eq "--with-time --with-language rc=$TL_SRC_RC" "--with-time --with-language rc=0"
+assert_eq "--with-time field counts=$(nf_set "$T_SRC")" "--with-time field counts=9"
+assert_eq "both flags field counts=$(nf_set "$TL_SRC")" "both flags field counts=11"
+assert_eq "no flag field counts=$(nf_set "$N_SRC")" "no flag field counts=8"
+assert_eq "--with-language field counts=$(nf_set "$F_SRC")" "--with-language field counts=10"
+if [ -n "$T_SRC" ] && [ "$(printf '%s\n' "$T_SRC" | cut -f 1-8)" = "$N_SRC" ]; then
+  pass "--with-time: columns 1-8 equal the run without the flag"
+else
+  fail "--with-time columns 1-8" "differ from the run without the flag"
+fi
+if [ -n "$TL_SRC" ] && [ "$(printf '%s\n' "$TL_SRC" | cut -f 1-10)" = "$F_SRC" ]; then
+  pass "both flags: columns 1-10 equal the --with-language run, in order"
+else
+  fail "both flags columns 1-10" "differ from the --with-language run"
 fi
 case_end

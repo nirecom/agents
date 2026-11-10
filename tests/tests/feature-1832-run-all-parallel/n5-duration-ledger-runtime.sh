@@ -29,12 +29,12 @@ dur_missing() {
 
 # secs_of_key <substring> — seconds of the last record whose key contains that substring.
 secs_of_key() {
-    fx_ledger_cat | awk -F'|' -v pat="$1" 'NF == 3 && index($3, pat) { v = $2 } END { print v }'
+    fx_ledger_cat | awk -F'|' -v pat="$1" 'NF == 5 && index($5, pat) { v = $2 } END { print v }'
 }
 
 # keys_matching <substring> — how many records carry a key containing that substring.
 keys_matching() {
-    fx_ledger_cat | awk -F'|' -v pat="$1" 'NF == 3 && index($3, pat) { n++ } END { print n + 0 }'
+    fx_ledger_cat | awk -F'|' -v pat="$1" 'NF == 5 && index($5, pat) { n++ } END { print n + 0 }'
 }
 
 # ===========================================================================
@@ -95,7 +95,7 @@ P_FAIL="$(fx_contract_field "$P_OUT" FAIL)"
 P_SKIP="$(fx_contract_field "$P_OUT" SKIP)"
 P_EXEC="$(fx_contract_field "$P_OUT" EXECUTED)"
 P_LINES="$(fx_ledger_lines)"
-P_ONCE="$(fx_ledger_cat | awk -F'|' 'NF == 3 { n[$3]++ } END { c = 0; for (k in n) if (n[k] == 1) c++; print c + 0 }')"
+P_ONCE="$(fx_ledger_cat | awk -F'|' 'NF == 5 { n[$5]++ } END { c = 0; for (k in n) if (n[k] == 1) c++; print c + 0 }')"
 P1_N="$(keys_matching p1.sh)"; P2_N="$(keys_matching p2.sh)"; P3_N="$(keys_matching p3.sh)"
 
 if [ "$P_PASS" = "1" ] && [ "$P_FAIL" = "1" ] && [ "$P_SKIP" = "1" ] && [ "$P_EXEC" = "3" ]; then

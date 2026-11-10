@@ -14,10 +14,12 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 fx_init "n21-runner-closed" >/dev/null
 r21() { printf 'R21 %s=%s\n' "$1" "$2"; }
 
-# states — `open:closed:consolidating:base` counts of the ledger's dur.2 files.
+# The current ledger format's name prefix (v3, #2932); fixed here like LM_CUR in _lib.sh.
+CUR="dur.3"
+# states — `open:closed:consolidating:base` counts of the ledger's current-format files.
 states() {
   local f o=0 c=0 s=0 b=0
-  for f in "$(fx_ledger_dir)"/dur.2.*; do
+  for f in "$(fx_ledger_dir)"/"$CUR".*; do
     [ -f "$f" ] || continue
     case "${f##*/}" in
       *.closed.log) c=$((c + 1)) ;;
@@ -28,16 +30,28 @@ states() {
   done
   printf '%s:%s:%s:%s' "$o" "$c" "$s" "$b"
 }
-closed_names() { local f; for f in "$(fx_ledger_dir)"/dur.2.*.closed.log; do [ -f "$f" ] && printf '%s ' "${f##*/}"; done; }
+closed_names() { local f; for f in "$(fx_ledger_dir)"/"$CUR".*.closed.log; do [ -f "$f" ] && printf '%s ' "${f##*/}"; done; }
 ledger_files() { local n=0 f; for f in "$(fx_ledger_dir)"/dur.*; do [ -e "$f" ] && n=$((n + 1)); done; echo "$n"; }
 # closed_records — `<key basename>=<secs>` of every record in the closed segments, sorted.
 closed_records() {
   local f l k
-  for f in "$(fx_ledger_dir)"/dur.2.*.closed.log; do
+  for f in "$(fx_ledger_dir)"/"$CUR".*.closed.log; do
     [ -f "$f" ] || continue
     while IFS= read -r l; do
       case "$l" in '#'*|'') continue ;; esac
       k="${l##*|}"; l="${l#*|}"; printf '%s=%s\n' "${k##*/}" "${l%%|*}"
+    done < "$f"
+  done | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//'
+}
+# closed_vt — `<key basename>=<verdict>|<termination>` of every v3 record in the closed segments, sorted.
+closed_vt() {
+  local f l rid secs v t k
+  for f in "$(fx_ledger_dir)"/"$CUR".*.closed.log; do
+    [ -f "$f" ] || continue
+    while IFS= read -r l; do
+      case "$l" in '#'*|'') continue ;; esac
+      IFS='|' read -r rid secs v t k <<< "$l"
+      printf '%s=%s|%s\n' "${k##*/}" "$v" "$t"
     done < "$f"
   done | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//'
 }
@@ -87,6 +101,22 @@ fx_exec "$root" 60 "$FX_TMP_ROOT/7.out" "$FX_TMP_ROOT/7.err" -j 2 "$q/q1.sh" "$q
 r21 fail_rc "$?"
 r21 fail_states "$(states)"
 r21 fail_records "$(closed_records)"
+r21 fail_vt "$(closed_vt)"
+
+# (8, #2932 v3) the harvest records the file result: a per-file timeout as `-|timeout`, a pass
+# as `PASS|completed`. RUN_ALL_TIMEOUT_SECONDS caps every file's timeout for this run only.
+# The per-file kill lives in the launcher libs; fx_new_root copies none of them, and without
+# them <root>/bin/run-all.sh falls back to tlr_exec_plain (no timeout), so copy the set here
+# exactly as tests/tests/feature-2501-run-all-report/_fx.sh rr_new_root does.
+cp "$FX_REPO_ROOT/bin/run-with-timeout.sh" "$root/bin/run-with-timeout.sh"
+for lib in run-all-launch.sh run-all-classify.sh run-all-hits.sh timed-exec.sh test-language-registry-plain.sh; do
+  [ -f "$FX_REPO_ROOT/bin/lib/$lib" ] && cp "$FX_REPO_ROOT/bin/lib/$lib" "$root/bin/lib/$lib"
+done
+export RUN_ALL_TIMEOUT_SECONDS=3
+fx_exec "$root" 90 "$FX_TMP_ROOT/8.out" "$FX_TMP_ROOT/8.err" -j 2 "$q/q1.sh" "$q/slow.sh"
+r21 timeout_rc "$?"
+unset RUN_ALL_TIMEOUT_SECONDS
+r21 timeout_vt "$(closed_vt)"
 
 # (4) --print-plan and a run with no test to execute create no ledger at all.
 fx_exec "$root" 60 "$FX_TMP_ROOT/4.out" "$FX_TMP_ROOT/4.err" --print-plan --all

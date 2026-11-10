@@ -79,12 +79,12 @@ else
     fresh_ledger
     i=1
     while [ "$i" -le "$TOTAL_SEG" ]; do
-        printf '%s|1|filler/%s.sh\n' "$RID" "$i" > "$(stamped "$i")"
+        printf '%s|1|PASS|completed|filler/%s.sh\n' "$RID" "$i" > "$(stamped "$i")"
         i=$((i + 1))
     done
-    printf '%s|5|edge/newest.sh\n' "$RID" >> "$(stamped "$TOTAL_SEG")"
-    printf '%s|3|edge/in.sh\n' "$RID" >> "$(stamped "$IN_AT")"
-    printf '%s|4|edge/out.sh\n' "$RID" >> "$(stamped "$OUT_AT")"
+    printf '%s|5|PASS|completed|edge/newest.sh\n' "$RID" >> "$(stamped "$TOTAL_SEG")"
+    printf '%s|3|PASS|completed|edge/in.sh\n' "$RID" >> "$(stamped "$IN_AT")"
+    printf '%s|4|PASS|completed|edge/out.sh\n' "$RID" >> "$(stamped "$OUT_AT")"
     {
         printf 'k1\tedge/newest.sh\n'
         printf 'k2\tedge/in.sh\n'
@@ -111,9 +111,9 @@ elif [ -z "$RID" ]; then
     fx_fail "N29. cannot build the fixture: repo id is empty"
 else
     fresh_ledger
-    printf '%s|4|beyond/cutoff.sh\n' "$RID" > "$(stamped 1)"
+    printf '%s|4|PASS|completed|beyond/cutoff.sh\n' "$RID" > "$(stamped 1)"
     awk -v n=$((MAX_REC + 50)) -v rid="$RID" \
-        'BEGIN { for (i = 0; i < n; i++) printf "%s|1|pad/%d.sh\n", rid, i }' > "$(stamped 2)"
+        'BEGIN { for (i = 0; i < n; i++) printf "%s|1|PASS|completed|pad/%d.sh\n", rid, i }' > "$(stamped 2)"
     {
         printf 'k1\tbeyond/cutoff.sh\n'
         printf 'k2\tpad/0.sh\n'
@@ -162,7 +162,7 @@ FX_LEDGER_KEEP=1
 fresh_ledger
 i=1
 while [ "$i" -le "$PLANT" ]; do
-    printf '%s|1|young/%s.sh\n' "${RID:-0000000000000000}" "$i" > "$(fx_ledger_dir)/dur.$SCHEMA.${HOST_TOK:-0000000000000000}.20200101T0000$(printf '%02d' "$i")-1.log"
+    printf '%s|1|PASS|completed|young/%s.sh\n' "${RID:-0000000000000000}" "$i" > "$(fx_ledger_dir)/dur.$SCHEMA.${HOST_TOK:-0000000000000000}.20200101T0000$(printf '%02d' "$i")-1.log"
     i=$((i + 1))
 done
 

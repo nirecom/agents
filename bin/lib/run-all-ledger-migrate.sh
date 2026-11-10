@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# --- BEGIN temporary: dur.1 / pre-v2 baseline segments → dur.2 / v2 segments migration added 2026-10-03 ---
-# deletion-condition: every host the user runs has executed this code once and holds no dur.1.*, pre-v2 *.seg, or *.migrating file (#2079 follow-up issue)
+# --- BEGIN temporary: dur.1 / dur.2 / pre-v2 baseline segments → dur.3 / v2 segments migration added 2026-10-03 ---
+# deletion-condition: no dur.1 / dur.2 segment has been written on any host for 30 days or more, and no host holds a dur.1.*, dur.2.*, pre-v2 *.seg, or *.migrating file (#2079 / #2932 follow-up)
 # Removing this file (its one source line in run-all-durations.sh and the `command -v` call
 # sites) changes no permanent behaviour — legacy files simply stop being read.
-# Why it exists: #2079 S6 re-keyed Windows hosts and versioned both ledger formats, so
-# records written before it would otherwise be orphaned. Sourced only, by
-# run-all-durations.sh after run-all-durations-consolidate.sh (its lock is shared).
+# Why it exists: #2079 S6 re-keyed Windows hosts and versioned both ledger formats, and #2932
+# moved the ledger rows to v3, so records written before either would otherwise be orphaned.
+# Sourced only, by run-all-durations.sh after run-all-durations-consolidate.sh (its lock is shared).
 
 RUN_ALL_MIGRATE_WINDOW_MIN=60
 
@@ -82,9 +82,12 @@ _ralm_claim() {
 
 # --- duration ledger ----------------------------------------------------------
 
+# _RALM_PAT: dur.1 (every token on Windows, re-keyed by #2079); _RALM_PAT2: this host's own
+# dur.2 segments (#2932 v3 rows), whatever their state (open, closed, consolidating, base).
 _ralm_dur_pat() {
     _RALM_PAT="dur.1.*.log"
     [ "$_RALM_WIN" -eq 1 ] || _RALM_PAT="dur.1.$_RALM_TOK.*.log"
+    _RALM_PAT2="dur.2.$_RALM_TOK.*.log"
 }
 
 # run_all_ledger_migrate_durations_pending <ledger-dir> — 0 when legacy work may exist;
@@ -94,14 +97,36 @@ run_all_ledger_migrate_durations_pending() {
     [ -d "$dir" ] || return 1
     _ralm_facts
     _ralm_dur_pat
-    for f in "$dir"/$_RALM_PAT "$dir"/$_RALM_PAT.migrating "$dir"/.migrate.tmp.*; do
+    for f in "$dir"/$_RALM_PAT "$dir"/$_RALM_PAT.migrating "$dir"/$_RALM_PAT2 "$dir"/$_RALM_PAT2.migrating \
+             "$dir"/.migrate.tmp.*; do
         [ -e "$f" ] && return 0
     done
     return 1
 }
 
-# run_all_ledger_migrate_durations <ledger-dir> <list> — claim legacy dur.1 segments and
-# append `<stamp>-<pid>\t<attribute>\t<claim>` per claim to <list>; the caller
+# _ralm_list_dur2 <dir> <list> — `<stamp>-<pid>\t-\t<claim>` per claimed dur.2 segment; the
+# attribute `-` makes the fold take it from the segment's own `#os` header.
+_ralm_list_dur2() {
+    local f sp
+    for f in "$1"/$_RALM_PAT2.migrating; do
+        [ -f "$f" ] || continue
+        sp="${f##*/}"
+        sp="${sp#dur.2."$_RALM_TOK".}"
+        sp="${sp%.log.migrating}"
+        sp="${sp%.closed}"
+        sp="${sp%.consolidating}"
+        case "$sp" in
+            [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]-[0-9]*) ;;
+            *) continue ;;
+        esac
+        case "${sp#*-}" in *[!0-9]*) continue ;; esac
+        printf '%s\t-\t%s\n' "$sp" "$f" >>"$2"
+    done
+    return 0
+}
+
+# run_all_ledger_migrate_durations <ledger-dir> <list> — claim legacy dur.1 / dur.2 segments
+# and append `<stamp>-<pid>\t<attribute>\t<claim>` per claim to <list>; the caller
 # (run_all_dur_consolidate, holding the ledger lock) folds them in and deletes them.
 run_all_ledger_migrate_durations() {
     local dir="${1:-}" list="${2:-}" f n sp
@@ -110,6 +135,8 @@ run_all_ledger_migrate_durations() {
     _ralm_dur_pat
     _ralm_sweep_temps "$dir"
     _RALM_SKIP_DEST="" _ralm_claim "$dir" "$_RALM_PAT"
+    _RALM_SKIP_DEST="" _ralm_claim "$dir" "$_RALM_PAT2"
+    _ralm_list_dur2 "$dir" "$list"
     [ "$_RALM_WIN" -eq 1 ] && _ralm_win_tokens
     for f in "$dir"/$_RALM_PAT.migrating; do
         [ -f "$f" ] || continue
@@ -204,4 +231,4 @@ NF == 6 && $1 == "v1" { print "v2", $2, TOK, $4, $5, $6, ATTR; next }
     _run_all_dur_unlock "$dir"
     return 0
 }
-# --- END temporary: dur.1 / pre-v2 baseline segments → dur.2 / v2 segments migration ---
+# --- END temporary: dur.1 / dur.2 / pre-v2 baseline segments → dur.3 / v2 segments migration ---

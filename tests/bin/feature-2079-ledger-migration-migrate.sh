@@ -45,6 +45,38 @@ case_begin "n17-non-windows-same-token" "bin/lib/run-all-ledger-migrate.sh"
 run_migrate_nonwindows_cases
 case_end
 
+case_begin "n23-dur2-rows-migrate-to-v3" "bin/lib/run-all-ledger-migrate.sh"
+run_v3_migrate_rows_cases
+case_end
+
+case_begin "n23-migrated-attr-from-os-header" "bin/lib/run-all-ledger-migrate.sh"
+run_v3_migrate_attr_cases
+case_end
+
+case_begin "n23-young-dur2-not-claimed" "bin/lib/run-all-ledger-migrate.sh"
+run_v3_migrate_window_cases
+case_end
+
+case_begin "n23-dur2-claim-boundary" "bin/lib/run-all-ledger-migrate.sh"
+run_v3_migrate_claim_cases
+case_end
+
+case_begin "n23-dur2-broken-name-claim-kept" "bin/lib/run-all-ledger-migrate.sh"
+run_v3_migrate_broken_cases
+case_end
+
+case_begin "n23-fold-keep-per-series" "bin/lib/run-all-durations-consolidate.sh"
+run_v3_fold_cases
+case_end
+
+case_begin "n23-base-record-cap" "bin/lib/run-all-durations-consolidate.sh"
+run_v3_cap_cases
+case_end
+
+case_begin "n23-file-result-and-append" "bin/lib/run-all-durations.sh"
+run_v3_writer_lib_cases
+case_end
+
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

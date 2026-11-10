@@ -68,17 +68,19 @@ c18_norun_old() {
 
 c18_foreign() {
   local long; long="$(printf 'k%.0s' $(seq 1 600))"
-  lm_plant_dur "dur.2.0123456789abcdef.${DC_D}T010000-5.closed.log" 30 "$DC_L" "1:f.sh"
+  lm_plant_dur "$LM_CUR.0123456789abcdef.${DC_D}T010000-5.closed.log" 30 "$DC_L" "1:f.sh"
   dc_plant "garbage" 30 "#os $DC_L" 1:g1.sh
   dc_plant "${DC_D}T010000-abc.closed" 30 "#os $DC_L" 1:g2.sh
   dc_plant "2026030T010000-5.closed" 30 "#os $DC_L" 1:g3.sh
-  dc_plant "${DC_D}T020000-21.closed" 30 "#os $DC_L" 2:ok/key "=ffffffffffffffff|3|z.sh" \
-    "=RID|12345|bad/a" "=RID|x|bad/b" "=abc|3|bad/c" "=RID|3|" "=RID|3|a|b" "=RID|5|$long"
+  # v3 rows; the 3-field `RID|3|bad/d` is a legacy row inside a live segment (invalid there).
+  dc_plant "${DC_D}T020000-21.closed" 30 "#os $DC_L" 2:ok/key "=ffffffffffffffff|3|PASS|completed|z.sh" \
+    "=RID|12345|PASS|completed|bad/a" "=RID|x|PASS|completed|bad/b" "=abc|3|PASS|completed|bad/c" \
+    "=RID|3|PASS|completed|" "=RID|3|bad/d" "=RID|3|PA SS|completed|bad/e" "=RID|5|PASS|completed|$long"
 }
 # c18_foreign_sums — name:cksum of everything consolidation must leave alone.
 c18_foreign_sums() {
   local f
-  for f in "$(lm_dur_dir)"/dur.2.0123456789abcdef.* "$(lm_dur_dir)"/*garbage* "$(lm_dur_dir)"/*-abc.closed.log \
+  for f in "$(lm_dur_dir)"/"$LM_CUR".0123456789abcdef.* "$(lm_dur_dir)"/*garbage* "$(lm_dur_dir)"/*-abc.closed.log \
     "$(lm_dur_dir)"/*.2026030T*; do
     [ -f "$f" ] && printf '%s:%s ' "${f##*/}" "$(lm_sum "$f")"
   done | sed "s/$(lm_tok)/T/g"
@@ -111,7 +113,7 @@ c18_cons_rc() { dc_cons; say rc "$?"; }
 # ---- parent side --------------------------------------------------------------
 
 run_cons_attr_cases() {
-  local c r b="dur.2.T.${DC_D}T030000"
+  local c r b="$LM_CUR.T.${DC_D}T030000"
   dc_lib_ck n18/1; c="$(lm_cache)"
   lm_run "$c" c18_two_attrs; lm_run "$c" dc_cons
   r="$(lm_run "$c" dc_report a.sh b.sh c.sh d.sh)"
@@ -134,7 +136,7 @@ run_cons_provenance_cases() {
   ck "n18/2/late-closed-newer-provenance-wins" "9 2" "$(lm_v "$r" vals)"
   ck "n18/2/one-base-named-by-max-provenance" "1:0:0" \
     "$(lm_v "$r" nb):$(lm_v "$r" ncons):$(lm_v "$r" nclosed)"
-  case "$(lm_v "$r" bases)" in "dur.2.T.${DC_D}T020000-0"[1-9]".log") pass "n18/2/base-s-is-t2" ;;
+  case "$(lm_v "$r" bases)" in "$LM_CUR.T.${DC_D}T020000-0"[1-9]".log") pass "n18/2/base-s-is-t2" ;;
     *) fail "n18/2/base-s-is-t2" "bases=[$(lm_v "$r" bases)]" ;; esac
   c="$(lm_cache)"
   lm_run "$c" c18_same_prov; lm_run "$c" dc_cons
@@ -142,7 +144,7 @@ run_cons_provenance_cases() {
   c="$(lm_cache)"
   lm_run "$c" c18_name; lm_run "$c" dc_cons
   r="$(lm_run "$c" dc_report p.sh q.sh)"
-  ck "n18/4/base-named-max-stamp-0k" "dur.2.T.${DC_D}T040000-01.log|5 6" "$(lm_v "$r" ls)|$(lm_v "$r" vals)"
+  ck "n18/4/base-named-max-stamp-0k" "$LM_CUR.T.${DC_D}T040000-01.log|5 6" "$(lm_v "$r" ls)|$(lm_v "$r" vals)"
   lm_run "$c" c18_same_second
   ck "n18/4/same-second-open-read-before-base" "8 6" "$(lm_v "$(lm_run "$c" dc_report p.sh q.sh)" vals)"
 }
@@ -185,17 +187,17 @@ run_cons_foreign_cases() {
   dc_lib_ck n18/9; c="$(lm_cache)"
   lm_run "$c" c18_foreign
   before="$(lm_run "$c" c18_foreign_sums)"
-  [ "$(printf '%s' "$before" | grep -o 'dur\.2\.' | wc -l)" -eq 4 ] || fail "n18/9/fixture-planted" "before=[$before]"
+  [ "$(printf '%s' "$before" | grep -oF "$LM_CUR." | wc -l)" -eq 4 ] || fail "n18/9/fixture-planted" "before=[$before]"
   lm_run "$c" dc_cons
   r="$(lm_run "$c" dc_report ok/key)"
   ck "n18/9-12/other-token-and-other-state-names-untouched" "$before" "$(lm_run "$c" c18_foreign_sums)"
   ck "n18/9/consolidation-ran" "2|1|0" "$(lm_v "$r" vals)|$(lm_v "$r" nb)|$(lm_v "$r" nclosed)"
   body="$(printf '%s' "$(lm_run "$c" dc_body)" | tr ';' '\n' | grep -v '^#' | LC_ALL=C sort | tr '\n' ';')"
-  ck "n18/10-11/other-repo-kept-invalid-dropped" "R|2|ok/key;ffffffffffffffff|3|z.sh;" "$body"
+  ck "n18/10-11/other-repo-kept-invalid-dropped" "R|2|PASS|completed|ok/key;ffffffffffffffff|3|PASS|completed|z.sh;" "$body"
 }
 
 run_cons_reorder_cases() {
-  local c r b="dur.2.T.${DC_D}T030000"
+  local c r b="$LM_CUR.T.${DC_D}T030000"
   dc_lib_ck n18/13; c="$(lm_cache)"
   lm_run "$c" c18_reorder; lm_run "$c" dc_cons
   r="$(lm_run "$c" dc_report a.sh b.sh c.sh)"
@@ -205,7 +207,7 @@ run_cons_reorder_cases() {
   c="$(lm_cache)"
   lm_run "$c" c18_aside_left; lm_run "$c" dc_cons
   r="$(lm_run "$c" dc_report a.sh b.sh)"
-  ck "n18/14/publish-skips-leftover-aside-number" "dur.2.T.${DC_D}T050000-02.log" "$(lm_v "$r" ls)"
+  ck "n18/14/publish-skips-leftover-aside-number" "$LM_CUR.T.${DC_D}T050000-02.log" "$(lm_v "$r" ls)"
   ck "n18/14/leftover-aside-read-then-deleted" "1 2" "$(lm_v "$r" vals)"
 }
 
@@ -221,10 +223,10 @@ run_cons_window_cases() {
   ck "n18/15/consolidate-exit-0" "0" "$(lm_v "$(lm_run "$c" c18_cons_rc)" rc)"
   r="$(lm_run "$c" dc_report k1.sh "k$C18_MANY.sh")"
   ck "n18/15/all-inputs-removed-one-base" "0|0|1" "$(lm_v "$r" nclosed)|$(lm_v "$r" ncons)|$(lm_v "$r" nb)"
-  want="$(for ((i = 1; i <= C18_MANY; i++)); do printf 'R|%s|k%s.sh\n' "$i" "$i"; done | LC_ALL=C sort | tr '\n' ';')"
+  want="$(for ((i = 1; i <= C18_MANY; i++)); do printf 'R|%s|PASS|completed|k%s.sh\n' "$i" "$i"; done | LC_ALL=C sort | tr '\n' ';')"
   got="$(printf '%s' "$(lm_run "$c" dc_body)" | tr ';' '\n' | grep -v '^#' | LC_ALL=C sort | tr '\n' ';')"
   ck "n18/15/base-holds-all-70-keys-and-values" "$want" "$got"
-  case ";$got" in *";R|1|k1.sh;"*) pass "n18/15/oldest-stamp-key-in-base" ;;
+  case ";$got" in *";R|1|PASS|completed|k1.sh;"*) pass "n18/15/oldest-stamp-key-in-base" ;;
     *) fail "n18/15/oldest-stamp-key-in-base" "body=[$got]" ;; esac
   ck "n18/15/oldest-and-newest-readable-after" "1 $C18_MANY" "$(lm_v "$r" vals)"
 }

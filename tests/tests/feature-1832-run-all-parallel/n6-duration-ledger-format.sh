@@ -66,40 +66,47 @@ secs_for() {
 expand_raw() {
     local s="$1"
     s="${s//@RID@/$RID}"
+    s="${s//@VT@/|PASS|completed|}"
     s="${s//@P@/|}"
     s="${s//%CR%/$CR}"
     printf '%s' "$s"
 }
 
 # ===========================================================================
-# N26 — the record grammar: <repo_id 16 alnum>|<secs 1-4 digits>|<non-empty key>
+# N26 — the v3 record grammar (#2932):
+#   <repo_id 16 alnum>|<secs 1-4 digits>|<verdict>|<termination>|<non-empty key>
 # ===========================================================================
 # Spaces and non-ASCII are DATA, not delimiters: only |, TAB, CR, LF and emptiness
-# disqualify a key. Every row below is planted in one segment and resolved in one call,
-# so a rule that leaks (say, dropping the NF check) surfaces as exactly its own row.
+# disqualify a key. A 3-field (dur.2) line in a live segment is rejected.
+# @VT@ expands to |PASS|completed|.
 LINE_TABLE='
-ok_zero|@RID@@P@0@P@t/ok-zero.sh|t/ok-zero.sh|0
-ok_mid|@RID@@P@7@P@t/ok-mid.sh|t/ok-mid.sh|7
-ok_max_digits|@RID@@P@9999@P@t/ok-max.sh|t/ok-max.sh|9999
-ok_dotted|@RID@@P@3@P@t/sub.dir/ok.dots.sh|t/sub.dir/ok.dots.sh|3
-ok_inner_space|@RID@@P@5@P@t/with space.sh|t/with space.sh|5
-ok_leading_space|@RID@@P@8@P@ t/lead-space.sh| t/lead-space.sh|8
-ok_non_ascii|@RID@@P@6@P@t/naïve-café-tëst.sh|t/naïve-café-tëst.sh|6
-bad_secs_5digits|@RID@@P@12345@P@t/bad-5digits.sh|t/bad-5digits.sh|(empty)
-bad_secs_empty|@RID@@P@@P@t/bad-secs-empty.sh|t/bad-secs-empty.sh|(empty)
-bad_secs_alpha|@RID@@P@abc@P@t/bad-secs-alpha.sh|t/bad-secs-alpha.sh|(empty)
-bad_secs_negative|@RID@@P@-3@P@t/bad-secs-neg.sh|t/bad-secs-neg.sh|(empty)
-bad_secs_plus|@RID@@P@+3@P@t/bad-secs-plus.sh|t/bad-secs-plus.sh|(empty)
-bad_secs_float|@RID@@P@1.5@P@t/bad-secs-float.sh|t/bad-secs-float.sh|(empty)
-bad_secs_padded|@RID@@P@ 3@P@t/bad-secs-pad.sh|t/bad-secs-pad.sh|(empty)
+ok_zero|@RID@@P@0@VT@t/ok-zero.sh|t/ok-zero.sh|0
+ok_mid|@RID@@P@7@VT@t/ok-mid.sh|t/ok-mid.sh|7
+ok_max_digits|@RID@@P@9999@VT@t/ok-max.sh|t/ok-max.sh|9999
+ok_dotted|@RID@@P@3@VT@t/sub.dir/ok.dots.sh|t/sub.dir/ok.dots.sh|3
+ok_inner_space|@RID@@P@5@VT@t/with space.sh|t/with space.sh|5
+ok_leading_space|@RID@@P@8@VT@ t/lead-space.sh| t/lead-space.sh|8
+ok_non_ascii|@RID@@P@6@VT@t/naïve-café-tëst.sh|t/naïve-café-tëst.sh|6
+ok_fail_completed|@RID@@P@2@P@FAIL@P@completed@P@t/ok-fail.sh|t/ok-fail.sh|2
+ok_timeout|@RID@@P@3@P@-@P@timeout@P@t/ok-timeout.sh|t/ok-timeout.sh|3
+ok_migrated_unknown|@RID@@P@4@P@?@P@?@P@t/ok-migrated.sh|t/ok-migrated.sh|4
+bad_secs_5digits|@RID@@P@12345@VT@t/bad-5digits.sh|t/bad-5digits.sh|(empty)
+bad_secs_empty|@RID@@P@@VT@t/bad-secs-empty.sh|t/bad-secs-empty.sh|(empty)
+bad_secs_alpha|@RID@@P@abc@VT@t/bad-secs-alpha.sh|t/bad-secs-alpha.sh|(empty)
+bad_secs_negative|@RID@@P@-3@VT@t/bad-secs-neg.sh|t/bad-secs-neg.sh|(empty)
+bad_secs_plus|@RID@@P@+3@VT@t/bad-secs-plus.sh|t/bad-secs-plus.sh|(empty)
+bad_secs_float|@RID@@P@1.5@VT@t/bad-secs-float.sh|t/bad-secs-float.sh|(empty)
+bad_secs_padded|@RID@@P@ 3@VT@t/bad-secs-pad.sh|t/bad-secs-pad.sh|(empty)
 bad_two_fields|@RID@@P@t/bad-two.sh|t/bad-two.sh|(empty)
-bad_four_fields|@RID@@P@4@P@t/bad-four.sh@P@extra|t/bad-four.sh|(empty)
+bad_v2_three_fields|@RID@@P@4@P@t/bad-v2.sh|t/bad-v2.sh|(empty)
+bad_four_fields|@RID@@P@4@P@PASS@P@t/bad-four.sh|t/bad-four.sh|(empty)
+bad_six_fields|@RID@@P@4@VT@t/bad-six.sh@P@extra|t/bad-six.sh|(empty)
 bad_no_separator|@RID@ 4 t/bad-nopipe.sh|t/bad-nopipe.sh|(empty)
-bad_repo_id_other|ZZZZZZZZZZZZZZZZ@P@4@P@t/bad-rid-other.sh|t/bad-rid-other.sh|(empty)
-bad_repo_id_short|ZZZZZZZZZZZZZZZ@P@4@P@t/bad-rid-short.sh|t/bad-rid-short.sh|(empty)
-bad_repo_id_long|ZZZZZZZZZZZZZZZZZ@P@4@P@t/bad-rid-long.sh|t/bad-rid-long.sh|(empty)
-bad_key_inner_cr|@RID@@P@4@P@t/bad%CR%cr.sh|t/bad-cr.sh|(empty)
-bad_key_empty|@RID@@P@4@P@||(empty)
+bad_repo_id_other|ZZZZZZZZZZZZZZZZ@P@4@VT@t/bad-rid-other.sh|t/bad-rid-other.sh|(empty)
+bad_repo_id_short|ZZZZZZZZZZZZZZZ@P@4@VT@t/bad-rid-short.sh|t/bad-rid-short.sh|(empty)
+bad_repo_id_long|ZZZZZZZZZZZZZZZZZ@P@4@VT@t/bad-rid-long.sh|t/bad-rid-long.sh|(empty)
+bad_key_inner_cr|@RID@@P@4@VT@t/bad%CR%cr.sh|t/bad-cr.sh|(empty)
+bad_key_empty|@RID@@P@4@VT@||(empty)
 '
 
 if lib_missing "N26a. every accepted record class resolves to its own value"; then
@@ -173,7 +180,7 @@ else
         fname="${fname//%S%/$SCHEMA}"
         fname="${fname//%H%/$HOST_TOK}"
         fresh_ledger
-        printf '%s|8|seg/probe.sh\n' "$RID" > "$(fx_ledger_dir)/$fname"
+        printf '%s|8|PASS|completed|seg/probe.sh\n' "$RID" > "$(fx_ledger_dir)/$fname"
         run_all_dur_lookup "$AG" "$KEYS" "$OUT" || true
         got="$(secs_for k1)"
         [ "$got" = "$want" ] || NAME_BAD="$NAME_BAD $name(want=$want got=$got)"
@@ -197,8 +204,8 @@ fi
 if lib_missing "N35. two same-stamp segments with conflicting values resolve the same way every time"; then :
 else
     fresh_ledger
-    printf '%s|2|tie/x.sh\n' "$RID" > "$(seg_path 20200101T000005 1)"
-    printf '%s|9|tie/x.sh\n' "$RID" > "$(seg_path 20200101T000005 2)"
+    printf '%s|2|PASS|completed|tie/x.sh\n' "$RID" > "$(seg_path 20200101T000005 1)"
+    printf '%s|9|PASS|completed|tie/x.sh\n' "$RID" > "$(seg_path 20200101T000005 2)"
     printf 'k1\ttie/x.sh\n' > "$KEYS"
 
     run_all_dur_lookup "$AG" "$KEYS" "$OUT" || true; T1="$(secs_for k1)"
@@ -218,25 +225,33 @@ fi
 # The header is for a human reading the ledger; the reader must skip it, and every OTHER
 # line keeps the N26 record grammar. Asserted on the writer's own output, not a planted file.
 OS_RE='^#os [A-Za-z0-9._-]{1,32}/[A-Za-z0-9._-]{1,64}$'
-REC_RE='^[A-Za-z0-9]{16}\|[0-9]{1,4}\|[^|]+$'
+REC_RE='^[A-Za-z0-9]{16}\|[0-9]{1,4}\|[A-Za-z0-9?_-]{1,16}\|[A-Za-z0-9?_-]{1,16}\|[^|]+$'
 if lib_missing "N48a. the writer's segment starts with the #os attribute header"; then
     fx_fail "N48b. every non-header line keeps the record grammar (implementation missing or unloadable: $DUR_LIB_REL)"
     fx_fail "N48c. the reader skips the header line (implementation missing or unloadable: $DUR_LIB_REL)"
+    fx_fail "N48d. the writer records each file's verdict and termination (implementation missing or unloadable: $DUR_LIB_REL)"
 else
     fresh_ledger
     N48_SEG="$(
         RUN_ALL_DUR_SEGMENT=""
         run_all_dur_writer_init "$AG"
-        run_all_dur_append "hdr/a.sh" 4
-        run_all_dur_append "hdr/b.sh" 11
+        run_all_dur_append "hdr/a.sh" 4 PASS completed
+        run_all_dur_append "hdr/b.sh" 11 FAIL completed
         printf '%s' "$RUN_ALL_DUR_SEGMENT"
     )"
     N48_NAME="${N48_SEG##*/}"
     N48_FIRST="$(head -n 1 "$N48_SEG" 2>/dev/null)"
-    if [ "$SCHEMA" = "2" ] && [ "${N48_NAME#dur.2.}" != "$N48_NAME" ] && printf '%s\n' "$N48_FIRST" | grep -qE "$OS_RE"; then
+    if [ "$SCHEMA" = "3" ] && [ "${N48_NAME#dur.3.}" != "$N48_NAME" ] && printf '%s\n' "$N48_FIRST" | grep -qE "$OS_RE"; then
         fx_pass "N48a. $N48_NAME opens with '$N48_FIRST'"
     else
-        fx_fail "N48a. want schema 2, a dur.2.* name and an #os first line; got schema=$SCHEMA name=${N48_NAME:-none} first='$N48_FIRST'"
+        fx_fail "N48a. want schema 3, a dur.3.* name and an #os first line; got schema=$SCHEMA name=${N48_NAME:-none} first='$N48_FIRST'"
+    fi
+    N48_A="$(grep -cxF "$RID|4|PASS|completed|hdr/a.sh" "$N48_SEG" 2>/dev/null || true)"
+    N48_B="$(grep -cxF "$RID|11|FAIL|completed|hdr/b.sh" "$N48_SEG" 2>/dev/null || true)"
+    if [ "$N48_A:$N48_B" = "1:1" ]; then
+        fx_pass "N48d. the PASS file is written as PASS|completed and the FAIL file as FAIL|completed"
+    else
+        fx_fail "N48d. want one PASS|completed row for hdr/a.sh and one FAIL|completed row for hdr/b.sh, got $N48_A:$N48_B"
     fi
     N48_HDRS="$(grep -c '^#' "$N48_SEG" 2>/dev/null || true)"
     N48_BAD="$(tail -n +2 "$N48_SEG" 2>/dev/null | grep -cvE "$REC_RE" || true)"
@@ -247,7 +262,7 @@ else
         fx_fail "N48b. headers=$N48_HDRS non-conforming=$N48_BAD records=$N48_RECS (want 1/0/2)"
     fi
     fresh_ledger
-    printf '#os Linux/1.0\n%s|4|hdr/a.sh\n%s|11|hdr/b.sh\n' "$RID" "$RID" > "$(seg_path 20260101T000000 4242)"
+    printf '#os Linux/1.0\n%s|4|PASS|completed|hdr/a.sh\n%s|11|FAIL|completed|hdr/b.sh\n' "$RID" "$RID" > "$(seg_path 20260101T000000 4242)"
     printf 'k1\thdr/a.sh\nk2\thdr/b.sh\n' > "$KEYS"
     run_all_dur_lookup "$AG" "$KEYS" "$OUT" || true
     if [ "$(secs_for k1):$(secs_for k2)" = "4:11" ]; then

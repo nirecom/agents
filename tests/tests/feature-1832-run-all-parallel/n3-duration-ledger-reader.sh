@@ -77,9 +77,9 @@ else
     {
         printf 'not a record at all\n'
         printf '%s|5|a|b\n' "$RID"
-        printf '%s|12345|five/digits.sh\n' "$RID"
-        printf '%s|7|\n' "$RID"
-        printf '%s|3|good/a.sh\n' "$RID"
+        printf '%s|12345|PASS|completed|five/digits.sh\n' "$RID"
+        printf '%s|7|PASS|completed|\n' "$RID"
+        printf '%s|3|PASS|completed|good/a.sh\n' "$RID"
     } > "$(seg_path 20200101T000001 1)"
     {
         printf 'k1\tgood/a.sh\n'
@@ -108,8 +108,8 @@ printf 'k1\tshared/x.sh\n' > "$KEYS"
 # n11_case <old-secs> <new-secs> — resolves shared/x.sh with those two segments planted.
 n11_case() {
     fresh_ledger
-    printf '%s|%s|shared/x.sh\n' "$RID" "$1" > "$(seg_path 20200101T000001 1)"
-    printf '%s|%s|shared/x.sh\n' "$RID" "$2" > "$(seg_path 20200101T000002 1)"
+    printf '%s|%s|PASS|completed|shared/x.sh\n' "$RID" "$1" > "$(seg_path 20200101T000001 1)"
+    printf '%s|%s|PASS|completed|shared/x.sh\n' "$RID" "$2" > "$(seg_path 20200101T000002 1)"
     run_all_dur_lookup "$AG" "$KEYS" "$OUT" || return 1
     secs_for k1
 }
@@ -132,8 +132,8 @@ if lib_missing "N12. the later line in a segment wins"; then :
 else
     fresh_ledger
     {
-        printf '%s|9|shared/x.sh\n' "$RID"
-        printf '%s|2|shared/x.sh\n' "$RID"
+        printf '%s|9|PASS|completed|shared/x.sh\n' "$RID"
+        printf '%s|2|PASS|completed|shared/x.sh\n' "$RID"
     } > "$(seg_path 20200101T000001 1)"
     run_all_dur_lookup "$AG" "$KEYS" "$OUT"
     RC=$?
@@ -188,7 +188,7 @@ else
     MARK="$FX_TMP_ROOT/pwned-marker"
     rm -f "$MARK" 2>/dev/null || true
     EVIL='$(touch '"$MARK"')`touch '"$MARK"'`; rm -rf /tmp/nope; evil.sh'
-    printf '%s|4|%s\n' "$RID" "$EVIL" > "$(seg_path 20200101T000001 1)"
+    printf '%s|4|PASS|completed|%s\n' "$RID" "$EVIL" > "$(seg_path 20200101T000001 1)"
     printf 'k1\t%s\n' "$EVIL" > "$KEYS"
 
     run_all_dur_lookup "$AG" "$KEYS" "$OUT"
@@ -216,11 +216,11 @@ else
     fresh_ledger
     i=1
     while [ "$i" -le "$PLANT" ]; do
-        printf '%s|1|filler/%s.sh\n' "$RID" "$i" > "$(seg_path "20200101T$(printf '%06d' "$i")" 1)"
+        printf '%s|1|PASS|completed|filler/%s.sh\n' "$RID" "$i" > "$(seg_path "20200101T$(printf '%06d' "$i")" 1)"
         i=$((i + 1))
     done
-    printf '%s|6|planted/newest.sh\n' "$RID" >> "$(seg_path "20200101T$(printf '%06d' "$PLANT")" 1)"
-    printf '%s|4|planted/inside.sh\n' "$RID" >> "$(seg_path "20200101T$(printf '%06d' $((PLANT - 10)))" 1)"
+    printf '%s|6|PASS|completed|planted/newest.sh\n' "$RID" >> "$(seg_path "20200101T$(printf '%06d' "$PLANT")" 1)"
+    printf '%s|4|PASS|completed|planted/inside.sh\n' "$RID" >> "$(seg_path "20200101T$(printf '%06d' $((PLANT - 10)))" 1)"
     {
         printf 'k1\tplanted/newest.sh\n'
         printf 'k2\tplanted/inside.sh\n'
@@ -252,9 +252,9 @@ if lib_missing "N19. a segment longer than $MAX_REC lines is truncated, not fail
 else
     fresh_ledger
     PAD_SEG="$(seg_path 20200101T000001 1)"
-    printf '%s|5|early/known.sh\n' "$RID" > "$PAD_SEG"
+    printf '%s|5|PASS|completed|early/known.sh\n' "$RID" > "$PAD_SEG"
     awk -v n=$((MAX_REC + 100)) -v rid="$RID" \
-        'BEGIN { for (i = 0; i < n; i++) printf "%s|1|pad/%d.sh\n", rid, i }' >> "$PAD_SEG"
+        'BEGIN { for (i = 0; i < n; i++) printf "%s|1|PASS|completed|pad/%d.sh\n", rid, i }' >> "$PAD_SEG"
     {
         printf 'k1\tearly/known.sh\n'
         printf 'k2\tpad/0.sh\n'

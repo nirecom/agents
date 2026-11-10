@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # audit-tests.sh — Retire checker for issue-specific test files.
 # Usage: bin/audit-tests.sh [--dry-run] [--stale-months N] [--offline]
-#                           [--format text|json] [--fix-headers] [--dup-groups]
+#                           [--format text|json] [--fix-headers] [--dup-groups] [--heavy]
 #        bin/audit-tests.sh --embed-cases [--band-size N] [--order frequency|priority] [--only-file <relpath>]
 # Exit:  0 = candidates found, 1 = no candidates, 2 = error. Writes by default: a
 # flagless run DELETES candidates (git rm), --fix-headers rewrites headers in place;
-# --dry-run reports only. --dup-groups: read-only TSV (bin/lib/test-dup-group.sh).
+# --dry-run reports only. --dup-groups / --heavy: read-only TSV (bin/lib/test-dup-group.sh / test-heavy-judge.sh).
 # --embed-cases: docs/architecture/claude-code/sweep-tests-embed-cases.md.
 # Scans tests/<category>/feature-NNN-*.{sh,Tests.ps1}. Unit=case: refcount 0
 # whole-unit git rm, partial-orphan excises dead blocks, else file-level fallback.
@@ -33,6 +33,7 @@ FORMAT=text
 FIX_HEADERS=0
 FIX_APPLY=0
 DUP_GROUPS=0
+HEAVY=0
 sweep_write_mode_init
 
 while [[ $# -gt 0 ]]; do
@@ -48,6 +49,7 @@ while [[ $# -gt 0 ]]; do
     --offline) OFFLINE=1; shift ;;
     --fix-headers) FIX_HEADERS=1; shift ;;
     --dup-groups) DUP_GROUPS=1; shift ;;
+    --heavy) HEAVY=1; shift ;;
     --apply) sweep_write_mode_apply; FIX_APPLY=1; shift ;;
     --dry-run) sweep_write_mode_dry_run; shift ;;
     --format)
@@ -98,7 +100,14 @@ fi
 
 # Read-only inventory mode. Placed before gh init and cutoff computation: it
 # needs neither, so it stays offline-safe and timeout-free. No scope filter here
-# by design — the inventory is a corpus-wide fact (S3).
+# by design — the inventory is a corpus-wide fact (S3). --heavy is the same kind of mode.
+if [[ "$HEAVY" -eq 1 ]]; then
+  # shellcheck source=lib/test-heavy-judge.sh
+  source "$SCRIPT_DIR/lib/test-heavy-judge.sh"
+  thj_mode_guard "$FIX_APPLY" "$FIX_HEADERS" "$FORMAT" "$DUP_GROUPS" || exit 2
+  thj_audit_heavy "$REPO_ROOT" && exit 0
+  exit 2
+fi
 if [[ "$DUP_GROUPS" -eq 1 ]]; then
   tdg_mode_guard "$DUP_GROUPS" "$FIX_APPLY" "$FIX_HEADERS" "$FORMAT" || exit 2
   tdg_run "$REPO_ROOT" && exit 0
