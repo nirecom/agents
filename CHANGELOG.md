@@ -176,3 +176,7 @@ Changes: Fixed `find-peer --session self` failing with "not-in-list" when given 
 ### FEATURE: PR #2979 (2026-11-10)
 Background: fix(#2936): keep the Stop confirm-plan guard within its time budget a...
 Changes: Fixed: a plan confirmation could be refused with "no-receipt" after the Stop hook timed out on a long conversation; the hook now stays within its time budget, the confirmation recovers the missing receipt when the previous turn did present the plan, and the refusal message explains the possible timeout.
+
+### FEATURE: PR #2990 (2026-11-10)
+Background: feat(#2960): generalize how migrate judges its target repo (GitLab host, subgroup, test layout)
+Changes: /migrate now handles GitLab repos under subgroups (group/sub/project) and gitlab.* hosts without GITLAB_HOSTNAME set, and reports test layouts it cannot cover.
