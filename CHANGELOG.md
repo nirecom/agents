@@ -172,3 +172,7 @@ Changes: Editing a glossary Definition or Related no longer asks you to re-appro
 ### FEATURE: PR #2981 (2026-11-10)
 Background: fix(#2668): accept the unquoted own-session line of ListAgents in find-peer
 Changes: Fixed `find-peer --session self` failing with "not-in-list" when given a real ListAgents output; the session's own line is now recognized with or without quotes around its name, and an unreadable own line is now reported as an error instead of being ignored.
+
+### FEATURE: PR #2979 (2026-11-10)
+Background: fix(#2936): keep the Stop confirm-plan guard within its time budget a...
+Changes: Fixed: a plan confirmation could be refused with "no-receipt" after the Stop hook timed out on a long conversation; the hook now stays within its time budget, the confirmation recovers the missing receipt when the previous turn did present the plan, and the refusal message explains the possible timeout.
