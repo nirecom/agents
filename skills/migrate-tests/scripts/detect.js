@@ -7,13 +7,14 @@
 // not count) → testHarness and caseMarker off.
 // Each subdirectory holding tests becomes a category (by-target: covers its same-named source dir);
 // every other directory directly under tests/ becomes a supportDir. `sections[<candidate>]` is the
-// whole tests section ready for `bin/repo-settings --write-tests`.
+// whole tests section ready for `bin/repo-settings --write-tests`. `uncoveredTests` lists the test
+// files that section cannot place (a stray file beside categories, a deep file with no entrypoint).
 // CLI: node detect.js [--root <dir>] → the proposal as JSON on stdout.
 
 const fs = require("fs");
 const path = require("path");
 const HOOKS_LIB = path.join(__dirname, "..", "..", "..", "hooks", "lib");
-const { nativePath } = require(path.join(HOOKS_LIB, "repo-settings"));
+const { nativePath, placementIn } = require(path.join(HOOKS_LIB, "repo-settings"));
 const { entriesWhere } = require(path.join(HOOKS_LIB, "test-language-registry"));
 const { translateEre } = require(path.join(HOOKS_LIB, "ere", "translate"));
 
@@ -52,6 +53,26 @@ function walk(dir, rel, out) {
       out.push(r);
     }
   }
+}
+
+// A suite subfile `a/x/y` counts as placed when `files` holds an entrypoint `a/x.<ext>` beside its dir.
+function hasEntrypoint(files, f) {
+  const segs = f.split("/");
+  const prefix = [...segs.slice(0, -2), `${segs[segs.length - 2]}.`].join("/");
+  return files.some((e) => e.startsWith(prefix) && !e.slice(prefix.length).includes("/"));
+}
+
+// uncoveredTests(section, files) — the test files no consumer of the proposed section treats as a test.
+function uncoveredTests(section, files) {
+  if (!section) return [];
+  const out = [];
+  for (const f of files) {
+    const rel = `${TESTS_DIR}/${f}`;
+    const { kind } = placementIn(section, rel);
+    const strayFlat = kind === "flat" && section.categorization !== "flat";
+    if (strayFlat || (kind === "suite-subfile" && !hasEntrypoint(files, f))) out.push({ path: rel, placement: kind });
+  }
+  return out.sort((a, b) => (a.path < b.path ? -1 : 1));
 }
 
 function detect(rootArg) {
@@ -95,6 +116,7 @@ function detect(rootArg) {
     candidates,
     sections,
     testFiles: files.length,
+    uncoveredTests: uncoveredTests(sections[candidates[0]], files),
   };
 }
 

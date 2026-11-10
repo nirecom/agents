@@ -45,6 +45,18 @@ into `glab api projects/<path>` (and `gh api repos/<path>`), where a traversal
 segment would reach a project the caller never named. No resolvable project means
 no forge — fail-safe, applied symmetrically to both forges (CPR-ORTH).
 
+Migrate-only fallback (#2960): the `/migrate-*` host judges (`hostOf` in
+`bin/lib/migrate-needs.js`, `hia_host` via `bin/detect-forge-type --guess-unconfigured-host`)
+additionally treat an unconfigured `gitlab.*` host as `gitlab`, so a user without
+`GITLAB_HOSTNAME` keeps the pre-resolver behavior. The rule lives only in
+`bin/lib/migrate-forge-type.js`. It guesses toward gitlab only, and only when a
+project path resolved. The one github exception is a host that is exactly a key of
+plan-sync's `HOST_ALIASES` (`hooks/lib/plan-sync/remote-url.js`, e.g. `ssh.github.com`):
+it takes the alias target's type, and github only for a valid `owner/repo` path —
+the same rule plan-sync already applies, so no new host becomes github. The resolver and
+every other caller stay unchanged, so codehost routing, `isPrivateRepo` and plan-sync
+never hand an unconfigured host's path to `glab api` (#2308).
+
 ## 4. Codehost API surface
 
 `codehostGitlab` mirrors `codehostGithub`'s signature (CPR-ORTH) and drives

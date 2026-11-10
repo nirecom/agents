@@ -172,6 +172,7 @@ function commitUrlFor(target, sha) {
 }
 
 module.exports = {
+  HOST_ALIASES,
   isAllowedRemoteUrl,
   isPlaceholderUrl,
   fillPlaceholder,

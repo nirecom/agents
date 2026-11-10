@@ -5,6 +5,8 @@
 // GITLAB_HOSTNAME (and GITLAB_SSH_HOSTNAME) from .env (SSOT) and folds them
 // into resolveForgeTarget to classify the origin URL.
 // Relative require keeps it independent of any root variable.
+// --guess-unconfigured-host is for the /migrate-* skills only (bin/lib/migrate-forge-type.js);
+// every other caller keeps the resolver's type, so no unconfigured host reaches glab api (#2308).
 const { execFileSync } = require("child_process");
 const { resolveForgeTarget } = require("../hooks/lib/parse-remote-url");
 const { readGitlabHostConfig, readGitlabSshHostConfig } = require("../hooks/lib/forge-router");
@@ -35,6 +37,9 @@ if (url === null) {
 const gitlabHost = readGitlabHostConfig(repoDir);
 const gitlabSshHost = readGitlabSshHostConfig(repoDir);
 const res = resolveForgeTarget(url, { gitlabHost, gitlabSshHost }); // { type, host, project }
+if (process.argv.includes("--guess-unconfigured-host")) {
+  res.type = require("./lib/migrate-forge-type").guessUnconfiguredType(res);
+}
 
 if (field) {
   const v = res[field];
