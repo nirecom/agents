@@ -25,6 +25,7 @@ When the transcript tail is undecidable, it records each stage the final message
 It sends the `[confirm-plan] continue:` prompt at most once per receipt, also when the presentation followed a Stop block.
 Enforcement (PreToolUse): `confirm-checkpoint.js` passes a CONFIRM echo to the dialog only when the presentation receipt matches the plan's current path, link, and content, and spends the receipt.
 On a mismatch, or when it cannot verify, it denies and asks you to present the plan again; there is no cap.
+When the Stop hook left no receipt, `confirm-checkpoint.js` records it from the previous turn only when that turn passes the same presentation check; otherwise the deny names a possible Stop timeout.
 
 **CPA-3 — Gate check (`next-step --gate`).**
 Run the standalone command `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --gate` and follow the `GATE_ACTION` line of its stdout.
@@ -34,7 +35,7 @@ Never interpret ON/OFF yourself, and never read `GATE_ACTION` as a different val
 - `proceed`: take the caller's OFF branch (plan steps: print a one-paragraph prose summary, then proceed; the summary carries the CPA-2 plan-link line once). When `GATE_HINT` carries a warning sentence (e.g. a failed scope-change check), relay it to the user in that summary.
 - `ask`: when `GATE_HINT` names a scope change or carries a warning, show it to the user first; then take the caller's ON branch (plan steps: the sentinel procedure below; write-tests / write-code / update-docs / worktree-start: the skill's own ON branch — a pre-action gate asks via `AskUserQuestion`, a post-action gate presents the result and continues). <!-- askuser-none -->
   - Plan steps follow the three bullets below with no `AskUserQuestion` call; `<STAGE>` = `INTENT` / `OUTLINE` / `DETAIL` per the caller. <!-- askuser-none -->
-  - Presentation: end the final body text with "The approval dialog follows this message; if it does not appear, reply once you have reviewed the plan." and then the CPA-2 plan-link line as the last line, then close the turn.
+  - Presentation: end the final body text with "The approval dialog follows once this presentation is recorded; if it does not appear, reply once you have reviewed the plan." and then the CPA-2 plan-link line as the last line, then close the turn.
   - On `REASON` `pre-confirm-audit:cap-reached`: write in the presentation and in the CONFIRM echo summary that the Allow also accepts audit `<run-id>`.
   - CONFIRM echo (main path): when the turn end is blocked with a `[confirm-plan] continue:` prompt, emit only `echo "<<WORKFLOW_CONFIRM_{STAGE}: {one-line summary}>>"` as your next message.
   - CONFIRM echo (fallback): when no prompt came, let the turn close and wait for the user's reply; on a change request, revise and loop back to CPA-1, otherwise emit only that echo in the next turn.

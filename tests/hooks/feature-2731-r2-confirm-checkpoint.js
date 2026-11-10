@@ -178,7 +178,9 @@ for (const stage of STAGES) {
     const r = runHook(s, stage, "english", ["-r", NO_CC]);
     assert.ok(r.deny, `fixture: no receipt -> deny: ${JSON.stringify(r.json)}`);
     const reason = r.json.reason || "";
-    assert.ok(reason.startsWith(`[confirm-plan] CONFIRM_${stage.toUpperCase()} denied (no-receipt): present the plan again`), `fallback head:\n${reason}`);
+    assert.ok(reason.startsWith(`[confirm-plan] CONFIRM_${stage.toUpperCase()} denied (no-receipt) (`), `fallback head:\n${reason}`);
+    assert.ok(reason.includes("presentation-receipt-log.jsonl"), `fallback names the receipt log:\n${reason}`);
+    assert.ok(reason.includes("): present the plan again"), `fallback action:\n${reason}`);
     // #2820: the fallback names the workflow step (clarify_intent for the intent artifact).
     const step = stage === "intent" ? "clarify_intent" : stage;
     assert.ok(reason.includes(`(plan-link --step ${step})`), `plan-link command:\n${reason}`);

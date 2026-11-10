@@ -19,7 +19,7 @@ function anchoredTailOf(tail) {
   const c = anchor.message && anchor.message.content;
   if (!Array.isArray(c) || c.some((it) => it && it.type === "tool_use")) return null;
   const entries = Array.isArray(t.entries) ? t.entries : [];
-  // readTail re-parses the lines, so the anchor is found by uuid, not by identity.
+  // A refreshed tail may hold re-parsed entries, so the anchor is found by uuid, not by identity.
   let at = -1;
   for (let i = entries.length - 1; i >= 0; i--) {
     if (entries[i] && entries[i].uuid === anchor.uuid) { at = i; break; }
@@ -64,4 +64,21 @@ function noticeFor(stages) {
     "so it may need to be presented again before approval.";
 }
 
-module.exports = { anchoredTailOf, markerArtifacts, mayHavePresented, noticeFor };
+// tailAllowsContinue(tail, input, deadline) -> true only when tail, extended by what was appended
+// since it was read (no whole re-read, no wait), holds the final message anchored on a text entry
+// with no tool_use and only thinking after it; the undecidable path's continue gate. A spent
+// deadline, an unreadable transcript or a throw reads false.
+function tailAllowsContinue(tail, input, deadline) {
+  try {
+    const { PROBE_RESERVE_MS } = require("../lib/presentation-turn");
+    if (!tail || !input || deadline - Date.now() < PROBE_RESERVE_MS) return false;
+    const TR = require("../lib/transcript-reader");
+    const now = TR.refreshTurnTail(tail, { input: { transcript_path: input.transcript_path }, deadlineAt: deadline - PROBE_RESERVE_MS });
+    if (now.undecidable || typeof input.last_assistant_message !== "string" || !TR.flushed(now.lastTextBlock, input.last_assistant_message)) return false;
+    return anchoredTailOf(now) !== null;
+  } catch (_) {
+    return false;
+  }
+}
+
+module.exports = { anchoredTailOf, markerArtifacts, mayHavePresented, noticeFor, tailAllowsContinue };

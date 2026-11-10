@@ -67,8 +67,9 @@ function renderEntry(e, opts = {}) {
 
 // The redacted state text and its input summary, or null when the transcript holds nothing.
 function buildInput(transcriptPath, adapter, ctx) {
-  const lines = readTurnTail({ input: { transcript_path: transcriptPath } }).lines;
-  const entries = parseLines(lines);
+  // The bounded tail (#2936) grows back to the non-sidechain prompt that opened the turn.
+  const tail = readTurnTail({ input: { transcript_path: transcriptPath }, reachedBy: (e) => isRealUserPrompt(e) && e.isSidechain !== true });
+  const entries = Array.isArray(tail.entries) ? tail.entries : parseLines(tail.lines);
   if (entries.length === 0) return null;
   const { MAX_STATE_CHARS, redactOutbound } = require(COMMON);
   const sources = [];

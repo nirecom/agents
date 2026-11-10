@@ -1,14 +1,12 @@
 "use strict";
 // Per-turn marker files for confirm-plan Stop hook coordination.
-//
-// show-plan-link.js (PostToolUse) writes a marker for every final plan
-// artifact, just before emitting the breadcrumb. stop-confirm-plan-guard.js (Stop) reads
-// and deletes any markers for the current session, then checks that the turn's response
-// text shows each marked plan's plan-link line (URL, else the local path).
-//
-// File naming: <workflowDir>/<sid>.confirm-plan-turn-<rand>.json
-// The glob is namespaced under `<sid>.confirm-plan-turn-*` so future readers
-// can discover all consumers via that prefix.
+// show-plan-link.js (PostToolUse) writes a marker for every final plan artifact, just before
+// emitting the breadcrumb. stop-confirm-plan-guard.js (Stop) reads and deletes the session's
+// markers, then checks that the turn's response text shows each marked plan's plan-link line.
+// The one other remover is confirm-checkpoint's receipt recovery (#2936): it spends only the
+// markers a killed Stop left, those created before the next turn opened.
+// File naming: <workflowDir>/<sid>.confirm-plan-turn-<rand>.json — the `<sid>.confirm-plan-turn-*`
+// prefix lets every consumer discover them.
 
 const fs = require("fs");
 const path = require("path");
@@ -70,8 +68,7 @@ function readAndDeleteTurnMarkers(sessionId) {
 }
 
 // Non-destructive read: same scan as readAndDeleteTurnMarkers, no unlink.
-// Safe to call from PreToolUse (Stop hook's read-and-delete remains the sole
-// consumer that clears markers).
+// Safe to call from PreToolUse.
 function peekTurnMarkers(sessionId) {
   if (typeof sessionId !== "string" || !SID_RE.test(sessionId)) return [];
   const dir = getSessionStateDir(sessionId);
@@ -101,4 +98,29 @@ function peekTurnMarkers(sessionId) {
   return results;
 }
 
-module.exports = { writeTurnMarker, readAndDeleteTurnMarkers, peekTurnMarkers };
+// consumeTurnMarkersBefore(sessionId, iso): unlinks the markers whose created_at is before iso.
+// A marker with a missing or unparsable created_at stays for the next Stop; never throws.
+function consumeTurnMarkersBefore(sessionId, iso) {
+  if (typeof sessionId !== "string" || !SID_RE.test(sessionId)) return;
+  const limit = Date.parse(iso);
+  if (Number.isNaN(limit)) return;
+  let dir;
+  let entries;
+  try {
+    dir = getSessionStateDir(sessionId);
+    entries = fs.readdirSync(dir);
+  } catch (_) {
+    return;
+  }
+  const prefix = `${sessionId}.confirm-plan-turn-`;
+  for (const name of entries) {
+    if (!name.startsWith(prefix) || !name.endsWith(".json")) continue;
+    const full = path.join(dir, name);
+    try {
+      const created = Date.parse(JSON.parse(fs.readFileSync(full, "utf8")).created_at);
+      if (created < limit) fs.unlinkSync(full);
+    } catch (_) { /* unreadable, malformed or not removable: left for the next Stop */ }
+  }
+}
+
+module.exports = { writeTurnMarker, readAndDeleteTurnMarkers, peekTurnMarkers, consumeTurnMarkersBefore };

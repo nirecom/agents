@@ -149,8 +149,11 @@ if (require.main === module) {
   let finalReportBody = "";
   let headingFound = false;
   try {
-    // Wait for the final text to be flushed (#2610); an undecidable flush passes.
-    const tail = require("./lib/transcript-reader").readTurnTail({ input });
+    // Wait for the final text to be flushed (#2610); an undecidable flush passes. The bounded tail
+    // (#2936) grows until it holds an entry with the heading, so an older turn's report is still read.
+    const TR = require("./lib/transcript-reader");
+    const holdsHeading = (e) => e && e.type === "assistant" && TR.textItemsOf(e).join("\n").includes(h2Header);
+    const tail = TR.readTurnTail({ input, reachedBy: holdsHeading });
     if (tail.undecidable || tail.lines.length === 0) process.exit(0);
     const lines = tail.lines;
     for (let i = lines.length - 1; i >= 0; i--) {
