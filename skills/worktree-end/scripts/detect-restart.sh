@@ -3,7 +3,7 @@
 # Output format: key=required_or_not_required|reason
 # Categories: cc_restart, vscode_reload, installer_rerun, os_reboot
 # Always exits 0 (fail-safe). On any gh failure, outputs all not_required|.
-# Args: $1 = PR_NUMBER
+# Args: $1 = PR_NUMBER, $2 = PR-side worktree path (rules-injection policy source; missing => fail-safe required)
 # reason strings are fixed sentinels (not variable filenames) — see each stage below;
 # os_reboot is always not_required at this layer (env override lives in SKILL.md).
 set -euo pipefail
@@ -19,6 +19,11 @@ emit_all_not_required() {
 }
 
 PR_NUMBER="${1:-}"
+# $2 = PR-side worktree path (policy source for Stage A); normalized to mixed form for node.
+WORKTREE="${2:-}"
+if [[ -n "$WORKTREE" ]] && command -v cygpath >/dev/null 2>&1; then
+  WORKTREE="$(cygpath -m "$WORKTREE" 2>/dev/null || printf '%s' "$WORKTREE")"
+fi
 if [[ -z "$PR_NUMBER" ]]; then
   emit_all_not_required
   exit 0
@@ -43,11 +48,27 @@ skill_md_changed() {
   [[ "$verdict" == "yes" ]]
 }
 
+# unconditional_rule_verdict — rules/ files in the PR that Claude Code expands at session start.
+# Definition source: EXPECTED_UNCONDITIONAL in the PR-side worktree's rules-injection-policy.js,
+# read as data by detect-restart-rules.js (#1694). Sets UR_UNREADABLE=1 when the policy cannot be
+# read (or node fails): the caller then requires a restart (fail-safe). Returns 0 only for "yes".
+UR_UNREADABLE=0
+unconditional_rule_verdict() {
+  local verdict
+  verdict="$(printf '%s\n' "$CC_FILES" | grep -E '^rules/.+$' | node "$SCRIPT_DIR/detect-restart-rules.js" "$WORKTREE" 2>/dev/null)" || verdict="unreadable"
+  case "$verdict" in
+    yes) return 0 ;;
+    no) return 1 ;;
+    *) UR_UNREADABLE=1; return 1 ;;
+  esac
+}
+
 # Stage A: cc_restart — classification table <pattern> TAB <check> TAB <fixed reason>;
 # the first row whose pattern matches (and whose check passes) wins.
 CC_RESTART_TABLE=(
   $'^(CLAUDE\\.md|CLAUDE\\.local\\.md)$\tnone\tCLAUDE.md modified in PR'
-  $'^rules/.+$\tnone\trules/ modified in PR (rules/ content loads into the effective CLAUDE.md ruleset)'
+  $'^rules/.+$\tunconditional_rule\trules/ unconditional rule modified in PR (loaded at session start, no paths: key)'
+  $'^hooks/lib/rules-injection-policy\\.js$\tnone\trules-injection policy modified in PR (the unconditional rule set itself changed)'
   $'^settings(-extension)?\\.json$\tnone\tsettings.json or settings-extension.json modified in PR'
   $'(^|/)SKILL\\.md$\tskill_md\tSKILL.md added, removed or frontmatter changed'
 )
@@ -56,6 +77,13 @@ for row in "${CC_RESTART_TABLE[@]}"; do
   IFS=$'\t' read -r cc_pattern cc_check cc_reason <<< "$row"
   printf '%s\n' "$CC_FILES" | grep -qE "$cc_pattern" || continue
   if [[ "$cc_check" == "skill_md" ]] && ! skill_md_changed; then
+    continue
+  fi
+  if [[ "$cc_check" == "unconditional_rule" ]] && ! unconditional_rule_verdict; then
+    if (( UR_UNREADABLE )); then
+      CC_RESTART_LINE="cc_restart=required|rules-injection policy unreadable (fail-safe: restart required)"
+      break
+    fi
     continue
   fi
   CC_RESTART_LINE="cc_restart=required|$cc_reason"

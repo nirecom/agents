@@ -165,14 +165,19 @@ are never two lists that can disagree. Deriving is the reader's privilege alone 
 rule name once and computes nothing.
 
 The file is **data, not a program**. It is contributor-editable and is read on every
-pre-commit run and on every `InstructionsLoaded` firing, so both consumers parse its
+pre-commit run and on every `InstructionsLoaded` firing, so every consumer parses its
 source text for constant declarations rather than `require()`-ing it — a `require()`
 would execute whatever a pull request put in the module body, before review, with the
 reviewer's privileges, merely because a session started on that branch.
 Keep every declaration a plain one-line literal so that reader keeps working.
 
 The reader is one shared implementation, `hooks/lib/rules-policy-reader.js`, used by
-both `bin/check-on-demand-rules.sh` and `hooks/instructions-loaded-audit.js`. That module
+`bin/check-on-demand-rules.sh`, `hooks/instructions-loaded-audit.js` and
+`skills/worktree-end/scripts/detect-restart-rules.js`. The last one decides whether a PR
+needs a Claude Code restart: only a changed rule in `EXPECTED_UNCONDITIONAL` (expanded at
+session start) does. It reads the PR-side worktree's policy, not the local main's, because
+main is pulled only after the check; a PR that edits the policy file itself also requires a
+restart, and an unreadable policy fails safe to "required" (#1694). That module
 is agents-owned code, so `require()`-ing it is correct; only the declaration file is
 untrusted. The `RULES_INJECTION_POLICY` path override is a test seam and is read as data
 on the same path — it is never executed either.

@@ -114,12 +114,12 @@ test_I13_detect_restart_rules_reason() {
     local out
     out="$(run_with_timeout 30 \
            env PATH="$mock_posix:$PATH" \
-           bash "$detect_sh" "999" 2>/dev/null)"
+           bash "$detect_sh" "999" "$_HELPERS_SCRIPT_CHECKOUT_ROOT" 2>/dev/null)"
 
-    if printf '%s\n' "$out" | grep -qF 'cc_restart=required|rules/ modified in PR (rules/ content loads into the effective CLAUDE.md ruleset)'; then
-        pass "I13: detect-restart.sh rules/ file → cc_restart=required|rules/ modified in PR (rules/ content loads into the effective CLAUDE.md ruleset)"
+    if printf '%s\n' "$out" | grep -qF 'cc_restart=required|rules/ unconditional rule modified in PR (loaded at session start, no paths: key)'; then
+        pass "I13: detect-restart.sh unconditional rules/ file → cc_restart=required|rules/ unconditional rule modified in PR"
     else
-        fail "I13: expected 'cc_restart=required|rules/ modified in PR (rules/ content loads into the effective CLAUDE.md ruleset)', got:
+        fail "I13: expected 'cc_restart=required|rules/ unconditional rule modified in PR (loaded at session start, no paths: key)', got:
 $out"
     fi
 }
@@ -136,7 +136,7 @@ test_I13b_detect_restart_rules_and_claude_priority() {
     local out
     out="$(run_with_timeout 30 \
            env PATH="$mock_posix:$PATH" \
-           bash "$detect_sh" "999" 2>/dev/null)"
+           bash "$detect_sh" "999" "$_HELPERS_SCRIPT_CHECKOUT_ROOT" 2>/dev/null)"
 
     if printf '%s\n' "$out" | grep -qF 'cc_restart=required|CLAUDE.md modified in PR'; then
         pass "I13b: CLAUDE.md + rules/ → CLAUDE.md arm takes priority"

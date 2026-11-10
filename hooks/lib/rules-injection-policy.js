@@ -5,8 +5,8 @@
 // `paths:` frontmatter into every session; a rule that should only be read on demand disables that auto-injection with
 // a single reserved glob that can never match a real path, plus a marker comment so a reader knows it is deliberate.
 //
-// Consumers (never the other way round — this file requires nothing): hooks/instructions-loaded-audit.js and
-// bin/check-on-demand-rules.sh. Both parse this file AS DATA and never require() it, so keep every declaration below a
+// Consumers (never the other way round — this file requires nothing): hooks/instructions-loaded-audit.js,
+// bin/check-on-demand-rules.sh and skills/worktree-end/scripts/detect-restart-rules.js. Every consumer parses this file AS DATA and never require()s it, so keep every declaration below a
 // plain one-line literal: no computed values, no concatenation, no module-body side effects.
 
 // The reserved `paths:` value. It contains a directory segment that cannot
