@@ -4,6 +4,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../lib/gh-user-block-guard.sh
+. "$SCRIPT_DIR/../lib/gh-user-block-guard.sh"
 
 DRY_RUN=0
 REPO=""
@@ -150,6 +152,8 @@ if [[ "$TITLE" == \[ds4\]* ]]; then
   if [[ "$DRY_RUN" -eq 1 ]]; then
     echo "[DRY-RUN] Would strip [ds4] prefix from #1488 and add model-scope:ds4"
     echo "[DRY-RUN] New title would be: $NEW_TITLE"
+  elif ! gh_user_block_guard "migrate-model-labels:#1488" --op edit --issue 1488 --repo "$REPO" --new-title "$NEW_TITLE"; then
+    echo "SKIP: #1488 title kept — user-block-guard rejected the change (reason on stderr; edit by hand)"
   else
     gh issue edit 1488 --repo "$REPO" --title "$NEW_TITLE" --add-label "model-scope:ds4"
     echo "FIXED: #1488 title updated to: $NEW_TITLE"

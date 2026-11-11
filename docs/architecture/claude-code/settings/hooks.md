@@ -15,6 +15,11 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
   the authenticated account. Silence requires positive proof (login match or repo admin); an
   unreadable command shape is unresolved, not safe. Never blocks, never bypassed by WORKFLOW_OFF or
   WORKTREE_OFF. Reason codes: `hooks/confirm-forge-target-ownership/reasons.js` (issue #2053).
+- `protect-user-block.js` (PreToolUse, matcher: `Bash|runInTerminal|runCommands`) — hands every
+  `gh issue create|edit|comment|delete` and `gh api` issue write (REST and the six GraphQL issue
+  mutations) to `bin/user-block-guard`: a title change on an issue holding a `<user>` block denies,
+  a body change that alters the block asks. An unreadable target denies a title change and asks
+  otherwise. Never bypassed by WORKFLOW_OFF or WORKTREE_OFF (issue #2940).
 - `block-main-audit-verdict.js` (PreToolUse, matcher: `Bash|runInTerminal|runCommands|PowerShell`) —
   the reverse of `block-subagent-sentinels.js`: blocks the main conversation (no `agent_id`) from
   writing a pre-confirm audit verdict through `bin/supervisor-write-audit-verdict` or

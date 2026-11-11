@@ -87,6 +87,10 @@ fi
 # shellcheck source=../lib/native-path.sh
 . "$(cd "$(dirname "$0")" && pwd)/../lib/native-path.sh"
 gh_outbound_guard "issue-body-append:#$ISSUE_NUMBER" < "$BODY_TMPFILE" || exit 1
+# shellcheck source=../lib/gh-user-block-guard.sh
+. "$(cd "$(dirname "$0")" && pwd)/../lib/gh-user-block-guard.sh"
+gh_user_block_guard "issue-body-append:#$ISSUE_NUMBER" --op edit --issue "$ISSUE_NUMBER" ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} \
+    --new-body-file "$(native_path "$BODY_TMPFILE")" || exit 1
 
 if ! MSYS_NO_PATHCONV=1 gh issue edit "$ISSUE_NUMBER" ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} --body-file "$(native_path "$BODY_TMPFILE")" >/dev/null; then
     echo "Error: gh issue edit ${ISSUE_NUMBER} failed" >&2

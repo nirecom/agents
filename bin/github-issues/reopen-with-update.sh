@@ -35,7 +35,9 @@ BODY_TMPFILE="$(mktemp)"
 chmod 600 "$BODY_TMPFILE"
 NOTE_TMPFILE="$(mktemp)"
 chmod 600 "$NOTE_TMPFILE"
-trap 'rm -f "$BODY_TMPFILE" "$NOTE_TMPFILE"' EXIT
+COMMENT_TMPFILE="$(mktemp)"
+chmod 600 "$COMMENT_TMPFILE"
+trap 'rm -f "$BODY_TMPFILE" "$NOTE_TMPFILE" "$COMMENT_TMPFILE"' EXIT
 
 # Outbound scan guard library — sourced once, used by both the note (below) and the
 # composed body (Step 2).
@@ -43,6 +45,8 @@ trap 'rm -f "$BODY_TMPFILE" "$NOTE_TMPFILE"' EXIT
 . "$(dirname "$0")/../lib/gh-outbound-guard.sh"
 # shellcheck source=../lib/native-path.sh
 . "$(dirname "$0")/../lib/native-path.sh"
+# shellcheck source=../lib/gh-user-block-guard.sh
+. "$(dirname "$0")/../lib/gh-user-block-guard.sh"
 
 # --- note sanitization ------------------------------------------------------
 # Only the FIRST physical line survives. Joining the lines instead would keep every
@@ -139,6 +143,8 @@ printf '%s' "$NEW_BODY" > "$BODY_TMPFILE"
 # FATAL (exit 1), unlike the WARN+continue pattern used for the banner refresh
 # below: this is a security boundary, not a best-effort cosmetic update.
 gh_outbound_guard "reopen:#$ISSUE_NUMBER" < "$BODY_TMPFILE" || exit 1
+gh_user_block_guard "reopen:#$ISSUE_NUMBER" --op edit --issue "$ISSUE_NUMBER" --repo "$REPO_SLUG" \
+    --new-body-file "$(native_path "$BODY_TMPFILE")" || exit 1
 
 if ! ISSUE_CLOSE_SKILL=1 gh issue edit "$ISSUE_NUMBER" --body-file "$(native_path "$BODY_TMPFILE")" >/dev/null 2>&1; then
     echo "WARN: body banner update failed for #${ISSUE_NUMBER}" >&2
@@ -174,7 +180,11 @@ if [ -n "$COMMENT_ID" ]; then
 ### Reopen Log"
     NEW_COMMENT="${OLD_COMMENT}
 ${LOG_ENTRY}"
-    if ! MSYS_NO_PATHCONV=1 gh api -X PATCH \
+    printf '%s' "$NEW_COMMENT" > "$COMMENT_TMPFILE"
+    if ! gh_user_block_guard "reopen-comment:#$ISSUE_NUMBER" --op comment-edit --comment-id "$COMMENT_ID" \
+            --repo "$REPO_SLUG" --new-body-file "$(native_path "$COMMENT_TMPFILE")"; then
+        echo "WARN: reopen-log comment PATCH skipped for #${ISSUE_NUMBER}" >&2
+    elif ! MSYS_NO_PATHCONV=1 gh api -X PATCH \
             "repos/${REPO_SLUG}/issues/comments/${COMMENT_ID}" \
             -f "body=${NEW_COMMENT}" >/dev/null 2>&1; then
         echo "WARN: reopen-log comment PATCH failed for #${ISSUE_NUMBER}" >&2
@@ -184,7 +194,11 @@ else
     NEW_COMMENT="<!-- reopen-log -->
 ### Reopen Log
 ${LOG_ENTRY}"
-    if ! gh issue comment "$ISSUE_NUMBER" --body "$NEW_COMMENT" >/dev/null 2>&1; then
+    printf '%s' "$NEW_COMMENT" > "$COMMENT_TMPFILE"
+    if ! gh_user_block_guard "reopen-comment:#$ISSUE_NUMBER" --op comment-create --issue "$ISSUE_NUMBER" \
+            --repo "$REPO_SLUG" --new-body-file "$(native_path "$COMMENT_TMPFILE")"; then
+        echo "WARN: reopen-log comment creation skipped for #${ISSUE_NUMBER}" >&2
+    elif ! gh issue comment "$ISSUE_NUMBER" --body "$NEW_COMMENT" >/dev/null 2>&1; then
         echo "WARN: reopen-log comment creation failed for #${ISSUE_NUMBER}" >&2
     fi
 fi
