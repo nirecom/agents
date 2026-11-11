@@ -538,6 +538,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/protect-user-block.js\"",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|runInTerminal|runCommands",
+        "hooks": [
+          {
+            "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/enforce-system-ops.js\"",
             "timeout": 15
           }

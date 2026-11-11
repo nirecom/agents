@@ -90,6 +90,7 @@ Traced by running each hook on a deny-side and a permitted-side input with every
 | `workflow-gate` | allow-deny hook | あり (with limit) | git / gh / bash child processes |
 | `enforce-worktree` | allow-deny hook | あり (with limit) | git child processes |
 | `confirm-forge-target-ownership` | allow-deny hook | あり (with limit) | gh child processes (its own deadline moves to the shared parts) |
+| `protect-user-block` | allow-deny hook | あり (with limit) | gh child process (via `bin/user-block-guard`); too little time left denies instead of asking |
 | `check-cross-platform` | allow-deny hook | あり (with limit) | git child processes |
 | `block-case-markers` | allow-deny hook | あり (with limit) | git and `bin/check-case-markers.sh` child processes |
 | `block-clearance-token-write` | allow-deny hook | あり (with limit) | git, through the workflow session id resolver, for a plans-dir entry nothing else places |

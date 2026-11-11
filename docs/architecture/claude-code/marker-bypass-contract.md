@@ -57,6 +57,7 @@ answering "which hooks does my marker bypass?" links here rather than restating 
 | `hooks/workflow-gate.js` | PreToolUse | Yes | Yes (skips the unstaged-tracked Gate 1 check AND makes the Tier 3 worktree-entry early gate return `verdict: "dormant"`) |
 | `hooks/enforce-issue-close.js` | PreToolUse | Yes | No |
 | `hooks/confirm-forge-target-ownership.js` | PreToolUse | No | No |
+| `hooks/protect-user-block.js` | PreToolUse | No | No |
 | `hooks/stop-premature-stop-guard.js` | Stop | Yes | No |
 | `hooks/stop-final-report-guard.js` | Stop | Yes | No |
 | `hooks/stop-l2-findings-display.js` | Stop | Yes | No |
