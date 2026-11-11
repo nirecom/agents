@@ -188,6 +188,7 @@ function checkEntry(e, i, seen, repoRoot, seenSources, opts) {
     checkPart(e[k], `${where}.${k}`, repoRoot, null, { node: needNode || (isObj(e[k]) && e[k].node !== undefined) });
   }
   checkPart(e.tableDrivenDetector, `${where}.tableDrivenDetector`, repoRoot, null);
+  checkChildLaunch(e, `${where}.childLaunch`, repoRoot, opts);
   checkPart(e.envClearLine, `${where}.envClearLine`, repoRoot, opts, { js: true });
   if (!nullOr(e.helperLibrary, isObj)) fail(`${where}.helperLibrary`, "must be {path, sourceRegex} or null");
   if (e.helperLibrary) {
@@ -197,6 +198,9 @@ function checkEntry(e, i, seen, repoRoot, seenSources, opts) {
     const shared = e.helperLibrary.sharedSourceRegex;
     if (shared !== undefined && !plain(shared, `${where}.helperLibrary.sharedSourceRegex`).includes("AGENTS_TEST_HARNESS_DIR")) {
       fail(`${where}.helperLibrary.sharedSourceRegex`, "must reach the harness through AGENTS_TEST_HARNESS_DIR");
+    }
+    if (!nullOr(e.helperLibrary.looseSourceRegex, (v) => typeof v === "boolean")) {
+      fail(`${where}.helperLibrary.looseSourceRegex`, "must be true or false");
     }
   }
   if (!e.caseMarkerReader !== !e.helperLibrary) {
@@ -220,6 +224,21 @@ function checkEntry(e, i, seen, repoRoot, seenSources, opts) {
   checkNewEntrypointRunner(e, `${where}.newEntrypointRunner`);
   if (!nullOr(e.note, isStr)) fail(`${where}.note`, "must be a string");
   checkRequired(e, where, opts);
+}
+
+// The child reader / analyzer launch of an external-runtime part; the command itself is launch.requires.
+function checkChildLaunch(e, where, repoRoot, opts) {
+  const c = e.childLaunch;
+  if (absent(c)) return;
+  if (!isObj(c)) fail(where, "must be {args, reader, analyzer} or null");
+  if (!Array.isArray(c.args) || c.args.length === 0) fail(`${where}.args`, "must be a non-empty array of strings");
+  c.args.forEach((a, j) => {
+    if (plain(a, `${where}.args[${j}]`) === "") fail(`${where}.args[${j}]`, "must not be empty");
+  });
+  checkRepoFile(c.reader, `${where}.reader`, repoRoot, opts);
+  checkRepoFile(c.analyzer, `${where}.analyzer`, repoRoot, opts);
+  const req = isObj(e.launch) ? e.launch.requires : undefined;
+  if (!isStr(req) || req === "") fail(where, "needs launch.requires, the command that runs the child");
 }
 
 // The skip-reason word of caseEmbedRules that refuses a new entrypoint, and the hint shown with it.

@@ -10,8 +10,13 @@ pytest_case_markers() {
     crb_run "$1" uv run --no-project python "$CRB_PATH"
 }
 
-# has_table_driven_pytest <file> — rc 0 when a test is decorated with @pytest.mark.parametrize
-# (or `@mark.parametrize` after `from pytest import mark`); a line scan, so no uv is needed.
+# has_table_driven_pytest <file> — the analyzer's table-driven op on the syntax tree. rc 0 table-driven,
+# 1 not, 70 cannot judge (uv missing, the child failed or the file does not parse).
 has_table_driven_pytest() {
-    grep -qE '^[[:space:]]*@(pytest\.)?mark\.parametrize([[:space:](]|$)' "$1" 2>/dev/null
+    local out a
+    command -v uv >/dev/null 2>&1 || return 70
+    crb_native_path "${BASH_SOURCE[0]%/*}/pytest-case-analyzer.py"; a="$CRB_PATH"
+    crb_native_path "$1"
+    out="$(uv run --no-project python "$a" table-driven "$CRB_PATH")" || return 70
+    [[ "${out%$'\r'}" == table-driven ]]
 }

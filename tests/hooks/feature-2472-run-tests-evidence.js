@@ -66,3 +66,7 @@ caseEnd();
 caseBegin("mark-step-refuses-ingest-pending-then-passes-after-ingest", "hooks/workflow-mark/mark-step-handler.js");
 test("mark-step-refuses-ingest-pending-then-passes-after-ingest", () => noNewFailures(fails, ingest.markStepIngestPendingFlow));
 caseEnd();
+
+caseBegin("fixture-run-launches-with-node-unless-node-false", "tests/lib/run-tests-outcome-fixture.js");
+test("fixture-run-launches-with-node-unless-node-false", () => noNewFailures(fails, ingest.launchInterpreterFlow));
+caseEnd();

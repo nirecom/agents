@@ -131,6 +131,10 @@ caseBegin("launch-spec-node", "hooks/lib/test-gates/parts/external-runtime.js");
 test("external-runtime.js launchSpec(): the bash parts' arguments, helper for self-impl only", () => L.launchSpecNode());
 caseEnd();
 
+caseBegin("launch-from-registry", "hooks/lib/test-gates/parts/external-runtime.js");
+test("external-runtime.js reads its launch from the registry's childLaunch and launch.requires", () => L.launchFromRegistry());
+caseEnd();
+
 caseBegin("headers-parity", "hooks/lib/test-gates/headers.js");
 test("headers.js reads the Tests: / Tags: lines as the retired extract_headers did", () => P.headers());
 caseEnd();
