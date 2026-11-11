@@ -28,6 +28,12 @@ printf 'nirecom/agents\tnirecom\t1\tPVT_kwHOAMF_jc4BXf9E\t%s\t%s\t%s\t%s\t%s\t%s
 cat > "$IC_TMP_ROOT/mock-bin/gh" <<'MOCK_EOF'
 #!/bin/bash
 ARGS="$*"
+# bin/user-block-guard's reads (api graphql / REST comment) go to the guard stub by absolute path on every OS.
+# The wrapper's own `parent { number }` / projectsV2 / fields queries do not match and stay with this mock.
+case "$ARGS" in
+  api\ graphql\ *'query($owner:String!'*|api\ graphql\ *'query($id:ID!'*|api\ repos/*/issues/comments/[0-9]*)
+    [ -n "${GH_GUARD_STUB_BIN:-}" ] && exec "$GH_GUARD_STUB_BIN/gh" "$@" ;;
+esac
 if [ -n "${GH_MOCK_ARGS_LOG:-}" ]; then
     printf '%s\n' "$ARGS" >> "$GH_MOCK_ARGS_LOG"
 fi
@@ -236,6 +242,12 @@ case "$ARGS" in
 esac
 MOCK_EOF
 chmod +x "$IC_TMP_ROOT/mock-bin/gh"
+# bin/user-block-guard reads the old issue via `gh api graphql` through node, which never reaches the
+# bash mock above on Windows; the helper's gh.exe stub answers it (no <user> block). Installed before
+# the mock-bin PATH prepend so the bash mock stays first for the wrappers.
+# shellcheck source=/dev/null
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/gh-guard-fetch-stub.sh"
+gh_guard_fetch_stub_install "$IC_TMP_ROOT/guard-stub"
 export PATH="$IC_TMP_ROOT/mock-bin:$PATH"
 
 TMP=""

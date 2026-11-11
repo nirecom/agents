@@ -156,6 +156,14 @@ if [ "$APPLY" = "1" ]; then
     MANIFEST_SOURCE["$mid"]="$msource"
   done < "$MANIFEST_PATH"
 
+  # shellcheck source=../../../bin/lib/gh-user-block-guard.sh
+  . "$SCRIPT_CHECKOUT_ROOT/bin/lib/gh-user-block-guard.sh"
+  # shellcheck source=../../../bin/lib/native-path.sh
+  . "$SCRIPT_CHECKOUT_ROOT/bin/lib/native-path.sh"
+  REDACTED_TEXT="[redacted by content-scan]"
+  REDACT_TMP="$(mktemp)"
+  trap 'rm -f "$REDACT_TMP"' EXIT
+
   # Parse confirm IDs (comma-separated)
   IFS=',' read -ra CONFIRM_ID_LIST <<< "$CONFIRM_IDS"
   FIRST=1
@@ -189,12 +197,21 @@ const chunks=[]; process.stdin.on('data',c=>chunks.push(c)); process.stdin.on('e
       echo "scan-repo: STALE: $cid (content changed since scan)" >&2
       exit 5
     fi
-    # Apply redaction
+    # Apply redaction; a redaction that would touch a <user> block is left to the user (#2940).
+    printf '%s' "$REDACTED_TEXT" > "$REDACT_TMP"
     if [ "$ckind" = "issue-body" ]; then
-      gh issue edit "$cissue" --repo "$crepo" --body "[redacted by content-scan]" >/dev/null
+      guard_target=(--op edit --issue "$cissue")
+    else
+      guard_target=(--op comment-edit --comment-id "$ccomment")
+    fi
+    if ! gh_user_block_guard "scan-repo:$cid" "${guard_target[@]}" --repo "$crepo" \
+        --new-body-file "$(native_path "$REDACT_TMP")"; then
+      echo "scan-repo: $cid: redaction skipped — do the redaction by hand (it touches a <user> block)" >&2
+    elif [ "$ckind" = "issue-body" ]; then
+      gh issue edit "$cissue" --repo "$crepo" --body "$REDACTED_TEXT" >/dev/null
       echo "  redacted: $cid"
     elif [ "$ckind" = "issue-comment" ]; then
-      gh api -X PATCH "repos/${crepo}/issues/comments/${ccomment}" -f body="[redacted by content-scan]" >/dev/null
+      gh api -X PATCH "repos/${crepo}/issues/comments/${ccomment}" -f body="$REDACTED_TEXT" >/dev/null
       echo "  redacted: $cid"
     fi
     # Canary: after first item, stop unless --canary-skip

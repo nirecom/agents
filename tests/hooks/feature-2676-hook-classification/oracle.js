@@ -116,6 +116,10 @@ const ORACLE = {
       input: bash("gh issue create -R example-owner/example-repo -t x -b y"), setup: () => ({ env: withFakeGh() }) },
     { label: "git status", want: "none", input: bash("git status"), setup: () => ({ env: withFakeGh() }) },
   ] },
+  "protect-user-block": { kind: "allow-deny", probes: [
+    { label: "gh issue create with a <user> block", want: "deny", input: bash('gh issue create -t x -b "<user>a</user>"') },
+    { label: "git status", want: "none", input: bash("git status") },
+  ] },
   // Refuses through exit 2 with stderr only; runProbe reads exit 2 as deny.
   "enforce-system-ops": { kind: "allow-deny", probes: [
     { label: "winget install", want: "deny", input: bash("winget install example.tool"), env: { SYSTEM_OPS_APPROVED: "0" } },

@@ -31,6 +31,13 @@ set -- "${_FILTERED_ARGS[@]+"${_FILTERED_ARGS[@]}"}"
 # Join all args for matching
 ARGS="$*"
 
+# bin/user-block-guard's reads (api graphql / REST comment) go to the guard stub by absolute path on every OS.
+# The wrapper's own `parent { number }` / projectsV2 queries do not match and stay with this mock.
+case "$ARGS" in
+  api\ graphql\ *'query($owner:String!'*|api\ graphql\ *'query($id:ID!'*|api\ repos/*/issues/comments/[0-9]*)
+    [ -n "${GH_GUARD_STUB_BIN:-}" ] && exec "$GH_GUARD_STUB_BIN/gh" "$@" ;;
+esac
+
 # ----------------------------------------------------------------------------
 # Shared dispatch for `gh --jq` invocations introduced by issue #222 refactor.
 # The real gh CLI accepts `--jq EXPR` and applies it to the JSON response

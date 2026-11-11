@@ -19,6 +19,10 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=../lib/gh-outbound-guard.sh
 source "$SCRIPT_DIR/../lib/gh-outbound-guard.sh"
+# shellcheck source=../lib/gh-user-block-guard.sh
+source "$SCRIPT_DIR/../lib/gh-user-block-guard.sh"
+# shellcheck source=../lib/native-path.sh
+source "$SCRIPT_DIR/../lib/native-path.sh"
 
 SESSION_ID=""
 PLANS_DIR_ARG=""
@@ -107,6 +111,13 @@ if [[ "$ISSUES_SET" -eq 1 && -z "$ISSUES_CSV" ]]; then
         # run-completion.sh discards this script's stderr — the sidecar file is
         # the only channel the caller can surface the block reason through.
         printf '%s\n' "$GH_OUTBOUND_GUARD_MESSAGE" > "$SIDECAR"
+        rm -f "$SCAN_TMP"
+        echo "SCAN_BLOCKED"
+        exit 2
+    fi
+    if ! gh_user_block_guard "intent-derived-issue-body" --op create --new-title "$TITLE_LINE" \
+            --new-body-file "$(native_path "$SCAN_TMP")"; then
+        printf '%s\n' "$GH_USER_BLOCK_GUARD_MESSAGE" > "$SIDECAR"
         rm -f "$SCAN_TMP"
         echo "SCAN_BLOCKED"
         exit 2
