@@ -95,11 +95,20 @@ rpc_load_context() {
 # concatenated, so the block is unchanged from codex's perspective; an absent/empty source just
 # omits its portion (fail-open).
 rpc_load_settled_decisions() {
-  EXTRACT_BIN="$(dirname "$(realpath "$0")")/extract-mandatory-sections"
+  local bin_dir h
+  local -a tradeoff_args=()
+  bin_dir="$(dirname "$(realpath "$0")")"
+  EXTRACT_BIN="$bin_dir/extract-mandatory-sections"
   TRADEOFFS_CONTENT=""
   if [[ -n "$ACCEPTED_TRADEOFFS_FILE" && -f "$ACCEPTED_TRADEOFFS_FILE" ]]; then
+    # Every staged heading plus the legacy one (#2924); plan-schema.js owns the names.
+    while IFS= read -r h; do
+      h="${h%$'\r'}"
+      if [[ -n "$h" ]]; then tradeoff_args+=(--section "$h"); fi
+    done < <(node "$bin_dir/../hooks/lib/plan-schema.js" --accepted-tradeoffs-headings 2>/dev/null || true)
+    [[ "${#tradeoff_args[@]}" -gt 0 ]] || tradeoff_args=(--section "Accepted Tradeoffs")
     TRADEOFFS_CONTENT=$("$EXTRACT_BIN" "$ACCEPTED_TRADEOFFS_FILE" \
-      --section "Accepted Tradeoffs" --with-headers 2>/dev/null || true)
+      "${tradeoff_args[@]}" --with-headers 2>/dev/null || true)
   fi
   CLASS_MEMBERS_CONTENT=""
   if [[ -n "$CLASS_MEMBERS_FILE" && -f "$CLASS_MEMBERS_FILE" ]]; then

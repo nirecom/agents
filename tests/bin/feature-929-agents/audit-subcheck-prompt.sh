@@ -166,6 +166,10 @@ _asp_categories_run() {
     local p_en=""; [ -f "$cap_en" ] && p_en="$(tr -d '\r' < "$cap_en")"
     assert_not_contains "acp: CONV_LANG=english PROMPT has no free-text language line" "$p_en" "Write every free-text field"
     assert_contains "acp: CONV_LANG=english PROMPT still routes sub-check names into detail" "$p_en" 'name the sub-check inside "detail" instead.'
+    # #2924: the audit instruction asks codex to compare the ISSUE SNAPSHOT block with the plans
+    # and to file an upstream copy under the copying plan's category (alert side: alert-prompt.sh).
+    assert_contains "acp: audit PROMPT tells codex to compare the ISSUE SNAPSHOT block (#2924)" "$p_en" "Compare the ISSUE SNAPSHOT block with the plan artifacts"
+    assert_contains "acp: audit PROMPT files a copy under intent, outline or detail (#2924)" "$p_en" "category intent, outline or detail"
 
     # Control: the sub-check id as a category is still rejected (no remapping on the parse side).
     local bad_body="$TMPDIR_BASE/acp-body-bad.txt" out_bad

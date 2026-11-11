@@ -1,18 +1,11 @@
 #!/usr/bin/env bash
-# Tests: skills/_shared/priority-hierarchy.md, agents/outline-planner.md, agents/outline-reviewer.md, agents/detail-planner.md, agents/detail-reviewer.md, skills/make-detail-plan/SKILL.md
+# Tests: skills/_shared/priority-hierarchy.md, agents/outline-planner.md, agents/outline-planner/revision-round.md, agents/outline-reviewer.md, agents/detail-planner.md, agents/detail-reviewer.md, skills/make-detail-plan/SKILL.md
 # Tags: priority-hierarchy, planning, ssot, detail, outline, reject-disposition, scope:issue-specific
-# Static checks for issue #647 — priority-hierarchy SSOT.
-#
-# Verifies:
-#   1. SSOT file exists at skills/_shared/priority-hierarchy.md
-#   2–4. Required section headings present in SSOT
-#   5. Literal rejection token present
-#   6. SSOT line count ≤50
+# Static checks for issue #647 — priority-hierarchy SSOT. Verifies:
+#   1–6. SSOT file exists, required headings, literal rejection token, line count ≤50
 #   7–11. Each consumer file references the SSOT path
 #   12–13. reject: contradicts approved within 15 lines of ROUND_RESPONSE in planners
 #   14. detail-planner.md contains ## Approved Scope & Priority Hierarchy heading
-#
-# Tests FAIL until implementation is complete — that is expected.
 set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -175,17 +168,17 @@ within_lines_of() {
 }
 
 # ---------------------------------------------------------------------------
-# 12. agents/outline-planner.md: reject: contradicts approved within 15 lines
-#     of ROUND_RESPONSE
+# 12. agents/outline-planner/revision-round.md (split out of outline-planner.md, #2924):
+#     reject: contradicts approved within 15 lines of ROUND_RESPONSE
 # ---------------------------------------------------------------------------
-if [ -f "$OUTLINE_PLANNER" ]; then
-    if within_lines_of "$OUTLINE_PLANNER" "ROUND_RESPONSE" "reject: contradicts approved" 15; then
-        pass "12: outline-planner.md has 'reject: contradicts approved' within 15 lines of ROUND_RESPONSE"
+if [ -f "${OUTLINE_PLANNER%.md}/revision-round.md" ]; then
+    if within_lines_of "${OUTLINE_PLANNER%.md}/revision-round.md" "ROUND_RESPONSE" "reject: contradicts approved" 15; then
+        pass "12: outline-planner/revision-round.md has 'reject: contradicts approved' within 15 lines of ROUND_RESPONSE"
     else
-        fail "12: outline-planner.md missing 'reject: contradicts approved' within 15 lines of ROUND_RESPONSE"
+        fail "12: outline-planner/revision-round.md missing 'reject: contradicts approved' within 15 lines of ROUND_RESPONSE"
     fi
 else
-    fail "12: agents/outline-planner.md not found"
+    fail "12: agents/outline-planner/revision-round.md not found (#2924 split pending)"
 fi
 
 # ---------------------------------------------------------------------------

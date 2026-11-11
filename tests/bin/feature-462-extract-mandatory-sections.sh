@@ -113,7 +113,7 @@ Issue body for multi-section test.
 - member-A
 - member-B
 
-## Accepted Tradeoffs
+## Accepted Tradeoffs (outline)
 
 - tradeoff-multi-one
 - tradeoff-multi-two
@@ -124,7 +124,7 @@ Delivery plan body.
 EOF
 
 OUT=$(run_with_timeout bash "$SCRIPT" "$FIXTURE_MULTI" \
-    --section Issue --section "Class members" --section "Accepted Tradeoffs" --with-headers 2>&1) || true
+    --section Issue --section "Class members" --section "Accepted Tradeoffs (outline)" --with-headers 2>&1) || true
 
 if echo "$OUT" | grep -q "^## Issue"; then
     pass "(4) multi-section: '## Issue' header present"
@@ -136,10 +136,10 @@ if echo "$OUT" | grep -q "^## Class members"; then
 else
     fail "(4) multi-section: '## Class members' header missing. Output: $OUT"
 fi
-if echo "$OUT" | grep -q "^## Accepted Tradeoffs"; then
-    pass "(4) multi-section: '## Accepted Tradeoffs' header present"
+if echo "$OUT" | grep -qF "## Accepted Tradeoffs (outline)"; then
+    pass "(4) multi-section: staged '## Accepted Tradeoffs (outline)' header present (#2924)"
 else
-    fail "(4) multi-section: '## Accepted Tradeoffs' header missing. Output: $OUT"
+    fail "(4) multi-section: '## Accepted Tradeoffs (outline)' header missing. Output: $OUT"
 fi
 
 # ---------------------------------------------------------------------------

@@ -21,7 +21,9 @@ See agents/detail-planner/procedure.md for the full Procedure and NEEDS_RESEARCH
 - Never answer a concern tagged `[glossary-drift term=<term>]` with `reject:` (including `reject: contradicts approved <intent|outline>`): revise, or write `accepted(glossary-drift): <reason>` when the revision prompt says the user accepted it via `WORKFLOW_GLOSSARY_ACCEPTED`.
 - Never answer a concern tagged `[upstream-inconsistency …]` with `reject:`: revise per the user's A / D, or write `accepted(upstream-inconsistency): <reason>` when the revision prompt says the user chose C.
 - When re-run after a return to an upstream plan step, revise the existing detail as a diff against the re-approved upstream; never redraft it from scratch.
-- The **Delivery plan** section must appear first among substantive plan sections, immediately after the `## Issues` carry-forward header. Do not place Delivery plan after Background or Files to modify.
+- The **Delivery plan** section must appear first among substantive plan sections, immediately after `## Issues` (assemble adds it). Do not place Delivery plan after Background or Files to modify.
+- Write exactly one `## Accepted Tradeoffs (detail)` holding only the tradeoffs this detail newly accepts (the empty marker of `skills/_shared/no-upstream-copy.md` when none); never copy an upstream stage's tradeoffs.
+- Follow `skills/_shared/no-upstream-copy.md`: reference the issues, intent and outline by section name; write only what the detail newly decides.
 - When outline.md contains a Delivery plan, your Delivery plan must be consistent with it (you may expand; do not contradict).
 - Read before planning. Do not invent file paths or APIs.
 - Follow `rules/core-principles.md`. Read `rules/coding.md` before following it — it is on-demand-only and never auto-injected.

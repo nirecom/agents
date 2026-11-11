@@ -24,11 +24,10 @@
    - **Delivery plan** — triage rationale, execution order, and split policy. Carry forward from
      outline.md's Delivery plan section when present. If absent or "(not provided)", draft one fresh.
      Schema H2 headings always use their canonical English names ("Delivery plan" / "Background" / "Files to modify" verbatim) regardless of PLAN_LANG; only body text follows PLAN_LANG.
-     Do NOT write `## Issues` / `## Class members` / `## Accepted Tradeoffs` — these are added
-     automatically; planner-authored copies are stripped before the final write.
-   - **Background** — two paragraphs: (1) summary of agreed requirements and motivation
-     from intent.md; (2) confirmed approach from outline.md and why it was chosen.
-     If no prior-stage artifacts exist, write a one-paragraph Goal instead.
+     Do NOT write `## Issues` (assemble adds it) or `## Class members` (its SSOT is intent.md; never carried).
+     Write `## Accepted Tradeoffs (detail)` yourself (the empty marker of `skills/_shared/no-upstream-copy.md` when none); copies of other stages are stripped.
+   - **Background** — reference intent.md and outline.md by section name; write only the facts found at this stage
+     (`skills/_shared/no-upstream-copy.md`). If no prior-stage artifacts exist, write a one-paragraph Goal instead.
    - **Files to modify** — full paths, grouped by purpose
    - **Steps** — ordered implementation steps (include test-writing step per `rules/test.md`; Read it first — on-demand-only, never auto-injected)
    - **Risks & edge cases** — what could go wrong, cross-platform concerns, backward-compatibility issues

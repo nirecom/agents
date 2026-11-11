@@ -37,11 +37,11 @@ sci_eq "render: exit 0" "$SCI_RC" "0"
 sci_match "render: stdout CURSOR_STATUS line" "$SCI_STDOUT" '^CURSOR_STATUS: fresh$'
 sci_match "render: stdout CURSOR_NEXT line" "$SCI_STDOUT" '^CURSOR_NEXT: \{'
 RD_ORDER=""
-for tag in "[SUPERVISOR INPUT HEADER]" "[HANDOFF START]" "[PROGRESS START]" "[USER UTTERANCES START]" "[ACTIONS SINCE PREVIOUS ALERT RUN START]" "[PLAN ARTIFACTS START]" "[SUPERVISOR STATE START]"; do
+for tag in "[SUPERVISOR INPUT HEADER]" "[HANDOFF START]" "[PROGRESS START]" "[USER UTTERANCES START]" "[ACTIONS SINCE PREVIOUS ALERT RUN START]" "[PLAN ARTIFACTS START]" "[SUPERVISOR STATE START]" "[ISSUE SNAPSHOT START]"; do
   RD_ORDER="$RD_ORDER $(rd_line "$RD_OUT" "$tag")"
 done
 RD_ORDER_OK="$(printf '%s\n' $RD_ORDER | awk 'NR>1 && $1<=prev{bad=1} $1==0{bad=1} {prev=$1} END{print (bad ? "bad:" : "ok")}')"
-sci_eq "render: seven blocks present in plan order, PROGRESS between HANDOFF and USER UTTERANCES (lines:$RD_ORDER)" "$RD_ORDER_OK" "ok"
+sci_eq "render: eight blocks present in plan order (ISSUE SNAPSHOT last, #2924), PROGRESS between HANDOFF and USER UTTERANCES (lines:$RD_ORDER)" "$RD_ORDER_OK" "ok"
 RD_H="$(sci_header "$RD_OUT")"
 sci_has "render header: transcript path" "$RD_H" "sidA.jsonl"
 sci_has "render header: action range L1..L6" "$RD_H" "L1..L6"

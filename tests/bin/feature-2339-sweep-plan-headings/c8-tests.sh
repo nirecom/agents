@@ -18,7 +18,7 @@ BODY_REUSED
 
 BODY_NONGOALS
 
-## Accepted Tradeoffs
+## Accepted Tradeoffs (outline)
 
 BODY_TRADEOFFS
 
@@ -50,7 +50,7 @@ C8_ORDER=(
     "## Adopted approach"
     "## Delivery plan"
     "## Considered alternatives (rejected)"
-    "## Accepted Tradeoffs"
+    "## Accepted Tradeoffs (outline)"
     "## Confirmed non-goals"
     "## Reused existing utilities / building blocks"
 )

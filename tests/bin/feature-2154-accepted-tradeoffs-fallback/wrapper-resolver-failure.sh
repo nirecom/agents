@@ -188,8 +188,13 @@ printf '## Test Case Categories\n\n- Normal cases\n' > "$F5_CONTEXT"
 # The path really comes from the resolver, so the marker travels the production
 # route rather than being handed to review-plan-codex directly.
 F5_RESOLVED="$(with_timeout bash "$AGENTS_ROOT/bin/resolve-accepted-tradeoffs-file" "$F5_PLANS" F5SID detail outline intent 2>/dev/null)"
-assert_eq "F5-0: the resolver selects the tradeoffs file carrying the marker" \
-  "$F5_PLANS/F5SID-intent.md" "$F5_RESOLVED"
+assert_eq "F5-0: the resolver prints the merged control-dir file (#2924)" \
+  "$(merged_path F5SID detail)" "$(norm "$F5_RESOLVED")"
+if grep -qF -- "$F5_SECRET" "$F5_RESOLVED" 2>/dev/null && [[ "$(stage_set "$F5_RESOLVED")" == "intent" ]]; then
+  pass "F5-0: the merged file carries the marker under its intent section"
+else
+  fail "F5-0: the merged file lacks the marker or the intent section: [$(stage_set "$F5_RESOLVED")]"
+fi
 
 F5_OUT_F="$TMPROOT/f5-stdout.txt"; F5_ERR_F="$TMPROOT/f5-stderr.txt"
 F5_RC=0

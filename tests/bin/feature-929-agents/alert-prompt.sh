@@ -69,6 +69,14 @@ _alp_run() {
             fi
         fi
 
+        # #2924: the copy-detection directive is audit-only. The ISSUE SNAPSHOT block itself is
+        # assembled in both modes, so the instruction sentence is what alert must lack.
+        if [[ "$prompt" == *"Compare the ISSUE SNAPSHOT block"* || "$prompt" == *"category intent, outline or detail"* ]]; then
+            fail "alert-prompt[$lang]: alert PROMPT carries the audit-only copy-detection directive"
+        else
+            pass "alert-prompt[$lang]: alert PROMPT has no copy-detection directive (#2924)"
+        fi
+
         if [[ "$(printf '%s\n' "$out" | head -n 1)" != "STATUS: SUCCESS" ]]; then
             fail "alert-prompt[$lang]: valid stub finding must give STATUS: SUCCESS, got: $(printf '%s' "$out" | head -n 2 | tr '\n' ' ')"
             continue

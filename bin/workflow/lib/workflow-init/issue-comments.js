@@ -6,45 +6,20 @@
  * from here, so the two artifacts can never drift (CPR-SSOT).
  */
 
-// WI-9 contract (CWE-77): workflow sentinels are stripped from untrusted
-// third-party issue content — body, title, comment bodies and comment metadata.
-const SENTINEL_RE = /<<WORKFLOW_[A-Z_]+[^>]*>>/g;
-
-// U+0085/U+2028/U+2029 end a line for a Markdown reader but survive a \n-only
-// splitter, so a blockquote prefix never reaches the text behind them.
-const EXOTIC_BREAK_RE = /[\u0085\u2028\u2029]/g;
-const ANY_BREAK_RE = /\r\n|[\n\r\u0085\u2028\u2029]/g;
+// WI-9 contract (CWE-77): the sanitize helpers live in the shared unit (#2924) and are re-exported.
+const {
+  SENTINEL_RE,
+  EXOTIC_BREAK_RE,
+  ANY_BREAK_RE,
+  stripSentinels,
+  sanitizeInline,
+  sanitizeBlock,
+  quoteBlock,
+} = require("../../../../hooks/lib/untrusted-text-sanitize");
 
 const HEADING = "## Issue comments";
 const UNKNOWN = "(unknown)";
 const NO_ISSUE = "(none — no issue)";
-
-// #2063 C14: loop to a fixed point — deleting one token can splice a still-live
-// opener back together (a sentinel nested inside another), so re-scan until a
-// pass removes nothing.
-function stripSentinels(text) {
-  if (typeof text !== "string") return "";
-  let out = text;
-  let prev;
-  do {
-    prev = out;
-    out = out.replace(SENTINEL_RE, "");
-  } while (out !== prev);
-  return out;
-}
-
-// Values interpolated into one line (author, createdAt, issue title): every line
-// terminator becomes a space so the value cannot open a second line.
-function sanitizeInline(text) {
-  return stripSentinels(String(text).replace(ANY_BREAK_RE, " "));
-}
-
-// Multi-line values (comment body, issue body): real breaks survive as LF, which
-// the blockquote prefix then covers; the rest are flattened.
-function sanitizeBlock(text) {
-  const unified = String(text).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  return stripSentinels(unified.replace(EXOTIC_BREAK_RE, " "));
-}
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -78,12 +53,8 @@ function quoteBody(comment) {
   if (!isPlainObject(comment) || typeof comment.body !== "string") {
     return "> (malformed comment)";
   }
-  const clean = sanitizeBlock(comment.body);
-  if (clean === "") return "> (empty comment)";
-  return clean
-    .split("\n")
-    .map((line) => (line === "" ? ">" : `> ${line}`))
-    .join("\n");
+  if (sanitizeBlock(comment.body) === "") return "> (empty comment)";
+  return quoteBlock(comment.body);
 }
 
 function renderComment(comment, position) {
@@ -108,6 +79,9 @@ function renderNoIssueSection() {
 
 module.exports = {
   COMMENTS_HEADING: HEADING,
+  SENTINEL_RE,
+  EXOTIC_BREAK_RE,
+  ANY_BREAK_RE,
   stripSentinels,
   sanitizeInline,
   sanitizeBlock,
