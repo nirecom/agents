@@ -7,6 +7,8 @@
 // TL3 gap (what this test does NOT catch):
 // - Claude Code reading the hook's deny / ask JSON and showing the approval dialog
 // - the real GitHub GraphQL reply and `{owner}`/`{repo}` placeholder resolution (Step 9 measures)
+// Closest-to-action mitigation: bin/check-verification-gate.sh category: hook-registration;
+// the hook's registration in settings.json is cross-checked by tests/hooks/feature-2676-hook-classification/oracle.js.
 const { caseBegin, caseEnd } = require("../lib/harness");
 
 const assert = require("node:assert");
@@ -24,14 +26,14 @@ const CLI = path.join(fx.REPO, "bin", "user-block-guard");
 const R = "example-owner/example-repo";
 const B = "<user>keep me</user>";
 const stub = makeStubGh(fx.tempDir("e2e-stub"));
-const issue = (body) => ({
-  data: { repository: { issue: { id: "I_kw7", title: "Old title", body, comments: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } } } },
+const issue = (body, nodes = []) => ({
+  data: { repository: { issue: { id: "I_kw7", title: "Old title", body, comments: { pageInfo: { hasNextPage: false, endCursor: null }, nodes } } } },
 });
 
 // runChain(command, oldBody) -> { decision, reason, ghCalls, stdout, stderr }, from a neutral cwd.
-function runChain(command, oldBody) {
+function runChain(command, oldBody, reply = issue(oldBody)) {
   assert.ok(fs.existsSync(HOOK) && fs.existsSync(CLI), "hook or CLI is not present (expected before write-code)");
-  stub.setSpec({ rules: [{ match: "graphql", stdout: issue(oldBody) }], fallback: { exit: 1, stderr: "unscripted gh call" } });
+  stub.setSpec({ rules: [{ match: "graphql", stdout: reply }], fallback: { exit: 1, stderr: "unscripted gh call" } });
   stub.resetCalls();
   const work = fx.tempDir("e2e-run");
   const env = { ...process.env };
@@ -73,5 +75,66 @@ test("gh issue edit 7 -b with the block rewritten asks, and the reason names the
   assert.strictEqual(r.decision, "ask", `${r.stdout}${r.stderr}`);
   assert.match(r.reason, /<user>/);
   assert.ok(fetched(r));
+});
+caseEnd();
+
+// The block sits in a COMMENT, not the body: the title is still locked.
+const comment = (body) => ({ id: "IC_kw99", databaseId: 99, body, viewerDidAuthor: false });
+
+caseBegin("title-edit-comment-block:gh-issue-edit-title-denies", "hooks/protect-user-block.js");
+test("gh issue edit 7 -t New on an issue whose only <user> block is in a comment is denied", () => {
+  const r = runChain(`gh issue edit 7 -R ${R} -t New`, null, issue("intro only\n", [comment(`note\n${B}\n`)]));
+  assert.strictEqual(r.decision, "deny", `${r.stdout}${r.stderr}`);
+  assert.ok(fetched(r), JSON.stringify(r.ghCalls));
+});
+caseEnd();
+
+caseBegin("title-edit-comment-block:clean-comment-passes", "hooks/protect-user-block.js");
+test("the same title change with a block-free comment gives no decision", () => {
+  const r = runChain(`gh issue edit 7 -R ${R} -t New`, null, issue("intro only\n", [comment("plain note\n")]));
+  assert.strictEqual(r.decision, "none", `${r.stdout}${r.stderr}`);
+});
+caseEnd();
+
+// The old issue holds NO block; the same call changes the title and adds one to the body.
+const nodeIssue = (body) => ({
+  data: { node: { __typename: "Issue", id: "I_kw7", title: "Old title", body, comments: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } } },
+});
+const UPDATE_ISSUE = "mutation($id:ID!,$title:String,$body:String){updateIssue(input:{id:$id,title:$title,body:$body}){issue{id}}}";
+
+caseBegin("title-edit-adds-block:gh-issue-edit-denies", "hooks/protect-user-block.js");
+test("gh issue edit 7 -t New -b '<user>..' on an issue without a block is denied", () => {
+  const r = runChain(`gh issue edit 7 -R ${R} -t New -b '${B}'`, "intro only\n");
+  assert.strictEqual(r.decision, "deny", `${r.stdout}${r.stderr}`);
+  assert.ok(fetched(r), JSON.stringify(r.ghCalls));
+});
+caseEnd();
+
+caseBegin("title-edit-adds-block:rest-patch-denies", "hooks/protect-user-block.js");
+test("gh api -X PATCH issues/7 -f title=New -f body='<user>..' on an issue without a block is denied", () => {
+  const r = runChain(`gh api -X PATCH repos/${R}/issues/7 -f title=New -f body='${B}'`, "intro only\n");
+  assert.strictEqual(r.decision, "deny", `${r.stdout}${r.stderr}`);
+  assert.ok(fetched(r), JSON.stringify(r.ghCalls));
+});
+caseEnd();
+
+caseBegin("title-edit-adds-block:graphql-update-issue-denies", "hooks/protect-user-block.js");
+test("GraphQL updateIssue with a new title and a body adding a block on an issue without one is denied", () => {
+  const r = runChain(`gh api graphql -f query='${UPDATE_ISSUE}' -f id=I_kw7 -f title=New -f body='${B}'`, null, nodeIssue("intro only\n"));
+  assert.strictEqual(r.decision, "deny", `${r.stdout}${r.stderr}`);
+  assert.ok(fetched(r), JSON.stringify(r.ghCalls));
+});
+caseEnd();
+
+caseBegin("title-edit-adds-block:clean-body-passes", "hooks/protect-user-block.js");
+test("the same title edits with a block-free body on an issue without a block give no decision", () => {
+  for (const [cmd, reply] of [
+    [`gh issue edit 7 -R ${R} -t New -b 'plain'`, issue("intro only\n")],
+    [`gh api -X PATCH repos/${R}/issues/7 -f title=New -f body='plain'`, issue("intro only\n")],
+    [`gh api graphql -f query='${UPDATE_ISSUE}' -f id=I_kw7 -f title=New -f body='plain'`, nodeIssue("intro only\n")],
+  ]) {
+    const r = runChain(cmd, null, reply);
+    assert.strictEqual(r.decision, "none", `${cmd}: ${r.stdout}${r.stderr}`);
+  }
 });
 caseEnd();
