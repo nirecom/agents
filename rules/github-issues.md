@@ -117,3 +117,10 @@ An issue that already carries implementation work is not a meta parent, and labe
 When creating, editing, or commenting on issues or PRs in a PUBLIC repository, do not include names of or cross-references to PRIVATE repositories.
 Do not paste private-repo issue or PR URLs, or `owner/private-repo#N` references, into any public outbound content.
 Treat every public forge-write as potentially world-visible; omit private repo identifiers entirely.
+
+## `<user>` block
+
+- A `<user>`…`</user>` block is the user's own statement; never write a new one, even on request.
+- Change or delete an existing block, or delete a comment or issue holding one, only through a user-approved dialog.
+- Never change the title of an issue whose body or any comment holds a block.
+- Enforced by `hooks/protect-user-block.js` and `bin/lib/gh-user-block-guard.sh`; `bin/user-block-guard` owns the judgment.

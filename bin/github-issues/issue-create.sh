@@ -186,6 +186,10 @@ SCAN_TMP=$(mktemp)
 } > "$SCAN_TMP"
 # A fixed literal label, never the caller's path: it must not match an allowlist glob (bin/scan-outbound.sh).
 gh_outbound_guard "issue-body" < "$SCAN_TMP" || { rm -f "$SCAN_TMP"; exit 1; }
+# shellcheck source=../lib/gh-user-block-guard.sh
+. "$(cd "$(dirname "$0")" && pwd)/../lib/gh-user-block-guard.sh"
+gh_user_block_guard "issue-create" --op create --new-title "$TITLE" --new-body-file "$(native_path "$SCAN_TMP")" \
+    || { rm -f "$SCAN_TMP"; exit 1; }
 rm -f "$SCAN_TMP"
 
 # Reporting model → reporter-model:* label; --reporter-model wins. SSOT: hooks/lib/model-match.js.

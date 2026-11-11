@@ -1,0 +1,4 @@
+#!/usr/bin/env node
+"use strict";
+// bin/user-block-guard — dispatch to bin/user-block-guard.d/main.js (contract in its header).
+require("./user-block-guard.d/main").cli();

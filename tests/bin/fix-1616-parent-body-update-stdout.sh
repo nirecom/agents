@@ -46,6 +46,10 @@ done
 
 setup_tmp() {
     TMP="$(mktemp -d)"
+    # The user-block guard reads the old issue via `gh api graphql` through node (never the bash mock on
+    # Windows); the helper's gh.exe stub answers it with a body without a <user> block.
+    . "$SCRIPT_CHECKOUT_ROOT/tests/lib/gh-guard-fetch-stub.sh"
+    gh_guard_fetch_stub_install "$TMP/guard-stub"
     export PATH="$MOCK_DIR:$PATH"
     export GH_MOCK_COMMENT_LOG="$TMP/comments.log"
     : > "$GH_MOCK_COMMENT_LOG"

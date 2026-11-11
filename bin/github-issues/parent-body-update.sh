@@ -4,15 +4,9 @@
 # If issue <N> has a parent issue, flip `- [ ] #<N>` to `- [x] #<N>` in the
 # parent's body. No-op when there is no parent.
 #
-# Security notes:
-# - <N> must be digits-only (validated by /issue-close-stage / /issue-close-finalize before calling).
-# - PARENT_BODY is treated as opaque text and passed as a single argv to
-#   `gh issue edit --body` — it cannot escape into the shell.
-# - The match uses a word boundary (`\b`) so `#42` does not match `#420`.
-#
-# Concurrency caveat: read-modify-write is not atomic. A concurrent edit to
-# the parent body between fetch and write will be lost. Acceptable for
-# single-user, low-churn use.
+# Security: <N> is digits-only; PARENT_BODY is opaque text passed as one argv to
+# `gh issue edit --body`; `\b` keeps `#42` from matching `#420`. A `<user>` diff stops the edit (#2940).
+# Read-modify-write is not atomic (a concurrent parent edit is lost); fine for single-user use.
 
 set -uo pipefail
 
@@ -46,6 +40,20 @@ fi
 PARENT_BODY=$(gh issue view "$PARENT" --json body --jq .body)
 NEW_BODY=$(printf '%s' "$PARENT_BODY" \
     | perl -pe "s/- \\[ \\] #${N}\\b/- [x] #${N}/g")
+
+# The guard reads the same cwd-resolved parent the edit below writes.
+# shellcheck source=../lib/gh-user-block-guard.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/gh-user-block-guard.sh"
+# shellcheck source=../lib/native-path.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/native-path.sh"
+GUARD_TMPFILE="$(mktemp)"
+trap 'rm -f "$GUARD_TMPFILE"' EXIT
+printf '%s' "$NEW_BODY" > "$GUARD_TMPFILE"
+if ! gh_user_block_guard "parent-body-update:#$PARENT" --op edit --issue "$PARENT" --new-body-file "$(native_path "$GUARD_TMPFILE")"; then
+    echo "WARN: parent body update skipped for #${PARENT}" >&2
+    exit 1
+fi
+
 if ! ISSUE_CLOSE_SKILL=1 gh issue edit "$PARENT" --body "$NEW_BODY" >/dev/null 2>&1; then
     echo "WARN: parent body update failed for #${PARENT}" >&2
     exit 1

@@ -47,6 +47,11 @@ setup() {
     # Stateful gh mock: view reads store, edit --body-file writes store back.
     cat > "$TMP/mock-bin/gh" <<'MOCKGH'
 #!/usr/bin/env bash
+# bin/user-block-guard's reads (api graphql / REST comment) go to the guard stub by absolute path on every OS.
+case "$*" in
+  api\ graphql\ *'query($owner:String!'*|api\ graphql\ *'query($id:ID!'*|api\ repos/*/issues/comments/[0-9]*)
+    [ -n "${GH_GUARD_STUB_BIN:-}" ] && exec "$GH_GUARD_STUB_BIN/gh" "$@" ;;
+esac
 echo "gh $*" >> "$MOCK_LOG_DIR/gh-calls.log"
 case "$1 $2" in
   "issue view")
@@ -64,6 +69,10 @@ esac
 exit 0
 MOCKGH
     chmod +x "$TMP/mock-bin/gh"
+    # The user-block guard reads the old issue via `gh api graphql` through node (never the bash mock on
+    # Windows); the helper's gh.exe stub answers it with a body without a <user> block.
+    . "$SCRIPT_CHECKOUT_ROOT/tests/lib/gh-guard-fetch-stub.sh"
+    gh_guard_fetch_stub_install "$TMP/guard-stub"
     export PATH="$TMP/mock-bin:$PATH"
     export AGENTS_MAIN_ROOT="$TMP/fake_main_root"
 }
@@ -105,6 +114,11 @@ if [ "$RC" -eq 0 ] && edit_called \
     pass "A-1: --note appends a Revision inside one marker block, original body intact"
 else
     fail "A-1: expected single-block append; got rc=$RC begin=$BEGIN_N end=$END_N body='$BODY'"
+fi
+if grep -q '"graphql"' "${F2940_GH_LOG:-/nonexistent}" 2>/dev/null; then
+    pass "A-1b: user-block guard's old-state read reached the guard stub (recorded in F2940_GH_LOG)"
+else
+    fail "A-1b: expected a graphql call recorded in F2940_GH_LOG='${F2940_GH_LOG:-}'"
 fi
 teardown
 
