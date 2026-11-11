@@ -80,6 +80,7 @@ if (mode === "setup") {
   for (const e of table.entries) {
     const named = [e.launch && e.launch.wrapper, e.helperLibrary && e.helperLibrary.path, e.notationDoc];
     for (const k of ["caseMarkerReader", "caseEmbedRules", "tableDrivenDetector", "envClearLine"]) named.push(e[k] && e[k].file);
+    if (isObj(e.childLaunch)) named.push(e.childLaunch.reader, e.childLaunch.analyzer);
     for (const rel of named.filter(isStr)) {
       fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
       fs.writeFileSync(path.join(root, rel), "");
@@ -215,6 +216,8 @@ run_rows reject <<'ROWS'
 notation-doc-missing-file|pester|notationDoc|e.notationDoc = "fx/no-such-notation.md";
 helper-library-path-missing-file|bash|helperLibrary.path|e.helperLibrary.path = "fx/no-such-helper.sh";
 helper-library-path-missing-file-new-entry|pytest|helperLibrary.path|e.helperLibrary.path = "fx/no-such-helper.py";
+child-launch-reader-missing-file|pytest|childLaunch.reader|e.childLaunch.reader = "fx/no-such-case-reader.py";
+child-launch-analyzer-missing-file|pester|childLaunch.analyzer|e.childLaunch.analyzer = "fx/no-such-case-analyzer.ps1";
 ROWS
 case_end
 

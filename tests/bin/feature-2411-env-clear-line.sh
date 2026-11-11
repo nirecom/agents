@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2411-env-clear-line.sh
 # Tests: bin/lib/test-language-parts/bash.sh, bin/lib/test-language-parts/js.sh, bin/lib/test-language-parts/pester.sh, bin/lib/test-language-parts/pytest.sh, hooks/lib/test-language-registry.json, hooks/lib/test-language-registry.js
-# Tags: TL1, bin, test-language-registry, session-id, tombstone, table-driven, scope:issue-specific, pwsh-not-required
+# Tags: TL1, bin, test-language-registry, session-id, tombstone, table-driven, scope:issue-specific
 # #2507 moved the envClearLine parts to Node: their row tables live in tests/bin/feature-2507-env-clear-line.js,
 # so this file keeps the registry route through the bash loader and the tableDrivenDetector parts.
 set -u
@@ -70,14 +70,23 @@ printf '%s\n' "import pytest" "" "" "def test_loop():" "    for n in [1, 2]:" " 
 
 case_begin "pester-table-driven-detector" "bin/lib/test-language-parts/pester.sh"
 # Positive: -ForEach and -TestCases on It; negative: a ForEach-Object pipeline in a plain It.
-assert_eq "pester $(td_route pester "$TD/foreach.Tests.ps1" "$TD/testcases.Tests.ps1" "$TD/plain.Tests.ps1")" \
-  "pester fn=has_table_driven_pester rc=0 0 1"
+# The detector answers through pwsh, so a host without it skips rather than passes.
+if command -v pwsh >/dev/null 2>&1; then
+  assert_eq "pester $(td_route pester "$TD/foreach.Tests.ps1" "$TD/testcases.Tests.ps1" "$TD/plain.Tests.ps1")" \
+    "pester fn=has_table_driven_pester rc=0 0 1"
+else
+  skip "pester table-driven detector: pwsh is not on PATH"
+fi
 case_end
 
 case_begin "pytest-table-driven-detector" "bin/lib/test-language-parts/pytest.sh"
-# Positive: @pytest.mark.parametrize; negative: a for loop inside a plain test.
-assert_eq "pytest $(td_route pytest "$TD/test_param.py" "$TD/test_plain.py")" \
-  "pytest fn=has_table_driven_pytest rc=0 1"
+# Positive: @pytest.mark.parametrize; negative: a for loop inside a plain test. The detector answers through uv.
+if command -v uv >/dev/null 2>&1; then
+  assert_eq "pytest $(td_route pytest "$TD/test_param.py" "$TD/test_plain.py")" \
+    "pytest fn=has_table_driven_pytest rc=0 1"
+else
+  skip "pytest table-driven detector: uv is not on PATH"
+fi
 case_end
 
 echo ""

@@ -67,7 +67,9 @@ function summaries(lines, root) {
     msgs.push("Commit blocked: new test entrypoint placed directly under tests/.");
     const cats = R.categoriesFor(root);
     msgs.push(`A test entrypoint (${labels.join(" / ")}) must live under ${l.dir}/<category>/ (categories: ${cats.join(" ")}).`);
-    msgs.push(`Move it into the matching category dir, e.g. ${l.dir}/${cats[0]}/<name>.sh.`);
+    const shapeEntry = R.reg().entries.find((e) => e.status === "supported" && R.fieldValue(e, "newFileNameShape"));
+    const example = shapeEntry ? `${l.dir}/${cats[0]}/${R.fieldValue(shapeEntry, "newFileNameShape")}` : `${l.dir}/${cats[0]}/`;
+    msgs.push(`Move it into the matching category dir, e.g. ${example}.`);
   }
   if (lines.some((l) => /MISSING_TESTS_HEADER|INVALID_TESTS_TOKEN|MISSING_SCOPE_TAG|MISSING_HARNESS_SOURCE/.test(l))) {
     msgs.push("Commit blocked: staged test file(s) fail frontmatter validation.");

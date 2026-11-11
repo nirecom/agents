@@ -3,10 +3,10 @@
 #   deps           ORDER<TAB><idx><TAB><begin><TAB><end> per case, then <idx><TAB><csv> per case
 #   leftover-defs  <line><TAB><name> per top-level function no command names
 #   self-impl <file> <helper>  <line><TAB><kind><TAB><detail> per counter-init / harness-redef
-#   skip-reason    nested-describe when a Describe sits inside another; else nothing
+#   skip-reason / table-driven  nested-describe (a Describe inside another) / table-driven (an It with -ForEach or -TestCases); else nothing
 #   syntax-check   nothing; exit 0 when the file parses, 1 with the first parse error otherwise
 #   case-count     the number of top-level Describe blocks; exit 1 when there is none
-#   all <file> <helper>  OP<TAB><op> blocks for every op but syntax-check (OP<TAB><op><TAB>fail: failed)
+#   all <file> <helper>  OP<TAB><op> blocks for every op but syntax-check / table-driven (OP<TAB><op><TAB>fail: failed)
 # Exit 1: unreadable, a parse error, not conforming (deps) or no unit (case-count); 2: unknown op.
 param([string]$Op = '', [string]$Path = '', [string]$Helper = '')
 
@@ -150,6 +150,16 @@ function Get-SkipReasonRow {
     }
 }
 
+function Get-TableDrivenRow {
+    param([System.Management.Automation.Language.ScriptBlockAst]$Ast)
+    $it = { param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'It' }
+    foreach ($c in $Ast.FindAll($it, $true)) {
+        foreach ($e in $c.CommandElements) {
+            if ($e -is "$script:Lang.CommandParameterAst" -and $e.ParameterName -in @('ForEach', 'TestCases')) { return 'table-driven' }
+        }
+    }
+}
+
 function Get-CaseCountRow {
     param([System.Management.Automation.Language.ScriptBlockAst]$Ast)
     $count = @(Get-TopDescribe -Ast $Ast).Count
@@ -165,6 +175,7 @@ function Get-OpRow {
         'self-impl' { Get-SelfImplRow -Ast $Ast -Helper $Helper }
         'leftover-defs' { Get-LeftoverRow -Ast $Ast }
         'skip-reason' { Get-SkipReasonRow -Ast $Ast }
+        'table-driven' { Get-TableDrivenRow -Ast $Ast }
         default { }
     }
 }
@@ -174,8 +185,8 @@ function Write-Row {
     if ($Row.Count -gt 0) { [Console]::Out.Write(($Row -join "`n") + "`n") }
 }
 
-# syntax-check stays out of `all`: it answers by exit code alone, after the parse below.
-if ($Op -notin ($script:Ops + 'all', 'syntax-check')) {
+# syntax-check and table-driven stay out of `all`: the gates do not read them from it.
+if ($Op -notin ($script:Ops + 'all', 'syntax-check', 'table-driven')) {
     [Console]::Error.WriteLine("[pester-case-analyzer] unknown op: $Op")
     exit 2
 }

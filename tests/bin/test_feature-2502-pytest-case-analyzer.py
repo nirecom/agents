@@ -4,7 +4,8 @@
 
 Called as `<op> <file> [args]`: deps (ORDER lines matching the test case reader's ranges,
 then idx<TAB>csv), leftover-defs (line<TAB>name), self-impl <file> <helper> (line<TAB>kind
-<TAB>detail), skip-reason (one word or nothing) and syntax-check (no stdout; rc 0 / 1). The
+<TAB>detail), skip-reason (one word or nothing), table-driven (the word `table-driven` or nothing;
+rc 1 on a syntax error) and syntax-check (no stdout; rc 0 / 1). The
 file under analysis is parsed with `ast`, never imported.
 """
 
@@ -395,7 +396,55 @@ def test_file_under_analysis_is_never_executed(case, tmp_path):
     sentinel = tmp_path / "executed.flag"
     lines = ["from pathlib import Path", f"Path({json.dumps(str(sentinel))}).write_text('ran')", *SAMPLE]
     path = write(tmp_path / "test_side.py", lines)
-    for op in ("deps", "leftover-defs", "skip-reason", "syntax-check"):
+    for op in ("deps", "leftover-defs", "skip-reason", "table-driven", "syntax-check"):
         analyze_ok(case, op, path)
     analyze_ok(case, "self-impl", path, str(HELPER))
     assert not sentinel.exists(), f"{case}: sentinel must not be written"
+
+
+# table-driven (#2735): the verdict comes from the syntax tree, so a decorator line that only sits
+# inside a string literal is no table. Any function or class decorator that is_parametrize accepts
+# counts, `pt.mark.parametrize` through an alias included (is_parametrize reads the `.mark` attribute).
+IN_STRING = [
+    "DOC = '''",
+    '@pytest.mark.parametrize("n", [1, 2])',
+    "'''",
+]
+
+
+@pytest.mark.parametrize(
+    ("lines", "want"),
+    [
+        pytest.param(PARAMETRIZED, [["table-driven"]], id="function-decorator"),
+        pytest.param(["import pytest", "", "", *IN_STRING, "", "", "def test_a():", "    assert DOC"], [], id="decorator-line-only-in-triple-quoted-string"),
+        pytest.param(
+            ["import pytest", "", "", PARAM, "class TestBox:", "    def test_one(self, n):", "        assert n"],
+            [["table-driven"]],
+            id="class-decorator",
+        ),
+        pytest.param(
+            ["import pytest as pt", "", "", '@pt.mark.parametrize("n", [1, 2])', "def test_a(n):", "    assert n"],
+            [["table-driven"]],
+            id="aliased-pytest-mark",
+        ),
+        pytest.param(
+            ["import pytest", "", "", PARAM, "async def test_a(n):", "    assert n"],
+            [["table-driven"]],
+            id="async-function-decorator",
+        ),
+        pytest.param(
+            ["import pytest", "", "", "class TestBox:", f"    {PARAM}", "    def test_one(self, n):", "        assert n"],
+            [["table-driven"]],
+            id="method-decorator-inside-class",
+        ),
+        pytest.param(SAMPLE, [], id="control-no-parametrize"),
+    ],
+)
+def test_table_driven_answers_from_the_syntax_tree(case, tmp_path, lines, want):
+    assert analyze_ok(case, "table-driven", write(tmp_path / "test_td.py", lines)) == want, f"{case}: table-driven"
+
+
+def test_table_driven_syntax_error_exits_one(case, tmp_path):
+    done = run(case, ANALYZER, "table-driven", str(write(tmp_path / "test_td_bad.py", ["def test_x(:", "    assert True"])))
+    assert done.returncode == 1, f"{case}: exit code; stderr: {done.stderr}"
+    assert done.stdout == "", f"{case}: no stdout"

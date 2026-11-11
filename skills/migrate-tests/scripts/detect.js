@@ -21,13 +21,13 @@ const { translateEre } = require(path.join(HOOKS_LIB, "ere", "translate"));
 const TESTS_DIR = "tests";
 const TEST_FILE_RE = /\.(sh|bash|js|cjs|mjs|ps1|py)$/i;
 const HELPER_DIRS = new Set(["lib", "fixtures", "fixture", "helpers", "golden", "node_modules"]);
-// A harness load is a line-anchored load statement: the registry's helperLibrary regexes, except the
-// js one, whose `^[^/]*require(` also accepts a require(...) inside a string literal.
+// A harness load is a line-anchored load statement: the registry's helperLibrary regexes, except an
+// entry whose sourceRegex is loose (`looseSourceRegex`); JS_LOAD_RE stands in for that one.
 const JS_LOAD_RE = /^\s*(?:(?:(?:const|let|var)\s+[^=]+=\s*)?require\(\s*|import\s+(?:[^'"]+\s+from\s+)?)["'][^"']*\/harness(?:\.[cm]?js)?["']/;
 const LOAD_RES = [
   JS_LOAD_RE,
   ...entriesWhere("helper-library")
-    .filter((e) => !/\.js$/.test(e.helperLibrary.path))
+    .filter((e) => !e.helperLibrary.looseSourceRegex)
     .flatMap((e) => [e.helperLibrary.sourceRegex, e.helperLibrary.sharedSourceRegex])
     .filter(Boolean)
     .map(translateEre)

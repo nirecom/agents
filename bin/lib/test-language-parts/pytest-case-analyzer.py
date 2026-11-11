@@ -10,6 +10,7 @@ pytest_case_scan.py (the test case reader's own code) and prints:
                  or an xunit setup_module / teardown_module / setup_function / teardown_function
   self-impl <helper>  <line>\\t<kind>\\t<detail> per module-level counter-init / harness-redef
   skip-reason    parametrized-case when a test uses @pytest.mark.parametrize; else nothing
+  table-driven   table-driven when any function or class carries a parametrize decorator; else nothing
   syntax-check   nothing; exit 0 when the file parses, 1 with the reason on stderr otherwise
   case-count     the number of module-level cases (is_case); exit 1 when there is none
 Exit 1: unreadable, a syntax error, not conforming (deps) or no unit (case-count); 2: unknown op.
@@ -26,6 +27,7 @@ from pytest_case_scan import DEFINITIONS, is_case, scan_cases
 
 ASSIGNMENTS = (ast.Assign, ast.AnnAssign, ast.AugAssign)
 FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
+DECORATED = (*FUNCTIONS, ast.ClassDef)
 COUNTERS = ("PASS", "FAIL", "passed", "failed")
 XUNIT_FUNCTIONS = ("setup_module", "teardown_module", "setup_function", "teardown_function")
 
@@ -168,6 +170,14 @@ def skip_reason(tree: ast.Module) -> list[str]:
     return []
 
 
+def table_driven(tree: ast.Module) -> list[str]:
+    """table-driven: a decorator in the syntax tree, never a line that only sits in a string."""
+    for node in ast.walk(tree):
+        if isinstance(node, DECORATED) and any(is_parametrize(d) for d in node.decorator_list):
+            return ["table-driven"]
+    return []
+
+
 def case_count(tree: ast.Module) -> list[str]:
     """The module-level test_* functions and Test* classes; a class is one unit."""
     count = sum(1 for node in tree.body if is_case(node))
@@ -182,6 +192,7 @@ OPS = {
     "leftover-defs": lambda tree, args: leftover_defs(tree),
     "self-impl": self_impl,
     "skip-reason": lambda tree, args: skip_reason(tree),
+    "table-driven": lambda tree, args: table_driven(tree),
     # main() parses the file before any op; a parse failure exits 1 with the reason.
     "syntax-check": lambda tree, args: [],
 }

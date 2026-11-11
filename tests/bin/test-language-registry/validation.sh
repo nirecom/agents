@@ -48,12 +48,27 @@ suite-command-uses-path|t.entries[1].launch.command = ["bash", "{path}"];
 suite-command-uses-native-path|t.entries[1].launch.command = ["run", "{nativePath}"];
 suite-command-uses-native-path-sq|t.entries[1].launch.command = ["run", "'{nativePathSq}'"];
 fallback-entry-nonexistent|t.tableDrivenFallbackEntry = "no-such-entry";
+loose-source-regex-string|t.entries[0].helperLibrary.looseSourceRegex = "yes";
+loose-source-regex-number|t.entries[0].helperLibrary.looseSourceRegex = 1;
+child-launch-not-object|t.entries[1].childLaunch = "uv";
+child-launch-empty-args|t.entries[1].childLaunch = {args: [], reader: "bin/lib/test-language-parts/pytest-case-reader.py", analyzer: "bin/lib/test-language-parts/pytest-case-analyzer.py"};
+child-launch-absolute-reader|t.entries[1].childLaunch = {args: ["run"], reader: "/abs/r.py", analyzer: "bin/lib/test-language-parts/pytest-case-analyzer.py"};
+child-launch-absolute-analyzer|t.entries[1].childLaunch = {args: ["run"], reader: "bin/lib/test-language-parts/pytest-case-reader.py", analyzer: "/abs/a.py"};
+child-launch-missing-analyzer|t.entries[1].childLaunch = {args: ["run"], reader: "bin/lib/test-language-parts/pytest-case-reader.py"};
+child-launch-missing-reader|t.entries[1].childLaunch = {args: ["run"], analyzer: "bin/lib/test-language-parts/pytest-case-analyzer.py"};
+child-launch-args-empty-string-element|t.entries[1].childLaunch = {args: [""], reader: "bin/lib/test-language-parts/pytest-case-reader.py", analyzer: "bin/lib/test-language-parts/pytest-case-analyzer.py"};
+child-launch-args-non-string-element|t.entries[1].childLaunch = {args: [1], reader: "bin/lib/test-language-parts/pytest-case-reader.py", analyzer: "bin/lib/test-language-parts/pytest-case-analyzer.py"};
+child-launch-without-requires|t.entries[1].childLaunch = {args: ["run"], reader: "bin/lib/test-language-parts/pytest-case-reader.py", analyzer: "bin/lib/test-language-parts/pytest-case-analyzer.py"}; delete t.entries[1].launch.requires;
 ROWS
 case_end
 
-case_begin "validation-accepts-case-embed-rules" "hooks/lib/test-language-registry.js"
+case_begin "validation-accepts-optional-parts" "hooks/lib/test-language-registry.js"
 # The control for the embed-rules-* rejects: a well-formed part reference and null are
-# both valid, so each reject above is caused by its malformed value alone.
+# both valid, so each reject above is caused by its malformed value alone. The same holds for
+# helperLibrary.looseSourceRegex: either boolean is valid, so the loose-source-regex-* rejects
+# are caused by their non-boolean value alone, and for childLaunch: a well-formed object (on an
+# entry whose launch.requires is set) and null are valid, so the child-launch-* rejects are
+# caused by their malformed value alone.
 while IFS='|' read -r vname vbody; do
   [ -n "$vname" ] || continue
   fx_table_edit "$VAL_BASE" "$VAL_DIR/$vname.json" "$vbody"
@@ -64,6 +79,10 @@ while IFS='|' read -r vname vbody; do
 done <<'ROWS'
 embed-rules-well-formed|t.entries[0].caseEmbedRules = {file: "bin/lib/test-language-parts/bash-case-embed.sh", function: "bash_case_embed"};
 embed-rules-null|t.entries[0].caseEmbedRules = null;
+loose-source-regex-true|t.entries[0].helperLibrary.looseSourceRegex = true;
+loose-source-regex-false|t.entries[0].helperLibrary.looseSourceRegex = false;
+child-launch-well-formed|t.entries[1].childLaunch = {args: ["run"], reader: "bin/lib/test-language-parts/pytest-case-reader.py", analyzer: "bin/lib/test-language-parts/pytest-case-analyzer.py"};
+child-launch-null|t.entries[1].childLaunch = null;
 ROWS
 case_end
 

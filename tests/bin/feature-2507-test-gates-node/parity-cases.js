@@ -158,4 +158,4 @@ async function depsFailed() {
   });
 }
 
-module.exports = { headers, caseRecords, recordsUnavailable, selfImplWindow, selfImplUnavailable, codeLanguage, bashEmbed, normalizeContent, depsFailed, gate };
+module.exports = { headers, caseRecords, recordsUnavailable, selfImplWindow, selfImplUnavailable, codeLanguage, bashEmbed, normalizeContent, depsFailed, gate, withEntry };
