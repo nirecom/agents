@@ -28,7 +28,7 @@ function oneVariant(v) {
     seen.cli = F.advance(v.sid, "run_tests", "--complete");
     seen.afterRefusal = eventCount(v.sid);
     seen.ingestedEarly = F.isIngested(v.sid, seen.stem);
-    seen.show = F.run(SHOW, ["--session", v.sid], { cwd: F.ROOT });
+    seen.show = F.run(SHOW, ["--session", v.sid], { cwd: F.ROOT, node: false });
     const cmd = `bash ${SHOW} --session ${v.sid}`;
     F.hook(v.sid, cmd, seen.show.status, seen.show.stdout);
     seen.ingested = F.isIngested(v.sid, seen.stem);
@@ -98,7 +98,7 @@ function markStepIngestPendingFlow() {
     s.afterRefusal = eventCount(sid);
     s.statusAfterRefusal = runTests(sid).status;
     s.ingestedEarly = F.isIngested(sid, s.stem);
-    s.show = F.run(SHOW, ["--session", sid], { cwd: F.ROOT });
+    s.show = F.run(SHOW, ["--session", sid], { cwd: F.ROOT, node: false });
     F.hook(sid, `bash ${SHOW} --session ${sid}`, s.show.status, s.show.stdout);
     s.ingested = F.isIngested(sid, s.stem);
     s.beforeSecond = eventCount(sid);
@@ -132,4 +132,40 @@ function markStepIngestPendingFlow() {
   });
 }
 
-module.exports = { ingestPendingFlow, markStepIngestPendingFlow };
+// The fixture's run() launches an entrypoint with node unless the caller passes `node: false`
+// (a bash entrypoint); the extension of the file never decides the interpreter.
+function launchInterpreterFlow() {
+  const sid = "s-2472-launch";
+  const JS_ENTRY = "hooks/workflow-state/record-step-verdict.js";
+  const r = {};
+  try {
+    r.shDefault = F.run(SHOW, ["--session", sid], { cwd: F.ROOT });
+    r.shBash = F.run(SHOW, ["--session", sid], { cwd: F.ROOT, node: false });
+    r.jsDefault = F.run(JS_ENTRY, [], { cwd: F.ROOT });
+    r.jsBash = F.run(JS_ENTRY, [], { cwd: F.ROOT, node: false });
+  } catch (e) {
+    r.error = errText(e);
+  }
+  check("T5 launch: a .sh entrypoint run with no `node` option is launched by node (and fails to parse)", () => {
+    if (!r.shDefault) return r.error || "did not run";
+    if (!/SyntaxError/.test(r.shDefault.stderr)) return `node did not parse the shell script: status ${r.shDefault.status} stderr ${r.shDefault.stderr.slice(0, 200)}`;
+    return undefined;
+  });
+  check("T5 launch: a .sh entrypoint run with `node: false` is launched by bash", () => {
+    if (!r.shBash) return r.error || "did not run";
+    if (/SyntaxError/.test(r.shBash.stderr)) return `launched by node: ${r.shBash.stderr.slice(0, 200)}`;
+    return undefined;
+  });
+  check("T5 launch: a .js entrypoint run with no `node` option is launched by node and exits 0", () => {
+    if (!r.jsDefault) return r.error || "did not run";
+    eq(r.jsDefault.status, 0, `exit (stderr: ${r.jsDefault.stderr.slice(0, 200)})`);
+    return undefined;
+  });
+  check("T5 launch: a .js entrypoint run with `node: false` is handed to bash, not node", () => {
+    if (!r.jsBash) return r.error || "did not run";
+    if (r.jsBash.status === 0 && r.jsBash.stderr === "") return "the .js file ran cleanly under bash";
+    return undefined;
+  });
+}
+
+module.exports = { ingestPendingFlow, markStepIngestPendingFlow, launchInterpreterFlow };

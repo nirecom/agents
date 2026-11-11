@@ -45,11 +45,13 @@ Top level: `schema` (1), `headerMaxLines` (10: how many leading lines carry `# T
 | `siblingSuiteDir` | A same-named directory next to the test holds its sub-files; retire deletes both |
 | `header` | `{commentPrefix}` or null. Header readers match `<commentPrefix> Tests:` / `Tags:` / `Serial:` as a fixed string (bash: `tlr_comment_prefix`, which also sets `TLR_COMMENT_PREFIX`); null takes `tableDrivenFallbackEntry`'s |
 | `launch` | How to run it (below); null for `recognized-only` |
+| `childLaunch` | `{args, reader, analyzer}`: how the Node gates (`hooks/lib/test-gates/parts/external-runtime.js`) start the language's child reader and analyzer — `<launch.requires> <args…> <reader\|analyzer> …`. `args` is a non-empty array of non-empty strings; `reader` / `analyzer` are repo-relative and must exist. The command is `launch.requires`, which must be set; it is not repeated here. Absent or null: the entry has no child launch (pester and pytest set it) |
 | `caseMarkerReader` | Part reference that reads the language's case markers, or null. Tools read it through `crr_read` (`bin/lib/case-record-reader.sh`), never directly |
 | `caseEmbedRules` | Part reference answering the `sweep-tests --embed-cases` questions (below), or null: the language's files are then skipped as `no-embed-rules` |
 | `tableDrivenDetector` | Part reference that detects the table-driven shape, or null |
 | `envClearLine` | Part reference that tells whether one line only clears named env vars, in the language's own idiom (`unset`, `Remove-Item Env:`, `os.environ.pop`, `delete process.env`), or null. `bin/check-session-id-ssot.sh` uses it to pass tombstone-clearing lines; a line in a language without it fails closed. Required for a supported entry |
 | `helperLibrary` | `{path, sourceRegex}`: the helper library and the grep -E proof a test loads it, or null. Comes as a pair with `caseMarkerReader`: both or neither |
+| `helperLibrary.looseSourceRegex` | `true` when `sourceRegex` is loose enough to accept a load inside a string literal, so it cannot prove a line-anchored load; a tool that needs one (`skills/migrate-tests/scripts/detect.js`) use their own line-anchored pattern instead. Boolean, optional (absent = `false`); only js sets it |
 | `codeLanguage` | `{sourcePatterns, shebangInterpreters}`: the code this language's tests are written for — basename patterns, and interpreter names read from the first line of a file without an extension. Required for a supported entry; a pattern belongs to one entry only |
 | `newFileNameShape` | What a new test file is called, with `<name>` as the free part (`<name>.Tests.ps1`, `test_<name>.py`). Required for a supported entry |
 | `notationDoc` | Repo-relative document that teaches the language's case-marker notation. Required for a supported entry; must exist |
@@ -102,7 +104,7 @@ Shared code separates **capability** (is the field non-null) from **ownership** 
 | Part | Arguments | Result |
 |---|---|---|
 | `caseMarkerReader` | absolute test path | `TRP_CASE_*` / `TRP_HAS_MARKERS` / `_TRP_MARKER_MALFORMED*` / `_TRP_MARKER_UNCERTAIN` globals (the `trp_parse_case_markers` contract) |
-| `tableDrivenDetector` | test path | rc 0 when table-driven |
+| `tableDrivenDetector` | test path | rc 0 table-driven / 1 not / 70 cannot judge (runtime missing or the file cannot be parsed) |
 | `caseEmbedRules` | `<op> <absolute test path> [args]` | one op per call (below); an unknown op returns 2 |
 
 `crr_read <abs>` is the one entry to case records: a `FILE\t<state>\t<line>\t<reason>` line, then one `CASE\t<name>\t<target>\t<begin>\t<end>\t<deps>\t<reason>` line per case of a conforming file. `deps` is `?` when the language has no `caseEmbedRules`. A `deps` op that fails (an analyzer whose case order disagrees with the reader's included) or whose rows break the row contract ([test-language-registry/case-embed-ops.md](test-language-registry/case-embed-ops.md)) makes the file `uncertain` with reason `case-embed` and no CASE lines; a `deps` op with no runtime (69) makes it `unavailable`.

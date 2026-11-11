@@ -2,7 +2,6 @@
 # that no longer matches a flagged line, fails tests/tests/test-language-registry-residue.sh.
 # Rows cover only what scan.js's own rules cannot tell apart from test discovery.
 hooks/pre-commit.d/registry.js	.replace(/\.sh$/, "")	strips a gate CLI path to the section-marker name; not test discovery
-hooks/pre-commit.d/checks/tests-frontmatter/frontmatter-gate.js	e.g. tests/hooks/<name>.sh	user-facing block message whose wording must not change; example path, not discovery
 hooks/workflow-run-tests/exec-model.js	"pytest", "jest", "vitest"	test-runner command words that classify ad-hoc Bash commands; not a launch per language
 hooks/workflow-gate/incomplete-steps-message.js	Ad-hoc test commands	guidance text naming example commands for the user; not dispatch
 hooks/workflow-run-tests/exec-model.js	PESTER_FILE_RE = /\.Tests\.ps1$/i	classifies a path typed in an ad-hoc command line, which the registry loader does not see; not repo test discovery
@@ -30,6 +29,8 @@ bin/lib/test-language-parts/bash-case-embed.sh	[[ "$rel" == tests/lib/*harness*.
 bin/lib/test-language-parts/pytest-case-analyzer.py	if alias.name == "pytest" and alias.asname	the pytest part's own child analyzer resolving how a test imports pytest; per-language reader code, not a language dispatch
 bin/lib/test-language-parts/pytest_case_scan.py	and node.value.value.id == "pytest"	the pytest part's own child scanner recognizing the pytest.mark decorator; per-language reader code, not a language dispatch
 bin/check-root-names/line-scan.js	const PY_EXT = /\.py$/;	picks the comment and string stripper for a scanned source file by extension, for every tracked file; not test discovery
-hooks/lib/test-gates/parts/external-runtime.js	pester: { command: "pwsh"	the launch table of the external-runtime gate part (command and child reader per runtime), which the registry loader does not own; not test discovery
 tests/lib/precommit-check-runner.js	`${GATES[gate]}.js`	builds the require path of a pre-commit gate module from its name; a module file, not a test file
 tests/lib/precommit-check-runner.js	`${e.name}.js`	builds the require path of a pre-commit check module from its name; a module file, not a test file
+bin/lib/check-askuser-dialog-ids.js	file.endsWith(".sh") && path.basename	scans the .sh files under skills/**/scripts for AskUserQuestion dialog IDs; not a test-language or test-discovery decision
+bin/lib/check-askuser-dialog-ids.js	.filter((f) => f.endsWith(".js"))	scans the workflow-init phase modules (.js) to collect ASK_IDs; not a test-language or test-discovery decision
+bin/github-issues/migration/commit-migration-artifacts.sh	*.sh)	case arm that sets the executable bit on every staged shell script the pre-commit hook requires as 100755; not test discovery (the word tests is the migrate-tests skill name)

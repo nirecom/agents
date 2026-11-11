@@ -52,6 +52,7 @@
         "timeoutSeconds": 180,
         "suiteRootMarker": null
       },
+      "childLaunch": { "args": ["-NoProfile", "-NonInteractive", "-File"], "reader": "bin/lib/test-language-parts/pester-case-reader.ps1", "analyzer": "bin/lib/test-language-parts/pester-case-analyzer.ps1" },
       "caseMarkerReader": { "file": "bin/lib/test-language-parts/pester.sh", "function": "pester_case_markers", "node": { "file": "hooks/lib/test-gates/parts/external-runtime.js", "function": "reader" } },
       "caseEmbedRules": { "file": "bin/lib/test-language-parts/pester-case-embed.sh", "function": "pester_case_embed", "node": { "file": "hooks/lib/test-gates/parts/external-runtime.js", "function": "analyzer" } },
       "tableDrivenDetector": { "file": "bin/lib/test-language-parts/pester.sh", "function": "has_table_driven_pester" },
@@ -86,6 +87,7 @@
         "timeoutSeconds": 180,
         "suiteRootMarker": null
       },
+      "childLaunch": { "args": ["run", "--no-project", "python"], "reader": "bin/lib/test-language-parts/pytest-case-reader.py", "analyzer": "bin/lib/test-language-parts/pytest-case-analyzer.py" },
       "caseMarkerReader": { "file": "bin/lib/test-language-parts/pytest.sh", "function": "pytest_case_markers", "node": { "file": "hooks/lib/test-gates/parts/external-runtime.js", "function": "reader" } },
       "caseEmbedRules": { "file": "bin/lib/test-language-parts/pytest-case-embed.sh", "function": "pytest_case_embed", "node": { "file": "hooks/lib/test-gates/parts/external-runtime.js", "function": "analyzer" } },
       "tableDrivenDetector": { "file": "bin/lib/test-language-parts/pytest.sh", "function": "has_table_driven_pytest" },
@@ -124,7 +126,7 @@
       "caseEmbedRules": { "file": "bin/lib/test-language-parts/js-case-embed.sh", "function": "js_case_embed", "node": { "file": "bin/lib/test-language-parts/js-case-analyzer.js", "function": "analyze" } },
       "tableDrivenDetector": { "file": "bin/lib/test-language-parts/js.sh", "function": "has_table_driven_js" },
       "envClearLine": { "file": "hooks/lib/test-gates/parts/env-clear/js.js", "function": "envClearLine" },
-      "helperLibrary": { "path": "tests/lib/harness.js", "sourceRegex": "^[^/]*require\\([\"']\\.\\./lib/harness(\\.js)?[\"']\\)" },
+      "helperLibrary": { "path": "tests/lib/harness.js", "sourceRegex": "^[^/]*require\\([\"']\\.\\./lib/harness(\\.js)?[\"']\\)", "looseSourceRegex": true },
       "codeLanguage": { "sourcePatterns": ["*.js", "*.cjs", "*.mjs"], "shebangInterpreters": ["node"] },
       "newFileNameShape": "<name>.js",
       "notationDoc": "skills/_shared/test-design/case-markers/js.md",

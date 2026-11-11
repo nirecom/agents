@@ -3,7 +3,8 @@
 # The Pester analyzer answers each caseEmbedRules op as TSV for one test file, called as
 # `<op> <file> [args]`: deps (ORDER lines matching the test case reader's ranges, then
 # idx<TAB>csv), leftover-defs (line<TAB>name), self-impl <file> <helper> (line<TAB>kind<TAB>
-# detail), skip-reason (one word or nothing), syntax-check (no stdout; rc 0 / 1) and the
+# detail), skip-reason (one word or nothing), table-driven (the word `table-driven` or nothing;
+# rc 1 on a syntax error), syntax-check (no stdout; rc 0 / 1) and the
 # internal `all <file> <helper>` (OP<TAB><name> blocks equal to the single ops). It parses
 # with the PowerShell AST and never runs the file.
 
@@ -212,10 +213,30 @@ Describe 'pester-case-analyzer' -Tag 'target:bin/lib/test-language-parts/pester-
         $r.StdOut.Trim() | Should -BeExactly $Want -Because "[case-count: $Label] the count"
     }
 
+    # table-driven (#2735): the verdict comes from the AST, so a text that only sits in a block
+    # comment or a here-string is no table; -ForEach / -TestCases on a real It command is, in any case.
+    It 'table-driven: <Label>' -ForEach @(
+        @{ Label = 'It -ForEach is a table'; Code = 0; Want = 'table-driven'; Line = @("Describe 'x' {", "    It 'y <v>' -ForEach @(@{ v = 1 }, @{ v = 2 }) { `$v | Should -Be `$v }", '}') }
+        @{ Label = 'It -TestCases is a table'; Code = 0; Want = 'table-driven'; Line = @("Describe 'x' {", "    It 'y <v>' -TestCases @(@{ v = 1 }) { `$v | Should -Be `$v }", '}') }
+        @{ Label = 'a lower-case -testcases is a table'; Code = 0; Want = 'table-driven'; Line = @("Describe 'x' {", "    It 'y <v>' -testcases @(@{ v = 1 }) { `$v | Should -Be `$v }", '}') }
+        @{ Label = 'It -ForEach with a variable is a table'; Code = 0; Want = 'table-driven'; Line = @("Describe 'x' {", "    `$cases = @(@{ v = 1 })", "    It 'y <v>' -ForEach `$cases { `$v | Should -Be `$v }", '}') }
+        @{ Label = 'It -TestCases with a variable is a table'; Code = 0; Want = 'table-driven'; Line = @("Describe 'x' {", "    `$cases = @(@{ v = 1 })", "    It 'y <v>' -TestCases `$cases { `$v | Should -Be `$v }", '}') }
+        @{ Label = 'a plain It is not'; Code = 0; Want = ''; Line = @("Describe 'x' {", "    It 'y' { 1 | Should -Be 1 }", '}') }
+        @{ Label = 'text only inside a block comment is not'; Code = 0; Want = ''; Line = @(
+                '<#', "It 'y <v>' -ForEach @(@{ v = 1 }) { `$v | Should -Be `$v }", '#>', "Describe 'x' {", "    It 'y' { 1 | Should -Be 1 }", '}') }
+        @{ Label = 'text only inside a here-string is not'; Code = 0; Want = ''; Line = @(
+                "`$doc = @'", "It 'y <v>' -ForEach @(@{ v = 1 }) { `$v | Should -Be `$v }", "'@", "Describe 'x' {", "    It 'y' { 1 | Should -Be 1 }", '}') }
+        @{ Label = 'a syntax error fails'; Code = 1; Want = ''; Line = @("Describe 'x' {", "    It 'y' -ForEach @(@{ v = 1 }) { 1 | Should -Be 1") }
+    ) {
+        $r = Invoke-Analyzer -Label "table-driven: $Label" -Argument @('table-driven', (New-Sample -Name 'td/t.Tests.ps1' -Line $Line))
+        $r.ExitCode | Should -Be $Code -Because "[table-driven: $Label] exit code; stderr: $($r.StdErr)"
+        $r.StdOut.Trim() | Should -BeExactly $Want -Because "[table-driven: $Label] the answer"
+    }
+
     It 'never runs the file under analysis' {
         $sentinel = Join-Path $TestDrive 'executed.flag'
         $path = New-Sample -Name 'side/side.Tests.ps1' -Line (@("Set-Content -LiteralPath '$sentinel' -Value 'ran'") + $script:SampleLine)
-        foreach ($op in 'deps', 'leftover-defs', 'skip-reason', 'syntax-check') { $null = Get-OpRow -Label "never runs $op" -Op $op -Path $path }
+        foreach ($op in 'deps', 'leftover-defs', 'skip-reason', 'table-driven', 'syntax-check') { $null = Get-OpRow -Label "never runs $op" -Op $op -Path $path }
         $null = Get-OpRow -Label 'never runs self-impl' -Op 'self-impl' -Path $path -Extra @($script:Helper)
         $sentinel | Should -Not -Exist -Because '[never runs] the sentinel must not be written'
     }

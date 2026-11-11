@@ -144,3 +144,46 @@ test("PG-uninitialized-warn-once: no .agents.json → not blocked, one REPO_SETT
   assert.equal(n, 1, r.text);
 });
 caseEnd();
+
+// cfgWith(name, edit) — a copy of the checkout's hooks/ whose registry table `edit(table)` has altered.
+function cfgWith(name, edit) {
+  const cfg = path.join(ROOT, name);
+  for (const sub of ["bin", "hooks", "skills", "docs"]) fs.cpSync(path.join(C.CHECKOUT, sub), path.join(cfg, sub), { recursive: true });
+  const file = path.join(cfg, "hooks", "lib", "test-language-registry.json");
+  const table = JSON.parse(fs.readFileSync(file, "utf8"));
+  edit(table);
+  fs.writeFileSync(file, `${JSON.stringify(table, null, 2)}\n`);
+  return cfg;
+}
+
+// gateWith(cfg, dir) — the frontmatter gate of the cfg copy over dir's index.
+function gateWith(cfg, dir) {
+  const r = spawnSync(process.execPath, [RUNNER, "--cfg", cfg, "tests-frontmatter", "frontmatter"], {
+    cwd: dir, encoding: "utf8", env: process.env, timeout: 180000,
+  });
+  return { rc: r.status, text: `${r.stdout || ""}\n${r.stderr || ""}` };
+}
+
+const firstSupported = (table) => table.entries.find((e) => e.status === "supported");
+
+caseBegin("PG-flat-example-default-shape", "hooks/pre-commit.d/checks/tests-frontmatter/frontmatter-gate.js");
+test("PG-flat-example-default-shape: the real registry (bash first) keeps the example tests/unit/<name>.sh", () => {
+  const dir = repo(BY_TYPE);
+  stage(dir, { "tests/foo.sh": ONE });
+  const r = gate(dir, "frontmatter");
+  assert.equal(r.rc, 1, r.text);
+  assert.ok(r.text.includes("e.g. tests/unit/<name>.sh."), r.text);
+});
+caseEnd();
+
+caseBegin("PG-flat-example-follows-registry-shape", "hooks/pre-commit.d/checks/tests-frontmatter/frontmatter-gate.js");
+test("PG-flat-example-follows-registry-shape: the example is built from the first supported entry's newFileNameShape", () => {
+  const cfg = cfgWith("cfg-shape", (t) => { firstSupported(t).newFileNameShape = "<name>.alt.sh"; });
+  const dir = repo(BY_TYPE);
+  stage(dir, { "tests/foo.sh": ONE });
+  const r = gateWith(cfg, dir);
+  assert.equal(r.rc, 1, r.text);
+  assert.ok(r.text.includes("e.g. tests/unit/<name>.alt.sh."), r.text);
+  assert.ok(!r.text.includes("<name>.sh."), `old fixed example leaked: ${r.text}`);
+});
+caseEnd();

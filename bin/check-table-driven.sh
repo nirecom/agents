@@ -2,7 +2,8 @@
 # bin/check-table-driven.sh — T1-D: tests of parser/regex/allowlist sources must be table-driven.
 # Usage: check-table-driven.sh [--staged] [file ...]  (--staged reads git diff --cached)
 # Exit: 0 compliant (or no parser target), 1 a test lacks the table-driven structure,
-#       2 usage error, unreadable registry, or an unreachable detector part.
+#       2 usage error, unreadable registry, or an unavailable detector (unreachable part,
+#       runtime missing, or the file cannot be parsed).
 # The detector is the matched test-language registry entry's tableDrivenDetector, else
 # the tableDrivenFallbackEntry's (docs/architecture/claude-code/test-language-registry.md).
 
@@ -114,7 +115,7 @@ check_test_file() {
     if has_detector "$test_file"; then id="$TLR_ID"; fi
     tlr_call_part "$id" tableDrivenDetector "$test_file" || rc=$?
     if [[ $rc -eq 70 ]]; then
-        echo "ERROR: cannot check $test_file: the $id table-driven detector is unavailable" >&2
+        echo "ERROR: cannot check $test_file: the $id table-driven detector is unavailable (runtime missing or the file cannot be parsed)" >&2
         exit 2
     fi
 
