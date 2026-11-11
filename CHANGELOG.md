@@ -180,3 +180,7 @@ Changes: Fixed: a plan confirmation could be refused with "no-receipt" after the
 ### FEATURE: PR #2990 (2026-11-10)
 Background: feat(#2960): generalize how migrate judges its target repo (GitLab host, subgroup, test layout)
 Changes: /migrate now handles GitLab repos under subgroups (group/sub/project) and gitlab.* hosts without GITLAB_HOSTNAME set, and reports test layouts it cannot cover.
+
+### FEATURE: PR #2996 (2026-11-11)
+Background: fix(#1694): require a Claude Code restart only when a rule expanded a...
+Changes: Worktree end no longer asks for a Claude Code restart when a PR only changes conditionally loaded rules; it asks only when a rule loaded at session start changes.
