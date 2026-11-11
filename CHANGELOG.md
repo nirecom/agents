@@ -184,3 +184,7 @@ Changes: /migrate now handles GitLab repos under subgroups (group/sub/project) a
 ### FEATURE: PR #2996 (2026-11-11)
 Background: fix(#1694): require a Claude Code restart only when a rule expanded a...
 Changes: Worktree end no longer asks for a Claude Code restart when a PR only changes conditionally loaded rules; it asks only when a rule loaded at session start changes.
+
+### FEATURE: PR #2999 (2026-11-11)
+Background: fix(#2955): make repo-has-no-residue pass on main; refactor(#2735): m...
+Changes: Fixed the test-language registry residue check so it passes on main; language vocabulary now comes from the registry.;Table-driven test detection for pytest and Pester now parses the test file with the language's own parser instead of matching text, so it no longer reports a false "clean"; a file it cannot parse or a missing runtime now exits 2 instead of passing.;Child-process launch settings for the Pester and pytest test gates moved into the test-language registry (`childLaunch`).
