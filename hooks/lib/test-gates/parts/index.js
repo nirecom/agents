@@ -73,7 +73,7 @@ function embed(entry, op, file, opts = {}) {
     id: entry.id,
     cases: opts.cases || [],
     helper: helperOf(entry),
-    runtimeMissing: () => external && !R.which((X.LAUNCH[entry.id] || {}).command || entry.id),
+    runtimeMissing: () => external && !R.which(R.fieldValue(entry, "launch.requires") || entry.id),
     readCases: (f) => readCases(entry, f),
     call: (o, f, h) => (external ? p.fn(o, f, h, { id: entry.id }) : p.fn(o, local(f), h)),
   };

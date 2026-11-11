@@ -81,4 +81,26 @@ function launchSpecNode() {
   }
 }
 
-module.exports = { PLACEMENT, placementHookJs, placementNode, launchLinesInBash, launchSpecNode };
+// The launch comes from the registry: a swapped childLaunch / launch.requires changes launchSpec(),
+// a missing runtime gives the reader's rc 79, and an entry without childLaunch has no launch.
+async function launchFromRegistry() {
+  const { withEntry } = require("./parity-cases");
+  const X = require(path.join(F.REPO, "hooks", "lib", "test-gates", "parts", "external-runtime.js"));
+  const file = "C:/wt/tests/bin/x";
+  const norm = (s) => ({ command: s.command, args: s.args.map((a) => String(a).replace(/\\/g, "/")) });
+  const repo = (rel) => path.join(F.REPO, ...rel.split("/")).replace(/\\/g, "/");
+  const swap = (e) => ({ ...e, launch: { ...e.launch, requires: "swapped-runtime-cmd" }, childLaunch: { args: ["--swapped"], reader: "bin/swapped/r.x", analyzer: "bin/swapped/a.x" } });
+  await withEntry("pytest", swap, () => {
+    assert.deepStrictEqual(norm(X.launchSpec("pytest", "reader", { file })), { command: "swapped-runtime-cmd", args: ["--swapped", repo("bin/swapped/r.x"), file] }, "reader follows the swapped registry");
+    assert.deepStrictEqual(norm(X.launchSpec("pytest", "analyzer", { op: "deps", file })), { command: "swapped-runtime-cmd", args: ["--swapped", repo("bin/swapped/a.x"), "deps", file] }, "analyzer follows the swapped registry");
+    assert.deepStrictEqual(X.reader(file, { id: "pytest" }), { rc: 79 }, "a launch.requires not on PATH gives rc 79");
+    assert.strictEqual(X.analyzer("deps", file, "", { id: "pytest" }).rc, 69, "a launch.requires not on PATH gives rc 69");
+  });
+  await withEntry("pester", (e) => {
+    const c = { ...e };
+    delete c.childLaunch;
+    return c;
+  }, () => assert.throws(() => X.launchSpec("pester", "reader", { file }), /no launch for pester/, "no childLaunch, no launch"));
+}
+
+module.exports = { PLACEMENT, placementHookJs, placementNode, launchLinesInBash, launchSpecNode, launchFromRegistry };

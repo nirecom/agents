@@ -212,3 +212,50 @@ test("MTD-sections-without-categories-invalid: a by-* section stripped of catego
   }
 });
 caseEnd();
+
+// detectWith(name, edit, root) — detect.js of a checkout copy whose registry `edit(table)` has altered
+// (the module reads the registry at load time, so a fresh copy is the only way to vary it).
+function detectWith(name, edit, root) {
+  const cfg = path.join(TMP, name);
+  for (const sub of ["bin", "hooks", "skills", "docs"]) fs.cpSync(path.join(CHECKOUT, sub), path.join(cfg, sub), { recursive: true });
+  const file = path.join(cfg, "hooks", "lib", "test-language-registry.json");
+  const table = JSON.parse(fs.readFileSync(file, "utf8"));
+  edit(table);
+  fs.writeFileSync(file, `${JSON.stringify(table, null, 2)}\n`);
+  return require(path.join(cfg, "skills", "migrate-tests", "scripts", "detect.js")).detect(root).testHarness;
+}
+const bashEntry = (t) => t.entries.find((e) => e.id === "bash");
+
+caseBegin("MTD-loose-source-regex-excluded", "skills/migrate-tests/scripts/detect.js");
+test("MTD-loose-source-regex-excluded: an entry flagged helperLibrary.looseSourceRegex does not detect a harness load; unflagged (false / omitted) entries do", () => {
+  const cases = [
+    { name: "cfg-loose-true", edit: (t) => { bashEntry(t).helperLibrary.looseSourceRegex = true; }, want: "off" },
+    { name: "cfg-loose-false", edit: (t) => { bashEntry(t).helperLibrary.looseSourceRegex = false; }, want: "on" },
+    { name: "cfg-loose-omitted", edit: () => {}, want: "on" },
+  ];
+  for (const { name, edit, want } of cases) {
+    assert.equal(detectWith(name, edit, ALL_HARNESS), want, `${name}: testHarness`);
+  }
+});
+caseEnd();
+
+// js tests: only a line-anchored load counts, never a require(...) inside a string literal.
+const JS_LOAD = 'const { caseBegin } = require("../lib/harness");\n';
+const JS_IMPORT = 'import h from "../lib/harness.js";\n';
+const JS_STRING = 'const note = "require(\'../lib/harness\') is only text";\nconsole.log(note);\n';
+const JS_MIDLINE = 'console.log(1); require("../lib/harness");\n';
+
+caseBegin("MTD-js-load-line-anchored", "skills/migrate-tests/scripts/detect.js");
+test("MTD-js-load-line-anchored: a js load statement counts; a require inside a string literal or after other code does not", () => {
+  const cases = [
+    { name: "require", body: JS_LOAD, want: "on" },
+    { name: "import", body: JS_IMPORT, want: "on" },
+    { name: "string-literal", body: JS_STRING, want: "off" },
+    { name: "mid-line", body: JS_MIDLINE, want: "off" },
+  ];
+  for (const { name, body, want } of cases) {
+    const root = tree(`js-load-${name}`, { "tests/a.js": body });
+    assert.equal(require(DETECT).detect(root).testHarness, want, `${name}: testHarness`);
+  }
+});
+caseEnd();

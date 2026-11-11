@@ -142,11 +142,12 @@ function placeOutcome(sid, o) {
 }
 const isIngested = (sid, stem) => fs.existsSync(path.join(controlDir(sid), `${stem}.ingested`));
 
-// run(file, args, opts) — one child run of a repo entrypoint (node for js, bash otherwise).
+// run(file, args, opts) — one child run of a repo entrypoint. It launches with node by default;
+// pass `node: false` for a bash entrypoint.
 function run(rel, args, opts) {
   const o = opts || {};
   const abs = path.join(ROOT, rel);
-  const isNode = o.node === true || (o.node !== false && !rel.endsWith(".sh"));
+  const isNode = o.node !== false;
   const argv = isNode ? [abs].concat(args || []) : [fwd(abs)].concat(args || []);
   const r = spawnSync(isNode ? process.execPath : "bash", argv, {
     encoding: "utf8", timeout: o.timeout || 60000, cwd: o.cwd || TMP, input: o.input || "",
