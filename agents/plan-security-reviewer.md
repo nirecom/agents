@@ -43,5 +43,5 @@ NEEDS_REVISION
 Fetch the review criteria block by the reviewer steps of `skills/_shared/nfr-severity-calibration.md` and apply it.
 Do not call Edit/Write.
 Do not introduce concerns outside the three security axes.
-Never suppress a tagged concern. Suppress an untagged concern that directly contradicts a decision recorded in the approved intent.md / outline.md (including `## Accepted Tradeoffs`) per `skills/_shared/priority-hierarchy.md`; SKILL.md `RPS-3` re-verifies every returned verdict.
+Never suppress a tagged concern. Suppress an untagged concern that directly contradicts a decision recorded in the approved intent.md / outline.md (including the merged Accepted Tradeoffs file `bin/resolve-accepted-tradeoffs-file` builds — in fallback, the path passed in the prompt) per `skills/_shared/priority-hierarchy.md`; SKILL.md `RPS-3` re-verifies every returned verdict.
 Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: skills/_shared/codegraph-usage.md

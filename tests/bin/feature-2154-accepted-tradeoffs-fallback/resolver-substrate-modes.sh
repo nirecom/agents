@@ -30,7 +30,8 @@ else
 #          sanctioned input cannot be presented at all — the S9/S18 idiom.
 P_INTREE="$(make_plans s19 outline intent)"
 INTREE_BODY="IN-TREE-SYMLINK-BODY-2154-QZWX"
-printf '# the real detail draft\n\n%s\n' "$INTREE_BODY" > "$P_INTREE/SID-realdetail.md"
+printf '# the real detail draft\n\n## Accepted Tradeoffs (detail)\n\n%s\n' "$INTREE_BODY" > "$P_INTREE/SID-realdetail.md"
+S19_CTL="$WORKFLOW_STATE_DIR/SID.control"
 # The absolute variant runs against the SHELL's own spelling of the same
 # directory. `realpath` reports a resolved link target in the native namespace,
 # so an absolute link and a plans dir spelled in two different namespaces cannot
@@ -65,20 +66,19 @@ for s19_mode in absolute relative; do
     fail "S19-0 ($s19_mode): the planted in-tree symlink does not traverse — S19's verdict would be vacuous"
   fi
   resolve_e "$S19_DIR" SID detail outline intent
-  assert_eq "S19 ($s19_mode): an in-tree symlink candidate is ACCEPTED → its own path is emitted" \
-    "$S19_DIR/SID-detail.md" "$RES_OUT"
+  assert_eq "S19 ($s19_mode): an in-tree symlink chain → the merged file is printed (#2924)" \
+    "$(merged_path SID detail)" "$(norm "$RES_OUT")"
   assert_eq "S19 ($s19_mode): in-tree symlink candidate → exit 0" "0" "$RES_RC"
   assert_eq "S19 ($s19_mode): accepting it is silent — no refusal diagnostic on stderr" "" "$RES_ERR"
-  # The point of accepting it: the consumer must be able to READ the draft
-  # through the emitted path. An emitted path that no longer opens would satisfy
-  # the string comparison above and still break review-plan-codex's `-f`.
-  assert_eq "S19 ($s19_mode): the emitted path really opens to the linked draft" \
+  # The point of accepting it: the linked draft's content must reach the consumer.
+  # A link skipped as if it escaped would leave the merged file without it.
+  assert_eq "S19 ($s19_mode): the linked draft's body is merged — the link was ACCEPTED" \
     "$INTREE_BODY" "$(grep -F -- "$INTREE_BODY" "$RES_OUT" 2>/dev/null || printf 'UNREADABLE')"
-  S19_V="$(canon_verdict "$RES_OUT" "$S19_DIR")"
+  S19_V="$(canon_verdict "$RES_OUT" "$S19_CTL")"
   if [[ "$S19_V" == "unknown" ]]; then
     skip "S19 ($s19_mode) canonical verdict: no realpath / readlink -f on PATH"
   else
-    assert_eq "S19 ($s19_mode): the accepted link canonically resolves INSIDE PLANS_DIR" "inside" "$S19_V"
+    assert_eq "S19 ($s19_mode): the printed file canonically resolves INSIDE the control dir" "inside" "$S19_V"
   fi
 done
 
@@ -155,12 +155,14 @@ unset CAND RPROBE
 # can falsify deterministically: a candidate that is not a regular file. It pins
 # the observable half of S4's contract (skip and continue to the next candidate,
 # exit 0) on every host, chmod or no chmod.
-P_S20B="$(make_plans s20b outline intent)"
+P_S20B="$(make_staged s20b outline intent)"
 mkfifo "$P_S20B/SID-detail.md" 2>/dev/null || printf 'x' > "$P_S20B/SID-detail.md"
 if [[ -p "$P_S20B/SID-detail.md" ]]; then
   resolve "$P_S20B" SID detail outline intent
-  assert_eq "S20b: an unopenable (non-regular) candidate is skipped → outline path emitted" \
-    "$P_S20B/SID-outline.md" "$RES_OUT"
+  assert_eq "S20b: an unopenable (non-regular) candidate → the merged file is printed" \
+    "$(merged_path SID detail)" "$(norm "$RES_OUT")"
+  assert_eq "S20b: the non-regular candidate is skipped — no detail section merged" \
+    "intent outline" "$(stage_set "$RES_OUT")"
   assert_eq "S20b: unopenable candidate → exit 0 (skip, not refusal)" "0" "$RES_RC"
 else
   skip "S20b: non-regular-candidate case (mkfifo unavailable on this filesystem)"
@@ -170,15 +172,15 @@ rm -f "$P_S20B/SID-detail.md"
 # S20c — the strong OS-level contract, run only where mode bits are real. Kept
 # alongside S4 rather than replacing it: where the host honours chmod this is the
 # assertion that actually observes a permission denial.
-P_S20C="$(make_plans s20c outline intent)"
-printf '# detail\n\nsecret\n' > "$P_S20C/SID-detail.md"
+P_S20C="$(make_staged s20c outline intent)"
+printf '# detail\n\n## Accepted Tradeoffs (detail)\n\nsecret\n' > "$P_S20C/SID-detail.md"
 chmod 000 "$P_S20C/SID-detail.md" 2>/dev/null || true
 if [[ -r "$P_S20C/SID-detail.md" ]]; then
   skip "S20c: OS-level unreadable-candidate case (chmod 000 ineffective here — S20a/S20b carry the deterministic coverage)"
 else
   resolve "$P_S20C" SID detail outline intent
-  assert_eq "S20c: a genuinely unreadable candidate is skipped → outline path emitted" \
-    "$P_S20C/SID-outline.md" "$RES_OUT"
+  assert_eq "S20c: a genuinely unreadable candidate is skipped → no detail section merged" \
+    "intent outline" "$(stage_set "$RES_OUT")"
   assert_eq "S20c: genuinely unreadable candidate → exit 0" "0" "$RES_RC"
 fi
 chmod 644 "$P_S20C/SID-detail.md" 2>/dev/null || true
@@ -191,10 +193,10 @@ chmod 644 "$P_S20C/SID-detail.md" 2>/dev/null || true
 # SKIPPED (when the probe still opens the file): the whole row.
 # Because: mode bits are advisory on Windows/MSYS (the S4 / S20c / S27c precedent), so
 #          the unreadable shape cannot be built here at all.
-P_S20D="$(make_plans s20d outline intent)"
+P_S20D="$(make_staged s20d outline intent)"
 S20D_BODY="S20D-UNREADABLE-BODY-2154-QZWX"
 S20D_CAND="$P_S20D/SID-detail.md"
-printf '# detail\n\n%s\n' "$S20D_BODY" > "$S20D_CAND"
+printf '# detail\n\n## Accepted Tradeoffs (detail)\n\n%s\n' "$S20D_BODY" > "$S20D_CAND"
 S20D_BEFORE="$(cat "$S20D_CAND" 2>/dev/null || printf 'MISSING')"
 chmod 000 "$S20D_CAND" 2>/dev/null || true
 # The probe is a child process, not a `[[ -r ]]` test: that is the boundary the concern
@@ -204,11 +206,11 @@ if with_timeout bash -c 'cat -- "$1" >/dev/null 2>&1' _ "$S20D_CAND"; then
 else
   pass "S20d-0: a child process is genuinely denied the candidate — the permission boundary is real on this host"
   resolve_e "$P_S20D" SID detail outline intent
-  assert_eq "S20d: the resolver subprocess skips the unreadable candidate → outline path emitted" \
-    "$P_S20D/SID-outline.md" "$RES_OUT"
+  assert_eq "S20d: the resolver subprocess skips the unreadable candidate → no detail section merged" \
+    "intent outline" "$(stage_set "$RES_OUT")"
   assert_eq "S20d: unreadable candidate → exit 0 (skip, not refusal)" "0" "$RES_RC"
   assert_eq "S20d: skipping it is silent — no diagnostic replays the candidate on stderr" "" "$RES_ERR"
-  if [[ "$RES_OUT" == *"$S20D_BODY"* || "$RES_ERR" == *"$S20D_BODY"* ]]; then
+  if [[ "$RES_OUT" == *"$S20D_BODY"* || "$RES_ERR" == *"$S20D_BODY"* ]] || grep -qF -- "$S20D_BODY" "$RES_OUT" 2>/dev/null; then
     fail "S20d: the unreadable candidate's content leaked — stdout: [$RES_OUT] stderr: [$RES_ERR]"
   else
     pass "S20d: the unreadable candidate's content appears on neither stdout nor stderr"
@@ -249,28 +251,31 @@ if command -v cygpath >/dev/null 2>&1; then
   S21_FIX_RL="$(cygpath -u "$S21_FIX_RL" 2>/dev/null || printf '%s' "$S21_FIX_RL")"
 fi
 
-P_S21="$(make_plans s21 detail outline intent)"
-# s21_run <fixture-dir> <plans-dir> → S21_OUT / S21_RC, PATH holding only that
-# fixture. Called WITHOUT with_timeout on purpose: the timeout helper itself
-# lives on PATH, and S12 established the same direct form for this reason.
+P_S21="$(make_staged s21 detail outline intent)"
+S21_TOOLS="$(tool_path_dir "$TMPROOT/s21-tools")"
+# s21_run <fixture-dir> <plans-dir> → S21_OUT / S21_RC, PATH holding the #2924
+# resolver's tools (node + coreutils, no canonicalizer) plus only that fixture.
+# Called WITHOUT with_timeout on purpose: the timeout helper itself lives on PATH,
+# and S12 established the same direct form for this reason.
 s21_run() {
-  S21_OUT="$(PATH="$1" "$S21_BASH" "$RESOLVER" "$2" SID detail outline intent 2>/dev/null)"
+  S21_OUT="$(PATH="$S21_TOOLS${1:+:$1}" "$S21_BASH" "$RESOLVER" "$2" SID detail outline intent 2>/dev/null)"
   S21_RC=$?
 }
 
 # S21-control: with NEITHER canonicalizer reachable the resolver is fail-closed
-# (S12) and answers `intent`, not `detail`. That difference is what makes the two
+# (S12) and merges NO stage, not all three. That difference is what makes the two
 # rows below meaningful — without it a fixture whose canonicalizer never ran
-# would produce the same `detail` answer and the case would prove nothing.
+# would produce the same merged set and the case would prove nothing.
 s21_run "" "$P_S21"
 S21_CTRL_OUT="$S21_OUT"; S21_CTRL_RC="$S21_RC"
 if [[ "$S21_CTRL_RC" -ne 0 || -z "$S21_CTRL_OUT" ]]; then
   skip "S21: canonicalizer-mode cases (the resolver does not complete with a restricted PATH: rc=$S21_CTRL_RC)"
-elif [[ "$S21_CTRL_OUT" == "$P_S21/SID-detail.md" ]]; then
+elif [[ "$(stage_set "$S21_CTRL_OUT")" == "intent outline detail" ]]; then
   skip "S21: canonicalizer-mode cases (no canonicalizer produces the same answer as one — the fixtures cannot be told apart on this host)"
 else
-  assert_eq "S21-control: with no canonicalizer on PATH the scan is fail-closed → exempt last candidate" \
-    "$P_S21/SID-intent.md" "$S21_CTRL_OUT"
+  assert_eq "S21-control: with no canonicalizer on PATH → the merged file is printed" \
+    "$(merged_path SID detail)" "$(norm "$S21_CTRL_OUT")"
+  assert_eq "S21-control: the scan is fail-closed → no stage section merged" "" "$(stage_set "$S21_CTRL_OUT")"
   for s21_mode in realpath readlink; do
     if [[ "$s21_mode" == "realpath" ]]; then s21_fix="$S21_FIX_RP"; s21_have="$S21_RP"; else s21_fix="$S21_FIX_RL"; s21_have="$S21_RL"; fi
     if [[ -z "$s21_have" ]]; then
@@ -278,8 +283,10 @@ else
       continue
     fi
     s21_run "$s21_fix" "$P_S21"
-    assert_eq "S21 ($s21_mode-only): the first candidate is verified and emitted" \
-      "$P_S21/SID-detail.md" "$S21_OUT"
+    assert_eq "S21 ($s21_mode-only): the merged file is printed" \
+      "$(merged_path SID detail)" "$(norm "$S21_OUT")"
+    assert_eq "S21 ($s21_mode-only): every candidate is verified and merged" \
+      "intent outline detail" "$(stage_set "$S21_OUT")"
     assert_eq "S21 ($s21_mode-only): exit 0" "0" "$S21_RC"
   done
 fi
@@ -290,9 +297,9 @@ fi
 # SKIPPED (when ln -s fails, or S21's fixtures could not be told apart): both rows.
 # Because: without a real symlink there is no escape to canonicalize, and without
 #          a discriminating control a matching answer proves nothing.
-P_S21E="$(make_plans s21e outline intent)"
+P_S21E="$(make_staged s21e outline intent)"
 S21E_TARGET="$TMPROOT/s21-escape-target.md"
-printf '# outside\n\nS21-ESCAPE-SECRET-2154-QZWX\n' > "$S21E_TARGET"
+printf '# outside\n\n## Accepted Tradeoffs (detail)\n\nS21-ESCAPE-SECRET-2154-QZWX\n' > "$S21E_TARGET"
 if [[ "$S21_CTRL_RC" -ne 0 || -z "$S21_CTRL_OUT" ]]; then
   skip "S21-escape: canonicalizer-mode containment (the resolver does not complete with a restricted PATH — see S21)"
 elif (export MSYS=winsymlinks:nativestrict; ln -s "$S21E_TARGET" "$P_S21E/SID-detail.md" 2>/dev/null) && [[ -L "$P_S21E/SID-detail.md" ]]; then
@@ -308,8 +315,15 @@ elif (export MSYS=winsymlinks:nativestrict; ln -s "$S21E_TARGET" "$P_S21E/SID-de
       continue
     fi
     s21_run "$s21_fix" "$P_S21E"
-    assert_eq "S21-escape ($s21_mode-only): the escaping symlink is skipped → outline path emitted" \
-      "$P_S21E/SID-outline.md" "$S21_OUT"
+    assert_eq "S21-escape ($s21_mode-only): the merged file is printed" \
+      "$(merged_path SID detail)" "$(norm "$S21_OUT")"
+    assert_eq "S21-escape ($s21_mode-only): the escaping symlink is skipped → only intent+outline merged" \
+      "intent outline" "$(stage_set "$S21_OUT")"
+    if grep -qF -- "S21-ESCAPE-SECRET-2154-QZWX" "$S21_OUT" 2>/dev/null; then
+      fail "S21-escape ($s21_mode-only): the external file's content reached the merged file"
+    else
+      pass "S21-escape ($s21_mode-only): the external file's content is absent from the merged file"
+    fi
     assert_eq "S21-escape ($s21_mode-only): exit 0 (skip, not refusal)" "0" "$S21_RC"
   done
 else
@@ -332,31 +346,32 @@ if [[ -f "$S27A_PATH" && ! -s "$S27A_PATH" ]]; then
 else
   fail "S27a-0: the fixture is not a zero-byte regular file — S27a would judge a different shape"
 fi
+# #2924: the contained-but-unusable last candidate now yields a BODY-LESS merged file
+# (exit 0), never the candidate itself — so no row below can hand downstream a directory.
 resolve_e "$P_S27A" SID detail outline intent
-assert_eq "S27a: an EMPTY last candidate is still emitted → its exact path" "$S27A_PATH" "$RES_OUT"
-assert_eq "S27a: empty last candidate → exit 0 (the fallback does not re-apply the scan's '-s' guard)" "0" "$RES_RC"
-assert_eq "S27a: emitting it is silent — nothing on stderr warns the caller the file is empty" "" "$RES_ERR"
+assert_eq "S27a: an EMPTY last candidate → the body-less merged file is printed" "$(merged_path SID detail)" "$(norm "$RES_OUT")"
+assert_eq "S27a: empty last candidate → exit 0 (fail-soft, not refusal)" "0" "$RES_RC"
+assert_eq "S27a: it is silent — nothing on stderr" "" "$RES_ERR"
 assert_contained "S27a: emitted path" "$P_S27A"
-# The downstream consequence, asserted rather than assumed: review-plan-codex
-# admits the tradeoffs file on `-f` alone, which an empty file passes — so the
-# settled-decisions block renders empty and the review silently proceeds without it.
-if [[ -f "$RES_OUT" ]]; then
-  pass "S27a-downstream: the emitted path passes review-plan-codex's own '-f' admission check while carrying no settled-decision content"
+# The downstream consequence, asserted rather than assumed: review-plan-codex admits
+# the file on `-f` alone, and it carries no settled-decision section at all.
+if [[ -f "$RES_OUT" && -z "$(stage_set "$RES_OUT")" ]]; then
+  pass "S27a-downstream: the printed file passes '-f' and carries no settled-decision section"
 else
-  fail "S27a-downstream: the emitted path no longer passes '-f' — the downstream reading of this contract has changed: [$RES_OUT]"
+  fail "S27a-downstream: the printed file fails '-f' or carries a section: [$RES_OUT] [$(stage_set "$RES_OUT")]"
 fi
 
 # S27b — the same position, the shape S3 skips mid-scan.
 P_S27B="$(make_plans s27b)"
 mkdir -p "$P_S27B/SID-intent.md"
 resolve_e "$P_S27B" SID detail outline intent
-assert_eq "S27b: a DIRECTORY as the last candidate is still emitted → its exact path" "$P_S27B/SID-intent.md" "$RES_OUT"
-assert_eq "S27b: directory last candidate → exit 0 (the fallback does not re-apply the scan's '-f' guard)" "0" "$RES_RC"
+assert_eq "S27b: a DIRECTORY as the last candidate → the body-less merged file is printed" "$(merged_path SID detail)" "$(norm "$RES_OUT")"
+assert_eq "S27b: directory last candidate → exit 0 (fail-soft, not refusal)" "0" "$RES_RC"
 assert_contained "S27b: emitted path" "$P_S27B"
-if [[ -f "$RES_OUT" ]]; then
-  fail "S27b-downstream: a directory path passed review-plan-codex's '-f' admission check: [$RES_OUT]"
+if [[ -f "$RES_OUT" && -z "$(stage_set "$RES_OUT")" ]]; then
+  pass "S27b-downstream: the directory is never forwarded — a regular, section-less file is"
 else
-  pass "S27b-downstream: the emitted directory path is caught downstream by review-plan-codex's own '-f' admission check"
+  fail "S27b-downstream: the printed path is not a regular section-less file: [$RES_OUT]"
 fi
 
 # S27c — the shape S4/S20c skip mid-scan. Guarded like them: where chmod is a
@@ -371,10 +386,10 @@ if [[ -r "$P_S27C/SID-intent.md" ]]; then
   skip "S27c: unreadable last candidate (chmod 000 ineffective on this filesystem — the file is still readable)"
 else
   resolve_e "$P_S27C" SID detail outline intent
-  assert_eq "S27c: an UNREADABLE last candidate is still emitted → its exact path" "$P_S27C/SID-intent.md" "$RES_OUT"
-  assert_eq "S27c: unreadable last candidate → exit 0 (the fallback does not re-apply the scan's '-r' guard)" "0" "$RES_RC"
+  assert_eq "S27c: an UNREADABLE last candidate → the body-less merged file is printed" "$(merged_path SID detail)" "$(norm "$RES_OUT")"
+  assert_eq "S27c: unreadable last candidate → exit 0 (fail-soft, not refusal)" "0" "$RES_RC"
   assert_contained "S27c: emitted path" "$P_S27C"
-  if [[ "$RES_OUT" == *"$S27C_BODY"* || "$RES_ERR" == *"$S27C_BODY"* ]]; then
+  if [[ "$RES_OUT" == *"$S27C_BODY"* || "$RES_ERR" == *"$S27C_BODY"* ]] || grep -qF -- "$S27C_BODY" "$RES_OUT" 2>/dev/null; then
     fail "S27c: the unreadable candidate's content leaked — stdout: [$RES_OUT] stderr: [$RES_ERR]"
   else
     pass "S27c: the unreadable candidate's content appears on neither stdout nor stderr"

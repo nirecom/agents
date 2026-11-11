@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Resolve the --accepted-tradeoffs source for a codex review stage.
-# Scans the session's (owner-resolved) <suffix> plan in the given order and prints the
-# first readable non-empty candidate that stays inside PLANS_DIR after symlink
-# resolution; an escaping or unverifiable candidate is skipped (fail closed).
-# When nothing qualifies the last candidate is printed as-is so the caller's
-# non-empty-value contract holds — but only when it is lexically inside, is not
-# a symlink, is a direct child of PLANS_DIR, and no canonicalizer exists at all.
+# Resolve the --accepted-tradeoffs source for a codex review stage (#2924).
+# Reads every readable candidate plan of the suffix chain that stays inside PLANS_DIR after
+# symlink resolution (an escaping or unverifiable candidate is skipped, fail closed), merges
+# each stage's `## Accepted Tradeoffs (<stage>)` into <control dir>/accepted-tradeoffs.<chain
+# head>.md, and prints that path. The intent stage also takes the legacy heading of the intent
+# file; a legacy heading downstream is a carried copy, read only when the intent file is
+# unreadable. When no candidate qualifies, a body-less merged file is written — but only after
+# the last candidate passes the same containment checks as before (else exit 3).
 set -euo pipefail
 
 usage() {
@@ -98,7 +99,12 @@ owned_name() {
   printf '%s' "$name"
 }
 
+EXTRACT="$SCRIPT_DIR/extract-mandatory-sections"
+PLAN_SCHEMA="$SCRIPT_DIR/../hooks/lib/plan-schema.js"
+HEAD_SFX="$1"
 LAST=""
+READ_SFX=()
+READ_FILE=()
 for sfx in "$@"; do
   case "$sfx" in
     intent|outline|detail)
@@ -111,9 +117,59 @@ for sfx in "$@"; do
   ST=0
   canon_status "$CAND" || ST=$?
   [[ "$ST" -eq 0 ]] || continue
-  printf '%s\n' "$CAND"
-  exit 0
+  READ_SFX+=("$sfx")
+  READ_FILE+=("$CAND")
 done
+
+# write_merged — merge the stages of the readable candidates into the control file and print it.
+# Returns 1 when no merged file can be named (a chain head or session id that is no plain token
+# has no control-dir file); the caller then forwards the first readable candidate as before, and
+# with none readable there is nothing to forward (exit 3).
+write_merged() {
+  local out legacy stage i heading
+  [[ "$HEAD_SFX" =~ ^[A-Za-z0-9_-]+$ ]] || return 1
+  out="$(node "$SCRIPT_DIR/workflow-control-dir" --session "$SESSION_ID" --file "accepted-tradeoffs.$HEAD_SFX.md" --for-write 2>/dev/null)" || return 1
+  [[ -n "$out" ]] || return 1
+  legacy="$(node "$PLAN_SCHEMA" --accepted-tradeoffs-headings 2>/dev/null | tail -n 1 | tr -d '\r')"
+  [[ -n "$legacy" ]] || legacy="Accepted Tradeoffs"
+  # A directory at $out would swallow the rename and leave a directory path as the answer.
+  [[ -d "$out" ]] && return 1
+  # Global, not local: the EXIT trap runs after this function returns. Called under `||`, so
+  # errexit is off here and every write checks its own status.
+  MERGE_TMP="$out.tmp.$$"
+  trap 'rm -f "${MERGE_TMP:-}"' EXIT
+  : > "$MERGE_TMP" || return 1
+  for stage in intent outline detail; do
+    heading="$(node "$PLAN_SCHEMA" --accepted-tradeoffs-heading "$stage" 2>/dev/null | tr -d '\r')" || return 1
+    [[ -n "$heading" ]] || return 1
+    local body="" upstream="" own_read=0
+    for ((i = 0; i < ${#READ_SFX[@]}; i++)); do
+      upstream="${READ_FILE[$i]}"
+      [[ "${READ_SFX[$i]}" == "$stage" ]] || continue
+      own_read=1
+      body="$("$EXTRACT" "${READ_FILE[$i]}" --section "$heading" --with-headers 2>/dev/null || true)"
+      if [[ -z "$body" && "$stage" == intent ]]; then
+        body="$("$EXTRACT" "${READ_FILE[$i]}" --section "$legacy" --with-headers 2>/dev/null || true)"
+      fi
+    done
+    # Rescue: with the intent file unreadable, the most upstream readable file's legacy heading
+    # (the last readable candidate — the chain runs downstream to upstream) is the intent stage.
+    if [[ "$stage" == intent && "$own_read" -eq 0 && -n "$upstream" ]]; then
+      body="$("$EXTRACT" "$upstream" --section "$legacy" --with-headers 2>/dev/null || true)"
+    fi
+    [[ -n "$body" ]] || continue
+    if [[ -s "$MERGE_TMP" ]]; then printf '\n' >> "$MERGE_TMP" || return 1; fi
+    printf '## %s\n%s\n' "$heading" "$(printf '%s\n' "$body" | tail -n +2)" >> "$MERGE_TMP" || return 1
+  done
+  mv -f "$MERGE_TMP" "$out" || return 1
+  [[ -f "$out" && ! -d "$out" ]] || return 1
+  printf '%s\n' "$out"
+  exit 0
+}
+
+if [[ "${#READ_SFX[@]}" -gt 0 ]]; then
+  write_merged || { printf '%s\n' "${READ_FILE[0]}"; exit 0; }
+fi
 
 if [[ -z "$LAST" ]]; then
   echo "resolve-accepted-tradeoffs-file: no candidate plan path could be resolved." >&2
@@ -137,4 +193,7 @@ if [[ -e "$LAST" || -L "$LAST" ]]; then
     exit 3
   fi
 fi
-printf '%s\n' "$LAST"
+if ! write_merged; then
+  echo "resolve-accepted-tradeoffs-file: no candidate is readable and the chain has no merged-file name; refusing to forward it." >&2
+  exit 3
+fi

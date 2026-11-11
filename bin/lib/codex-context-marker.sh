@@ -2,7 +2,8 @@
 # bin/lib/codex-context-marker.sh — the single definition of the context section marker (#2814):
 # bin/build-codex-context writes it, bin/lib/review-plan-codex/inputs.sh splits on it.
 # A marker counts only in the exact written form, with a role from CCM_ROLES (in that order,
-# each once) and a source whose basename is the role's plan artifact (<sid>-<role>.md).
+# each once) and a source whose basename is the role's file (<role>.md or <sid>-<role>.md; the
+# `issues` role is the issue snapshot, reference data rather than a plan artifact — #2924).
 # Every other line that starts like a marker is rewritten by ccm_defang_stream. Markers are
 # split only in a file whose provenance record ccm_is_built finds (see the Provenance block).
 # Sourced; no `set -e` (a sourced library).
@@ -10,7 +11,7 @@
 
 CCM_PREFIX='<!-- codex-context-section:'
 CCM_DEFANGED='<!-- (codex-context-section)'
-CCM_ROLES='intent outline'
+CCM_ROLES='intent outline issues'
 CCM_RE='^<!-- codex-context-section: ([a-z]+) source=([^[:cntrl:]]+) -->$'
 
 # ccm_marker_line <role> <source> — the marker line, without the newline.

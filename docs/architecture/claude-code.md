@@ -220,12 +220,18 @@ session's own decision record as `--accepted-tradeoffs`, and a concern that dire
 contradicts a decision recorded there is out of bounds for the review. That record is not a
 single fixed file: a stage is entitled to the nearest decision document that actually exists,
 so `bin/resolve-accepted-tradeoffs-file` walks a per-stage suffix chain (`security-plan`:
-outline → intent; `test-review`: detail → outline → intent) and returns the first readable,
-non-empty candidate. A speculative skip that leaves `outline.md` unwritten therefore falls
-back to `intent.md` instead of reviewing against nothing — the condition that had reviewers
+outline → intent; `test-review`: detail → outline → intent), merges every stage's own
+`## Accepted Tradeoffs (<stage>)` section (a legacy unstaged heading counts as intent) into one
+file in the control dir, and prints its path; when that file cannot be written it prints the
+first readable candidate instead. Each stage writes only the tradeoffs it newly accepts, so the
+merge, not a copy, carries upstream decisions forward. A speculative skip that leaves `outline.md`
+unwritten therefore still yields `intent.md`'s decisions instead of reviewing against nothing — the condition that had reviewers
 re-raising decisions the user had already settled, one round of back-and-forth per stage. The
 resolver is fail-closed on a candidate that escapes `PLANS_DIR`: it refuses to forward one,
 and that refusal surfaces as loop exit 4 (HALT), never as a fallback to a Claude reviewer.
+`bin/issue-snapshot` caches the session's issues (sanitized, secret-redacted, blockquoted inside an
+untrusted-data frame, 64KB cap) as reference data in the control dir, so reviewers can spot a plan
+that copies the issue instead of referencing it.
 
 **Suppression is asserted twice, by different parties.** The reviewer is told to drop a
 contradicting concern itself, and the calling skill independently re-verifies every verdict it

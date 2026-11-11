@@ -9,7 +9,7 @@ The EM Supervisor's Codex engine (`bin/supervisor-findings-codex`, alert and aud
 
 ## What the input contains
 
-Seven delimited blocks, in order: a header, `HANDOFF`, `PROGRESS`, `USER UTTERANCES`, `ACTIONS SINCE PREVIOUS <MODE> RUN`, `PLAN ARTIFACTS`, `SUPERVISOR STATE`. An empty block renders as `(none)` so a reviewer can tell "nothing happened" from "the block was omitted".
+Eight delimited blocks, in order: a header, `HANDOFF`, `PROGRESS`, `USER UTTERANCES`, `ACTIONS SINCE PREVIOUS <MODE> RUN`, `PLAN ARTIFACTS`, `SUPERVISOR STATE`, `ISSUE SNAPSHOT`. `ISSUE SNAPSHOT` reads the `issues.md` that `bin/issue-snapshot` wrote to the first_session_id control dir (never calling gh) and renders the unavailable marker of `skills/_shared/no-upstream-copy.md` when it is absent; the audit uses it to report plans that copy upstream content. An empty block renders as `(none)` so a reviewer can tell "nothing happened" from "the block was omitted".
 
 - User utterances are collected over the whole transcript. The user's intent does not expire: a request made at the start of the session still binds what happens at the end.
 - Actions (commands, edits, skill/agent invocations, sentinels, hook blocks) are collected only from the transcript cursor onward. Earlier actions were already reviewed by the previous run of the same mode.

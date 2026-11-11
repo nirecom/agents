@@ -1,7 +1,7 @@
 "use strict";
 
 // #2475 supervisor codex input: transcript + state handoff records + session-progress.md + plan artifacts + state
-// rendered as seven delimited blocks. Every block body is defanged so embedded
+// + the issue snapshot (#2924), rendered as eight delimited blocks. Every block body is defanged so embedded
 // text can never forge a delimiter or open an HTML comment.
 
 const fs = require("fs");
@@ -13,7 +13,8 @@ const { progressPathFor, isRegularFile, isValidSid } = require("../progress-file
 const { resolvePlanArtifactOwner } = require("../../workflow-state/plan-artifact-owner");
 const { getWorkflowPlansDir } = require("../workflow-plans-dir");
 const { getStatePath } = require("../supervisor-state-writer");
-const { diagnoseControlMigration } = require("../../workflow-state/state-io/control-dir");
+const { diagnoseControlMigration, controlPath } = require("../../workflow-state/state-io/control-dir");
+const { resolveFirstSid } = require("../../workflow-state/state-ancestry");
 
 // A bracketed word run that reads as a fence once case, spacing, underscores and full-width forms
 // are ignored: any "... START|BEGIN|END", plus the suffix-less fence this input itself uses.
@@ -193,6 +194,21 @@ function stateLines(sid, snapshot) {
   return text === null ? [] : [text.replace(/\n$/, "")];
 }
 
+// The issue snapshot (#2924) of the first generation: <control>/issues.md, written by
+// bin/issue-snapshot. Read-only; gh is never called here. Cut at the same cap as PROGRESS.
+function issueSnapshotLines(wsid) {
+  // lang-check: ignore — the unavailable marker of skills/_shared/no-upstream-copy.md (functional data).
+  const none = ["snapshot なし"];
+  if (!wsid || wsid === "UNAVAILABLE" || !isValidSid(wsid)) return none;
+  let p;
+  try { p = controlPath(resolveFirstSid(wsid), "issues.md"); } catch (e) { diagnoseControlMigration(e, "supervisor-codex-input"); return none; }
+  const head = readHead(p, MAX_BYTES);
+  if (!head) return none;
+  const out = [head.buf.toString("utf8").replace(/\n$/, "")];
+  if (head.size > MAX_BYTES) out.push(`(truncated at ${MAX_BYTES} bytes)`);
+  return out;
+}
+
 function readCursor(sid, mode) {
   try {
     const st = JSON.parse(fs.readFileSync(getStatePath(sid), "utf8"));
@@ -226,6 +242,7 @@ function assemble(opts) {
     block(`ACTIONS SINCE PREVIOUS ${opts.mode.toUpperCase()} RUN`, c.actions),
     block("PLAN ARTIFACTS", planLines(opts.wsid, opts.planScope, opts.artifact)),
     block("SUPERVISOR STATE", stateLines(opts.sid, opts.stateSnapshot)),
+    block("ISSUE SNAPSHOT", issueSnapshotLines(opts.wsid)),
   ].join("\n\n") + "\n";
   return { text, status: cur.status, next: cursorLib.next(opts.transcript, entries) };
 }

@@ -365,5 +365,5 @@ guards every read-modify-write entry point (read included, not just the write) i
 `audit.js` / `alert.js` / `append.js`. The lock is an `fs.mkdirSync` directory
 plus an owner-token file, re-entrant within one process, with a stale-reclaim path
 after 10s. Lock-acquire failure is fail-closed (no write). The reclaim-after race
-is deliberately not defended (see the outline Accepted Tradeoffs) — the owner-token
+is deliberately not defended (see the outline's `## Accepted Tradeoffs (outline)`) — the owner-token
 lock is enough for a single-user PC hook model.

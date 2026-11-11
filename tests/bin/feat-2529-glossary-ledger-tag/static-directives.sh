@@ -28,7 +28,7 @@ for p in outline-planner detail-planner; do
   lt_has "$p: names the [glossary-drift term= tag" "[glossary-drift term=" "$body"
   lt_has "$p: defines the accepted(glossary-drift): <reason> disposition" "accepted(glossary-drift): <" "$body"
   lt_line_with "$p: one line forbids reject: for a tagged concern" "$body" "glossary-drift" "reject:"
-  trailer="$(grep -E '^[[:space:]]*1\. <reviewer concern' "$f" 2>/dev/null)"
+  tf="$f"; [ "$p" = outline-planner ] && tf="${f%.md}/revision-round.md"; trailer="$(grep -E '^[[:space:]]*1\. <reviewer concern' "$tf" 2>/dev/null)"
   lt_has "$p: trailer dispositions offer accepted(glossary-drift)" "accepted(glossary-drift)" "$trailer"
 done
 

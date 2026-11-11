@@ -6,6 +6,13 @@
 // direct require) reads canonical names, order and mappings from here so the
 // three cannot drift apart. See docs plan #2228/#2338/#2339.
 
+const ACCEPTED_TRADEOFFS_STAGES = Object.freeze(["intent", "outline", "detail"]);
+const LEGACY_ACCEPTED_TRADEOFFS = "Accepted Tradeoffs";
+// #2924: each stage writes only its own staged heading; the legacy one reads as intent.
+function acceptedTradeoffsHeading(stage) {
+  return ACCEPTED_TRADEOFFS_STAGES.includes(stage) ? `${LEGACY_ACCEPTED_TRADEOFFS} (${stage})` : null;
+}
+
 // Canonical H2 section names in canonical order, per artifact type. intent order
 // follows skills/clarify-intent/reference/intent-md-schema.md "Section order";
 // outline order is the #2228 importance-ordered schema; detail order follows the
@@ -19,7 +26,7 @@ const CANONICAL_SECTIONS = Object.freeze({
     "Constraints",
     "Interview Log",
     "Class members",
-    "Accepted Tradeoffs",
+    acceptedTradeoffsHeading("intent"),
     "worktrees",
   ]),
   outline: Object.freeze([
@@ -27,7 +34,7 @@ const CANONICAL_SECTIONS = Object.freeze({
     "Adopted approach",
     "Delivery plan",
     "Considered alternatives (rejected)",
-    "Accepted Tradeoffs",
+    acceptedTradeoffsHeading("outline"),
     "Confirmed non-goals",
     "Reused existing utilities / building blocks",
   ]),
@@ -37,6 +44,7 @@ const CANONICAL_SECTIONS = Object.freeze({
     "Files to modify",
     "Steps",
     "Risks & edge cases",
+    acceptedTradeoffsHeading("detail"),
     "Out of scope",
   ]),
 });
@@ -100,6 +108,7 @@ const CANONICAL_LITERALS = new Set();
 for (const type of Object.keys(CANONICAL_SECTIONS)) {
   for (const name of CANONICAL_SECTIONS[type]) CANONICAL_LITERALS.add(name);
 }
+CANONICAL_LITERALS.add(LEGACY_ACCEPTED_TRADEOFFS);
 
 const FIRST_BODY_SECTION = Object.freeze({
   outline: "Adopted approach",
@@ -126,9 +135,25 @@ function firstBodySection(artifactType) {
   return FIRST_BODY_SECTION[artifactType] || null;
 }
 
+// Stage of an Accepted Tradeoffs heading (bare text or H2 line): the staged
+// literal yields its stage, the legacy literal yields "intent", else null.
+function acceptedTradeoffsStage(heading) {
+  if (typeof heading !== "string") return null;
+  const t = heading.trim().replace(/^#+\s*/, "").trim();
+  if (t === LEGACY_ACCEPTED_TRADEOFFS) return "intent";
+  for (const stage of ACCEPTED_TRADEOFFS_STAGES) {
+    if (t === acceptedTradeoffsHeading(stage)) return stage;
+  }
+  return null;
+}
+
 module.exports = {
   CANONICAL_SECTIONS,
   LOCALIZED_TO_CANONICAL,
+  ACCEPTED_TRADEOFFS_STAGES,
+  LEGACY_ACCEPTED_TRADEOFFS,
+  acceptedTradeoffsHeading,
+  acceptedTradeoffsStage,
   canonicalizeHeading,
   firstBodySection,
 };
@@ -146,8 +171,15 @@ if (require.main === module) {
     process.stdout.write(JSON.stringify(order) + "\n");
   } else if (flag === "--localized-to-canonical") {
     process.stdout.write(JSON.stringify(LOCALIZED_TO_CANONICAL) + "\n");
+  } else if (flag === "--accepted-tradeoffs-heading") {
+    const out = acceptedTradeoffsHeading(args[1]);
+    if (out === null) process.exit(1);
+    process.stdout.write(out + "\n");
+  } else if (flag === "--accepted-tradeoffs-headings") {
+    const all = ACCEPTED_TRADEOFFS_STAGES.map(acceptedTradeoffsHeading).concat([LEGACY_ACCEPTED_TRADEOFFS]);
+    process.stdout.write(all.join("\n") + "\n");
   } else {
-    process.stderr.write("usage: plan-schema.js --first-body-section <type> | --order <type> | --localized-to-canonical\n");
+    process.stderr.write("usage: plan-schema.js --first-body-section <type> | --order <type> | --localized-to-canonical | --accepted-tradeoffs-heading <stage> | --accepted-tradeoffs-headings\n");
     process.exit(2);
   }
 }

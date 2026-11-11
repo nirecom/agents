@@ -72,16 +72,36 @@ C2: unresolved — <one-line reason why concern still applies>
 $(rpc_round2_rules)"
 }
 
+# rpc_build_copy_block — RPC_COPY_BLOCK: the full copy-ban SSOT (#2924) for the planner formats
+# only (outline-plan, detail-plan); security-plan and test-review never build it. An unreadable
+# SSOT fails the review before codex runs, like the criteria block.
+RPC_COPY_BLOCK=""
+rpc_build_copy_block() {
+  local ssot="$SCRIPT_DIR/../skills/_shared/no-upstream-copy.md" text=""
+  [[ -f "$ssot" && -r "$ssot" ]] && text="$(<"$ssot")"
+  if [[ -z "$text" ]]; then
+    codex_core_emit_failed "upstream copy rule unavailable: skills/_shared/no-upstream-copy.md"
+    exit 0
+  fi
+  RPC_COPY_BLOCK="[UPSTREAM COPY RULE START]
+${text}
+[UPSTREAM COPY RULE END]
+
+"
+}
+
 # rpc_prompt_head [<extra block>] — RPC_HEAD: the blocks every format places before its own
 # instructions, the plan step hierarchy first; <extra block> (test-review's input contract) last.
 # A global, not stdout: command substitution would strip the blank lines that end each block.
 rpc_prompt_head() {
   RPC_HEAD="${PREAMBLE}
 
-${HIERARCHY_BLOCK}${CRITERIA_BLOCK}${GLOSSARY_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}${1:-}"
+${HIERARCHY_BLOCK}${CRITERIA_BLOCK}${RPC_COPY_BLOCK}${GLOSSARY_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}${1:-}"
 }
 
 RPC_TAG_SENTENCE="Report a deviation from a prior-step decision, an upstream contradiction or an upstream gap with the [upstream-inconsistency ...] tag defined in the plan step hierarchy above, right after [SEV] on the concern line."
+RPC_COPY_SENTENCE="Report as a concern any passage that restates upstream content (the issues section or an earlier plan step) instead of referencing it by section name, as the upstream copy rule above forbids."
+RPC_OUTLINE_STRUCTURE_SENTENCE="Report as a concern an Adopted approach crammed into one paragraph instead of its itemized fields (summary, components changed, pros, cons and risks, Builds on, Trade-off, Cross-component risks, reason for adoption)."
 
 rpc_prompt_detail_plan() {
     rpc_build_context_block "The context below ([CONTEXT START] / [CONTEXT END]) holds the upstream plan steps and supporting material. Review the plan strictly against the upstream plan steps."
@@ -90,6 +110,7 @@ rpc_prompt_detail_plan() {
 [PLAN START]
 ${PLAN_CONTENT}
 [PLAN END]"
+    rpc_build_copy_block
     rpc_prompt_head
     if [[ "$ROUND" -ge 2 ]]; then
       CODEX_PROMPT="${RPC_HEAD}$(rpc_round2_body plan "APPROVED
@@ -113,6 +134,8 @@ Each concern MUST start with a number, a period, a space, [HIGH], [MEDIUM], or [
 
 ${RPC_TAG_SENTENCE}
 
+${RPC_COPY_SENTENCE}
+
 ${frame}"
     fi
 }
@@ -126,6 +149,7 @@ rpc_prompt_outline_plan() {
 [PLAN START]
 ${PLAN_CONTENT}
 [PLAN END]"
+    rpc_build_copy_block
     rpc_prompt_head
     if [[ "$ROUND" -ge 2 ]]; then
       CODEX_PROMPT="${RPC_HEAD}$(rpc_round2_body proposal "APPROVED <one-line justification>" "MISSING_ALTERNATIVE:")
@@ -141,12 +165,17 @@ Format B (missing alternative or tagged concern):
 MISSING_ALTERNATIVE:
 1. [HIGH|MEDIUM|LOW] <one-line description of the missing approach>
 2. [HIGH|MEDIUM|LOW] [upstream-inconsistency ...] <a tagged concern, if any>
+3. [HIGH|MEDIUM|LOW] <an upstream-copy or cramming concern, if any>
 
 Each numbered line MUST start with a number, period, space, [HIGH], [MEDIUM], or [LOW] in brackets, and space.
 
-Only use MISSING_ALTERNATIVE when a genuinely distinct high-level alternative that serves the intent is absent, or when a tagged concern is reported.
+Only use MISSING_ALTERNATIVE when a genuinely distinct high-level alternative that serves the intent is absent, or when a tagged concern, an upstream-copy concern, or a cramming concern (an Adopted approach crammed into one paragraph) is reported.
 
 ${RPC_TAG_SENTENCE}
+
+${RPC_COPY_SENTENCE}
+
+${RPC_OUTLINE_STRUCTURE_SENTENCE}
 
 ${frame}"
     fi
