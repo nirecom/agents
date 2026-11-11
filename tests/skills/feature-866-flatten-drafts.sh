@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests: skills/_shared/assemble-mandatory.sh, bin/run-codex-review-loop, skills/_shared/codex-review-loop.md
 # Tags: workflow, plans, hook, bin, env, scope:issue-specific
+# lang-check: ignore — the assertions match plan-language marker values and plan text the code under test emits (functional data).
 # Issue #866 — plan intermediates live flat under PLANS_DIR, told apart by filename suffix; contract: assemble-mandatory.sh header.
 # L3 gap (real planner orchestration): bin/check-verification-gate.sh category skill-orchestration.
 set -uo pipefail
@@ -46,29 +47,32 @@ mkdir -p "$T1_PLANS"
 cat > "$T1_PLANS/20260620-TEST-intent.md" << 'EOF'
 # Test Intent
 
-Some intro.
-
 ## Issues
 
 - #866
 
+## Glossary
+
 ## Class members
 
 - member-a
-- member-b
 
 ## Accepted Tradeoffs
 
 - tradeoff-a
 EOF
 
-# Planner output at the target path; the body starts with a ## header so the extractor stops at the first planner section.
+# Planner output at the target path; it writes its own `(outline)` section (#2924).
 cat > "$T1_PLANS/20260620-TEST-outline.md" << 'EOF'
 # Planner-Produced Outline
 
 ## Adopted approach
 
 Some approach detail.
+
+## Accepted Tradeoffs (outline)
+
+なし
 EOF
 
 # In-place: arg 2 == arg 3
@@ -87,8 +91,9 @@ fi
 
 if grep -qF "## Issues" "$T1_PLANS/20260620-TEST-outline.md" \
    && ! grep -qF "## Class members" "$T1_PLANS/20260620-TEST-outline.md" \
-   && grep -qF "## Accepted Tradeoffs" "$T1_PLANS/20260620-TEST-outline.md"; then
-  pass "T1 output contains Issues and Accepted Tradeoffs from intent; Class members is not injected (#2228)"
+   && grep -qx "## Accepted Tradeoffs (outline)" "$T1_PLANS/20260620-TEST-outline.md" \
+   && ! grep -qx "## Accepted Tradeoffs" "$T1_PLANS/20260620-TEST-outline.md"; then
+  pass "T1 output: Issues injected, own '(outline)' kept, no legacy copy (#2924), no Class members (#2228)"
 else
   fail "T1 mandatory sections missing from output"
 fi
@@ -117,13 +122,8 @@ cat > "$T2_PLANS/20260620-TEST-intent.md" << 'EOF'
 - t-only
 EOF
 
-cat > "$T2_PLANS/20260620-TEST-outline.md" << 'EOF'
-# Planner Outline
-
-## Adopted approach
-
-Body content here.
-EOF
+printf '%s\n' "# Planner Outline" "" "## Adopted approach" "" "Body content here." "" \
+  "## Accepted Tradeoffs (outline)" "" "なし" > "$T2_PLANS/20260620-TEST-outline.md"
 
 T2_RC=0
 bash "$ASSEMBLE" --source-kind intent \
@@ -196,6 +196,8 @@ cat > "$T7_PLANS/20260620-TEST-intent.md" << 'EOF'
 
 - #866
 
+## Glossary
+
 ## Class members
 
 - a
@@ -205,13 +207,8 @@ cat > "$T7_PLANS/20260620-TEST-intent.md" << 'EOF'
 - t
 EOF
 
-cat > "$T7_PLANS/20260620-TEST-outline.md" << 'EOF'
-# Planner Outline
-
-## Adopted approach
-
-Body.
-EOF
+printf '%s\n' "# Planner Outline" "" "## Adopted approach" "" "Body." "" \
+  "## Accepted Tradeoffs (outline)" "" "なし" > "$T7_PLANS/20260620-TEST-outline.md"
 
 T7_RC=0
 bash "$ASSEMBLE" --source-kind intent \

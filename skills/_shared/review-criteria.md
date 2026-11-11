@@ -37,7 +37,7 @@ Judge whether a choice is safe and simple enough for the requirements and constr
 Report content the artifact copies from a canonical source, such as an upstream plan step, instead of referencing it in one line; ask for a one-line reference.
 A one-line reference is not a concern.
 Grade a copy MEDIUM.
-Exempt `## Issues` and `## Accepted Tradeoffs`: a script copies them verbatim and verifies the copy.
+Exempt `## Issues` only: a script copies it verbatim and verifies the copy (`skills/_shared/no-upstream-copy.md`).
 
 ## Examples
 

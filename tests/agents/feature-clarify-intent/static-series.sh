@@ -234,7 +234,7 @@ assert_contains "$LOCAL_REPO_ROOT/skills/_shared/triage-legacy-compat.md" \
 N16B_TABLE=(
     "N16b-01|agents/outline-reviewer.md"
     "N16b-02|agents/detail-reviewer.md"
-    "N16b-03|agents/outline-planner.md"
+    "N16b-03|agents/outline-planner/class-members.md"
     "N16b-04|agents/detail-planner.md"
     "N16b-05|bin/lib/review-plan-codex/inputs.sh"
 )

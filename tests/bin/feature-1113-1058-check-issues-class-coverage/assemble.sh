@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # Tests: skills/_shared/assemble-mandatory.sh
 # Tags: scope:issue-specific, TL2
-# Assemble-integration tests for assemble-mandatory.sh: the outline coverage
-# gate wiring (TC-A*) plus the #2228 changes — mandatory 3->2 (no Class members
-# injection), Adopted-approach-first hard check (exit 4), and temp-before-mv so
-# a failed verify never overwrites a prior outline.md. TC-C* are RED until those
-# land.
+# lang-check: ignore — the assertions match plan-language marker values and plan text the code under test emits (functional data).
+# Assemble-integration tests for assemble-mandatory.sh: the outline coverage gate wiring
+# (TC-A*), the #2228 changes (no Class members injection, Adopted-approach-first exit 4,
+# temp-before-mv) and #2924 (each planner writes its own `## Accepted Tradeoffs (<stage>)`).
 
 # TL3 gap: no live make-outline-plan MOP path with a real PLAN_LANG=japanese
 # planner, and no real concurrent writer racing the final mv. Closest
@@ -69,7 +68,17 @@ Take approach A.
 ## Delivery plan
 
 Do the work.
+
+## Accepted Tradeoffs (outline)
+
+なし
 EOF
+
+# #2924: the own stage follows --source-kind (outline → detail), so the outline-kind
+# cases get a planner that writes the detail-stage section.
+A_PLANNER_D="$TMPDIR_BASE/a-planner-detail-stage.md"
+printf '%s\n' "# Outline Plan — detail stage" "" "## Adopted approach" "" "Take approach A." "" \
+    "## Delivery plan" "" "Do the work." "" "## Accepted Tradeoffs (detail)" "" "なし" > "$A_PLANNER_D"
 
 # Source with 2 issues but only 1 class member (triggers gate block when wired)
 A_SOURCE_2ISSUES="$TMPDIR_BASE/a-source-2issues.md"
@@ -102,6 +111,10 @@ cat > "$A_DETAIL_PLANNER" << 'EOF'
 ## Files to modify
 
 - bin/foo
+
+## Accepted Tradeoffs (detail)
+
+なし
 EOF
 
 # TC-A1: --source-kind intent, -outline.md output, valid 1:1 coverage → assemble succeeds
@@ -120,7 +133,7 @@ grep -q "check-issues-class-coverage" "$ASSEMBLE" \
 # TC-A2: --source-kind outline, -outline.md output, valid 1:1 coverage → assemble succeeds
 A_OUT_A2="$TMPDIR_BASE/test-a2-outline.md"
 EXIT_CODE=0; OUT=$(run_with_timeout bash "$ASSEMBLE" --source-kind outline \
-    "$A_SOURCE" "$A_PLANNER" "$A_OUT_A2" 2>&1) || EXIT_CODE=$?
+    "$A_SOURCE" "$A_PLANNER_D" "$A_OUT_A2" 2>&1) || EXIT_CODE=$?
 [[ $EXIT_CODE -eq 0 ]] \
     && pass "TC-A2: --source-kind outline, -outline.md output → assemble succeeds (gate did not block valid 1:1)" \
     || fail "TC-A2: --source-kind outline, -outline.md → expected exit 0, got $EXIT_CODE (output: $OUT)"
@@ -164,6 +177,10 @@ Take approach A.
 ## Delivery plan
 
 Do the work.
+
+## Accepted Tradeoffs (outline)
+
+- outline-stage tradeoff
 EOF
 
 # Bad outline planner: first body H2 is NOT "## Adopted approach".
@@ -178,18 +195,24 @@ Do the work first.
 ## Adopted approach
 
 Approach A (out of order).
+
+## Accepted Tradeoffs (detail)
+
+なし
 EOF
 
-# TC-C1: valid outline (Adopted approach first) → assemble succeeds and the
-# output carries exactly the 2 remaining mandatory sections.
+# TC-C1: valid outline → Issues injected, the planner's own `(outline)` section kept,
+# and the intent's legacy `## Accepted Tradeoffs` no longer copied in (#2924).
 C_OUT_C1="$TMPDIR_BASE/test-c1-outline.md"
-EXIT_CODE=0; OUT=$(run_with_timeout bash "$ASSEMBLE" --source-kind outline \
+EXIT_CODE=0; OUT=$(run_with_timeout bash "$ASSEMBLE" --source-kind intent \
     "$A_SOURCE" "$C_PLANNER_GOOD" "$C_OUT_C1" 2>&1) || EXIT_CODE=$?
 if [[ $EXIT_CODE -eq 0 ]] && grep -q "^## Issues$" "$C_OUT_C1" 2>/dev/null \
-    && grep -q "^## Accepted Tradeoffs$" "$C_OUT_C1" 2>/dev/null; then
-    pass "TC-C1: valid outline (Adopted approach first) → assemble succeeds with Issues + Accepted Tradeoffs"
+    && grep -q "^## Accepted Tradeoffs (outline)$" "$C_OUT_C1" 2>/dev/null \
+    && ! grep -q "^## Accepted Tradeoffs$" "$C_OUT_C1" 2>/dev/null \
+    && ! grep -qF "tradeoff A" "$C_OUT_C1" 2>/dev/null; then
+    pass "TC-C1: valid outline → Issues + own '(outline)' section, no legacy Accepted Tradeoffs copy"
 else
-    fail "TC-C1: expected exit 0 with Issues + Accepted Tradeoffs (exit $EXIT_CODE, output: $OUT)"
+    fail "TC-C1: expected Issues + '(outline)' and no legacy copy (exit $EXIT_CODE, output: $OUT)"
 fi
 
 # TC-C2: mandatory 3→2 — assemble must NOT inject a '## Class members' section
@@ -256,6 +279,10 @@ Take approach A.
 ## Delivery plan
 
 Do the work.
+
+## Accepted Tradeoffs (detail)
+
+なし
 EOF
 C_OUT_C7="$TMPDIR_BASE/test-c7-outline.md"
 EXIT_CODE=0; OUT=$(run_with_timeout bash "$ASSEMBLE" --source-kind outline \
@@ -289,6 +316,10 @@ cat > "$C_DETAIL_WITH_CM" << 'EOF'
 ## Files to modify
 
 - bin/foo
+
+## Accepted Tradeoffs (detail)
+
+なし
 EOF
 C_OUT_C9="$TMPDIR_BASE/test-c9-detail.md"
 EXIT_CODE=0; OUT=$(run_with_timeout bash "$ASSEMBLE" --source-kind outline \
@@ -316,7 +347,7 @@ else
     PLAN_SCHEMA_BIN_NODE="$PLAN_SCHEMA_BIN"
     C_OUT_C6_NODE="$C_OUT_C6"
 fi
-EXIT_CODE=0; OUT=$(run_with_timeout bash "$ASSEMBLE" --source-kind outline \
+EXIT_CODE=0; OUT=$(run_with_timeout bash "$ASSEMBLE" --source-kind intent \
     "$A_SOURCE" "$C_PLANNER_GOOD" "$C_OUT_C6" 2>&1) || EXIT_CODE=$?
 # Bridge stdout — the authoritative expected value (trim trailing newline only).
 C6_EXPECTED="$(node "$PLAN_SCHEMA_BIN_NODE" --first-body-section outline 2>/dev/null)"
@@ -325,7 +356,7 @@ C6_EXPECTED="${C6_EXPECTED%$'\n'}"
 C6_ACTUAL="$(node -e "
 const fs = require('fs');
 const text = fs.readFileSync('$C_OUT_C6_NODE', 'utf8');
-const mandatory = new Set(['Issues', 'Issue', 'Class members', 'Accepted Tradeoffs']);
+const mandatory = new Set(['Issues', 'Issue', 'Class members', 'Accepted Tradeoffs', 'Accepted Tradeoffs (intent)', 'Accepted Tradeoffs (outline)', 'Accepted Tradeoffs (detail)']);
 const h2 = text.split(/\r?\n/).filter(function (l) { return /^## /.test(l); }).map(function (l) { return l.replace(/^## /, '').trim(); });
 const body = h2.filter(function (h) { return !mandatory.has(h); });
 process.stdout.write(body.length ? body[0] : '');
@@ -360,18 +391,18 @@ EXIT_CODE=0; OUT=$(run_with_timeout bash "$ASSEMBLE" --source-kind intent \
     && pass "TC-C10: source has Issues but no '## Class members' section → gate blocks (non-zero exit)" \
     || fail "TC-C10: expected non-zero (gate block for absent Class members section), got 0 (output: $OUT)"
 
-# TC-C11: --source-kind intent produces output with exactly the two mandatory
-# sections (Issues + Accepted Tradeoffs) but NOT Class members. This verifies that
-# the 3→2 reduction applies to the intent path symmetrically with the outline path
-# (TC-C2 covers --source-kind outline already).
+# TC-C11: --source-kind intent produces output with Issues and the planner's own
+# `(outline)` section, NOT Class members and NOT the intent's legacy Accepted
+# Tradeoffs (#2924). TC-C9 covers the --source-kind outline (detail) side.
 C_OUT_C11="$TMPDIR_BASE/test-c11-intent-outline.md"
 EXIT_CODE=0; OUT=$(run_with_timeout bash "$ASSEMBLE" --source-kind intent \
     "$A_SOURCE" "$C_PLANNER_GOOD" "$C_OUT_C11" 2>&1) || EXIT_CODE=$?
 if [[ $EXIT_CODE -eq 0 ]] && [[ -f "$C_OUT_C11" ]] \
     && grep -q "^## Issues$" "$C_OUT_C11" 2>/dev/null \
-    && grep -q "^## Accepted Tradeoffs$" "$C_OUT_C11" 2>/dev/null \
+    && grep -q "^## Accepted Tradeoffs (outline)$" "$C_OUT_C11" 2>/dev/null \
+    && ! grep -q "^## Accepted Tradeoffs$" "$C_OUT_C11" 2>/dev/null \
     && ! grep -q "^## Class members$" "$C_OUT_C11" 2>/dev/null; then
-    pass "TC-C11: --source-kind intent output has Issues + Accepted Tradeoffs, no Class members (3→2 parity with TC-C2)"
+    pass "TC-C11: --source-kind intent output has Issues + '(outline)', no legacy copy, no Class members"
 else
     fail "TC-C11: --source-kind intent output structure wrong (exit $EXIT_CODE, output: $OUT)"
 fi

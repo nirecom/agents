@@ -68,7 +68,7 @@ make_plans() {
 CASE_DIR="$TESTS_DIR/feature-2154-accepted-tradeoffs-fallback"
 
 # shellcheck source=./feature-2154-accepted-tradeoffs-fallback/layer-a-resolution.sh
-. "$CASE_DIR/layer-a-resolution.sh"
+. "$CASE_DIR/merged-helpers.sh" && . "$CASE_DIR/layer-a-resolution.sh"
 # shellcheck source=./feature-2154-accepted-tradeoffs-fallback/layer-b-prompt.sh
 . "$CASE_DIR/layer-b-prompt.sh"
 # Layer B first: the forgery cases consume its run_rpc / prompt_* helpers.

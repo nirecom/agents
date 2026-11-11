@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Tests: skills/_shared/assemble-mandatory.sh, skills/make-outline-plan/SKILL.md
 # Tags: outline, planning, skill, bin, env, scope:issue-specific
-# Integration tests for skills/_shared/assemble-mandatory.sh (issue #462).
-# Tests will FAIL until skills/_shared/assemble-mandatory.sh is implemented
-# and SKILL.md files are updated.
+# lang-check: ignore — the assertions match plan-language marker values and plan text the code under test emits (functional data).
+# Integration tests for skills/_shared/assemble-mandatory.sh (issue #462), on the current
+# contract: only `## Issues` is injected (#2228 dropped Class members) and each planner writes
+# its own `## Accepted Tradeoffs (<stage>)` (#2924).
 set -uo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -84,14 +85,14 @@ UNIQUE_PLANNER_MARKER_XYZ_12345
 
 Do the work.
 
-## Risks
+## Accepted Tradeoffs (outline)
 
-Some risks.
+OWN_OUTLINE_TRADEOFF_MARKER — the planner's own stage, kept
 EOF
 
 OUT_FILE="$TMPDIR_BASE/assembled.md"
 EXIT_CODE=0
-ASSEMBLE_OUT=$(run_with_timeout bash "$ASSEMBLE" "$INTENT_FIXTURE" "$PLANNER_FIXTURE" "$OUT_FILE" 2>&1) || EXIT_CODE=$?
+ASSEMBLE_OUT=$(run_with_timeout bash "$ASSEMBLE" --source-kind intent "$INTENT_FIXTURE" "$PLANNER_FIXTURE" "$OUT_FILE" 2>&1) || EXIT_CODE=$?
 
 if [[ "$EXIT_CODE" == "0" ]]; then
     pass "(b) assemble-mandatory.sh: exit 0 on valid input"
@@ -106,91 +107,43 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# (d) count assertion — each mandatory section appears exactly once
+# (d) count — Issues once, the own `(outline)` section once, no Class members, no legacy copy
 # ---------------------------------------------------------------------------
+cnt() { grep -c "^## $1\$" "$OUT_FILE" 2>/dev/null || true; }
 if [[ -f "$OUT_FILE" ]]; then
-    c_issue=$(grep -c '^## Issues$' "$OUT_FILE" 2>/dev/null || echo 0)
-    c_class=$(grep -c '^## Class members$' "$OUT_FILE" 2>/dev/null || echo 0)
-    c_trade=$(grep -c '^## Accepted Tradeoffs$' "$OUT_FILE" 2>/dev/null || echo 0)
-
-    if [[ "$c_issue" -eq 1 ]]; then
-        pass "(d) count: '## Issues' appears exactly once"
-    else
-        fail "(d) count: '## Issues' expected 1, got $c_issue"
-    fi
-    if [[ "$c_class" -eq 1 ]]; then
-        pass "(d) count: '## Class members' appears exactly once"
-    else
-        fail "(d) count: '## Class members' expected 1, got $c_class"
-    fi
-    if [[ "$c_trade" -eq 1 ]]; then
-        pass "(d) count: '## Accepted Tradeoffs' appears exactly once"
-    else
-        fail "(d) count: '## Accepted Tradeoffs' expected 1, got $c_trade"
-    fi
+    for row in "Issues=1" "Class members=0" "Accepted Tradeoffs=0" "Accepted Tradeoffs (outline)=1"; do
+        h="${row%=*}"; want="${row##*=}"; got="$(cnt "$h")"
+        [[ "$got" -eq "$want" ]] && pass "(d) count: '## $h' appears $want time(s)" \
+            || fail "(d) count: '## $h' expected $want, got $got"
+    done
 else
     fail "(d) count: skipped — output file missing"
 fi
 
 # ---------------------------------------------------------------------------
-# (e) order assertion — H1 line 1, then Issue < Class members < Accepted Tradeoffs < Delivery plan
+# (e) order — H1 near the top, then Issues < Delivery plan
 # ---------------------------------------------------------------------------
 if [[ -f "$OUT_FILE" ]]; then
     ln_h1=$(awk '/^# /{print NR; exit}' "$OUT_FILE")
     ln_issue=$(awk '/^## Issues$/{print NR; exit}' "$OUT_FILE")
-    ln_class=$(awk '/^## Class members$/{print NR; exit}' "$OUT_FILE")
-    ln_trade=$(awk '/^## Accepted Tradeoffs$/{print NR; exit}' "$OUT_FILE")
     ln_delivery=$(awk '/^## Delivery plan$/{print NR; exit}' "$OUT_FILE")
-
-    # H1 at or very near top
-    if [[ -n "$ln_h1" && "$ln_h1" -le 3 ]]; then
-        pass "(e) order: H1 at or near top (line $ln_h1)"
-    else
-        fail "(e) order: H1 expected within first 3 lines, got line='$ln_h1'"
-    fi
-
-    if [[ -n "$ln_issue" && -n "$ln_class" && -n "$ln_trade" && -n "$ln_delivery" ]] && \
-       [[ "$ln_issue" -lt "$ln_class" ]] && \
-       [[ "$ln_class" -lt "$ln_trade" ]] && \
-       [[ "$ln_trade" -lt "$ln_delivery" ]]; then
-        pass "(e) order: Issues($ln_issue) < Class members($ln_class) < Accepted Tradeoffs($ln_trade) < Delivery plan($ln_delivery)"
-    else
-        fail "(e) order: expected Issues<Class<Tradeoffs<Delivery. Got issues=$ln_issue class=$ln_class trade=$ln_trade delivery=$ln_delivery"
-    fi
+    [[ -n "$ln_h1" && "$ln_h1" -le 3 ]] && pass "(e) order: H1 at or near top (line $ln_h1)" \
+        || fail "(e) order: H1 expected within first 3 lines, got line='$ln_h1'"
+    [[ -n "$ln_issue" && -n "$ln_delivery" && "$ln_issue" -lt "$ln_delivery" ]] \
+        && pass "(e) order: Issues($ln_issue) < Delivery plan($ln_delivery)" \
+        || fail "(e) order: expected Issues<Delivery. Got issues=$ln_issue delivery=$ln_delivery"
 else
     fail "(e) order: skipped — output file missing"
 fi
 
 # ---------------------------------------------------------------------------
-# (f) verbatim assertion — Accepted Tradeoffs body from intent equals
-#     Accepted Tradeoffs body in assembled output
+# (f) no carry — the intent's Accepted Tradeoffs body is not copied; the planner's own stays
 # ---------------------------------------------------------------------------
-if [[ -f "$OUT_FILE" ]]; then
-    INTENT_TRADE_BODY="$TMPDIR_BASE/intent-trade-body.txt"
-    OUT_TRADE_BODY="$TMPDIR_BASE/out-trade-body.txt"
-
-    awk '
-      BEGIN { inside=0 }
-      /^## Accepted Tradeoffs[[:space:]]*$/ { inside=1; next }
-      inside && /^## / { inside=0 }
-      inside { print }
-    ' "$INTENT_FIXTURE" > "$INTENT_TRADE_BODY"
-
-    awk '
-      BEGIN { inside=0 }
-      /^## Accepted Tradeoffs[[:space:]]*$/ { inside=1; next }
-      inside && /^## / { inside=0 }
-      inside { print }
-    ' "$OUT_FILE" > "$OUT_TRADE_BODY"
-
-    if diff -q "$INTENT_TRADE_BODY" "$OUT_TRADE_BODY" >/dev/null 2>&1; then
-        pass "(f) verbatim: '## Accepted Tradeoffs' body matches intent fixture"
-    else
-        fail "(f) verbatim: body mismatch. Diff:
-$(diff "$INTENT_TRADE_BODY" "$OUT_TRADE_BODY" 2>&1 | head -20)"
-    fi
+if [[ -f "$OUT_FILE" ]] && ! grep -qF "Best-effort only." "$OUT_FILE" \
+    && grep -qF "OWN_OUTLINE_TRADEOFF_MARKER" "$OUT_FILE"; then
+    pass "(f) no carry: intent tradeoffs not copied, planner's own '(outline)' body kept"
 else
-    fail "(f) verbatim: skipped — output file missing"
+    fail "(f) no carry: intent tradeoffs copied or own '(outline)' body lost"
 fi
 
 # ---------------------------------------------------------------------------
@@ -292,81 +245,62 @@ Also inside fence.
 ```
 
 End of delivery plan.
+
+## Accepted Tradeoffs (outline)
+
+なし
 PLANNER_FENCE_EOF
 
 OUT_FENCE="$TMPDIR_BASE/out-fence.md"
 EXIT_CODE=0
-ERR_FENCE=$(run_with_timeout bash "$ASSEMBLE" "$INTENT_FENCE" "$FENCE_PLANNER" "$OUT_FENCE" 2>&1) || EXIT_CODE=$?
+ERR_FENCE=$(run_with_timeout bash "$ASSEMBLE" --source-kind intent "$INTENT_FENCE" "$FENCE_PLANNER" "$OUT_FENCE" 2>&1) || EXIT_CODE=$?
 
-if [[ "$EXIT_CODE" == "0" && -f "$OUT_FENCE" ]]; then
-    if grep -q "This is inside a fence — should NOT be stripped." "$OUT_FENCE"; then
-        pass "(j) fence-aware: fenced content preserved in output"
-    else
-        fail "(j) fence-aware: fenced content lost. Output:
-$(cat "$OUT_FENCE" 2>/dev/null | head -40)"
-    fi
+if [[ "$EXIT_CODE" == "0" && -f "$OUT_FENCE" ]] && grep -q "This is inside a fence — should NOT be stripped." "$OUT_FENCE"; then
+    pass "(j) fence-aware: fenced content preserved in output"
 else
-    fail "(j) fence-aware: assemble failed (exit=$EXIT_CODE). Stderr: $ERR_FENCE"
+    fail "(j) fence-aware: assemble failed or fenced content lost (exit=$EXIT_CODE). Stderr: $ERR_FENCE"
 fi
 
 # ---------------------------------------------------------------------------
-# (k) legacy soft-fail (intent.md kind) — missing ## Class members
+# (k) legacy intent — `## Issue` (singular), no Class members: assembles, Issues normalized,
+#     and the legacy `## Accepted Tradeoffs` is not copied (#2924)
 # ---------------------------------------------------------------------------
 LEGACY_INTENT="$TMPDIR_BASE/legacy-intent.md"
-cat > "$LEGACY_INTENT" << 'EOF'
-# Legacy intent (pre-#462)
-
-## Issue
-
-Old issue body.
-
-## Accepted Tradeoffs
-
-- legacy tradeoff
-EOF
-
+printf '%s\n' "# Legacy intent (pre-#462)" "" "## Issue" "" "Old issue body." "" \
+    "## Accepted Tradeoffs" "" "- legacy tradeoff" > "$LEGACY_INTENT"
 OUT_LEGACY="$TMPDIR_BASE/out-legacy.md"
 EXIT_CODE=0
 ERR_LEGACY=$(run_with_timeout bash "$ASSEMBLE" --source-kind intent \
     "$LEGACY_INTENT" "$PLANNER_FIXTURE" "$OUT_LEGACY" 2>&1) || EXIT_CODE=$?
-
-if [[ "$EXIT_CODE" == "0" ]]; then
-    pass "(k) legacy soft-fail: exit 0 for intent-kind missing Class members"
+if [[ "$EXIT_CODE" == "0" && -f "$OUT_LEGACY" ]] && grep -q '^## Issues$' "$OUT_LEGACY" \
+    && ! grep -qF "legacy tradeoff" "$OUT_LEGACY"; then
+    pass "(k) legacy intent: exit 0, '## Issue' normalized, legacy tradeoffs not copied"
 else
-    fail "(k) legacy soft-fail: expected exit 0, got $EXIT_CODE. Stderr: $ERR_LEGACY"
-fi
-
-if [[ -f "$OUT_LEGACY" ]]; then
-    if grep -q "none — legacy intent.md, pre-#462" "$OUT_LEGACY"; then
-        pass "(k) legacy soft-fail: placeholder 'none — legacy intent.md, pre-#462' present"
-    else
-        fail "(k) legacy soft-fail: expected placeholder missing. Output:
-$(cat "$OUT_LEGACY" 2>/dev/null | head -30)"
-    fi
-else
-    fail "(k) legacy soft-fail: output file not created"
+    fail "(k) legacy intent: expected exit 0 with Issues and no legacy copy (exit=$EXIT_CODE). Stderr: $ERR_LEGACY"
 fi
 
 # ---------------------------------------------------------------------------
-# (l) legacy hard-fail (outline.md kind) — missing ## Class members → non-zero exit
+# (l) --source-kind outline makes the own stage `detail`: a planner with only `(outline)` fails
 # ---------------------------------------------------------------------------
-OUT_BAD="$TMPDIR_BASE/out-bad.md"
-ERR_FILE="$TMPDIR_BASE/legacy-outline-err.txt"
+OUT_BAD="$TMPDIR_BASE/out-bad-detail.md"
 EXIT_CODE=0
-run_with_timeout bash "$ASSEMBLE" --source-kind outline \
-    "$LEGACY_INTENT" "$PLANNER_FIXTURE" "$OUT_BAD" 2>"$ERR_FILE" >/dev/null || EXIT_CODE=$?
-
-if [[ "$EXIT_CODE" != "0" ]]; then
-    pass "(l) legacy hard-fail: non-zero exit ($EXIT_CODE) for outline-kind missing Class members"
+ERR_BAD=$(run_with_timeout bash "$ASSEMBLE" --source-kind outline \
+    "$LEGACY_INTENT" "$PLANNER_FIXTURE" "$OUT_BAD" 2>&1) || EXIT_CODE=$?
+if [[ "$EXIT_CODE" == "4" && ! -f "$OUT_BAD" ]]; then
+    pass "(l) own stage: outline-kind source with no '(detail)' section → exit 4, no output"
 else
-    fail "(l) legacy hard-fail: expected non-zero exit, got 0"
+    fail "(l) own stage: expected exit 4 and no output, got $EXIT_CODE. Stderr: $ERR_BAD"
 fi
 
-if grep -qiE "contract violation" "$ERR_FILE" 2>/dev/null; then
-    pass "(l) legacy hard-fail: stderr contains 'contract violation' (case-insensitive)"
+# (l2) an unknown --source-kind value is a usage error: exit 2, stderr names it, no output
+OUT_KIND="$TMPDIR_BASE/out-bad-kind.md"
+EXIT_CODE=0
+ERR_KIND=$(run_with_timeout bash "$ASSEMBLE" --source-kind detail \
+    "$LEGACY_INTENT" "$PLANNER_FIXTURE" "$OUT_KIND" 2>&1) || EXIT_CODE=$?
+if [[ "$EXIT_CODE" == "2" && ! -f "$OUT_KIND" && "$ERR_KIND" == *"invalid --source-kind 'detail'"* ]]; then
+    pass "(l2) --source-kind detail → exit 2, reason on stderr, no output"
 else
-    fail "(l) legacy hard-fail: stderr missing 'contract violation'. Stderr:
-$(cat "$ERR_FILE" 2>/dev/null | head -20)"
+    fail "(l2) invalid --source-kind: expected exit 2 + reason + no output, got $EXIT_CODE. Stderr: $ERR_KIND"
 fi
 
 # ---------------------------------------------------------------------------
@@ -393,7 +327,7 @@ m_assemble() { # <out> <err-file> -> exit code on stdout
     local code=0
     run_with_timeout env TMPDIR="$M_ROOTS" TMP="$M_ROOTS" TEMP="$M_ROOTS" \
         WORKFLOW_PLANS_DIR="$M_PLANS" \
-        bash "$ASSEMBLE" "$INTENT_FIXTURE" "$PLANNER_FIXTURE" "$1" \
+        bash "$ASSEMBLE" --source-kind intent "$INTENT_FIXTURE" "$PLANNER_FIXTURE" "$1" \
         2>"$2" >/dev/null || code=$?
     printf '%s' "$code"
 }
@@ -476,7 +410,7 @@ cp "$PLANNER_FIXTURE" "$M_INPLACE"
 EXIT_CODE=0
 ERR_M_INPLACE=$(run_with_timeout env TMPDIR="$M_ROOTS" TMP="$M_ROOTS" TEMP="$M_ROOTS" \
     WORKFLOW_PLANS_DIR="$M_PLANS" \
-    bash "$ASSEMBLE" "$INTENT_FIXTURE" "$M_INPLACE" "$M_INPLACE" 2>&1) || EXIT_CODE=$?
+    bash "$ASSEMBLE" --source-kind intent "$INTENT_FIXTURE" "$M_INPLACE" "$M_INPLACE" 2>&1) || EXIT_CODE=$?
 
 if [[ "$EXIT_CODE" == "0" && -f "$M_INPLACE" ]]; then
     pass "(m) out-path: in-place mode (arg2 == arg3) still exits 0 -- the constraint is on the destination root, not on distinctness"

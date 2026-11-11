@@ -13,7 +13,7 @@ echo "=== Resolver error / edge / containment cases ==="
 # TL3 gap (TL2 substrate is not POSIX; a real POSIX host also verifies): S4 — an
 # unopenable candidate is skipped (mode bits are advisory on MSYS); S9-contain /
 # S9-fallback and S18 — run only while git-bash honours
-# MSYS=winsymlinks:nativestrict; S12 and S18 — built by emptying PATH, so an
+# MSYS=winsymlinks:nativestrict; S12 and S18 — built on a restricted PATH, so an
 # absolute-path realpath call is out of reach; I1 — a same-length in-place
 # rewrite (needs a hasher). Closest-to-action: check-verification-gate.sh.
 # --- S0: guard, shared with the injection sibling. Without an executable
@@ -83,10 +83,12 @@ fi
 # `[[ -s dir ]]` is true for a directory, so a size-only check would hand
 # review-plan-codex a path it can never read; the resolver must skip to the
 # next candidate instead.
-P_DIR="$(make_plans s3 outline intent)"
+P_DIR="$(make_staged s3 outline intent)"
 mkdir -p "$P_DIR/SID-detail.md"
 resolve "$P_DIR" SID detail outline intent
-assert_eq "S3: directory candidate skipped → outline path" "$P_DIR/SID-outline.md" "$RES_OUT"
+assert_eq "S3: directory candidate skipped → the merged file is printed" "$(merged_path SID detail)" "$(norm "$RES_OUT")"
+assert_eq "S3: the merged file holds outline+intent only — the directory added no detail section" \
+  "intent outline" "$(stage_set "$RES_OUT")"
 assert_eq "S3: directory candidate → exit 0" "0" "$RES_RC"
 
 # --- S4: a candidate that exists but is UNREADABLE is skipped.
@@ -97,14 +99,22 @@ assert_eq "S3: directory candidate → exit 0" "0" "$RES_RC"
 # Because: mode bits are advisory on Windows/MSYS, so the precondition the case
 #          rests on does not exist — asserting it would prove nothing.
 # TL3 gap: only a real POSIX filesystem exercises the unopenable-candidate path.
-P_UNREAD="$(make_plans s4 outline intent)"
-printf '# detail\n\nsecret\n' > "$P_UNREAD/SID-detail.md"
+P_UNREAD="$(make_staged s4 outline intent)"
+printf '# detail\n\n## Accepted Tradeoffs (detail)\n\nS4-UNREAD-SECRET-2924\n' > "$P_UNREAD/SID-detail.md"
 chmod 000 "$P_UNREAD/SID-detail.md" 2>/dev/null || true
 if [[ -r "$P_UNREAD/SID-detail.md" ]]; then
   skip "S4: unreadable-candidate case (chmod 000 ineffective on this filesystem — file still readable)"
 else
   resolve "$P_UNREAD" SID detail outline intent
-  assert_eq "S4: unreadable detail.md skipped → outline path" "$P_UNREAD/SID-outline.md" "$RES_OUT"
+  # #2924: the resolver prints the merged control-dir file; the skip shows as the
+  # detail section's absence from it, not as a different printed path.
+  assert_eq "S4: unreadable detail.md → the merged file is printed" "$(merged_path SID detail)" "$(norm "$RES_OUT")"
+  assert_eq "S4: unreadable detail.md skipped → only intent+outline merged" "intent outline" "$(stage_set "$RES_OUT")"
+  if grep -qF 'S4-UNREAD-SECRET-2924' "$RES_OUT" 2>/dev/null; then
+    fail "S4: the unreadable candidate's body reached the merged file"
+  else
+    pass "S4: the unreadable candidate's body is absent from the merged file"
+  fi
   assert_eq "S4: unreadable candidate → exit 0" "0" "$RES_RC"
 fi
 chmod 644 "$P_UNREAD/SID-detail.md" 2>/dev/null || true
@@ -132,8 +142,10 @@ assert_contained() {
       return
       ;;
   esac
-  case "$RES_OUT" in
-    "$dir"/*) pass "$name — contained inside PLANS_DIR" ;;
+  # #2924: the merged file lives in the state control dir; either spelling may match
+  # (cygpath rewrites an over-long path, so the raw one is checked as well).
+  case "$RES_OUT|$(norm "$RES_OUT")" in
+    "$dir"/*|"$WORKFLOW_STATE_DIR"/*.control/accepted-tradeoffs.*.md"|"*|*"|$WORKFLOW_STATE_DIR"/*.control/accepted-tradeoffs.*.md) pass "$name — contained inside PLANS_DIR or the merged control file" ;;
     *) fail "$name — emitted a path outside PLANS_DIR: [$RES_OUT]" ;;
   esac
 }
@@ -169,11 +181,13 @@ canon_verdict() {
 #          SeCreateSymbolicLink), not a filesystem feature, so the escape the
 #          case exists to refute cannot be constructed on this host.
 # TL3 gap: only a real POSIX host builds the link and exercises the path.
-P_LINK="$(make_plans s9 outline intent)"
+P_LINK="$(make_staged s9 outline intent)"
 LINK_TARGET="$TMPROOT/symlink-escape-detail.md"
-# A distinctive body, so the stdout assertion compares CONTENT, not existence.
+# A distinctive body, so the stdout assertion compares CONTENT, not existence. It sits
+# under the detail stage heading, so a resolver that followed the link would merge it.
 LINK_SECRET="SYMLINK-ESCAPE-SECRET-2154-QZWX"
-printf '# outside the plans dir\n\n%s\n' "$LINK_SECRET" > "$LINK_TARGET"
+printf '# outside the plans dir\n\n## Accepted Tradeoffs (detail)\n\n%s\n' "$LINK_SECRET" > "$LINK_TARGET"
+S9_CTL="$WORKFLOW_STATE_DIR/SID.control"
 # Protection Pattern 1: the symlink TARGET is the protected asset. Snapshot it so
 # the rows below can assert it survived the resolution unmodified — a resolver
 # that opened it for write, truncated it, or rewrote it in place would otherwise
@@ -195,12 +209,13 @@ if (export MSYS=winsymlinks:nativestrict; ln -s "$LINK_TARGET" "$P_LINK/SID-deta
   # S9-control — the canonicalizer itself, proven on an ordinary candidate.
   # Without it the residual row below could "pass" against a canon() that had
   # simply stopped resolving anything.
+  # #2924: the printed file is the merged one, so "inside" means inside the control dir.
   resolve "$P_LINK" SID outline intent
-  S9_CTRL="$(canon_verdict "$RES_OUT" "$P_LINK")"
+  S9_CTRL="$(canon_verdict "$RES_OUT" "$S9_CTL")"
   if [[ "$S9_CTRL" == "unknown" ]]; then
     skip "S9-control: canonical verdict (no realpath / readlink -f on PATH)"
   else
-    assert_eq "S9-control: a plain in-directory candidate canonically resolves INSIDE PLANS_DIR" "inside" "$S9_CTRL"
+    assert_eq "S9-control: a plain in-directory chain canonically resolves INSIDE the control dir" "inside" "$S9_CTRL"
   fi
 
   # S9-contain — a REQUIREMENT under the amended plan Step 1 containment clause:
@@ -213,14 +228,21 @@ if (export MSYS=winsymlinks:nativestrict; ln -s "$LINK_TARGET" "$P_LINK/SID-deta
   #          the emitted path really points, and a lexical verdict is precisely
   #          the false green this row exists to remove.
   resolve "$P_LINK" SID detail outline intent
-  assert_eq "S9-contain: escaping symlink candidate skipped → next candidate (outline) emitted" \
-    "$P_LINK/SID-outline.md" "$RES_OUT"
+  assert_eq "S9-contain: escaping symlink candidate skipped → the merged file is printed" \
+    "$(merged_path SID detail)" "$(norm "$RES_OUT")"
   assert_eq "S9-contain: escaping symlink candidate → exit 0 (skip, not refusal)" "0" "$RES_RC"
-  S9_REAL="$(canon_verdict "$RES_OUT" "$P_LINK")"
+  assert_eq "S9-contain: the merged file holds no detail section — the link was not read" \
+    "intent outline" "$(stage_set "$RES_OUT")"
+  if grep -qF -- "$LINK_SECRET" "$RES_OUT" 2>/dev/null; then
+    fail "S9-contain: the external file's content was merged into the forwarded file"
+  else
+    pass "S9-contain: the external file's content is absent from the merged file"
+  fi
+  S9_REAL="$(canon_verdict "$RES_OUT" "$S9_CTL")"
   if [[ "$S9_REAL" == "unknown" ]]; then
     skip "S9-contain canonical verdict: no realpath / readlink -f on PATH"
   else
-    assert_eq "S9-contain: the emitted path canonically stays INSIDE PLANS_DIR" "inside" "$S9_REAL"
+    assert_eq "S9-contain: the emitted path canonically stays INSIDE the control dir" "inside" "$S9_REAL"
   fi
 
   # S9-leak — a REQUIREMENT, and the contract-bound half of C1: the resolver is
@@ -288,29 +310,27 @@ else
   skip "S9: symlink-escape case (symlink creation unavailable on this filesystem — ln -s failed; Windows/MSYS without SeCreateSymbolicLink)"
 fi
 
-# --- S12 (fail-closed): where containment CANNOT be verified — neither realpath
-# nor `readlink -f` reachable — the amended Step 1 requires the candidate to be
-# SKIPPED, not emitted unchecked. Built by emptying PATH for the resolver's own
-# process (the one portable way to drop both canonicalizers); bash and the
-# resolver are named absolutely so it still starts. Every candidate is then
-# unverifiable, so only the EXEMPT last candidate may be emitted — the carve-out
-# needs an escape DETERMINED by canonicalization (S9-fallback) or an unverifiable
-# SYMLINK (S18 below), and this fixture is neither.
-# SKIPPED (when the resolver cannot complete without PATH): the whole row.
-# Because: a resolver that dies on an empty PATH never reached the branch.
+# --- S12 (fail-closed): with neither realpath nor `readlink -f` reachable, every
+# candidate is SKIPPED, not read unchecked. PATH is restricted to tool_path_dir's
+# wrappers (node + coreutils, no canonicalizer — #2924 needs node). The exempt last
+# candidate keeps exit 0, so a merged file with NO stage section is printed; the
+# carve-out needs a canonicalized escape (S9-fallback) or a symlink (S18).
+# SKIPPED (when the resolver cannot complete on the restricted PATH): the whole row.
+# Because: a resolver that dies on that PATH never reached the branch.
 BASH_BIN="$(command -v bash)"
-P_FC="$(make_plans s12 detail outline intent)"
-FC_OUT="$(PATH="" "$BASH_BIN" "$RESOLVER" "$P_FC" SID detail outline intent 2>/dev/null)"
+NOCANON_PATH="$(tool_path_dir "$TMPROOT/s12-tools")"
+P_FC="$(make_staged s12 detail outline intent)"
+FC_OUT="$(PATH="$NOCANON_PATH" "$BASH_BIN" "$RESOLVER" "$P_FC" SID detail outline intent 2>/dev/null)"
 FC_RC=$?
-# S18 needs to know whether this substrate runs the resolver without a PATH at all:
-# there a refusal and a crash both exit non-zero, so it cannot re-derive the fact.
+# S18 reuses this fact: there a refusal and a crash both exit non-zero.
 NOPATH_RAN=0
 if [[ "$FC_RC" -ne 0 || -z "$FC_OUT" ]]; then
-  skip "S12: fail-closed-without-canonicalizer case (the resolver did not complete with an empty PATH: rc=$FC_RC)"
+  skip "S12: fail-closed-without-canonicalizer case (the resolver did not complete on the restricted PATH: rc=$FC_RC)"
 else
   NOPATH_RAN=1
-  assert_eq "S12: no canonicalizer reachable → every candidate skipped fail-closed, exempt last candidate emitted" \
-    "$P_FC/SID-intent.md" "$FC_OUT"
+  assert_eq "S12: no canonicalizer reachable → the merged file is printed" \
+    "$(merged_path SID detail)" "$(norm "$FC_OUT")"
+  assert_eq "S12: every candidate skipped fail-closed → no stage section merged" "" "$(stage_set "$FC_OUT")"
 fi
 
 # --- S18: the combination S9-fallback and S12 each cover only HALF — an escaping
@@ -319,10 +339,10 @@ fi
 # ordinary regular file is still emitted at exit 0 when containment is merely
 # UNDECIDABLE. Neither reaches the branch refusing an UNDECIDABLE candidate that is
 # ALSO a symlink — an unverifiable link is an attack signature, not a routine miss.
-# Fixture: S12's empty-PATH technique + S9's ln -s guard.
-# SKIPPED (when ln -s fails, or S12 found the resolver needs a PATH): the refusal.
+# Fixture: S12's restricted-PATH technique + S9's ln -s guard.
+# SKIPPED (when ln -s fails, or S12 found the resolver dies on that PATH): the refusal.
 # Because: symlink creation is a Windows privilege (SeCreateSymbolicLink), and a
-#          resolver that dies on an empty PATH never reached the branch under test.
+#          resolver that dies on the restricted PATH never reached the branch under test.
 P_NC="$TMPROOT/plans-s18"
 mkdir -p "$P_NC"
 NC_TARGET="$TMPROOT/nocanon-symlink-target.md"
@@ -330,7 +350,7 @@ NC_SECRET="NOCANON-SYMLINK-SECRET-2154-QZWX"
 printf '# outside the plans dir\n\n%s\n' "$NC_SECRET" > "$NC_TARGET"
 NC_TARGET_BEFORE="$(cat "$NC_TARGET" 2>/dev/null || printf 'MISSING')"
 if [[ "$NOPATH_RAN" -eq 0 ]]; then
-  skip "S18: undecidable-symlink refusal (the resolver did not complete with an empty PATH — see S12)"
+  skip "S18: undecidable-symlink refusal (the resolver did not complete on the restricted PATH — see S12)"
 elif (export MSYS=winsymlinks:nativestrict; ln -s "$NC_TARGET" "$P_NC/SID-detail.md" 2>/dev/null) && [[ -L "$P_NC/SID-detail.md" ]]; then
   # Fixture precondition (S9-0's shape): without a traversing link every row below
   # judges a broken link instead of an unverifiable escape.
@@ -341,7 +361,7 @@ elif (export MSYS=winsymlinks:nativestrict; ln -s "$NC_TARGET" "$P_NC/SID-detail
   fi
   NC_ERR="$TMPROOT/s18-stderr.txt"
   rm -f "$NC_ERR"
-  NC_OUT="$(PATH="" "$BASH_BIN" "$RESOLVER" "$P_NC" SID detail 2>"$NC_ERR")"
+  NC_OUT="$(PATH="$NOCANON_PATH" "$BASH_BIN" "$RESOLVER" "$P_NC" SID detail 2>"$NC_ERR")"
   NC_RC=$?
   if [[ "$NC_RC" -eq 0 ]]; then
     fail "S18: unverifiable symlink as the lone candidate → exit 0; the unverifiable path reaches review-plan-codex's -f: [$NC_OUT]"
@@ -378,10 +398,13 @@ fi
 #          presented at all — see S10/S11.
 P_DOTS="$TMPROOT/plans..archive"
 if mkdir -p "$P_DOTS" 2>/dev/null && [[ -d "$P_DOTS" ]]; then
-  printf '# intent\n\nkeep it\n' > "$P_DOTS/SID-intent.md"
+  printf '# intent\n\n## Accepted Tradeoffs (intent)\n\nS17-BODY-2154\n' > "$P_DOTS/SID-intent.md"
   resolve_e "$P_DOTS" SID detail outline intent
-  assert_eq "S17: a plans dir named 'plans..archive' resolves to its exact intent path" \
-    "$P_DOTS/SID-intent.md" "$RES_OUT"
+  assert_eq "S17: a plans dir named 'plans..archive' → the merged file is printed" \
+    "$(merged_path SID detail)" "$(norm "$RES_OUT")"
+  # Not over-blocked means the intent file was READ: its body reached the merged file.
+  assert_eq "S17: the lookalike dir's intent body is merged" \
+    "S17-BODY-2154" "$(grep -xF S17-BODY-2154 "$RES_OUT" 2>/dev/null || printf 'ABSENT')"
   assert_eq "S17: sanctioned '..'-containing name → exit 0 (not over-blocked)" "0" "$RES_RC"
   assert_contained "S17: emitted path" "$P_DOTS"
 else

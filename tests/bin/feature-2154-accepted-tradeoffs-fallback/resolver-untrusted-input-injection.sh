@@ -100,11 +100,14 @@ fi
 #          up — see S10.
 P_SPACE="$TMPROOT/plans dir (2154) & 'quoted' [x]"
 if mkdir -p "$P_SPACE" 2>/dev/null && [[ -d "$P_SPACE" ]]; then
-  printf '# outline\n\nkeep it\n' > "$P_SPACE/SID-outline.md"
-  printf '# intent\n\nkeep it\n' > "$P_SPACE/SID-intent.md"
+  printf '# outline\n\n## Accepted Tradeoffs (outline)\n\nkeep it\n' > "$P_SPACE/SID-outline.md"
+  printf '# intent\n\n## Accepted Tradeoffs (intent)\n\nkeep it\n' > "$P_SPACE/SID-intent.md"
   resolve "$P_SPACE" SID detail outline intent
-  assert_eq "S11: spaces + shell-special chars in PLANS_DIR → exact outline path" \
-    "$P_SPACE/SID-outline.md" "$RES_OUT"
+  assert_eq "S11: spaces + shell-special chars in PLANS_DIR → the merged file is printed" \
+    "$(merged_path SID detail)" "$(norm "$RES_OUT")"
+  # A word-splitting resolver would open neither file; both stages present proves both reads.
+  assert_eq "S11: both candidates under the spaced dir were read into the merged file" \
+    "intent outline" "$(stage_set "$RES_OUT")"
   assert_eq "S11: spaces + shell-special chars in PLANS_DIR → exit 0" "0" "$RES_RC"
 else
   skip "S11: spaced plans-dir case (mkdir refused a directory name carrying spaces, parentheses, '&' and quotes)"
@@ -320,10 +323,14 @@ while IFS='|' read -r r_pos r_name; do
     s29_sid="SID29"; s29_sfx="st${s29_c}age"
   fi
   s29_want="$P29/$s29_sid-$s29_sfx.md"
-  if printf '# stage\n\n%s\n' "S29-BODY-$r_pos-$r_name" > "$s29_want" 2>/dev/null && [[ -s "$s29_want" ]]; then
+  # #2924: a plain-token id names a merged control file; a control-char id has none, so
+  # the candidate itself is forwarded. The body sits under the legacy heading either way.
+  s29_emit="$s29_want"
+  [[ "$r_pos" == "suffix" ]] && s29_emit="$(merged_path "$s29_sid" detail)"
+  if printf '# stage\n\n## Accepted Tradeoffs\n\n%s\n' "S29-BODY-$r_pos-$r_name" > "$s29_want" 2>/dev/null && [[ -s "$s29_want" ]]; then
     pass "S29[$r_pos/$r_name]-0: a candidate bearing an embedded $r_name really exists here — the sanctioned input is presentable"
     resolve_e "$P29" "$s29_sid" detail "$s29_sfx"
-    assert_eq "S29[$r_pos/$r_name]: the sanctioned candidate resolves to its exact path, control character intact" "$s29_want" "$RES_OUT"
+    assert_eq "S29[$r_pos/$r_name]: the sanctioned candidate is forwarded (itself, or merged), control character intact" "$s29_emit" "$([[ "$r_pos" == "suffix" ]] && norm "$RES_OUT" || printf '%s' "$RES_OUT")"
     assert_eq "S29[$r_pos/$r_name]: the sanctioned candidate → exit 0 (not over-blocked)" "0" "$RES_RC"
     assert_eq "S29[$r_pos/$r_name]: selecting it is silent — no refusal diagnostic on stderr" "" "$RES_ERR"
     assert_contained "S29[$r_pos/$r_name]: sanctioned emitted path" "$P29"
@@ -411,10 +418,13 @@ while IFS='|' read -r a30_pos a30_char; do
   fi
   a30_want="$P30/$a30_sid-$a30_sfx.md"
   a30_body="S30-BODY-$a30_pos-$a30_char"
-  if printf '# stage\n\n%s\n' "$a30_body" > "$a30_want" 2>/dev/null && [[ -s "$a30_want" ]]; then
+  # #2924: S29's split — a plain-token id is merged, a metacharacter id forwards the file.
+  a30_emit="$a30_want"
+  [[ "$a30_pos" == "suffix" ]] && a30_emit="$(merged_path "$a30_sid" detail)"
+  if printf '# stage\n\n## Accepted Tradeoffs\n\n%s\n' "$a30_body" > "$a30_want" 2>/dev/null && [[ -s "$a30_want" ]]; then
     pass "S30[$a30_pos/$a30_char]-0: a candidate named with a literal '$a30_char' really exists here — the sanctioned input is presentable"
     resolve_e "$P30" "$a30_sid" detail "$a30_sfx"
-    assert_eq "S30[$a30_pos/$a30_char]: the sanctioned candidate resolves to its exact path, metacharacter intact" "$a30_want" "$RES_OUT"
+    assert_eq "S30[$a30_pos/$a30_char]: the sanctioned candidate is forwarded (itself, or merged), metacharacter intact" "$a30_emit" "$([[ "$a30_pos" == "suffix" ]] && norm "$RES_OUT" || printf '%s' "$RES_OUT")"
     assert_eq "S30[$a30_pos/$a30_char]: the sanctioned candidate → exit 0 (not over-blocked)" "0" "$RES_RC"
     assert_eq "S30[$a30_pos/$a30_char]: selecting it is silent — no refusal diagnostic on stderr" "" "$RES_ERR"
     assert_contained "S30[$a30_pos/$a30_char]: sanctioned emitted path" "$P30"

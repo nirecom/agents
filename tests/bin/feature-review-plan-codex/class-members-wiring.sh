@@ -40,10 +40,10 @@ esac
 CW_TRADEOFF_MARKER="TRADEOFF_MARKER_2338_QZWX"
 CW_CLASSMEMBER_MARKER="CLASSMEMBER_MARKER_2338_QZWX"
 
-# --accepted-tradeoffs source (the outline): has Accepted Tradeoffs but,
-# post-#2228, NO Class members section.
+# --accepted-tradeoffs source: staged (#2924) + legacy Accepted Tradeoffs, NO Class members (#2228).
 CW_TRADEOFFS_FILE="$CW_TMPROOT/outline.md"
-printf '# Outline\n\n## Accepted Tradeoffs\n\n- %s: settled decision.\n' "$CW_TRADEOFF_MARKER" > "$CW_TRADEOFFS_FILE"
+printf '# Outline\n\n## Accepted Tradeoffs (outline)\n\n- %s: settled decision.\n' "$CW_TRADEOFF_MARKER" > "$CW_TRADEOFFS_FILE"
+printf '\n## Accepted Tradeoffs\n\n- LEGACY_%s: legacy heading.\n' "$CW_TRADEOFF_MARKER" >> "$CW_TRADEOFFS_FILE"
 
 # --class-members source (intent.md): the single canonical home of Class members.
 CW_INTENT_FILE="$CW_TMPROOT/intent.md"
@@ -94,9 +94,9 @@ cw_assert_not_in_prompt() {
 cw_run_rpc --class-members "$CW_INTENT_FILE"
 cw_assert_in_prompt "E1: Class members triage from intent.md reaches the codex prompt via --class-members" "$CW_CLASSMEMBER_MARKER"
 
-# E2: split-source anti-vacuity — the Accepted Tradeoffs from the outline source
-# still reaches the prompt in the same run.
-cw_assert_in_prompt "E2: Accepted Tradeoffs from --accepted-tradeoffs still reaches the prompt" "$CW_TRADEOFF_MARKER"
+# E2: split-source anti-vacuity — staged (#2924) and legacy Accepted Tradeoffs both reach the prompt.
+cw_assert_in_prompt "E2: Accepted Tradeoffs (outline) from --accepted-tradeoffs still reaches the prompt" "$CW_TRADEOFF_MARKER: settled decision"
+cw_assert_in_prompt "E2b: legacy ## Accepted Tradeoffs still reaches the prompt (compat, #2924)" "LEGACY_$CW_TRADEOFF_MARKER: legacy heading"
 
 # E1-neg (both verdicts): without --class-members, no Class members marker is in
 # the prompt — proving E1's marker came from intent.md, not the tradeoffs source.
