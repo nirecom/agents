@@ -56,7 +56,7 @@ if [[ "$BOOTSTRAP_MODE" == "1" ]]; then
     MERGE_SHA="$BOOTSTRAP_COMMIT_SHA"
 
     # Phase 3: Restart detection — feed empty PR_NUMBER; lib must tolerate "".
-    RESTART_OUTPUT="$(bash "$LIB_DIR/detect-restart.sh" "$PR_NUMBER" 2>/dev/null || true)"
+    RESTART_OUTPUT="$(bash "$LIB_DIR/detect-restart.sh" "$PR_NUMBER" "$WORKTREE" 2>/dev/null || true)"
 
     parse_cat() {
         printf '%s\n' "$RESTART_OUTPUT" | tr -d '\r' \
@@ -210,7 +210,7 @@ if [[ -f "$WORKTREE/WORKTREE_NOTES.md" ]]; then
 fi
 
 # Phase 3: Restart detection (four categories).
-RESTART_OUTPUT="$(bash "$LIB_DIR/detect-restart.sh" "$PR_NUMBER")"
+RESTART_OUTPUT="$(bash "$LIB_DIR/detect-restart.sh" "$PR_NUMBER" "$WORKTREE")"
 
 parse_cat() {
   printf '%s\n' "$RESTART_OUTPUT" | tr -d '\r' \

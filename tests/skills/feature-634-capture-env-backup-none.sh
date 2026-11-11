@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/skills/feature-634-capture-env-backup-none.sh
 # Tests: skills/worktree-end/scripts/capture-env.sh
-# Tags: worktree, end, cleanup, skill, bin, backup, scope:issue-specific
+# Tags: worktree, end, cleanup, skill, bin, backup, scope:issue-specific, detect-restart
 #
 # Unit tests for the BACKUP_DIR=(none) / missing-dir fallback logic in:
 #   skills/worktree-end/scripts/capture-env.sh
@@ -381,12 +381,21 @@ test_G4_missing_dir_falls_back() {
     pass "G4: missing BACKUP_DIR triggers same fallback as '(none)'"
 }
 
+# G5 (#1694): both detect-restart.sh calls (bootstrap + normal path) pass "$WORKTREE" as arg 2.
+test_G5_detect_restart_receives_worktree() {
+    local n_all n_ok
+    n_all="$(grep -c 'detect-restart\.sh"' "$SCRIPT")"
+    n_ok="$(grep -c 'detect-restart\.sh" "\$PR_NUMBER" "\$WORKTREE"' "$SCRIPT")"
+    if [ "$n_all" = "2" ] && [ "$n_ok" = "2" ]; then pass "G5: both detect-restart.sh calls pass \"\$WORKTREE\""; else fail "G5: calls=$n_all with-WORKTREE=$n_ok (want 2/2)"; fi
+}
+
 # ============ Run all ============
 
 test_G1_none_literal_falls_back
 test_G2_none_literal_no_notes
 test_G3_real_backup_dir_still_works
 test_G4_missing_dir_falls_back
+test_G5_detect_restart_receives_worktree
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
