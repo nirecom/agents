@@ -458,3 +458,7 @@ caseEnd();
 caseBegin("malformed-stdin-fail-open", "hooks/protect-user-block/run.js");
 gap.malformedStdinFailOpen();
 caseEnd();
+
+caseBegin("title-edit-adds-block:one-edit-call-descriptor", "hooks/protect-user-block/run.js");
+gap.titleEditAddsBlock(gx);
+caseEnd();

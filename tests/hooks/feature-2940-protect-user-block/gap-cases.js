@@ -193,8 +193,30 @@ function malformedStdinFailOpen() {
   });
 }
 
+// A title change whose same call adds a <user> block: gh issue edit, REST PATCH and GraphQL updateIssue.
+const TITLE_EDIT_ADDS_BLOCK = [
+  "gh issue edit 5 -t New -b '<user>x</user>'",
+  "gh api -X PATCH repos/example-owner/example-repo/issues/5 -f title=New -f body='<user>x</user>'",
+  "gh api graphql -f query='mutation($id:ID!,$title:String,$body:String){updateIssue(input:{id:$id,title:$title,body:$body}){issue{id}}}' -f id=I_1 -f title=New -f body='<user>x</user>'",
+];
+
+function titleEditAddsBlock({ run, one }) {
+  test("a title edit that adds a block in the same call hands title and body to ONE edit call; its rc decides", () => {
+    for (const cmd of TITLE_EDIT_ADDS_BLOCK) {
+      const r = run(cmd, { verdicts: { edit: 1, default: 0 } });
+      assert.strictEqual(r.decision, "deny", cmd);
+      const c = one(r);
+      assert.deepStrictEqual([flag(c, "--op"), flag(c, "--new-title"), c.body], ["edit", "New", "<user>x</user>"], cmd);
+      assert.ok(!has(c, "--title-unreadable") && !has(c, "--body-unreadable"), `${cmd}: ${c.args.join(" ")}`);
+      // Sanctioned counterpart: the hook adds no deny of its own, so a CLI allow gives no decision.
+      const allowed = run(cmd, { verdicts: { default: 0 } });
+      assert.deepStrictEqual([allowed.decision, allowed.calls.length], ["none", 1], cmd);
+    }
+  });
+}
+
 module.exports = {
   graphqlNonLiteralQuery, ghApiFailClosed, restNonLiteralFields, ghRepoPlaceholderAndAnomalies,
   unreadableIssueTarget, bodyVsBodyFileLastWins, graphqlStateOnlyUpdate, issueNewAlias,
-  multiLineCommand, malformedStdinFailOpen,
+  multiLineCommand, malformedStdinFailOpen, titleEditAddsBlock,
 };
