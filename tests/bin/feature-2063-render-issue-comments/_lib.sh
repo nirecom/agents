@@ -10,7 +10,7 @@ command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
 # The driver harness is reused rather than re-mocked: P2 needs a REAL Path A
 # context.md, and its gh/wip mocks plus pass/fail/finish are that harness's job.
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/feature-workflow-init-driver/_lib.sh"
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/feature-workflow-init-driver/_lib.sh"
 
 CLI="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/workflow/render-issue-comments"
 WORK="$ROOT_TMP/ric-work"

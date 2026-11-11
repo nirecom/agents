@@ -32,7 +32,7 @@ fi
 # A1: CANONICAL_SECTIONS.outline has the exact canonical order.
 _a1="$(node -e "
 const s = require('$PLAN_SCHEMA_NODE');
-const expected = ['Issues','Adopted approach','Delivery plan','Considered alternatives (rejected)','Accepted Tradeoffs','Confirmed non-goals','Reused existing utilities / building blocks'];
+const expected = ['Issues','Adopted approach','Delivery plan','Considered alternatives (rejected)','Accepted Tradeoffs (outline)','Confirmed non-goals','Reused existing utilities / building blocks'];
 const got = s.CANONICAL_SECTIONS && s.CANONICAL_SECTIONS.outline;
 if (JSON.stringify(got) !== JSON.stringify(expected)) { process.stderr.write('outline order mismatch: got=' + JSON.stringify(got) + '\n'); process.exit(1); }
 " 2>&1)"
@@ -41,7 +41,7 @@ if [[ $? -eq 0 ]]; then pass "A1: CANONICAL_SECTIONS.outline canonical order"; e
 # A2: CANONICAL_SECTIONS.detail includes the required detail sections.
 _a2="$(node -e "
 const s = require('$PLAN_SCHEMA_NODE');
-const need = ['Delivery plan','Background','Files to modify','Steps','Risks & edge cases','Out of scope'];
+const need = ['Delivery plan','Background','Files to modify','Steps','Risks & edge cases','Accepted Tradeoffs (detail)','Out of scope'];
 const got = (s.CANONICAL_SECTIONS && s.CANONICAL_SECTIONS.detail) || [];
 const missing = need.filter(function (x) { return got.indexOf(x) === -1; });
 if (missing.length !== 0) { process.stderr.write('detail missing: ' + JSON.stringify(missing) + ' (got=' + JSON.stringify(got) + ')\n'); process.exit(1); }
@@ -178,7 +178,7 @@ const canonicalAll = [].concat(
   (s.CANONICAL_SECTIONS && s.CANONICAL_SECTIONS.intent) || [],
   (s.CANONICAL_SECTIONS && s.CANONICAL_SECTIONS.outline) || [],
   (s.CANONICAL_SECTIONS && s.CANONICAL_SECTIONS.detail) || []
-);
+).concat([s.LEGACY_ACCEPTED_TRADEOFFS]);
 const bad = [];
 keys.forEach(function (k) {
   const expected = map[k];
@@ -213,7 +213,7 @@ const canonicalAll = [].concat(
   (s.CANONICAL_SECTIONS && s.CANONICAL_SECTIONS.intent) || [],
   (s.CANONICAL_SECTIONS && s.CANONICAL_SECTIONS.outline) || [],
   (s.CANONICAL_SECTIONS && s.CANONICAL_SECTIONS.detail) || []
-);
+).concat([s.LEGACY_ACCEPTED_TRADEOFFS]);
 const bad = [];
 keys.forEach(function (k) {
   const expected = map[k];
@@ -230,7 +230,7 @@ if [[ $? -eq 0 ]]; then pass "C2-cli: CLI --localized-to-canonical enumerates ev
 # (exact membership, order-independent) per the detail schema.
 _c3a="$(node -e "
 const s = require('$PLAN_SCHEMA_NODE');
-const expected = ['Delivery plan','Background','Files to modify','Steps','Risks & edge cases','Out of scope'];
+const expected = ['Delivery plan','Background','Files to modify','Steps','Risks & edge cases','Accepted Tradeoffs (detail)','Out of scope'];
 const got = (s.CANONICAL_SECTIONS && s.CANONICAL_SECTIONS.detail) || [];
 const missing = expected.filter(function (x) { return got.indexOf(x) === -1; });
 const extra = got.filter(function (x) { return expected.indexOf(x) === -1; });
@@ -290,8 +290,8 @@ _c3b1="$(c3b_has 'Issues')"
 if [[ $? -eq 0 ]]; then pass "C3b-1: CANONICAL_SECTIONS.intent contains 'Issues'"; else fail "C3b-1: $_c3b1"; fi
 _c3b2="$(c3b_has 'Class members')"
 if [[ $? -eq 0 ]]; then pass "C3b-2: CANONICAL_SECTIONS.intent contains 'Class members'"; else fail "C3b-2: $_c3b2"; fi
-_c3b3="$(c3b_has 'Accepted Tradeoffs')"
-if [[ $? -eq 0 ]]; then pass "C3b-3: CANONICAL_SECTIONS.intent contains 'Accepted Tradeoffs'"; else fail "C3b-3: $_c3b3"; fi
+_c3b3="$(c3b_has 'Accepted Tradeoffs (intent)')"
+if [[ $? -eq 0 ]]; then pass "C3b-3: CANONICAL_SECTIONS.intent contains 'Accepted Tradeoffs (intent)' (#2924)"; else fail "C3b-3: $_c3b3"; fi
 _c3b4="$(c3b_has 'Background/Motivation')"
 if [[ $? -eq 0 ]]; then pass "C3b-4: CANONICAL_SECTIONS.intent contains 'Background/Motivation'"; else fail "C3b-4: $_c3b4"; fi
 _c3b5="$(c3b_has 'Scope')"
@@ -319,7 +319,7 @@ if [[ $? -eq 0 ]]; then pass "C3b-10: CANONICAL_SECTIONS.intent places 'Glossary
 # reordering, insertion or removal fails (e.g. Background/Motivation must follow Glossary).
 _c3b10b="$(node -e "
 const s = require('$PLAN_SCHEMA_NODE');
-const expected = ['Issues','Glossary','Background/Motivation','Scope','Constraints','Interview Log','Class members','Accepted Tradeoffs','worktrees'];
+const expected = ['Issues','Glossary','Background/Motivation','Scope','Constraints','Interview Log','Class members','Accepted Tradeoffs (intent)','worktrees'];
 const got = (s.CANONICAL_SECTIONS && s.CANONICAL_SECTIONS.intent) || [];
 const bad = [];
 if (got.length !== expected.length) bad.push('length ' + got.length + ' != ' + expected.length);

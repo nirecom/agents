@@ -21,7 +21,7 @@ RPS-2. Invoke `"$AGENTS_MAIN_ROOT/skills/review-plan-security/scripts/run-codex-
 - exit 5 AUTO_EXTEND → same as exit 1 (concerns remain within the extension budget): present via RPS-3, address, re-run.
 - exit 7 FINALIZE_FAILED → `<CONTROL_DIR>/security-plan-unresolved-concerns.json` could not be written; HALT, surface the `## Concern Ledger: FINALIZE-FAILED` line, launch no fallback, emit no sentinel. After an ESCALATE, confirm the artifact with `bash "$AGENTS_MAIN_ROOT/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format security-plan` first.
 - exit 9 → HALT; accept per exit-codes.md "Escalation by format", then re-run.
-RPS-3. Triage — per `skills/_shared/priority-hierarchy.md`, reject a concern only when it directly contradicts a decision already settled in the approved intent.md / outline.md (including their `## Accepted Tradeoffs`).
+RPS-3. Triage — per `skills/_shared/priority-hierarchy.md`, reject a concern only when it directly contradicts a decision already settled in the approved intent.md / outline.md (including the merged Accepted Tradeoffs file `bin/resolve-accepted-tradeoffs-file` builds — in fallback, the path passed in the prompt).
 - Raising a topic the plan does not address is never grounds to reject.
 - Rejecting obliges naming the specific governing decision; a reject carrying no cited decision is a procedure violation.
 - Record each reject durably so it does not re-surface next round: `bash "$AGENTS_MAIN_ROOT/bin/concern-ledger" reject --plans-dir <PLANS_DIR> --session-id <session-id> --format security-plan --id C<N> --reason "<cited decision>"` (#2185).

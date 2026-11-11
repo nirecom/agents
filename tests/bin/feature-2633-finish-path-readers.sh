@@ -167,9 +167,13 @@ assert_eq "$OUT" "[]"
 case_end
 
 case_begin "resolve-accepted-tradeoffs-follows-upstream" "bin/resolve-accepted-tradeoffs-file"
+printf '\n## Accepted Tradeoffs (outline)\n\n- U_OUTLINE_TRADEOFF_MARK\n' >>"$PLANS/$U-outline.md"
+printf '# Outline\n\n## Accepted Tradeoffs (outline)\n\n- D_OWN_TRADEOFF_MARK\n' >"$PLANS/$D-outline.md"
 run_cap bash "$BIN/resolve-accepted-tradeoffs-file" "$PLANS" "$D" outline intent
-if [ "$RC" -eq 0 ] && same_path "$OUT" "$PLANS/$U-outline.md"; then pass "D outline intent -> U's outline"
-else fail "D outline intent -> U's outline" "rc=$RC out=$OUT err=$ERR"; fi
+if [ "$RC" -eq 0 ] && [ -f "$OUT" ] && grep -qF U_OUTLINE_TRADEOFF_MARK "$OUT" && ! grep -qF D_OWN_TRADEOFF_MARK "$OUT"; then
+  pass "D outline intent -> merged file carries U's outline tradeoffs, not D's own"
+else fail "D outline intent -> merged file carries U's outline tradeoffs, not D's own" "rc=$RC out=$OUT err=$ERR body=$(tr '\n' ' ' <"$OUT" 2>/dev/null | head -c 200)"; fi
+rm -f "$PLANS/$D-outline.md"
 case_end
 
 case_begin "plan-artifact-path-resolves-upstream-and-honors-plans-dir" "bin/plan-artifact-path"

@@ -1,25 +1,22 @@
 #!/usr/bin/env bash
-# Assemble a final plan file by injecting mandatory sections from a source file.
-# Usage: assemble-mandatory.sh [--source-kind intent|outline] <source.md> <planner-output.md> <out.md>
-# <planner-output.md> and <out.md> MAY be the same path (in-place mode, #866): the planner output
-# is snapshotted before the final write, so the read and write paths never alias.
+# Assemble a final plan file: inject `## Issues` from the source; keep the planner's own stage.
+# Usage: assemble-mandatory.sh --source-kind intent|outline <source.md> <planner-output.md> <out.md>
+# --source-kind picks the own stage (intent -> outline, outline -> detail). Only `## Issues` is
+# carried (#2924); the planner writes its own `## Accepted Tradeoffs (<stage>)` exactly once, and
+# the legacy, other-stage, Class members and planner Issues sections are stripped.
+# <planner-output.md> and <out.md> MAY be the same path (in-place mode, #866).
 # <out.md> must resolve under the plans dir or a system temp root (see the allowlist below).
-# Steps: extract `## Issues` (canonical/legacy) + `## Accepted Tradeoffs` and normalize; strip H1
-# + mandatory sections (strip still removes planner `## Class members` residue, but Class members
-# is no longer injected -- SSOT is intent.md, #2228); assemble into a temp file; verify count,
-# order (Issues < Accepted Tradeoffs), verbatim match, and outline first body H2; move temp -> out
-# only after every check passes (a failed verify never clobbers a prior valid file).
+# Verify (count, Issues verbatim, own stage once, outline first body H2) runs on a temp file;
+# the temp moves to <out.md> only after every check passes.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EXTRACT="$SCRIPT_CHECKOUT_ROOT/bin/extract-mandatory-sections"
 STRIP_AWK="$SCRIPT_DIR/strip-mandatory-sections.awk"
+PLAN_SCHEMA="$SCRIPT_CHECKOUT_ROOT/hooks/lib/plan-schema.js"
 
-# --source-kind is now vestigial (#2228): Class members is no longer injected, so intent vs
-# outline no longer branches assembly. The flag is still accepted and validated for CLI
-# backward-compat with existing callers; the outline coverage gate keys off the $OUT name instead.
-SOURCE_KIND="intent"
+SOURCE_KIND=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -34,10 +31,18 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ "$SOURCE_KIND" != "intent" && "$SOURCE_KIND" != "outline" ]]; then
-  echo "assemble-mandatory: invalid --source-kind '$SOURCE_KIND' (expected: intent|outline)" >&2
-  exit 2
-fi
+case "$SOURCE_KIND" in
+  intent) OWN_STAGE="outline" ;;
+  outline) OWN_STAGE="detail" ;;
+  "")
+    echo "assemble-mandatory: --source-kind intent|outline is required" >&2
+    exit 2
+    ;;
+  *)
+    echo "assemble-mandatory: invalid --source-kind '$SOURCE_KIND' (expected: intent|outline)" >&2
+    exit 2
+    ;;
+esac
 
 SOURCE="${1:?assemble-mandatory: <source.md> required}"
 PLANNER_OUT="${2:?assemble-mandatory: <planner-output.md> required}"
@@ -105,10 +110,19 @@ if [[ "$(readlink -f "$PLANNER_OUT" 2>/dev/null || echo "$PLANNER_OUT")" == \
     || { echo "assemble-mandatory: snapshot copy failed" >&2; exit 2; }
 fi
 
-# strip awk receives both legacy and canonical heading names so planner-side
-# duplicates of either form are removed. Class members stays in the strip set so
-# planner-authored residue is removed, even though it is no longer injected (#2228).
-MANDATORY_NAMES="Issues|Issue|Class members|Accepted Tradeoffs"
+# Heading names come from plan-schema.js (SSOT). The strip set holds the planner-side Issues
+# (both forms), Class members residue (#2228), and every Accepted Tradeoffs heading except the
+# own stage's (legacy included, #2924).
+command -v node > /dev/null 2>&1 || { echo "assemble-mandatory: node is required to resolve plan headings" >&2; exit 2; }
+OWN_TRADEOFFS="$(node "$PLAN_SCHEMA" --accepted-tradeoffs-heading "$OWN_STAGE" 2>/dev/null)"
+ALL_TRADEOFFS="$(node "$PLAN_SCHEMA" --accepted-tradeoffs-headings 2>/dev/null)"
+[[ -n "$OWN_TRADEOFFS" && -n "$ALL_TRADEOFFS" ]] \
+  || { echo "assemble-mandatory: cannot resolve Accepted Tradeoffs headings from $PLAN_SCHEMA" >&2; exit 2; }
+MANDATORY_NAMES="Issues|Issue|Class members"
+while IFS= read -r _h; do
+  _h="${_h%$'\r'}"
+  [[ -n "$_h" && "$_h" != "$OWN_TRADEOFFS" ]] && MANDATORY_NAMES="$MANDATORY_NAMES|$_h"
+done <<< "$ALL_TRADEOFFS"
 
 # --- Phase 1: Detect issues-section form in source. ---
 has_issues_plural=0
@@ -135,10 +149,8 @@ else
 fi
 
 # --- Phase 2: Extract injected block ---
-# Class members is intentionally NOT injected (#2228): its SSOT is intent.md.
-"$EXTRACT" "$SOURCE" \
-  --section "$ISSUES_SECTION_NAME" --section "Accepted Tradeoffs" \
-  --with-headers > "$WORK_DIR/injected_block"
+# Only Issues is injected: Class members (#2228) and Accepted Tradeoffs (#2924) stay upstream.
+"$EXTRACT" "$SOURCE" --section "$ISSUES_SECTION_NAME" --with-headers > "$WORK_DIR/injected_block"
 
 # --- Phase 3: Normalize legacy heading to canonical. ---
 if [[ "$ISSUES_SECTION_NAME" == "Issue" ]]; then
@@ -192,7 +204,7 @@ verify_fail() {
 count_section_headers() {
   local file="$1" section="$2"
   "$EXTRACT" "$file" --section "$section" --with-headers 2>/dev/null \
-    | grep -c "^## ${section}$" 2>/dev/null || true
+    | grep -cxF "## ${section}" 2>/dev/null || true
 }
 
 # `## Issues` is mandatory in the OUTPUT (always normalized to plural).
@@ -206,9 +218,10 @@ issue_in_out=$(count_section_headers "$ASSEMBLED" "Issue")
 [[ -z "$issue_in_out" ]] && issue_in_out=0
 [[ "$issue_in_out" -eq 0 ]] || verify_fail "## Issue (singular) appears in output but must be normalized to ## Issues"
 
-acc_count=$(count_section_headers "$ASSEMBLED" "Accepted Tradeoffs")
-[[ -z "$acc_count" ]] && acc_count=0
-[[ "$acc_count" -eq 1 ]] || verify_fail "## Accepted Tradeoffs appears ${acc_count} times outside fences (expected 1)"
+# The planner's own staged section must appear exactly once (a body of only the empty marker of skills/_shared/no-upstream-copy.md is valid).
+own_count=$(count_section_headers "$ASSEMBLED" "$OWN_TRADEOFFS")
+[[ -z "$own_count" ]] && own_count=0
+[[ "$own_count" -eq 1 ]] || verify_fail "## $OWN_TRADEOFFS appears ${own_count} times outside fences (expected 1)"
 
 # Fence-aware H1 count: walk the file with awk, toggling fence state.
 h1_count=$(awk '
@@ -221,35 +234,12 @@ if [[ "$h1_count" -ne 1 ]]; then
   verify_fail "H1 appears ${h1_count} times outside fences (expected 1)"
 fi
 
-# Order check: first non-fenced occurrence of each H2.
-order_line() {
-  local file="$1" section="$2"
-  awk -v target="$section" '
-    BEGIN { in_fence=0 }
-    /^```/ || /^~~~/ { in_fence = !in_fence; next }
-    !in_fence && $0 == ("## " target) { print NR; exit }
-  ' "$file"
-}
-
-ln_issues=$(order_line "$ASSEMBLED" "Issues")
-ln_tradeoffs=$(order_line "$ASSEMBLED" "Accepted Tradeoffs")
-[[ -n "$ln_issues" && -n "$ln_tradeoffs" ]] \
-  || verify_fail "mandatory section line numbers missing (issues=$ln_issues tradeoffs=$ln_tradeoffs)"
-[[ "$ln_issues" -lt "$ln_tradeoffs" ]] || verify_fail "## Issues must appear before ## Accepted Tradeoffs"
-
-# Verbatim match: each mandatory section body must equal the source's body.
-# For the issues section, the source-side name may be `Issue` (legacy) while
-# the output is always `Issues`. Compare bodies using each side's actual name.
+# Verbatim match: the Issues body must equal the source's. The source-side name may be
+# `Issue` (legacy) while the output is always `Issues`.
 src_issues_body=$("$EXTRACT" "$SOURCE" --section "$ISSUES_SECTION_NAME" 2>/dev/null || true)
 out_issues_body=$("$EXTRACT" "$ASSEMBLED" --section "Issues" 2>/dev/null || true)
 if [[ "$src_issues_body" != "$out_issues_body" ]]; then
   verify_fail "## Issues body in output does not match source"
-fi
-
-src_acc_body=$("$EXTRACT" "$SOURCE" --section "Accepted Tradeoffs" 2>/dev/null || true)
-out_acc_body=$("$EXTRACT" "$ASSEMBLED" --section "Accepted Tradeoffs" 2>/dev/null || true)
-if [[ "$src_acc_body" != "$out_acc_body" ]]; then
-  verify_fail "## Accepted Tradeoffs body in output does not match source"
 fi
 
 # --- Phase 8: Outline first-body-section hard check (#2228) ---

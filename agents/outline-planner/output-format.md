@@ -1,31 +1,31 @@
 ## Output Format
 
+Write one Adopted approach, itemized exactly as below; never cram it into one paragraph.
+
 ```
-## Approach A: <short name>
+## Adopted approach
 
-<1-2 paragraph description at design-direction level. No file paths. No steps.>
+- **Summary:** <1-3 lines at design-direction level. No file paths. No steps.>
+- **Components changed:** <the components this approach changes, at design level>
+- **Pros:** <bullets>
+- **Cons and risks:** <bullets>
+- **Builds on:** <existing utilities, patterns, or conventions already in the codebase>
+- **Trade-off:** see `## Accepted Tradeoffs (outline)` (write the content there, not here)
+- **Cross-component risks:** <component contract mismatches, dependency direction violations, or uncovered responsibility areas at design level; "none identified" if clean; "unable to assess — N components unread" if 8-file cap prevents full scan>
+- **Reason for adoption:** <why this approach over the rejected ones>
 
-**Builds on:** <existing utilities, patterns, or conventions already in the codebase>
-**Trade-off vs other options:** <one line>
-**Delivery plan:** <triage rationale / execution order / split policy — 1-2 lines>
-**Cross-component risks:** <component contract mismatches, dependency direction violations, or uncovered responsibility areas at design level; "none identified" if clean; "unable to assess — N components unread" if 8-file cap prevents full scan>
+## Considered alternatives (rejected)
 
----
+- **<short name>:** <one-line summary> — rejected because <one-line reason>
+- **<short name> (optional second):** <one-line summary> — rejected because <one-line reason>
 
-## Approach B: <short name>
+## Delivery plan
 
-<1-2 paragraph description>
+<triage rationale / execution order / split policy — 1-2 lines>
 
-**Builds on:** <...>
-**Trade-off vs other options:** <one line>
-**Delivery plan:** <triage rationale / execution order / split policy — 1-2 lines>
-**Cross-component risks:** <component contract mismatches, dependency direction violations, or uncovered responsibility areas at design level; "none identified" if clean; "unable to assess — N components unread" if 8-file cap prevents full scan>
+## Accepted Tradeoffs (outline)
 
----
-
-## Approach C: <short name> (optional)
-
-<...>
+<the tradeoffs this outline newly accepts; the empty marker (skills/_shared/no-upstream-copy.md) when none>
 ```
 
 ## Considered alternatives (rejected) — compression
@@ -41,6 +41,7 @@ If only one approach is genuinely viable (not just the easiest), emit **only** t
 SINGLE_APPROACH_JUSTIFIED: <one-line reason why alternatives are not viable>
 DELIVERY_PLAN: <triage rationale / execution order / split policy — one line>
 CROSS_COMPONENT_RISKS: <component contract mismatches, dependency direction issues, or coverage gaps; "none identified" if clean; "unable to assess" if 8-file cap prevents full scan>
+ACCEPTED_TRADEOFFS: <optional — the tradeoffs this outline newly accepts; omit the line when none>
 ```
 
 `<one-line reason>` recognized forms: `topology-only — …`, `intent-lock — …`, `frontrunner-collapse — …`.

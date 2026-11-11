@@ -7,6 +7,8 @@ const {
   sanitizeInline,
   sanitizeBlock,
   stripSentinels,
+} = require("../../../../../hooks/lib/untrusted-text-sanitize");
+const {
   renderCommentsSection,
   renderNoIssueSection,
 } = require("../issue-comments");

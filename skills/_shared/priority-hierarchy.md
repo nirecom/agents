@@ -28,5 +28,5 @@ Never `reject:` a concern tagged `[upstream-inconsistency `; the user decides it
 
 ## Reviewer: do not reopen upstream decisions
 
-Before emitting a concern, verify it does not contradict an upstream artifact. If an untagged concern would reopen a settled decision, suppress it (or downgrade to LOW under `## Accepted Tradeoffs`).
+Before emitting a concern, verify it does not contradict an upstream artifact. If an untagged concern would reopen a settled decision, suppress it (or downgrade to LOW under the Accepted Tradeoffs of every stage).
 Report a deviation from a prior-step decision, an upstream contradiction or an upstream gap with the tag instead; never suppress a tagged concern.

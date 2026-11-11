@@ -122,19 +122,23 @@ assert_contained "S23d: the empty-suffix emitted path" "$P_EMPTY"
 # a skipped candidate; (b) a session id near the filesystem's path-length limit,
 # where a resolver that truncated or mangled the name would answer a path that
 # opens to the wrong file.
-P_DUP="$(make_plans s24 detail outline intent)"
+# #2924: the merged file holds each stage once, however often the chain names it.
+P_DUP="$(make_staged s24 detail outline intent)"
 resolve_e "$P_DUP" SID detail detail outline intent
-assert_eq "S24a: a duplicated first suffix still resolves to the first match" "$P_DUP/SID-detail.md" "$RES_OUT"
+assert_eq "S24a: a duplicated first suffix → the merged file named by the head" "$(merged_path SID detail)" "$RES_OUT"
+assert_eq "S24a: every stage merged exactly once" "intent outline detail" "$(stage_set "$RES_OUT")"
 assert_eq "S24a: duplicated suffixes → exit 0" "0" "$RES_RC"
 rm -f "$P_DUP/SID-detail.md"
 # With the duplicated stage now ABSENT, both of its occurrences must be skipped —
-# a resolver that re-entered the chain on the second occurrence would answer
-# detail again, or stall; the documented answer is the next present stage.
+# a resolver that re-entered the chain on the second occurrence would merge detail
+# again, or stall.
 resolve_e "$P_DUP" SID detail outline detail intent
-assert_eq "S24b: a duplicate of an ABSENT suffix is skipped both times → outline" "$P_DUP/SID-outline.md" "$RES_OUT"
+assert_eq "S24b: a duplicate of an ABSENT suffix → the merged file" "$(merged_path SID detail)" "$RES_OUT"
+assert_eq "S24b: the absent stage is skipped both times — no detail section" "intent outline" "$(stage_set "$RES_OUT")"
 assert_eq "S24b: duplicate of an absent suffix → exit 0" "0" "$RES_RC"
 resolve_e "$P_DUP" SID outline outline outline
-assert_eq "S24c: the same suffix repeated as the whole chain resolves once" "$P_DUP/SID-outline.md" "$RES_OUT"
+assert_eq "S24c: the same suffix repeated as the whole chain → the outline-headed merged file" "$(merged_path SID outline)" "$RES_OUT"
+assert_eq "S24c: the repeated stage is merged once" "outline" "$(stage_set "$RES_OUT")"
 assert_eq "S24c: a wholly duplicated chain → exit 0" "0" "$RES_RC"
 
 # S24d — the length boundary. The id is built long enough to push the candidate
@@ -145,10 +149,13 @@ assert_eq "S24c: a wholly duplicated chain → exit 0" "0" "$RES_RC"
 # Because: without the file the run exercises the absent-candidate fallback,
 #          which Layer A case 4 already owns.
 S24_LONG_SID="$(printf 'L%.0s' $(seq 1 180))"
-if printf '# intent\n\nlong\n' > "$P_DUP/$S24_LONG_SID-intent.md" 2>/dev/null && [[ -s "$P_DUP/$S24_LONG_SID-intent.md" ]]; then
+if printf '# intent\n\n## Accepted Tradeoffs (intent)\n\nS24D-LONG-BODY\n' > "$P_DUP/$S24_LONG_SID-intent.md" 2>/dev/null && [[ -s "$P_DUP/$S24_LONG_SID-intent.md" ]]; then
   resolve_e "$P_DUP" "$S24_LONG_SID" detail outline intent
-  assert_eq "S24d: a near-limit-length session id resolves to its exact, untruncated path" \
-    "$P_DUP/$S24_LONG_SID-intent.md" "$RES_OUT"
+  assert_eq "S24d: a near-limit-length session id → its exact, untruncated merged file" \
+    "$(merged_path "$S24_LONG_SID" detail)" "$RES_OUT"
+  # A mangled id would open some other plan: the long id's own body must be merged.
+  assert_eq "S24d: the long id's own intent body is merged" \
+    "S24D-LONG-BODY" "$(grep -xF S24D-LONG-BODY "$RES_OUT" 2>/dev/null || printf 'ABSENT')"
   assert_eq "S24d: near-limit-length session id → exit 0" "0" "$RES_RC"
   assert_contained "S24d: the near-limit emitted path" "$P_DUP"
 else
@@ -160,8 +167,11 @@ fi
 # rather than aborting the scan.
 S24_LONG_SFX="$(printf 'S%.0s' $(seq 1 200))"
 resolve_e "$P_DUP" SID "$S24_LONG_SFX" outline
-assert_eq "S24e: an over-long suffix is skipped → the next present stage is emitted" \
-  "$P_DUP/SID-outline.md" "$RES_OUT"
+# The long suffix is a plain token, so it names the merged file (pinned as observed).
+assert_eq "S24e: an over-long head suffix names the merged file verbatim" \
+  "$(merged_path SID "$S24_LONG_SFX")" "$RES_OUT"
+assert_eq "S24e: the absent long candidate is skipped → only the outline stage is merged" \
+  "outline" "$(stage_set "$RES_OUT")"
 assert_eq "S24e: an over-long suffix → exit 0 (no crash, no abort)" "0" "$RES_RC"
 
 # --- S28 (C4): RELATIVE PLANS_DIR spellings. Every fixture in this suite hands the
@@ -173,8 +183,8 @@ assert_eq "S24e: an over-long suffix → exit 0 (no crash, no abort)" "0" "$RES_
 # and status EMPIRICALLY per spelling rather than assuming one contract for all.
 S28_ROOT="$TMPROOT/s28-relative"
 mkdir -p "$S28_ROOT/sub"
-printf '# detail\n\nrel\n' > "$S28_ROOT/SID-detail.md"
-printf '# detail\n\nrel\n' > "$S28_ROOT/sub/SID-detail.md"
+printf '# detail\n\n## Accepted Tradeoffs (detail)\n\nrel-root\n' > "$S28_ROOT/SID-detail.md"
+printf '# detail\n\n## Accepted Tradeoffs (detail)\n\nrel-sub\n' > "$S28_ROOT/sub/SID-detail.md"
 S28_OUTSIDE="$TMPROOT/s28-outside.md"
 printf '# outside\n\nS28-OUTSIDE-SECRET-2154-QZWX\n' > "$S28_OUTSIDE"
 
@@ -197,44 +207,49 @@ else
   fail "S28-0: the relative fixture is incomplete; S28 present-candidate rows would test absence instead"
 fi
 
-# spelling | session id | expected exit | expected stdout (empty = none)
+# #2924: an exit-0 row prints the merged control file; WHICH plans dir the spelling
+# reached is read from the merged body (rel-root / rel-sub; "-" = no section at all).
+# spelling | session id | expected exit | expected merged body ("" = refused)
 S28_ESCAPES=""
-while IFS='|' read -r r_dir r_sid r_rc r_out; do
+while IFS='|' read -r r_dir r_sid r_rc r_body; do
   [[ -n "$r_dir" ]] || continue
   rel_run "$r_dir" "$r_sid" detail outline intent
   assert_eq "S28[$r_dir/$r_sid]: exit status" "$r_rc" "$REL_RC"
-  assert_eq "S28[$r_dir/$r_sid]: emitted path is the caller's own spelling, verbatim" "$r_out" "$REL_OUT"
-  # Containment, judged on the path as the CALLER would open it: from the fixture
-  # CWD. A relative spelling that resolved outside the root is the escape this case
-  # exists to catch, and stdout comparison alone would not name it.
+  r_out=""; [[ -n "$r_body" ]] && r_out="$(merged_path "$r_sid" detail)"
+  assert_eq "S28[$r_dir/$r_sid]: emitted path is the merged control file (empty when refused)" "$r_out" "$REL_OUT"
+  if [[ -n "$r_body" ]]; then
+    r_got="$(grep -xE 'rel-(root|sub)' "$REL_OUT" 2>/dev/null || printf -- '-')"
+    assert_eq "S28[$r_dir/$r_sid]: the spelling reached the intended plans dir (merged body)" "$r_body" "$r_got"
+  fi
+  # Containment: the printed file must canonically sit inside the session's control dir.
   if [[ -n "$REL_OUT" ]] && command -v realpath >/dev/null 2>&1; then
     r_abs="$(cd "$S28_ROOT" && realpath -m -- "$REL_OUT" 2>/dev/null || true)"
-    r_root="$(cd "$S28_ROOT" && realpath -m -- . 2>/dev/null || true)"
+    r_root="$(realpath -m -- "$WORKFLOW_STATE_DIR/$r_sid.control" 2>/dev/null || true)"
     if [[ -z "$r_abs" || -z "$r_root" || "$r_abs" != "$r_root"/* ]]; then
       S28_ESCAPES="$S28_ESCAPES [$r_dir/$r_sid → $r_abs]"
     fi
   fi
 done <<'S28ROWS'
-.|SID|0|./SID-detail.md
-./|SID|0|.//SID-detail.md
-sub|SID|0|sub/SID-detail.md
-sub/|SID|0|sub//SID-detail.md
-./sub|SID|0|./sub/SID-detail.md
-./sub/|SID|0|./sub//SID-detail.md
-sub/.|SID|0|sub/./SID-detail.md
+.|SID|0|rel-root
+./|SID|0|rel-root
+sub|SID|0|rel-sub
+sub/|SID|0|rel-sub
+./sub|SID|0|rel-sub
+./sub/|SID|0|rel-sub
+sub/.|SID|0|rel-sub
 .|SIDX|3|
 ./|SIDX|3|
-sub|SIDX|0|sub/SIDX-intent.md
-sub/|SIDX|0|sub//SIDX-intent.md
-./sub|SIDX|0|./sub/SIDX-intent.md
-./sub/|SIDX|0|./sub//SIDX-intent.md
-sub/.|SIDX|0|sub/./SIDX-intent.md
+sub|SIDX|0|-
+sub/|SIDX|0|-
+./sub|SIDX|0|-
+./sub/|SIDX|0|-
+sub/.|SIDX|0|-
 S28ROWS
 if command -v realpath >/dev/null 2>&1; then
   if [[ -z "$S28_ESCAPES" ]]; then
-    pass "S28-contain: every path emitted for a relative PLANS_DIR resolves inside the fixture root"
+    pass "S28-contain: every path emitted for a relative PLANS_DIR resolves inside the control dir"
   else
-    fail "S28-contain: a relative spelling emitted a path that leaves the fixture root:$S28_ESCAPES"
+    fail "S28-contain: a relative spelling emitted a path outside the control dir:$S28_ESCAPES"
   fi
 else
   skip "S28-contain: no realpath on this host, so the emitted relative paths cannot be canonicalised"
@@ -290,7 +305,7 @@ assert_eq "S28h-asset: the file outside the relative root is byte-for-byte uncha
 S28_FSROOT="$TMPROOT/s28-fsroot"
 mkdir -p "$S28_FSROOT"
 S28_FSROOT_BODY="S28-FSROOT-BODY-2154-QZWX"
-printf '# detail\n\n%s\n' "$S28_FSROOT_BODY" > "$S28_FSROOT/SID-detail.md"
+printf '# detail\n\n## Accepted Tradeoffs (detail)\n\n%s\n' "$S28_FSROOT_BODY" > "$S28_FSROOT/SID-detail.md"
 S28_FSROOT_BEFORE="$(cat "$S28_FSROOT/SID-detail.md" 2>/dev/null || printf 'MISSING')"
 # The fixture addressed from the root: its own spelling in the namespace whose root IS
 # `/`. On MSYS the suite's `cygpath -m` fixture root is a `C:/...` path, which is not
@@ -325,9 +340,14 @@ if [[ "$S28_FSROOT_U" != /* || ! -s "$S28_FSROOT_U/SID-detail.md" ]]; then
 else
   pass "S28j-0: the fixture candidate is readable through a '/'-rooted spelling — the root case is presentable"
   resolve_e "$S28_FSROOT_U" SID detail outline intent
-  assert_eq "S28j-ref: through its ordinary absolute spelling the candidate resolves normally" \
-    "$S28_FSROOT_U/SID-detail.md" "$RES_OUT"
+  assert_eq "S28j-ref: through its ordinary absolute spelling the merged control file is emitted" \
+    "$(merged_path SID detail)" "$(norm "$RES_OUT")"
   assert_eq "S28j-ref: ordinary absolute spelling → exit 0" "0" "$RES_RC"
+  if grep -qF "$S28_FSROOT_BODY" "$RES_OUT" 2>/dev/null; then
+    pass "S28j-ref: the merged file carries the candidate's (detail) section"
+  else
+    fail "S28j-ref: the merged file lacks the candidate's (detail) section"
+  fi
   resolve_e "/" "${S28_FSROOT_U#/}/SID" detail outline intent
   # Two hosts, two mechanisms, one observable: MSYS reads the doubled `//` prefix as a
   # UNC root so the candidate is not even seen, while a POSIX host sees it and fails the
@@ -350,15 +370,17 @@ fi
 
 # S28k — the Windows DRIVE-ROOT spellings, the asymmetry S28i exists to contrast with:
 # `C:/` lexically normalises to `C:` (no leading-slash prefix), so `C:/SID-x.md` DOES
-# match `C:/*` and the all-absent fallback FORWARDS a doubled-separator path instead of
-# refusing it. Pinned as observed; the row also proves nothing is written at the drive root.
+# match `C:/*`, so the all-absent chain is NOT refused: since #2924 it yields a body-less
+# merged control file. Pinned as observed; the row also proves nothing is written at the drive root.
 # SKIPPED (off Windows): both spellings — there is no drive root to address.
 if command -v cygpath >/dev/null 2>&1; then
   for s28_droot in 'C:/' 'C:\'; do
     resolve_e "$s28_droot" "S28DRIVEROOT2154QZWX" detail outline intent
     assert_eq "S28k[$s28_droot]: an all-absent chain under a drive root is FORWARDED (exit 0), unlike '/'" "0" "$RES_RC"
-    assert_eq "S28k[$s28_droot]: the emitted path is the caller's own spelling plus the extra separator, verbatim" \
-      "${s28_droot}/S28DRIVEROOT2154QZWX-intent.md" "$RES_OUT"
+    assert_eq "S28k[$s28_droot]: the emitted path is the merged control file, not a drive-root path" \
+      "$(merged_path S28DRIVEROOT2154QZWX detail)" "$(norm "$RES_OUT")"
+    assert_eq "S28k[$s28_droot]: the merged file carries no stage section (nothing read at the drive root)" \
+      "" "$(stage_set "$RES_OUT")"
     if [[ -e "${s28_droot}S28DRIVEROOT2154QZWX-intent.md" ]]; then
       fail "S28k[$s28_droot]: the resolver created a file at the drive root"
     else

@@ -7,28 +7,29 @@
 # Sourced by tests/bin/feature-2154-accepted-tradeoffs-fallback.sh.
 echo "=== Layer A: fallback resolution (review-plan-codex stubbed) ==="
 
-# Case 1: all three candidates present → highest priority (detail).
+# #2924: stdout is ONE merged file <state>/<sid>.control/accepted-tradeoffs.<chain head>.md
+# holding every stage; which candidate files exist changes its content, never its path.
 P1="$(make_plans c1 detail outline intent)"
 resolve "$P1" SID detail outline intent
-assert_eq "1: all three present → detail path" "$P1/SID-detail.md" "$RES_OUT"
+assert_eq "1: all three present → the merged control-dir file" "$WORKFLOW_STATE_DIR/SID.control/accepted-tradeoffs.detail.md" "$(norm "$RES_OUT")"
 assert_eq "1: exit 0" "0" "$RES_RC"
 
-# Case 2: detail absent, outline present → outline.
+# Case 2: detail absent, outline present → the same merged file (named by the chain head).
 P2="$(make_plans c2 outline intent)"
 resolve "$P2" SID detail outline intent
-assert_eq "2: detail absent → outline path" "$P2/SID-outline.md" "$RES_OUT"
+assert_eq "2: detail absent → merged file named by the chain head" "$WORKFLOW_STATE_DIR/SID.control/accepted-tradeoffs.detail.md" "$(norm "$RES_OUT")"
 assert_eq "2: exit 0" "0" "$RES_RC"
 
-# Case 3: only intent present → intent.
+# Case 3: only intent present → the same merged file.
 P3="$(make_plans c3 intent)"
 resolve "$P3" SID detail outline intent
-assert_eq "3: detail+outline absent → intent path" "$P3/SID-intent.md" "$RES_OUT"
+assert_eq "3: detail+outline absent → merged file" "$WORKFLOW_STATE_DIR/SID.control/accepted-tradeoffs.detail.md" "$(norm "$RES_OUT")"
 assert_eq "3: exit 0" "0" "$RES_RC"
 
-# Case 4: all absent → LAST candidate path, exit 0 (fail-soft contract).
+# Case 4: all absent → a body-less merged file path, exit 0 (fail-soft contract).
 P4="$(make_plans c4)"
 resolve "$P4" SID detail outline intent
-assert_eq "4: all absent → last candidate path (fail-soft)" "$P4/SID-intent.md" "$RES_OUT"
+assert_eq "4: all absent → body-less merged file path (fail-soft)" "$WORKFLOW_STATE_DIR/SID.control/accepted-tradeoffs.detail.md" "$(norm "$RES_OUT")"
 assert_eq "4: all absent → exit 0 (non-empty value contract preserved)" "0" "$RES_RC"
 
 # Error case E1: zero candidate args → usage error, exit 2.
@@ -39,21 +40,18 @@ assert_eq "E1: zero candidate suffixes → exit 2 (usage error)" "2" "$RES_RC"
 P5="$(make_plans e2 outline intent)"
 : > "$P5/SID-detail.md"
 resolve "$P5" SID detail outline intent
-assert_eq "E2: empty detail.md skipped → outline path" "$P5/SID-outline.md" "$RES_OUT"
+assert_eq "E2: empty detail.md skipped → merged file" "$WORKFLOW_STATE_DIR/SID.control/accepted-tradeoffs.detail.md" "$(norm "$RES_OUT")"
 assert_eq "E2: exit 0" "0" "$RES_RC"
 
-# Case 5: the per-candidate scan (`-f && -s && -r`, lines 80-89 of the resolver)
-# is content-blind by design — it never parses for `## Accepted Tradeoffs`. A
-# higher-priority candidate that is present/non-empty/readable but carries no
-# settled-decisions content still wins, and a later candidate that DOES carry
-# the section is never reached. Not a defect in the resolver (its contract is
-# file-shape resolution, not content validation) — pinned here so a caller
-# cannot assume "resolved" implies "has usable Accepted Tradeoffs content".
+# Case 5 (#2924): the old scan was content-blind — a section-less detail.md won and shadowed
+# the outline that carried the decisions. The merged file reads every stage, so a section-less
+# candidate shadows nothing; the content side (intent rescued from outline's legacy heading
+# while intent.md is absent) is pinned in tests/bin/feature-2924-resolver-merged.sh.
 P6="$(make_plans c5 detail outline)"
 printf '# detail draft\n\nno settled-decisions section in this file\n' > "$P6/SID-detail.md"
 resolve "$P6" SID detail outline intent
-assert_eq "5: a non-empty candidate without '## Accepted Tradeoffs' still wins over a later candidate that has it (content-blind)" \
-  "$P6/SID-detail.md" "$RES_OUT"
+assert_eq "5: a section-less candidate no longer shadows the others — the merged file is emitted" \
+  "$WORKFLOW_STATE_DIR/SID.control/accepted-tradeoffs.detail.md" "$(norm "$RES_OUT")"
 assert_eq "5: exit 0" "0" "$RES_RC"
 
 # --- Wrapper argv capture (W1-W9): the REAL bin/run-codex-review-loop runs
@@ -139,7 +137,7 @@ run_wrapper() {
   printf '# %s draft\n' "$stage" > "$WRAP_PLANS/$sid-$draft.md"
   local s
   for s in $present; do
-    printf '# %s\n\n## Accepted Tradeoffs\n\nsettled\n' "$s" > "$WRAP_PLANS/$sid-$s.md"
+    printf '# %s\n\n## Accepted Tradeoffs (%s)\n\nsettled-%s\n' "$s" "$s" "$s" > "$WRAP_PLANS/$sid-$s.md"
   done
   rm -f "$ARGV_FILE" "$RESOLVER_CALLS"
   WRAP_RC=0
@@ -167,30 +165,30 @@ run_wrapper() {
 # Table-driven (skills/_shared/test-design/parser-regex-tests.md): one row per
 # stage × candidate-availability shape, until every candidate of every stage has
 # been observed winning at least once.
-# tag | stage | draft suffix | candidates present | expected forwarded suffix
-while IFS='|' read -r tag stage draft present want; do
+# tag | stage | draft suffix | candidates present | chain head (merged file name) | stages in it
+while IFS='|' read -r tag stage draft present want stages; do
   [[ -z "${tag// /}" || "$tag" =~ ^[[:space:]]*# ]] && continue
   tag="${tag//[[:space:]]/}"; stage="${stage//[[:space:]]/}"
-  draft="${draft//[[:space:]]/}"; want="${want//[[:space:]]/}"
+  draft="${draft//[[:space:]]/}"; want="${want//[[:space:]]/}"; stages="$(printf '%s' "$stages" | xargs)"
   present="$(printf '%s' "$present" | tr -s ' ' ' ')"
   run_wrapper "$tag" "$stage" "$draft" "$present"
-  assert_eq "$tag ($stage): forwards $want.md" "$WRAP_PLANS/$WRAP_SID-$want.md" "$ARGV_TRADEOFFS"
-  assert_eq "$tag ($stage): wrapper exit 0" "0" "$WRAP_RC"
+  assert_eq "$tag ($stage): forwards the merged file accepted-tradeoffs.$want.md (#2924)" "$WORKFLOW_STATE_DIR/$WRAP_SID.control/accepted-tradeoffs.$want.md" "$(norm "$ARGV_TRADEOFFS")"
+  assert_eq "$tag ($stage): wrapper exit 0 and the merged file holds stages [$stages]" "0|${stages:+ $stages}" "$WRAP_RC|$(for g in intent outline detail; do grep -qx "## Accepted Tradeoffs ($g)" "$ARGV_TRADEOFFS" 2>/dev/null && printf ' %s' "$g"; done)"
   # CPR-SSOT: the shared helper is the one that decided — not inlined logic.
   assert_eq "$tag ($stage): shared resolver invoked exactly once" "1" "$RESOLVER_CALL_COUNT"
   assert_eq "$tag ($stage): resolver received the stage's ordered candidate suffixes" \
     "$(expected_suffixes "$stage")" "$RESOLVER_SUFFIXES"
 done <<'TABLE'
-W1 | make-outline-plan     | outline     | intent               | intent
-W2 | make-outline-plan     | outline     |                      | intent
-W3 | make-detail-plan      | detail      | outline intent       | outline
-W4 | make-detail-plan      | detail      | intent               | intent
-W5 | review-plan-security  | detail      | outline intent       | outline
-W6 | review-plan-security  | detail      | intent               | intent
-W7 | review-tests          | test-review | detail outline intent| detail
-W8 | review-tests          | test-review | detail intent        | detail
-W9 | review-tests          | test-review | intent               | intent
-W10| review-tests          | test-review | outline intent       | outline
+W1 | make-outline-plan     | outline     | intent               | intent  | intent
+W2 | make-outline-plan     | outline     |                      | intent  |
+W3 | make-detail-plan      | detail      | outline intent       | outline | intent outline
+W4 | make-detail-plan      | detail      | intent               | outline | intent
+W5 | review-plan-security  | detail      | outline intent       | outline | intent outline
+W6 | review-plan-security  | detail      | intent               | outline | intent
+W7 | review-tests          | test-review | detail outline intent| detail  | intent outline detail
+W8 | review-tests          | test-review | detail intent        | detail  | intent detail
+W9 | review-tests          | test-review | intent               | detail  | intent
+W10| review-tests          | test-review | outline intent       | detail  | intent outline
 TABLE
 
 # W3/W5 double as the stage-order negative: detail.md exists in both rows (it is

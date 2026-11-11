@@ -84,7 +84,7 @@ mk_inputs() {
   BUILD_RC=0
   run_with_timeout 30 bash "$BUILD" --plans-dir "$d/plans" --session-id "$SID" --output "$d/codex-context.md" > /dev/null 2>&1 || BUILD_RC=$?
 }
-EXPECT_ROLES="intent outline survey-code survey-history concerns-log core-principles test-design test-review-input-contract supporting"
+EXPECT_ROLES="intent outline issues survey-code survey-history concerns-log core-principles test-design test-review-input-contract supporting"
 
 RUN_RC=0
 RUN_OUT=""

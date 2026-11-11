@@ -115,6 +115,8 @@ case_begin "class-members-wiring" "bin/review-plan-codex"
 # shellcheck source=./feature-review-plan-codex/class-members-wiring.sh
 . "$SCRIPT_DIR/class-members-wiring.sh"
 case_end
+# shellcheck source=./feature-review-plan-codex/copy-rule-prompt.sh
+. "$SCRIPT_DIR/copy-rule-prompt.sh"
 
 # ---------------------------------------------------------------------------
 # Summary

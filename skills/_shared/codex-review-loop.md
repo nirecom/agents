@@ -6,7 +6,7 @@ parts (context build → codex invocation → verdict parse) are enforced by the
 
 `EXTENSIONS_USED` is owned by the caller.
 
-ACCEPTED_TRADEOFFS_FILE is resolved by `bin/resolve-accepted-tradeoffs-file` from the suffix chain below; a non-zero exit reaches the caller as exit 4.
+ACCEPTED_TRADEOFFS_FILE is resolved by `bin/resolve-accepted-tradeoffs-file` from the suffix chain below into one merged file in the control dir holding every stage's Accepted Tradeoffs (fallback: the first readable chain member); a non-zero exit reaches the caller as exit 4.
 
 ## Parameters (caller supplies)
 
@@ -21,7 +21,7 @@ ACCEPTED_TRADEOFFS_FILE is resolved by `bin/resolve-accepted-tradeoffs-file` fro
 | PLANNER_AGENT | `outline-planner` | `detail-planner` |
 | PLANNER_MODEL | `model=` from MOP-2 | `model=` from MDP-3 |
 | REVIEWER_AGENT | `outline-reviewer` | `detail-reviewer` |
-| ACCEPTED_TRADEOFFS_FILE | first readable of `intent` | first readable of `outline` → `intent` |
+| ACCEPTED_TRADEOFFS_FILE | merged file of `intent` | merged file of `outline` → `intent` |
 | NON_APPROVED_VERDICT | `MISSING_ALTERNATIVE:` | `NEEDS_REVISION` |
 
 ## Parameters (review-only formats)
@@ -37,7 +37,7 @@ ACCEPTED_TRADEOFFS_FILE is resolved by `bin/resolve-accepted-tradeoffs-file` fro
 | PLANNER_AGENT | (none — review-only) | (none — review-only) |
 | PLANNER_MODEL | (none — review-only) | (none — review-only) |
 | REVIEWER_AGENT | `plan-security-reviewer` | `test-reviewer` |
-| ACCEPTED_TRADEOFFS_FILE | first readable of `outline` → `intent` | first readable of `detail` → `outline` → `intent` |
+| ACCEPTED_TRADEOFFS_FILE | merged file of `outline` → `intent` | merged file of `detail` → `outline` → `intent` |
 | NON_APPROVED_VERDICT | `NEEDS_REVISION` | `NEEDS_REVISION` |
 
 ## Round-continuing review-only formats
@@ -49,6 +49,7 @@ A NON_APPROVED_VERDICT (exit 1) is round-continuing: the caller addresses the co
 Exit 0 = APPROVED (review-tests fires `WORKFLOW_REVIEW_TESTS_COMPLETE`).
 Exit 2 / 5 / 6 CAN occur under the unified cap (ESCALATE, AUTO_EXTEND, HIGH_UNRESOLVED) — they no longer "do not occur".
 Exit 3 = codex CLI unusable → caller silently launches CC REVIEWER_AGENT fallback (for `security-code`, the `security-scanner` subagent, re-run at the same round via `--prestaged-report`).
+Before that launch, run `bin/resolve-accepted-tradeoffs-file` with the format's chain and pass its stdout path to the REVIEWER_AGENT prompt as the Accepted Tradeoffs file.
 Every REVIEWER_AGENT (and `security-scanner`) launch passes `model:` = the `model=` line of `node "$AGENTS_MAIN_ROOT/bin/resolve-role-model" --role reviewer`.
 Every such prompt carries the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section; the `security-scanner` JSON prompt carries it under the `dispatch_directive` key.
 Exit 4 = HALT — same as Contract B; no fallback.
@@ -125,6 +126,7 @@ The wrapper internally:
    - If only the intent file exists, only the intent part is written.
    - If only the outline file exists, only the outline part is written.
    - If neither exists, the output file is deleted and no `--context <context.md>` is passed downstream.
+   - The `issues` part (marker `codex-context-section: issues`, from `bin/issue-snapshot`) follows; it is reference data, never a plan step. When the snapshot fails, the part reads the unavailable marker of `skills/_shared/no-upstream-copy.md` and the build continues.
 2. Pre-flights `AGENTS_MAIN_ROOT` AND `$AGENTS_MAIN_ROOT/rules/core-principles.md`
    (both mandatory — missing either → exit 4).
 3. Calls `review-plan-codex` with the assembled flags, always passing

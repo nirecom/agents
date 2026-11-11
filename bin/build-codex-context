@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # bin/build-codex-context
-# Builds a unified Codex review context file by concatenating intent.md and
-# outline.md from a session plans directory. Handles absent/empty inputs,
+# Builds a unified Codex review context file by concatenating intent.md,
+# outline.md and the issue snapshot (bin/issue-snapshot). Handles absent/empty inputs,
 # atomic writes, trailing-newline injection, and stale-output cleanup, and records
 # the output's provenance (bin/lib/codex-context-marker.sh) so only it is split by marker.
 set -euo pipefail
@@ -107,6 +107,25 @@ fi
 
 if [[ "$OUTLINE_PRESENT" -eq 1 ]]; then
     write_part outline "$OUTLINE"
+fi
+
+# The issue snapshot (#2924) is reference data for copy detection, never a plan step. A failed
+# snapshot still writes the part, its body the unavailable marker, so the reviewer sees the gap; the source
+# then names the snapshot's own basename, which the marker grammar requires.
+SNAPSHOT="$(node "$(dirname "${BASH_SOURCE[0]}")/issue-snapshot" --session "$SID" 2>/dev/null)" || SNAPSHOT=""
+SNAPSHOT="${SNAPSHOT%[[:cntrl:]]}"
+printf '\n' >> "$TMP_OUT"  # the marker alone bounds the part; `---` stays the plan separator
+if [[ -n "$SNAPSHOT" && -f "$SNAPSHOT" && -s "$SNAPSHOT" && -r "$SNAPSHOT" ]]; then
+    write_part issues "$SNAPSHOT"
+else
+    # The snapshot lives in the session control dir, never in the plans dir (state-dirs.md).
+    CONTROL_DIR="$(node "$(dirname "${BASH_SOURCE[0]}")/workflow-control-dir" --session "$SID" 2>/dev/null)" || CONTROL_DIR="control"
+    CONTROL_DIR="${CONTROL_DIR%[[:cntrl:]]}"
+    {
+        printf '%s\n' "$(ccm_marker_line issues "${CONTROL_DIR:-control}/issues.md")"
+        # lang-check: ignore — the unavailable marker of skills/_shared/no-upstream-copy.md (functional data).
+        printf '## issues\nsnapshot なし\n'
+    } >> "$TMP_OUT"
 fi
 
 # The danger of mv here is success, not failure: with a directory at $OUTPUT it

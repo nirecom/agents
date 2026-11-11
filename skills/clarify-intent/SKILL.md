@@ -67,8 +67,10 @@ CI-3c. Decide the terms this session newly introduces; check each against the co
 Pick each term's category per `rules/docs/glossary.md`; CI-4 records the new terms in `## Glossary`.
 
 CI-4. Write the intent (Write tool, no mkdir) to the path `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --step clarify_intent` prints (`<PLANS_DIR>/<first_session_id>-intent.md`); when the CLI fails with a session id set, do not write — halt and report its stderr. With no session id, write `<PLANS_DIR>/YYYYMMDD-HHMMSS-intent.md`. Section order, per-section schemas, and language rules: `reference/intent-md-schema.md`. `## Issues` is the single SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).
+After the write, run `node "$AGENTS_MAIN_ROOT/bin/issue-snapshot" --session "$SESSION_ID"`; a non-zero exit is non-fatal — note it and continue.
 
 CI-4a. Self-review the intent.md body with `skills/_shared/combined-glossary.md` (reviewer directives); raise each drift as a tagged concern per `skills/_shared/glossary-drift-check.md`.
+Compare the intent.md body with the issue snapshot and rewrite any restatement that `skills/_shared/no-upstream-copy.md` forbids.
 Rerun CI-4a whenever a CI-5 Revise changes intent.md.
 
 CI-5. Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.

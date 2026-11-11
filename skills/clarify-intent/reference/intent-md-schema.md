@@ -14,7 +14,9 @@ Referenced by CI-4. Format rules for `<PLANS_DIR>/<session-id>-intent.md`.
 8. Constraints
 9. Interview Log (optional)
 10. `## Class members` (mandatory — see schema below)
-11. `## Accepted Tradeoffs` (`### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`) — captures design decisions already settled, used by `extract-mandatory-sections` to suppress re-raised concerns in later codex reviews.
+11. `## Accepted Tradeoffs (intent)` (`### <title>` heading + 1-paragraph rationale per entry; empty → write the empty marker of `skills/_shared/no-upstream-copy.md`) — captures design decisions already settled, used by `bin/resolve-accepted-tradeoffs-file` to suppress re-raised concerns in later codex reviews.
+    - Write only the tradeoffs the intent stage accepts; never restate the issue body (`skills/_shared/no-upstream-copy.md`).
+    - A legacy `## Accepted Tradeoffs` heading is still read as the intent stage.
 12. `## worktrees` (optional — omit for single-repo sessions; include when CI-3b collected sibling worktree paths)
 
 Language: write body text in `PLAN_LANG` (`$AGENTS_MAIN_ROOT/.env`) when it is a concrete non-English language; schema H2 heading lines always use their canonical English names regardless of `PLAN_LANG`. `PLAN_LANG` unset/`any`/`english` → write body text in English.
@@ -53,7 +55,7 @@ Immediately after `## Issues`. The intent glossary lists only the terms this ses
 
 ## `## Class members` schema (mandatory)
 
-Appears immediately before `## Accepted Tradeoffs`. Format per member:
+Appears immediately before `## Accepted Tradeoffs (intent)`. Format per member:
 ```
 - <name>: <description> — triage: <MUST | OPTIONAL | NA>
 ```

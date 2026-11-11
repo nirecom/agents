@@ -49,7 +49,7 @@ MOP-2. **Select the planner model, then delegate.** Run `bash -c 'node "$AGENTS_
 MOP-3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optionally `DELIVERY_PLAN: <plan>` on next line):
    - Parse both lines. If `DELIVERY_PLAN:` is absent (pre-change planner output), use the fallback text "(not provided — planner pre-dates this convention)".
    - Inform user that only one approach is viable (citing the reason) and that the skill is proceeding directly to `/make-detail-plan`.
-   - Write a minimal planner output containing the H1, the approved single approach text, and a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback) to `<OUTLINE_MD>`. Do NOT write `## Issues` / `## Accepted Tradeoffs` — the helper carries them forward next. Do NOT write `## Class members` — its SSOT is intent.md (#2228).
+   - Write a minimal planner output containing the H1, the approved single approach text, a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback), and `## Accepted Tradeoffs (outline)` from the `ACCEPTED_TRADEOFFS:` text (the empty marker of `skills/_shared/no-upstream-copy.md` when the line is absent) to `<OUTLINE_MD>`. Do NOT write `## Issues` — the helper carries it forward next. Do NOT write `## Class members` — its SSOT is intent.md (#2228).
    - Assemble the final outline.md by invoking the shared helper (same call as the normal path in MOP-4a):
      Run `bash "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind intent "$INTENT_MD" "$OUTLINE_MD" "$OUTLINE_MD"` (Bash tool).
    - Apply the full `skills/_shared/confirm-plan.md` protocol (CPA-1+CPA-2+CPA-3) using `CONFIRM_OUTLINE`. Even single viable approach may need artifact revision — the CPA-3 steps (presentation, CONFIRM echo on the turn-end block or else in the next turn, next response) cover that. Revise → ask what to change, re-run outline-planner, loop back to MOP-2.
@@ -58,14 +58,14 @@ MOP-3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optiona
 MOP-4. If outline-planner returns `NEEDS_RESEARCH`: run `/deep-research`, then re-prompt outline-planner with findings. Research budget: 2 rounds.
 
 MOP-4a. **Mandatory sections carry-forward (helper handles assembly — do not instruct planner to author them):**
-   After outline-planner returns its draft (initial or revised round), the orchestrator carries the 2 mandatory sections (`## Issues`, `## Accepted Tradeoffs`) verbatim from intent.md into the final outline.md via the shared helper:
+   After outline-planner returns its draft (initial or revised round), the orchestrator carries `## Issues` verbatim from intent.md into the final outline.md via the shared helper:
    Run `bash "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind intent "$INTENT_MD" "$OUTLINE_MD" "$OUTLINE_MD"` (Bash tool).
-   - The helper extracts the 2 sections from intent.md with headers, strips any planner-authored copies (plus any planner-authored `## Class members` residue) and the planner's H1 from the draft, and writes the assembled outline.md.
+   - The helper injects `## Issues` from intent.md, strips any planner-authored `## Issues`, legacy or other-stage Accepted Tradeoffs and `## Class members` residue plus the planner's H1, and checks the draft holds exactly one `## Accepted Tradeoffs (outline)`.
    - `## Class members` is NOT carried into outline.md — its SSOT is intent.md (#2228).
    - Helper exit non-zero → re-prompt outline-planner once and re-assemble; second failure → halt the loop.
-   - Do NOT instruct the planner to author the mandatory sections — the helper strips planner-authored copies before the final write.
+   - Do NOT instruct the planner to author `## Issues` — the helper strips planner-authored copies before the final write.
 
-   Constraint: outline-planner cannot add new entries to `## Accepted Tradeoffs` — `assemble-mandatory.sh` carries the intent.md tradeoffs verbatim. Record new design decisions in `## Confirmed non-goals` or `## Constraints` instead.
+   Constraint: outline-planner writes only the tradeoffs the outline newly accepts in `## Accepted Tradeoffs (outline)` (the empty marker when none); intent's tradeoffs stay in intent.md (`skills/_shared/no-upstream-copy.md`).
 
    `EXTENSIONS_USED` counter initialized to 0 at loop start.
 
@@ -73,7 +73,7 @@ MOP-5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
    (parameter values for the outline stage: FORMAT=outline-plan, CAP=1,
    MAX_EXTENSIONS=1, PLANNER_AGENT=outline-planner,
    REVIEWER_AGENT=outline-reviewer,
-   ACCEPTED_TRADEOFFS_FILE=the `intent` candidate resolved by `bin/resolve-accepted-tradeoffs-file`,
+   ACCEPTED_TRADEOFFS_FILE=the merged file `bin/resolve-accepted-tradeoffs-file` builds from the `intent` chain,
    NON_APPROVED_VERDICT=MISSING_ALTERNATIVE).
 
    For each review round, invoke `"$AGENTS_MAIN_ROOT/skills/make-outline-plan/scripts/run-codex-review-loop.sh"`
@@ -112,7 +112,7 @@ MOP-6. **Cap outcome dispatch.**
 MOP-7. On `APPROVED`:
    Retrieve `<CONV_LANG>` from the stdout of the standalone call `bash "$AGENTS_MAIN_ROOT/bin/get-config-var" CONV_LANG`.
 
-   Evaluate each approach and select the recommended one (highest trade-off score across cost, risk, existing-code consistency, and delivery timeline). Record it as `CHOSEN_APPROACH=<approach-name>`.
+   Compare the Adopted approach with the Considered alternatives and decide the recommended one (highest trade-off score across cost, risk, existing-code consistency, and delivery timeline). Record it as `CHOSEN_APPROACH=<approach-name>`.
 
    Emit this prose rationale summary as the turn-final assistant message, not as mid-turn text between tool calls — the VS Code extension renders only turn-final assistant text. Write the summary in `CONV_LANG` (or English if unset). For each approach, write one paragraph (rationale + trade-offs + delivery plan). End with: `Recommended approach: <name> — <one-line reason>`.
 
@@ -121,6 +121,7 @@ MOP-7. On `APPROVED`:
    List "Accepted upstream inconsistencies and user course corrections" in this summary per `upstream-inconsistency-pause.md`; a re-run after B revises the existing outline as a diff per that procedure.
 
 MOP-8. Write the chosen approach to `<OUTLINE_MD>` per the Output Schema. Always execute confirm-plan CPA-1+CPA-2 (artifact write + plan-link line).
+   When `CHOSEN_APPROACH` differs from the Adopted approach, only the orchestrator rewrites (never re-prompt the planner): itemize it as the new Adopted approach, move the former one to Considered alternatives, rewrite `## Accepted Tradeoffs (outline)`, then rerun assemble-mandatory (MOP-4a) and pass its check.
    Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
    - **`GATE_ACTION=audit-wait` / `audit-block`:** follow CPA-3.
    - **`GATE_ACTION=proceed`:** emit one-paragraph prose summary and proceed without `<<WORKFLOW_CONFIRM_OUTLINE>>`.
@@ -133,14 +134,14 @@ The file (per `PLAN_LANG` in `.env`; see `.env.example`) contains:
 - **Title** (H1): "Confirmed Approach" + `<session-id>`
 - **Mandatory sections** (assembled by `skills/_shared/assemble-mandatory.sh` from intent.md, not authored by planner):
   - `## Issues` — always present (empty placeholder allowed for Path C)
-  - `## Accepted Tradeoffs`
   - (`## Class members` is NOT carried into outline.md — its SSOT is intent.md, #2228)
-- **Planner-authored body sections** (drafted by outline-planner):
-  - **Adopted approach**: 1 paragraph + rationale for choosing it
+- **Planner-authored body sections** (drafted by outline-planner; the orchestrator writes them at MOP-3 / MOP-8):
+  - **Adopted approach**: itemized per `agents/outline-planner/output-format.md`, never one paragraph
   - **Delivery plan**: triage rationale / execution order / split policy for the adopted approach
   - **Considered alternatives (rejected)**: one entry per rejected approach with reason
   - **Reused existing utilities / building blocks**: list
-  - **Confirmed non-goals**: inherited from intent.md + any added during this stage
+  - **Confirmed non-goals**: only those added during this stage (intent's stay in intent.md)
+  - **Accepted Tradeoffs (outline)**: only the tradeoffs this stage newly accepts; the empty marker when none
 
 ## Rules
 
