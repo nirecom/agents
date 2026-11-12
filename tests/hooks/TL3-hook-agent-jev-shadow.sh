@@ -98,8 +98,9 @@ unset CLAUDECODE
 # The shipped registry is production, where the hook pair observes nothing: the hooks run on
 # the registry rolled back to shadow (the data-only rollback), inherited through NODE_OPTIONS.
 use_rollback_registry
+# CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1: Claude Code launches the Agent asynchronously, so tool_response has no answer text (product gap: issue #3010).
 ( cd "$REPO_FX" && env -u CLAUDE_CODE_SESSION_ID \
-    -u JEV_HTTP_TIMEOUT_MS -u JEV_PENDING_TTL_MS AGENTS_MAIN_ROOT="$REPO_N" JEV=on TYPESAFE_API_KEY="$SENTINEL_KEY" JEV_BASE_URL="$MOCK_URL" \
+    -u JEV_HTTP_TIMEOUT_MS -u JEV_PENDING_TTL_MS CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 AGENTS_MAIN_ROOT="$REPO_N" JEV=on TYPESAFE_API_KEY="$SENTINEL_KEY" JEV_BASE_URL="$MOCK_URL" \
     TL3_RECORD_FILE="$(np "$RECORD")" \
     "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 180 claude -p \
     "Use the Agent tool once with subagent_type complexity-judge and prompt 'classify this task', then stop." \
