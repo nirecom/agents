@@ -102,9 +102,14 @@ EOF
 
 unset CLAUDECODE
 
+p3_node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+AGENTS_NODE="$(p3_node_path "$SCRIPT_CHECKOUT_ROOT")"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/TL3-hook-skill-dispatch-payload/seed.sh"
+
 export TL3_RECORD_FILE="$RECORD_FILE"
 RESPONSE_FILE="$FIXTURE_DIR/response.json"
-if ! (cd "$FIXTURE_DIR" && "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 180 claude -p "Invoke the tl3-payload-probe skill, then stop." \
+# AGENTS_MAIN_ROOT is pinned to this checkout: the inherited decoy root would run its hooks instead.
+if ! (cd "$FIXTURE_DIR" && AGENTS_MAIN_ROOT="$AGENTS_NODE" "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 180 claude -p "Invoke the tl3-payload-probe skill, then stop." \
         --output-format json \
         --session-id "9f2c1d3e-2279-4a7b-9c5d-0e1f2a3b4c5d" \
         --settings "$FIXTURE_DIR/settings.json" \
@@ -148,11 +153,9 @@ run_R2
 # byte-for-byte, swap ONLY `tool_input.skill` to `resume-session`, and drive the
 # REAL registered hook with it: the downstream's state must come back untouched, so a
 # meta-op name cannot claim a step even when it rides a genuine host payload.
-p3_node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
-
 P3_DIR="$FIXTURE_DIR/p3"
-P3_WF="$P3_DIR/wf"
-P3_TRANSCRIPTS="$P3_DIR/transcripts"
+P3_WF="$(p3_node_path "$P3_DIR/wf")"
+P3_TRANSCRIPTS="$(p3_node_path "$P3_DIR/transcripts")"
 HOOK_SRC_NODE="$(p3_node_path "$HOOK_SRC")"
 STATEIO_NODE="$(p3_node_path "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io.js")"
 
@@ -163,13 +166,14 @@ STATEIO_NODE="$(p3_node_path "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-i
 # allowed to follow it back to a live session.
 p3_env() {
     env -u CLAUDE_CODE_SESSION_ID \
-        WORKFLOW_STATE_DIR="$P3_WF" WORKFLOW_PLANS_DIR="$P3_WF" \
+        WORKFLOW_STATE_DIR="$P3_WF" WORKFLOW_PLANS_DIR="$P3_WF" AGENTS_MAIN_ROOT="$AGENTS_NODE" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$P3_TRANSCRIPTS" \
         "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 25 "$@"
 }
 
-# p3_replay <payload-file> — the real hook, fed on stdin the way Claude Code does.
-p3_replay() { p3_env node "$HOOK_SRC_NODE" < "$1" >/dev/null 2>&1; }
+# p3_replay <payload-file> — the real hook, fed on stdin the way Claude Code does, from the
+# seeded fixture repo (payload cwd rewritten to it): the workflow gates resolve the repo from cwd.
+p3_replay() { jq -c --arg c "$P3_REPO_NODE" '.cwd = $c' "$1" | ( cd "$P3_REPO" && p3_env node "$HOOK_SRC_NODE" ) >/dev/null 2>&1; }
 
 # p3_digest <sid> — every step's status, joined. Comparing the WHOLE map catches
 # a replay that marked some other step as well as one that marked the step it was
@@ -200,14 +204,9 @@ run_P3() {
         return
     fi
 
-    mkdir -p "$P3_WF" "$P3_TRANSCRIPTS"
-    # A downstream whose current effective step IS an in-flight candidate (`research`,
-    # reached once workflow_init and clarify_intent are complete). Without it both
-    # replays below exit at the pre-init lookahead guard and prove nothing.
-    P3_SID="$sid" p3_env node -e "
-const { markStep } = require('$STATEIO_NODE');
-markStep(process.env.P3_SID, 'workflow_init', 'complete');
-markStep(process.env.P3_SID, 'clarify_intent', 'complete');" >/dev/null 2>&1
+    # A downstream whose current effective step IS an in-flight candidate (`research`)
+    # and which satisfies the workflow gates; seed.sh owns the fixture.
+    p3_seed_state "$sid"
 
     before=$(p3_digest "$sid")
     if [ "$before" = "<no-state>" ] || [ -z "$before" ]; then
@@ -261,7 +260,6 @@ R4_RECORD="$R4_DIR/dispatch.jsonl"
 R4_SETTINGS="$R4_DIR/settings.json"
 R4_DOWNSTREAM="7c4e5b62-2279-4f18-9a3c-1b2d3e4f5a6b"
 R4_UPSTREAM="tl3upstream2279"
-AGENTS_NODE="$(p3_node_path "$SCRIPT_CHECKOUT_ROOT")"
 R4_STORE_NODE=""
 
 # SKIP is reserved for environmental absence (the gates above, or claude -p
@@ -298,7 +296,7 @@ if (hit) process.stdout.write(hit[0] + NL + hit[1] + NL);" 2>/dev/null
 # session ids, and AGENTS_MAIN_ROOT pointing at this worktree.
 r4_env() {
     ( cd "$R4_REPO" && env -u CLAUDE_CODE_SESSION_ID \
-        WORKFLOW_STATE_DIR="$R4_STORE_NODE" WORKFLOW_PLANS_DIR="$R4_STORE_NODE" \
+        WORKFLOW_STATE_DIR="$R4_STORE_NODE" WORKFLOW_PLANS_DIR="$R4_STORE_NODE" AGENTS_MAIN_ROOT="$AGENTS_NODE" \
         "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 30 node -e "$1" ) 2>/dev/null
 }
 
@@ -386,7 +384,7 @@ run_R4() {
 
     # The live host. Only the launch itself may SKIP.
     if ! ( cd "$R4_REPO" && env -u CLAUDE_CODE_SESSION_ID \
-            WORKFLOW_STATE_DIR="$R4_STORE_NODE" WORKFLOW_PLANS_DIR="$R4_STORE_NODE" \
+            WORKFLOW_STATE_DIR="$R4_STORE_NODE" WORKFLOW_PLANS_DIR="$R4_STORE_NODE" AGENTS_MAIN_ROOT="$AGENTS_NODE" \
             TL3_RECORD_FILE="$R4_RECORD" \
             "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 180 claude -p \
             "Invoke the resume-session skill with the argument --from $R4_UPSTREAM. It will refuse because this is a non-interactive session; that refusal is expected. Do not retry it, do not use any other tool, and stop." \
@@ -418,7 +416,7 @@ run_R4() {
     # (c) the adoption /resume-session --from was invoked FOR still lands, driven
     #     through the real CLI (the S1-S10 assertion, on the live-host path).
     ok=$( ( cd "$R4_REPO" && env \
-        WORKFLOW_STATE_DIR="$R4_STORE_NODE" WORKFLOW_PLANS_DIR="$R4_STORE_NODE" \
+        WORKFLOW_STATE_DIR="$R4_STORE_NODE" WORKFLOW_PLANS_DIR="$R4_STORE_NODE" AGENTS_MAIN_ROOT="$AGENTS_NODE" \
         CLAUDE_CODE_SESSION_ID="$R4_DOWNSTREAM" \
         "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 30 node "$SCRIPT_CHECKOUT_ROOT/bin/resume-session-detect" --from "$R4_UPSTREAM" ) 2>/dev/null \
         | jq -r '.inherit_result.ok // empty' 2>/dev/null )

@@ -46,6 +46,8 @@ case_end
 . "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/parts.sh"
 # shellcheck source=test-language-registry/launch.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/launch.sh"
+# shellcheck source=test-language-registry/exec-carry.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/exec-carry.sh"
 # shellcheck source=test-language-registry/mutation.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/mutation.sh"
 

@@ -80,6 +80,25 @@ _run_all_real_setting() {
   env ${bridge[@]+"${bridge[@]}"} bash "$getcv" "$1" 2>/dev/null || true
 }
 
+# run_all_carried_read — prints one KEY=VALUE line per carried key that has a non-empty value (an
+# environment value wins over the real settings; a value with a line break is dropped with a stderr
+# warning); read-only and always 0. Call it before the root
+# decoy switch, and export each line after it (run_all_pin_test_env and rtb_exec_one do).
+run_all_carried_read() {
+  local key value
+  for key in $_RUN_ALL_CARRIED_KEYS; do
+    if [ -n "${!key+x}" ]; then value="${!key}"; else value="$(_run_all_real_setting "$key")"; fi
+    case "$value" in
+      *$'\n'* | *$'\r'*)
+        printf '[run-all-launch] %s holds a line break; not carried\n' "$key" >&2
+        continue
+        ;;
+    esac
+    if [ -n "$value" ]; then printf '%s=%s\n' "$key" "$value"; fi
+  done
+  return 0
+}
+
 _RUN_ALL_GUARD_DIR=""
 
 # run_all_pin_command_guard — a fresh guard instance in $TEST_RUN_ROOT/command-guard, first on
@@ -107,16 +126,13 @@ _run_all_fixture_pins_inherited() {
 # already in the environment wins), then pins the root decoy, <root> as the run root, the command
 # guard, the state dirs under <root>, and worktree change detection.
 run_all_pin_test_env() {
-  local key
-  local -a carried=()
-  for key in $_RUN_ALL_CARRIED_KEYS; do
-    if [ -n "${!key+x}" ]; then carried+=("${!key}"); else carried+=("$(_run_all_real_setting "$key")"); fi
-  done
+  local carried line
+  carried="$(run_all_carried_read)"
   run_all_pin_root_decoy || return 1
-  for key in $_RUN_ALL_CARRIED_KEYS; do
-    if [ -n "${carried[0]}" ]; then export "$key=${carried[0]}"; fi
-    carried=("${carried[@]:1}")
-  done
+  while IFS= read -r line; do
+    # shellcheck disable=SC2163  # line holds KEY=VALUE
+    if [ -n "$line" ]; then export "$line"; fi
+  done <<<"$carried"
   if ! _run_all_fixture_pins_inherited; then
     [ -n "${1:-}" ] && declare -F test_run_root_ensure >/dev/null 2>&1 || return 1
     export TEST_RUN_ROOT="$1"

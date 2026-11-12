@@ -7,8 +7,8 @@
 # is owned by run-tests-baseline-timeout.sh (RTB_TIMEOUT_DEFAULT). Outcomes come from
 # <logdir>/<i>.{state,timedout,unrunnable,unsupported,decoyhit} markers, never from the exit
 # code alone: RTB_EXEC_STATE ("" from a launcher that predates #2501), RTB_EXEC_TIMEDOUT,
-# RTB_EXEC_UNRUNNABLE, RTB_EXEC_UNSUPPORTED (not launched, so a test exiting 78 is not it),
-# RTB_EXEC_DECOY (any hit, reported or claimed (RUN_ALL_EXEC_HITS): the exit code says nothing about the base).
+# RTB_EXEC_UNRUNNABLE, RTB_EXEC_UNSUPPORTED (not launched), RTB_EXEC_DECOY (any decoy hit).
+# RUN_TL3 / RUN_TL4 reach the test via this checkout's run_all_carried_read, base old or new (#2997).
 
 case "${BASH_SOURCE[0]}" in
   */*) RTB_EXEC_LIB_DIR="${BASH_SOURCE[0]%/*}" ;;
@@ -43,7 +43,7 @@ rtb_base_predates_root_names() {
 
 rtb_exec_one() {
     local wt="${1:-}" rel="${2:-}" timeout="${3:-$RTB_TIMEOUT_DEFAULT}" logdir="${4:-}"
-    local launcher i cpid wpid rc iso restore_m=0
+    local launcher i cpid wpid rc iso restore_m=0 carried cur line
     RTB_EXEC_RC=""
     RTB_EXEC_TIMEDOUT=""
     RTB_EXEC_UNSUPPORTED=""
@@ -57,6 +57,15 @@ rtb_exec_one() {
     launcher="$wt/bin/lib/run-all-launch.sh"
     [ -f "$launcher" ] || launcher="$RTB_EXEC_LIB_DIR/run-all-launch.sh"
     [ -f "$launcher" ] || return 2
+    # RUN_TL3 / RUN_TL4 are read here, from this checkout's launcher and before any root decoy
+    # (#2997). The command substitution keeps its functions out of this shell, so the declare -F
+    # checks below still see only the base launcher.
+    carried=""
+    cur="$RTB_EXEC_LIB_DIR/run-all-launch.sh"
+    if [ -f "$cur" ]; then
+        # shellcheck source=bin/lib/run-all-launch.sh
+        carried="$( . "$cur" >/dev/null 2>&1 && run_all_carried_read 2>/dev/null )" || carried=""
+    fi
     # Per-run workflow/plans/transcript dirs: a base test must never resolve the live
     # session or write real workflow state. HOME stays; build caches live in the host temp area.
     iso="$(mktemp -d 2>/dev/null)" || return 2
@@ -82,6 +91,10 @@ rtb_exec_one() {
         export WORKFLOW_STATE_DIR="$iso/workflow" \
             WORKFLOW_PLANS_DIR="$iso/plans" CLAUDE_TRANSCRIPT_BASE_DIR="$iso/transcripts" \
             RUN_ALL_TIMEOUT_SECONDS="$timeout"
+        while IFS= read -r line; do
+            # shellcheck disable=SC2163  # line holds KEY=VALUE
+            if [ -n "$line" ]; then export "$line"; fi
+        done <<<"$carried"
         # The base test finds its tools from its own checkout; the launcher's decoy pin
         # makes any reach through a root variable visible instead of silently working.
         if declare -F run_all_pin_root_decoy >/dev/null 2>&1; then
