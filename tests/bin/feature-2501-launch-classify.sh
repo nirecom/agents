@@ -52,6 +52,8 @@ case_end
 . "$LC_CASES/security.sh"
 # shellcheck source=feature-2501-launch-classify/pytest-launch.sh
 . "$LC_CASES/pytest-launch.sh"
+# shellcheck source=feature-2501-launch-classify/carried-read.sh
+. "$LC_CASES/carried-read.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
