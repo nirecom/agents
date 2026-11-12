@@ -188,3 +188,7 @@ Changes: Worktree end no longer asks for a Claude Code restart when a PR only ch
 ### FEATURE: PR #2999 (2026-11-11)
 Background: fix(#2955): make repo-has-no-residue pass on main; refactor(#2735): m...
 Changes: Fixed the test-language registry residue check so it passes on main; language vocabulary now comes from the registry.;Table-driven test detection for pytest and Pester now parses the test file with the language's own parser instead of matching text, so it no longer reports a false "clean"; a file it cannot parse or a missing runtime now exits 2 instead of passing.;Child-process launch settings for the Pester and pytest test gates moved into the test-language registry (`childLaunch`).
+
+### FEATURE: PR #3011 (2026-11-12)
+Background: fix(#2997): carry RUN_TL3 / RUN_TL4 to the baseline re-run; fix(#3007...
+Changes: `bin/run-tests-baseline` now carries `RUN_TL3` / `RUN_TL4` to the base re-run, so a TL3 failure that already failed on main is classified as preexisting instead of blocking run_tests as undetermined (#2997).
