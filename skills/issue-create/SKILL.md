@@ -159,7 +159,9 @@ When `review.status` is `disputed` and the user chose the reviewer's verdict, di
 - parent is unreadable → exit 1
 - recover per `rules/github-issues.md` "Converting an issue into a meta parent"
 
-For `bulk-sub-of`: pipe TSV rows (one `title<TAB>body` per child) to `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/run-bulk-dispatch.sh" "$PLANS_DIR" N [-- passthrough flags]`; the script writes the manifest under `PLANS_DIR` and calls the dispatcher. Stdout is N URL lines (one per child, manifest order).
+For `bulk-sub-of`, the manifest path is `<PLANS_DIR>/<session-id>-bulk-dispatch-<n>.tsv` with n the parent issue number (Phase 5 reuses this value).
+Pipe TSV rows (one `title<TAB>body` per child) to `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/run-bulk-dispatch.sh" "<manifest path>" N [-- passthrough flags]`; the script writes the manifest there and calls the dispatcher.
+Stdout is N URL lines (one per child, manifest order).
 
 **Stdout contract**: `none|reopen|sub-of|sibling` emit exactly one URL line on success (last line of stdout); `make-parent` emits two (parent first, proposal last); `bulk-sub-of` emits N URL lines (one per child, manifest order, end of stdout). All other output goes to stderr. Single-verdict callers read the last stdout line and take the trailing digits of that URL as the issue number — no pipeline; `bulk-sub-of` callers loop over all trailing URL lines. Enforced by `bin/github-issues/issue-create-dispatch.sh`.
 
@@ -168,7 +170,8 @@ Issues created here may be added to an existing session's `closes_issues` list (
 ### Phase 5 — Record to WORKTREE_NOTES.md (primary-path capture)
 
 Runs for all Phase 4 verdicts (none|reopen|sub-of|make-parent|sibling|bulk-sub-of).
-Write Phase 4's stdout to `<PLANS_DIR>/<session-id>-issue-create-dispatch.txt` with the Write tool, then issue one standalone call: `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/run-phase5-record.sh" "<VERDICT>" auto "<Phase 1 title>" "<MANIFEST>" --input-file "<PLANS_DIR>/<session-id>-issue-create-dispatch.txt"` (`auto` resolves WORKTREE_NOTES.md itself; the manifest arg is used only for `bulk-sub-of`, pass `""` otherwise).
+Write Phase 4's stdout to `<PLANS_DIR>/<session-id>-issue-create-dispatch.txt` with the Write tool, then issue one standalone call: `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/run-phase5-record.sh" "<VERDICT>" auto "<Phase 1 title>" "<manifest path>" --input-file "<PLANS_DIR>/<session-id>-issue-create-dispatch.txt"` (`auto` resolves WORKTREE_NOTES.md itself; the manifest arg is the Phase 4 value, used only for `bulk-sub-of`, pass `""` otherwise).
+For `bulk-sub-of`, append `--remove-manifest` only when the Phase 4 dispatch exited 0.
 Failure is non-fatal — the script logs a stderr warning and continues.
 
 ## Label policy
@@ -189,7 +192,7 @@ Failure is non-fatal — the script logs a stderr warning and continues.
 - **Content Date field**: when the resolved project has a field named "Content Date" of type `DATE`, the script sets it to the issue's creation date (`YYYY-MM-DD`). The field id is discovered alongside the project node — no env var override needed. Projects without a Content Date field skip the step silently.
 - **Sub-issue API**: dispatcher uses `POST /repos/{owner}/{repo}/issues/{N}/sub_issues` with `sub_issue_id` = child's integer databaseId (fetched via `gh api graphql -f query='{ repository(owner: "OWNER", name: "REPO") { issue(number: N) { databaseId } } }' --jq '.data.repository.issue.databaseId'`), passed via `-F` (integer type).
 - **make-parent partial failure**: if a child attach fails mid-loop, both the parent and the proposal are already created — their URLs are still emitted, and `make-parent` exits non-zero with retry instructions on stderr. No atomic semantics (GitHub has no transactions).
-- **bulk-sub-of partial failure**: if any child create or attach fails, successfully created URLs are still output and recorded; the dispatcher writes retry info to stderr and exits non-zero. No atomic semantics (GitHub has no transactions).
+- **bulk-sub-of partial failure**: if any child create or attach fails, successfully created URLs are still output and recorded; the dispatcher writes retry info to stderr and exits non-zero, and the manifest is kept (not removed) so the rows not yet created can be identified; never re-run the whole manifest (created rows would duplicate). No atomic semantics (GitHub has no transactions).
 - **Origin marker**: `issue-create.sh` appends the filing session's `<!-- origin-session: <id> -->` line to the body; never add it by hand (`docs/architecture/cross-session-messaging.md` §3).
 - **Untrusted content**: title/body are passed as separate `gh` arguments — no shell expansion. Do not interpolate unvalidated input into `--title`.
 - **Schema enforcement (#443)**: `bin/github-issues/issue-create.sh` exits 3 when `Background` or `Changes` is missing. `ISSUE_CREATE_SKIP_SCHEMA=1` is an emergency escape hatch only — the sanctioned path is to add the missing fields. Incident issues (`type:incident`) bypass this skill entirely per Scope.
