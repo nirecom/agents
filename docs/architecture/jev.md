@@ -147,9 +147,10 @@ subagent and no ticket; only a confident yes acts.
     name `JEV_AUTO_SKIP_ASKUSER` is still read, with a warning, while the new
     one is unset (a temporary migration module).
   - `bin/check-askuser-dialog-ids` (a quality gate) fails a dialog line without
-    an ID or an `askuser-none` note, an ID the table lacks, and a table row no
-    line uses; it lists added or changed rows for the user to review.
-  - Levels: `high` covers approval, consent or destructive operations; gates and
+    an ID or an `askuser-none` note, a line that names `AskUserQuestion` more times
+    than it carries IDs, an ID the table lacks, and a table row no line uses; it lists added or changed rows for the user to review.
+  - Levels: `high` covers approval, consent or destructive operations; dialogs that
+    ask the user's own intent, requirements or priorities; gates and
     recoveries; and publication outside the machine (GitHub, push). When the
     step a dialog can arise in is unclear, rate it `high`. Review every added
     or changed ID against these criteria.
