@@ -14,6 +14,7 @@ function readRows(file) {
 // readSide(dir) — { recorded, hasRecords, failCases: Set, seenCases: Set, lines: [[case, detail]] }.
 // recorded: any case or detail record at all (the fp header); hasRecords: a FAIL case or a detail.
 // A FAIL case is a seq whose last cases.tsv record is FAIL; one without a detail line gives "".
+// A seq whose last record is OPEN and that has no detail line also gives "" (never seen or failed).
 function readSide(dir) {
   const caseRows = readRows(path.join(dir, "cases.tsv")).filter((r) => r.length >= 3);
   const detailRows = readRows(path.join(dir, "fail-details.tsv")).filter((r) => r.length >= 3);
@@ -26,6 +27,12 @@ function readSide(dir) {
   const detailSeqs = new Set(detailRows.map((r) => r[0]));
   const lines = detailRows.map(([, name, ...text]) => [name, text.join("\t")]);
   for (const [seq, { state, name }] of last) {
+    // An OPEN-at-end case is counted as a failure line (contract: OPEN becomes FAIL when the unit
+    // failed or timed out), but it stays out of seenCases and failCases: it was never settled.
+    if (state === "OPEN") {
+      if (!detailSeqs.has(seq)) lines.push([name, ""]);
+      continue;
+    }
     if (state !== "FAIL") continue;
     failCases.add(name);
     if (!detailSeqs.has(seq)) lines.push([name, ""]);

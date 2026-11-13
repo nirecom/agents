@@ -37,13 +37,11 @@ pass() {
 }
 
 fail() {
-  if [ -n "${2:-}" ]; then
-    echo "FAIL: $1 — $2"
-  else
-    echo "FAIL: $1"
-  fi
+  local text="$1"
+  if [ -n "${2:-}" ]; then text="$1 — $2"; fi
+  echo "FAIL: $text"
   FAIL=$((FAIL + 1))
-  _harness_detail_record "${2:-}"
+  _harness_detail_record "$text"
   _harness_case_failed
 }
 

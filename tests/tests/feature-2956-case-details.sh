@@ -3,7 +3,8 @@
 # Tests: tests/lib/harness-detail.sh, tests/lib/harness.sh
 # Tags: scope:issue-specific, run-all, result-dir, fail-details, tl2
 # #2956 S3/S5: the bash harness writes one fail-details.tsv record (<seq>\t<case>\t<text>) per
-# fail() call, folds $2 by the contract rule (checked against tests/fixtures/fail-detail-fold.tsv),
+# fail() call, folds the printed text by the contract rule (checked against tests/fixtures/fail-detail-fold.tsv;
+# the text is "$1" for a one-argument fail and "$1 — $2" for a two-argument fail),
 # records a fail outside any case as seq 0 / case "-", and harness-detail.sh offers the list and
 # count markers harness_list_detail / harness_count_detail.
 set -u
@@ -27,12 +28,22 @@ fold_load
 fail "outside-before" "before any case"
 for i in "${!FOLD_INPUTS[@]}"; do
   case_begin "fold-row-$i-end" "tests/lib/harness-detail.sh"
-  fail "fold" "${FOLD_INPUTS[$i]}"
+  fail "${FOLD_INPUTS[$i]}"
   case_end
 done
 case_begin "two-fails" "tests/lib/harness-detail.sh"
 fail "first" "detail one"
 fail "second" "detail two"
+case_end
+case_begin "one-arg" "tests/lib/harness.sh"
+fail "A"
+case_end
+case_begin "two-arg" "tests/lib/harness.sh"
+fail "A" "B"
+case_end
+case_begin "two-one-arg-fails" "tests/lib/harness.sh"
+fail "alpha"
+fail "beta"
 case_end
 case_begin "pass-only" "tests/lib/harness-detail.sh"
 pass "fine"
@@ -41,6 +52,9 @@ case_begin "no-detail" "tests/lib/harness-detail.sh"
 fail "bare"
 case_end
 fail "outside-after" "after the cases"
+opener=case_begin  # indirect on purpose: this case is never ended (the child exits inside it)
+"$opener" "abrupt-exit" "tests/lib/harness.sh"
+fail "cut"
 exit 0
 EOF
 
@@ -67,7 +81,7 @@ case_end
 case_begin "one-record-per-fail-call" "tests/lib/harness-detail.sh"
 got="$(fd_lines two-fails)"
 seq_two="$( [ -f "$CT" ] && awk -F'\t' '$3=="two-fails"{print $1; exit}' "$CT")"
-want="$(printf '%s\t%s\t%s\n%s\t%s\t%s' "$seq_two" two-fails "detail one" "$seq_two" two-fails "detail two")"
+want="$(printf '%s\t%s\t%s\n%s\t%s\t%s' "$seq_two" two-fails "first — detail one" "$seq_two" two-fails "second — detail two")"
 if [ -n "$seq_two" ] && [ "$got" = "$want" ]; then
   pass "two fail() calls in one case -> two records with the case's seq"
 else
@@ -82,7 +96,7 @@ case_end
 
 case_begin "fail-outside-case-is-seq-0-dash" "tests/lib/harness-detail.sh"
 got="$(fd_lines -)"
-want="$(printf '0\t-\tbefore any case\n0\t-\tafter the cases')"
+want="$(printf '0\t-\toutside-before — before any case\n0\t-\toutside-after — after the cases')"
 if [ "$got" = "$want" ]; then pass "fails before and after the cases -> seq 0, case -"; else fail "outside-case records" "got=$(printf '%q' "$got")"; fi
 case_end
 
@@ -93,6 +107,28 @@ case_end
 case_begin "fail-stdout-unchanged" "tests/lib/harness.sh"
 out="$(cat "$T/r-own.out")"
 if [[ "$out" == *"FAIL: first — detail one"* && "$out" == *"FAIL: bare"* ]]; then pass "fail() still prints FAIL: <name> — <detail>"; else fail "fail() stdout changed" "$out"; fi
+case_end
+
+# fd_texts <case> — the text field of that case's records, one per line.
+fd_texts() {
+  [ -f "$DT" ] && awk -F'\t' -v c="$1" '$2==c{print $3}' "$DT"
+}
+
+case_begin "fail-before-abrupt-exit-is-fail-record" "tests/lib/harness.sh"
+assert_eq "$( [ -f "$CT" ] && awk -F'\t' '$3=="abrupt-exit"{s=$2} END{print s}' "$CT")" "FAIL"
+assert_eq "$(fd_texts abrupt-exit)" "cut"
+case_end
+
+case_begin "one-arg-fail-records-name" "tests/lib/harness.sh"
+assert_eq "$(fd_texts one-arg)" "A"
+case_end
+
+case_begin "two-arg-fail-records-name-dash-detail" "tests/lib/harness.sh"
+assert_eq "$(fd_texts two-arg)" "A — B"
+case_end
+
+case_begin "two-one-arg-fails-differ" "tests/lib/harness.sh"
+assert_eq "$(fd_texts two-one-arg-fails)" "$(printf 'alpha\nbeta')"
 case_end
 
 case_begin "no-record-without-owned-result-dir" "tests/lib/harness.sh"

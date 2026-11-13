@@ -100,7 +100,9 @@ How each language fills it:
 - `\` becomes `\\`, a tab becomes `\t`, a newline becomes `\n`, so the record stays one line.
 - Text longer than 8192 characters after folding is cut there and ends with `\n[cut]`.
 
-The comparison unit of `bin/run-tests-baseline` is this folded text, not the `fail` name: two failures of one case with the same text are one line, and a branch line absent from the base makes the case `new-case-failure-on-branch`.
+For the bash harness `<text>` is what `fail` prints after `FAIL: ` — `$1` for a one-argument call, `$1 — $2` for a two-argument call — so the `fail` name is part of the line. A case still `OPEN` at the end (cut off by an abnormal exit, with no `fail` call) counts in the comparison as an empty failure line of that case; it is never listed as seen.
+
+The comparison unit of `bin/run-tests-baseline` is this folded text, compared as a multiset per case: two failures of one case with the same text are two lines, so one more on the branch than on the base is a new line, and a branch line absent from the base makes the case `new-case-failure-on-branch`.
 
 Two markers let a test report a large or unstable set compactly: `[count=N]` and `[list total=M: a | b]` (`\`, `|` and `]` inside an item are backslash-escaped). A branch line that differs from the base line only by marks that went down is the same failure: each count is at most the base's, and each list holds all its M items on both sides and is a sub-multiset of the base's. A list with fewer items than M, or a line ending in the fold's `\n[cut]`, is not comparable and counts as a new line (fail-closed). A line pair without any marker is compared as plain text.
 
