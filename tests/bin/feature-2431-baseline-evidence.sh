@@ -194,7 +194,7 @@ seed_pending_fail "$SID" 0 "tests/bin/gamma.sh"
 if [ "$CLI_EXISTS" = "1" ]; then
   SEQ_VAL="$(get_seq "$SID")"
   CLASSFILE="$TMPROOT/cls-unmet.txt"
-  printf 'tests/bin/gamma.sh\tbroken\t\n' > "$CLASSFILE"
+  printf 'tests/bin/gamma.sh\tbroken\tbase-pass\t0\t[]\n' > "$CLASSFILE"
   run_record "$SID" "${SEQ_VAL:-1}" "$CLASSFILE"
   [ "$REC_RC" -eq 1 ] && pass "record-unmet-conditions-pending: exits 1 when classification condition (4) not met" \
     || fail "record-unmet-conditions-pending: expected exit 1, got $REC_RC"
@@ -216,7 +216,7 @@ seed_pending_fail "$SID" 0 "tests/bin/zeta.sh" "tests/bin/eta.sh"
 if [ "$CLI_EXISTS" = "1" ]; then
   SEQ_VAL="$(get_seq "$SID")"
   CLASSFILE="$TMPROOT/cls-dup.txt"
-  printf 'tests/bin/zeta.sh\tpreexisting\tbase-fail\ntests/bin/zeta.sh\tpreexisting\tbase-fail\n' > "$CLASSFILE"
+  printf 'tests/bin/zeta.sh\tpreexisting\tbase-fail\t0\t[]\ntests/bin/zeta.sh\tpreexisting\tbase-fail\t0\t[]\n' > "$CLASSFILE"
   run_record "$SID" "${SEQ_VAL:-1}" "$CLASSFILE"
   assert_not_completed "record-duplicate-row-no-cover" "$SID"
 else
@@ -232,7 +232,7 @@ seed_pending_fail "$SID" 0 "tests/bin/theta.sh" "tests/bin/iota.sh"
 if [ "$CLI_EXISTS" = "1" ]; then
   SEQ_VAL="$(get_seq "$SID")"
   CLASSFILE="$TMPROOT/cls-sub.txt"
-  printf 'tests/bin/theta.sh\tpreexisting\tbase-fail\ntests/bin/kappa.sh\tpreexisting\tbase-fail\n' > "$CLASSFILE"
+  printf 'tests/bin/theta.sh\tpreexisting\tbase-fail\t0\t[]\ntests/bin/kappa.sh\tpreexisting\tbase-fail\t0\t[]\n' > "$CLASSFILE"
   run_record "$SID" "${SEQ_VAL:-1}" "$CLASSFILE"
   assert_not_completed "record-substituted-path-no-cover" "$SID"
 else
@@ -248,7 +248,7 @@ seed_pending_fail "$SID" 0 "tests/bin/lambda.sh" "tests/bin/mu.sh"
 if [ "$CLI_EXISTS" = "1" ]; then
   SEQ_VAL="$(get_seq "$SID")"
   CLASSFILE="$TMPROOT/cls-omit.txt"
-  printf 'tests/bin/lambda.sh\tpreexisting\tbase-fail\n' > "$CLASSFILE"
+  printf 'tests/bin/lambda.sh\tpreexisting\tbase-fail\t0\t[]\n' > "$CLASSFILE"
   run_record "$SID" "${SEQ_VAL:-1}" "$CLASSFILE"
   [ "$REC_RC" -eq 1 ] && pass "record-omitted-path-no-cover: exits 1 (cover condition (3) unmet)" \
     || fail "record-omitted-path-no-cover: expected exit 1, got $REC_RC"
@@ -264,7 +264,7 @@ seed_pending_fail "$SID" 0 "tests/bin/delta.sh"
 if [ "$CLI_EXISTS" = "1" ]; then
   SEQ_VAL="$(get_seq "$SID")"
   CLASSFILE="$TMPROOT/cls-success.txt"
-  printf 'tests/bin/delta.sh\tpreexisting\tbase-fail\n' > "$CLASSFILE"
+  printf 'tests/bin/delta.sh\tpreexisting\tbase-fail\t0\t[]\n' > "$CLASSFILE"
   run_record "$SID" "${SEQ_VAL:-1}" "$CLASSFILE"
   [ "$REC_RC" -eq 0 ] && pass "record-success-complete: exits 0 when all preexisting" \
     || fail "record-success-complete: expected exit 0, got $REC_RC"
@@ -293,7 +293,7 @@ while IFS='|' read -r ulabel useed uwant; do
   if [ "$CLI_EXISTS" = "1" ]; then
     SEQ_VAL="$(get_seq "$SID")"
     CLASSFILE="$TMPROOT/cls-unr-$ulabel.txt"
-    printf 'tests/bin/kappa.sh\tpreexisting\tbase-fail\n' > "$CLASSFILE"
+    printf 'tests/bin/kappa.sh\tpreexisting\tbase-fail\t0\t[]\n' > "$CLASSFILE"
     run_record "$SID" "${SEQ_VAL:-1}" "$CLASSFILE"
     assert_eq "$REC_RC" 1
     assert_not_completed "record-unrunnable-$ulabel" "$SID"
@@ -323,7 +323,7 @@ if [ "$CLI_EXISTS" = "1" ]; then
   SEQ_VAL="$(get_seq "$SID")"
   seed_events "$SID" '[{"kind":"step_status","step":"run_tests","status":"pending","origin":"race-interloper"}]'
   CLASSFILE="$TMPROOT/cls-race.txt"
-  printf 'tests/bin/epsilon.sh\tpreexisting\tbase-fail\n' > "$CLASSFILE"
+  printf 'tests/bin/epsilon.sh\tpreexisting\tbase-fail\t0\t[]\n' > "$CLASSFILE"
   run_record "$SID" "${SEQ_VAL:-1}" "$CLASSFILE"
   [ "$REC_RC" -eq 3 ] && pass "record-race-new-write: exits 3 when seq no longer matches (race)" \
     || fail "record-race-new-write: expected exit 3, got $REC_RC"
@@ -365,7 +365,7 @@ mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
 BOS_TOOL_JS="$AGENTS_WIN/tests/lib/workflow-state-tool.js"
 BOS_FAILING='["tests/bin/alpha.sh"]'
 BOS_CLS="$TMPROOT/bos-cls.txt"
-printf 'tests/bin/alpha.sh\tpreexisting\tbase-fail\n' > "$BOS_CLS"
+printf 'tests/bin/alpha.sh\tpreexisting\tbase-fail\t0\t[]\n' > "$BOS_CLS"
 BOS_CLS_N="$(np "$BOS_CLS")"
 BOS_EV_RT='{"kind":"step_annotation","step":"run_tests","key":'
 

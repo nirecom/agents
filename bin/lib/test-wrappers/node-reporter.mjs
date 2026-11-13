@@ -4,14 +4,33 @@
 // With a --test-reporter-destination the records are appended to it directly (O_APPEND per write):
 // node's own stream writes at its fd offset, which would overwrite whatever test code appended there,
 // so a forged or malformed line would vanish instead of failing the file. Without one, they are yielded.
+// Each failed test also appends `<seq>\t<case>\t<text>` to fail-details.tsv beside the destination
+// (#2956); <text> is the fold of test-result-contract.md (fail-details.tsv section).
 import { appendFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const target = process.env.RUN_ALL_NODE_TARGET || "";
 const clean = (s) => String(s).replace(/[\t\r\n]/g, " ");
 const DEST_FLAG = "--test-reporter-destination=";
 const destArg = process.execArgv.find((a) => a.startsWith(DEST_FLAG));
 const dest = destArg === undefined ? "" : destArg.slice(DEST_FLAG.length);
+const details = dest === "" ? "" : join(dirname(dest), "fail-details.tsv");
+const DETAIL_MAX = 8192;
+
+function fold(text) {
+  const lines = String(text).replace(/\r\n?/g, "\n").split("\n").map((l) => l.replace(/[ \t]+$/, ""));
+  while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  const out = Buffer.from(lines.map((l) => l.replace(/\\/g, "\\\\").replace(/\t/g, "\\t")).join("\\n"), "utf8");
+  return out.length > DETAIL_MAX ? Buffer.concat([out.subarray(0, DETAIL_MAX), Buffer.from("\\n[cut]")]) : out;
+}
+
+// node wraps what the test threw in an ERR_TEST_FAILURE whose cause is the thrown value.
+function failureText(data) {
+  const err = data.details && data.details.error;
+  const thrown = err && err.cause !== undefined ? err.cause : err;
+  if (thrown instanceof Error || (thrown && typeof thrown.message === "string")) return thrown.message;
+  return thrown === undefined ? "" : String(thrown);
+}
 
 // The file itself shows up as a test named by its path (node reports a file with no test, or one
 // that exits on its own, that way).
@@ -53,5 +72,8 @@ export default async function* caseReporter(source) {
     const record = `${seq}\t${state}\t${clean(name)}\t${clean(target)}\n`;
     if (dest === "") yield record;
     else appendFileSync(dest, record);
+    if (details !== "" && state === "FAIL" && event.type === "test:fail") {
+      appendFileSync(details, Buffer.concat([Buffer.from(`${seq}\t${clean(name)}\t`), fold(failureText(data)), Buffer.from("\n")]));
+    }
   }
 }

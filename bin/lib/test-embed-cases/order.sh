@@ -15,7 +15,7 @@ _tec_order_read() {
 
 # frequency: run-all ledger count desc, then git churn desc, then path asc. Churn = commits
 # (last 1000, merges excluded) touching a source path whose select-tests stem occurs in the
-# test's basename, so the order follows how often the code a test covers changes.
+# test's sts_name_key, so the order follows how often the code a test covers changes.
 tec_order_frequency() {
   local total="$1" rel p
   local counts="$TEC_TMP/counts.tsv" log="$TEC_TMP/log.txt" stems="$TEC_TMP/stems.tsv"
@@ -31,11 +31,12 @@ tec_order_frequency() {
   : >"$cands"
   for rel in ${TEC_CANDIDATES[@]+"${TEC_CANDIDATES[@]}"}; do
     run_all_dur_key_into "$PWD/$rel" "$PWD" || RUN_ALL_DUR_KEY_OUT="$rel"
-    printf '%s\t%s\n' "$rel" "$RUN_ALL_DUR_KEY_OUT" >>"$cands"
+    sts_name_key_into "$rel"
+    printf '%s\t%s\t%s\n' "$rel" "$RUN_ALL_DUR_KEY_OUT" "$STS_KEY" >>"$cands"
   done
   awk -F'\t' -v OFS='\t' '
     FILENAME == ARGV[1] { cnt[$1] = $2; next }
-    FILENAME == ARGV[2] { nc++; rel[nc] = $1; key[nc] = $2; b = $1; sub(/.*\//, "", b); base[nc] = b; next }
+    FILENAME == ARGV[2] { nc++; rel[nc] = $1; key[nc] = $2; base[nc] = $3; next }
     FILENAME == ARGV[3] { ns[$1]++; st[$1, ns[$1]] = $2; next }
     function flush(   c) { for (c in hit) churn[c]++; split("", hit) }
     $0 == "\001" { flush(); next }

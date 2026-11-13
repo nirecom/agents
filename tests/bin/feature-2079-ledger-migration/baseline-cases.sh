@@ -40,7 +40,8 @@ lb_plant_v2() {
 lb_age_old() { lm_age "$(lb_dir)/$(lm_oldtok "$1" "$2")-$3-$4.seg" "$5"; }
 
 # lb_same <sha> <rel> / lb_inh <rel> — run the real lookups (they trigger the migration).
-lb_same() { say same "$(rtb_ledger_lookup_same_base "$1" "$2")"; }
+# lb_same keeps only the result token: a v3 lookup may print the fingerprint after it (#2956 S7).
+lb_same() { local r; r="$(rtb_ledger_lookup_same_base "$1" "$2")"; say same "${r%%[[:space:]]*}"; }
 lb_inh() { say inh "$(rtb_ledger_lookup_inheritable "$1" | tr '\n' ' ')"; }
 
 # lb_append <sha> <rel> <fail|pass> — the writer path: init (migration hook), then one record.
@@ -134,10 +135,12 @@ run_baseline_mtime_lookup_cases() {
   local c e s m
   lb_win; c="$(lm_cache)"; e=$(( $(lb_now) - 29 * 86400 ))
   m="$(lm_v "$(lm_run "$c" lb_plant_old "$LM_W26300" stubhost "$e" 103 $((29 * 1440)) - "tests/a.sh:fail:abcdef1")" mtime)"
-  ck "b4/lookup-same-base-reads-migrated" "fail" "$(lm_v "$(lm_run "$c" lb_same abcdef1 tests/a.sh)" same)"
+  # The lookups still run the migration, but since #2956 S7 they read only v3 rows: a migrated
+  # v2 record carries no fingerprint, so it is a miss and the test re-runs.
+  ck "b4/lookup-same-base-skips-migrated-v2" "" "$(lm_v "$(lm_run "$c" lb_same abcdef1 tests/a.sh)" same)"
   s="$(lm_run "$c" lb_show "$LM_W26300" stubhost "$e" 103)"
   ck "b3/mtime-preserved-29-days" "1:$m" "$(lm_v "$s" dest):$(lm_v "$s" dmtime)"
-  ck "b4/lookup-inheritable-reads-migrated" "abcdef1 " "$(lm_v "$(lm_run "$c" lb_inh tests/a.sh)" inh)"
+  ck "b4/lookup-inheritable-skips-migrated-v2" "" "$(lm_v "$(lm_run "$c" lb_inh tests/a.sh)" inh)"
 }
 
 run_baseline_keep_lines_cases() {
@@ -181,7 +184,7 @@ run_baseline_nonwindows_cases() {
     lm_run "$c" lb_plant_old "$LM_W26300" stubhost "$e" 109 120 - "tests/a.sh:pass:abcdef1" >/dev/null
     fb1="$(lm_run "$c" lb_show "$s" otherhost "$e" 108)"; fb2="$(lm_run "$c" lb_show "$LM_W26300" stubhost "$e" 109)"
     before="$fb1$fb2"
-    ck "b7/$s-lookup-reads-own-token" "fail" "$(lm_v "$(lm_run "$c" lb_same abcdef1 tests/a.sh)" same)"
+    ck "b7/$s-lookup-skips-migrated-v2" "" "$(lm_v "$(lm_run "$c" lb_same abcdef1 tests/a.sh)" same)"
     r="$(lm_run "$c" lb_show "$s" stubhost "$e" 107)"; tok="$(lm_v "$r" tok)"
     ck "b7/$s-own-token-converted" "1:0:$m" "$(lm_v "$r" dest):$(lm_v "$r" src):$(lm_v "$r" dmtime)"
     ck "b7/$s-attr-unknown-migrated" "$(lb_lines "$tok" "$s/unknown-migrated" "$e" abcdef1:tests/a.sh:fail)" "$(lm_v "$r" lines)"
@@ -219,15 +222,14 @@ run_baseline_late_append_cases() {
   lb_win; c="$(lm_cache)"; e=$(( $(lb_now) - 7200 ))
   mm="$(lm_v "$(lm_run "$c" lb_plant_old "$LM_W26300" stubhost "$e" 113 120 .migrating "tests/a.sh:fail:abcdef1")" mtime)"
   lm_run "$c" lb_plant_old "$LM_W26300" stubhost "$e" 113 5 - "tests/b.sh:fail:abcdef2" >/dev/null
-  ck "b11/claimed-line-readable" "fail" "$(lm_v "$(lm_run "$c" lb_same abcdef1 tests/a.sh)" same)"
+  ck "b11/claimed-line-migrated-not-read" "" "$(lm_v "$(lm_run "$c" lb_same abcdef1 tests/a.sh)" same)"
   s="$(lm_run "$c" lb_show "$LM_W26300" stubhost "$e" 113)"; tok="$(lm_v "$s" tok)"
   ck "b11/claimed-to-v2-mtime-kept" "1:$mm:0" "$(lm_v "$s" dest):$(lm_v "$s" dmtime):$(lm_v "$s" mig)"
   ck "b11/reborn-original-left" "1" "$(lm_v "$s" src)"
   lm_run "$c" lb_age_old "$LM_W26300" stubhost "$e" 113 61
-  # Plan (11) is pinned strictly: the aged reborn line is readable by the new reader, even
-  # though its destination name is the one the claimed file already produced (cf. (9)).
+  # Plan (11): the aged reborn line is migrated too; as v2 it is never read as a verdict (#2956 S7).
   lm_run "$c" lb_same abcdef2 tests/b.sh >/dev/null
-  ck "b11/reborn-line-readable-after-aging" "fail:fail" "$(lm_v "$(lm_run "$c" lb_same abcdef2 tests/b.sh)" same):$(lm_v "$(lm_run "$c" lb_same abcdef1 tests/a.sh)" same)"
+  ck "b11/reborn-line-migrated-not-read" ":" "$(lm_v "$(lm_run "$c" lb_same abcdef2 tests/b.sh)" same):$(lm_v "$(lm_run "$c" lb_same abcdef1 tests/a.sh)" same)"
   c="$(lm_cache)"
   lm_run "$c" lb_plant_old "$LM_W26300" stubhost "$e" 114 120 - "tests/a.sh:fail:abcdef1" >/dev/null
   LM_XVAR="$e"
@@ -235,7 +237,7 @@ run_baseline_late_append_cases() {
   LM_XVAR=""
   s="$(lm_run "$c" lb_show "$LM_W26300" stubhost "$e" 114)"
   ck "b11b/changed-claim-kept-no-destination" "1:0" "$(lm_v "$s" mig):$(lm_v "$s" dest)"
-  ck "b11b/late-line-readable-next-round" "fail:fail" "$(lm_v "$(lm_run "$c" lb_same abcdef5 tests/late.sh)" same):$(lm_v "$(lm_run "$c" lb_same abcdef1 tests/a.sh)" same)"
+  ck "b11b/late-line-migrated-not-read" ":" "$(lm_v "$(lm_run "$c" lb_same abcdef5 tests/late.sh)" same):$(lm_v "$(lm_run "$c" lb_same abcdef1 tests/a.sh)" same)"
   s="$(lm_run "$c" lb_show "$LM_W26300" stubhost "$e" 114)"
   ck "b11b/claim-consumed-next-round" "0:1" "$(lm_v "$s" mig):$(lm_v "$s" dest)"
 }

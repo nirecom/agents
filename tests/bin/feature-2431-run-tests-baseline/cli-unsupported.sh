@@ -37,22 +37,26 @@ run_cli_unsupported_at_base_cases() {
   else
     pass "C3-unsupported-at-base: $t_uns not classified preexisting"
   fi
-  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: preexisting[[:space:]]+$t_78[[:space:]]+fails-at-base-exit-78\$"; then
-    pass "C3-exit-78-launched: a launched test exiting 78 is preexisting fails-at-base-exit-78"
+  # The exit-78 test writes no case records on either side (#2956 S8 table 1): an ordinary base
+  # failure judged at file level, not an unsupported one.
+  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: file-verdict-preexisting[[:space:]]+$t_78[[:space:]]+no-case-records\$"; then
+    pass "C3-exit-78-launched: a launched test exiting 78 is file-verdict-preexisting no-case-records"
   else
-    fail "C3-exit-78-launched: expected preexisting fails-at-base-exit-78; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
+    fail "C3-exit-78-launched: expected file-verdict-preexisting no-case-records; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
   fi
-  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE '^BASELINE_SUMMARY: preexisting=1 inherited=0 broken=0 undetermined=1$' \
+  if printf '%s\n' "$RTB_CLI_OUT" | grep -qxF "$(baseline_summary 0 0 0 1 1 0)" \
     && [ "$RTB_CLI_RC" -eq 0 ]; then
-    pass "C3-unsupported-at-base: summary preexisting=1 undetermined=1 and exit 0 (auto + proof)"
+    pass "C3-unsupported-at-base: summary undetermined=1 file_verdict=1 and exit 0 (auto + auto)"
   else
     fail "C3-unsupported-at-base: summary/exit mismatch; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
   fi
 
   # Ledger: the unsupported test is recorded only as undetermined, never as a pass/fail verdict.
   local got_uns got_78
+  # v3 (#2956 S7) may print the fingerprint after the result; only the result token is compared.
   got_uns="$(ledger_call "$cache" "$repo" rtb_ledger_lookup_same_base "$base" "$t_uns" 2>/dev/null)"
   got_78="$(ledger_call "$cache" "$repo" rtb_ledger_lookup_same_base "$base" "$t_78" 2>/dev/null)"
+  got_uns="${got_uns%%[[:space:]]*}" got_78="${got_78%%[[:space:]]*}"
   if [ "$got_uns" = "und:unsupported-at-base" ] && [ "$got_78" = "fail" ]; then
     pass "C3-unsupported-at-base: unsupported test recorded und:unsupported-at-base; exit-78 test recorded fail"
   else

@@ -20,10 +20,12 @@ _HARNESS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pw
 # The result env belongs to the launched file alone: never to a nested test or a child process.
 if [ -z "${_HARNESS_CASES_FILE+x}" ]; then
   _HARNESS_CASES_FILE=""
+  _HARNESS_DETAILS_FILE=""
   _HARNESS_CASE_SEQ=0
   _HARNESS_CASE_OPEN=""
   if [ -n "${RUN_ALL_RESULT_DIR:-}" ] && [ "${RUN_ALL_RESULT_OWNER-}" = "$0" ]; then
     _HARNESS_CASES_FILE="$RUN_ALL_RESULT_DIR/cases.tsv"
+    _HARNESS_DETAILS_FILE="$RUN_ALL_RESULT_DIR/fail-details.tsv"
   fi
 fi
 unset RUN_ALL_RESULT_DIR RUN_ALL_RESULT_OWNER
@@ -35,12 +37,11 @@ pass() {
 }
 
 fail() {
-  if [ -n "${2:-}" ]; then
-    echo "FAIL: $1 — $2"
-  else
-    echo "FAIL: $1"
-  fi
+  local text="$1"
+  if [ -n "${2:-}" ]; then text="$1 — $2"; fi
+  echo "FAIL: $text"
   FAIL=$((FAIL + 1))
+  _harness_detail_record "$text"
   _harness_case_failed
 }
 
@@ -156,14 +157,14 @@ case_end() {
 # discarded, return code ignored, no cases.tsv line written, and the counters plus every case-state
 # variable restored afterwards. Stdin is the caller's to redirect; caller-owned counters stay its own.
 _HARNESS_DISCARD_VARS=(PASS FAIL SKIP XFAIL_N XPASS_N CURRENT_CASE CURRENT_CASE_TARGET _HARNESS_CASES_FILE
-  _HARNESS_CASE_OPEN _HARNESS_CASE_FAILED _HARNESS_CASE_SEQ _HARNESS_CASE_NAME _HARNESS_CASE_TARGET _HARNESS_CASE_AT)
+  _HARNESS_DETAILS_FILE _HARNESS_CASE_OPEN _HARNESS_CASE_FAILED _HARNESS_CASE_SEQ _HARNESS_CASE_NAME _HARNESS_CASE_TARGET _HARNESS_CASE_AT)
 harness_discard_pass() {
   local _hdp_v _hdp_i=0
   local -a _hdp_saved=()
   for _hdp_v in "${_HARNESS_DISCARD_VARS[@]}"; do
     if [ -n "${!_hdp_v+x}" ]; then _hdp_saved+=("1${!_hdp_v}"); else _hdp_saved+=("0"); fi
   done
-  _HARNESS_CASES_FILE=""
+  _HARNESS_CASES_FILE="" _HARNESS_DETAILS_FILE=""
   "$@" >/dev/null 2>&1 || true
   for _hdp_v in "${_HARNESS_DISCARD_VARS[@]}"; do
     case "${_hdp_saved[_hdp_i]}" in
@@ -200,6 +201,8 @@ case "${BASH_SOURCE[0]}" in
   */*) _HARNESS_LIB_DIR="${BASH_SOURCE[0]%/*}" ;;
   *)   _HARNESS_LIB_DIR="." ;;
 esac
+# shellcheck source=tests/lib/harness-detail.sh
+if [ -f "$_HARNESS_LIB_DIR/harness-detail.sh" ]; then . "$_HARNESS_LIB_DIR/harness-detail.sh"; else _harness_detail_record() { :; }; fi
 # Exception: a harness copied without root-decoy.sh (a fixture checkout) keeps the decoy, run
 # root and command guard its launcher already pinned, as run_all_pin_root_decoy does; anything
 # else still fails closed.

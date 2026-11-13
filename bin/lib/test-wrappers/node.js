@@ -48,6 +48,21 @@ function settle(casesFile, status, file) {
   return 0;
 }
 
+// fail-details.tsv records follow their case to its renumbered seq; a record of no kept case is dropped.
+// latin1 keeps the bytes as written, so a fold cut inside a UTF-8 sequence is copied unchanged.
+function copyDetails(scratchDetails, outFile, records) {
+  if (!fs.existsSync(scratchDetails)) return;
+  const seqOf = new Map(records.map((f, i) => [f[0], String(i + 1)]));
+  const body = fs
+    .readFileSync(scratchDetails, "latin1")
+    .split("\n")
+    .map((l) => l.split("\t"))
+    .filter((f) => f.length === 3 && seqOf.has(f[0]))
+    .map((f) => `${seqOf.get(f[0])}\t${f[1]}\t${f[2]}\n`)
+    .join("");
+  if (body !== "") fs.writeFileSync(outFile, body, "latin1");
+}
+
 // The test code shares the process with the reporter and can find its destination in execArgv, so
 // both write to a scratch directory and only well-formed records are copied into the result directory.
 function runOnce(abs, file, casesFile) {
@@ -64,6 +79,7 @@ function runOnce(abs, file, casesFile) {
     const records = lines.map((l) => l.split("\t")).filter((f) => f.length >= 3 && /^(PASS|FAIL|SKIP)$/.test(f[1]));
     const body = records.map((f, i) => `${i + 1}\t${f[1]}\t${f[2]}\t${cleanTarget(file)}\n`).join("");
     if (body !== "") fs.writeFileSync(casesFile, body);
+    copyDetails(path.join(scratch, "fail-details.tsv"), path.join(path.dirname(casesFile), "fail-details.tsv"), records);
     // A record that is not well-formed is not trusted to be a pass: the run is settled as failed.
     return settle(casesFile, records.length === lines.length ? r.status : 1, file);
   } finally {

@@ -1,0 +1,19 @@
+# fail-detail-fold.tsv — input/expected pairs for the fail-details.tsv fold (SSOT: docs/architecture/claude-code/test-result-contract.md, fail-details.tsv section).
+# Columns: <name>\t<input>\t<expected>. Lines starting with # are comments.
+# <input> is decoded before folding: \\ -> backslash, \t -> tab, \r -> CR, \n -> LF (no other escape).
+# <expected> is the folded text byte for byte (never decoded).
+# Both columns expand @@REP:<count>:<char>@@ to <char> repeated <count> times (a single ASCII letter).
+plain	abc def	abc def
+multiline-lf	line1\nline2\nline3	line1\nline2\nline3
+crlf	first\r\nsecond\r\n	first\nsecond
+cr-only	first\rsecond	first\nsecond
+mixed-newlines	a\r\nb\rc\nd	a\nb\nc\nd
+tab	key\tvalue	key\tvalue
+backslash	C:\\dir\\file.txt	C:\\dir\\file.txt
+backslash-before-n	a\\nb	a\\nb
+trailing-spaces	a   \nb  \n	a\nb
+trailing-blank-lines	a\nb\n\n\n	a\nb
+inner-blank-line	a\n\nb	a\n\nb
+leading-spaces-kept	  indented\nnext	  indented\nnext
+long-cut	@@REP:9000:a@@	@@REP:8192:a@@\n[cut]
+exact-limit	@@REP:8192:b@@	@@REP:8192:b@@

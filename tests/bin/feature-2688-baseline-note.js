@@ -54,7 +54,7 @@ function recordAuto(label, extra) {
     ann("run_outcome", "fail"), ann("failing_tests", ["tests/bin/s.sh"]), ann("unrunnable_count", 0)]);
   const m = /^SEQ=(\S+)/m.exec(cli(["failing", "--session", id]).out);
   const file = path.join(TMP, `${id}.tsv`);
-  fs.writeFileSync(file, "tests/bin/s.sh\tundetermined\tskip-at-base\n");
+  fs.writeFileSync(file, "tests/bin/s.sh\tundetermined\tskip-at-base\t0\t[]\n");
   const r = cli(["record", "--session", id, "--seq", m ? m[1] : "1", "--classification", file, ...extra]);
   return Object.assign(r, { id });
 }
@@ -145,6 +145,53 @@ test("record-without-note-says-none", () => {
   assert.equal(r.rc, 0, r.err);
   assert.equal(entry(r.id).baseline_note ?? null, null);
   assert.equal(NOTE.readCompletionNote(r.id), autoLine(1, "skip-at-base", "(none)"));
+});
+caseEnd();
+
+// #2956 S9: baseline_new_lines_seen is disclosed once complete, whatever the basis (proof, auto
+// or a green run), one line per path, each capped at 200 characters.
+const NEW_PRE = "- Baseline new failure lines:";
+const seen = (p, count, head) => ({ [p]: { count, head, class: "new-case-failure-on-branch",
+  detail: "fails-at-base-exit-1-new-lines" } });
+
+caseBegin("new-lines-disclosure-line", "hooks/lib/run-tests-completion-note.js");
+test("new-lines-disclosure-line", () => {
+  const s = seen("t/a.sh", 2, ["line L1", "line L2"]);
+  const green = NOTE.completionNote(done({ baseline_new_lines_seen: s }));
+  assert.ok(typeof green === "string" && green.startsWith(
+    `${NEW_PRE} t/a.sh (2 new lines, new-case-failure-on-branch: line L1`), String(green));
+  assert.ok(green.includes("line L2"), green);
+  const proof = NOTE.completionNote(done({ completion_basis: "baseline-preexisting", baseline_new_lines_seen: s }));
+  assert.equal(proof, green, "a proof basis discloses the same line");
+  assert.equal(NOTE.completionNote({ status: "pending", baseline_new_lines_seen: s }), null);
+  const two = NOTE.completionNote(done({ baseline_new_lines_seen: Object.assign({}, s, seen("t/b.sh", 1, ["x"])) }));
+  const lines = two.split("\n");
+  assert.equal(lines.length, 2, two);
+  assert.ok(lines.every((l) => l.startsWith(NEW_PRE)), two);
+  const long = NOTE.completionNote(done({ baseline_new_lines_seen: seen("t/c.sh", 1, ["y".repeat(400)]) }));
+  assert.ok(long.length <= 200, `capped at 200, got ${long.length}`);
+});
+caseEnd();
+
+caseBegin("new-lines-disclosed-after-pending-then-green", "bin/workflow/run-tests-baseline-evidence");
+test("new-lines-disclosed-after-pending-then-green", () => {
+  const { markStep } = require(path.join(ROOT, "hooks", "workflow-state"));
+  const { RUN_TOMBSTONES } = require(path.join(ROOT, "hooks", "workflow-run-tests", "record-run.js"));
+  const id = sid("nl-green");
+  const p = "tests/bin/n.sh";
+  appendEvents(id, [
+    { kind: "step_status", step: "run_tests", status: "pending", provenance: "observed", origin: "run-tests-hook" },
+    ann("run_outcome", "fail"), ann("failing_tests", [p]), ann("unrunnable_count", 0)]);
+  const m = /^SEQ=(\S+)/m.exec(cli(["failing", "--session", id]).out);
+  const file = path.join(TMP, `${id}.tsv`);
+  fs.writeFileSync(file, `${p}\tnew-case-failure-on-branch\tfails-at-base-exit-1-new-lines\t1\t["violation Z"]\n`);
+  const r = cli(["record", "--session", id, "--seq", m ? m[1] : "1", "--classification", file]);
+  assert.equal(r.rc, 1, `a new failure on the branch stays pending, stderr=${r.err}`);
+  assert.equal(NOTE.readCompletionNote(id), null, "no completion note while pending");
+  markStep(id, "run_tests", "complete", Object.assign({ run_outcome: "pass", failing_tests: [] }, RUN_TOMBSTONES));
+  const note = NOTE.readCompletionNote(id);
+  assert.ok(typeof note === "string" && note.startsWith(`${NEW_PRE} ${p} (1 new lines, new-case-failure-on-branch: violation Z`),
+    String(note));
 });
 caseEnd();
 

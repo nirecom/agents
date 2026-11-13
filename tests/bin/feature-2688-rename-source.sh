@@ -107,11 +107,12 @@ commit_all "$R" rename
 S="rn-ren-$$"
 run_with_timeout 30 node "$(np "$SEED_JS")" "$AGENTS_WIN" "$S" tests/bin/new-t.sh >/dev/null 2>&1 || fail "fixture: seed $S"
 rtb "$R" "$S"
-ck "rename: exit 0 (preexisting via the old path)" 0 "$RTB_RC"
+# #2956 S8: the rename itself counts as a test-file change, so the base failure is a file verdict (auto).
+ck "rename: exit 0 (file verdict via the old path)" 0 "$RTB_RC"
 present "rename: the old path ran at base" "$R.marks/old-at-base"
-has_line "rename: preexisting line for the new path" "BASELINE: preexisting tests/bin/new-t.sh"
+has_line "rename: file-verdict line for the new path" "BASELINE: file-verdict-preexisting tests/bin/new-t.sh test-file-changed"
 has_line "rename: detail names the old path" "-via-rename:tests/bin/old-t.sh"
-ck "rename: completion_basis" "baseline-preexisting" "$(field "$S" completion_basis)"
+ck "rename: completion_basis" "baseline-auto-accepted" "$(field "$S" completion_basis)"
 case_end
 
 case_begin "added-test-without-rename-stays-pending" "bin/lib/run-tests-baseline-rename.sh"

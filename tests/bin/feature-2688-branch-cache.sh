@@ -4,10 +4,9 @@
 # Tags: run-tests, baseline, branch-rerun, cache, input-version, scope:issue-specific, pwsh-not-required, TL2, dup-group-keep:runtime-limit, budget
 # dup-group-keep: together with feature-2688-branch-rerun.sh (same Tests:), the real CLI runs overlap and exceed the 120 s limit.
 # To balance run time, the budget-slice cases (zero and boundary) are placed here too.
-# #2688 T2 - cache for the branch standalone re-run. Results are kept in branch.v1.*.seg keyed by input_version,
-# and a second run with the same input_version does not re-run. A changed working tree re-runs, and when input_version
-# cannot be resolved (merge base unknown) it re-runs every time. A fails-alone result is also reused (proceeding to the base stage),
-# and a broken or old-format segment is not used but falls back to a re-run (fail-closed).
+# #2688 T2 - branch re-run cache (branch.v2.*.seg, b2, 7 fields; #2956 S7) keyed by input_version: same iv reuses,
+# changed tree or unresolved iv re-runs, fails-alone is reused, broken/old (b1) segments fall back to a re-run.
+# Expectations follow #2956 S8 (zero slice = budget-exhausted exit 8; changed branch copy = test-file-changed).
 # TL3 gap: the time to compute input_version in a real worktree is out of scope.
 
 set -uo pipefail
@@ -36,16 +35,18 @@ case_end
 # remaining = total - 45 (SAFETY) - 2 (KILL_GRACE) - 150 - SECONDS, and the slice is 0 when remaining < 30 (MIN_SLICE).
 # slice>0 needs total >= 227 + SECONDS. 197 = 227 - 30 is the lower side: with the reserve the slice is always 0, but if the
 # reserve fell back to 0 the remaining would be 150 - SECONDS >= 30 and the branch copy would run (a reserve regression is caught).
-# The base stage carries no reserve, so at 197 it still runs after the branch stage skips.
+# The branch stage is the only source of branch-side records (#2956 S6), so a branch copy that did not run
+# leaves nothing to compare: S8 table 2 makes it undetermined budget-exhausted (exit 8), not a base-only preexisting.
 # 257 = 227 + 30 s of SECONDS jitter margin (the upper side).
 case_begin "budget-boundary-197-skips-the-rerun" "bin/lib/run-tests-baseline-branch.sh"
 R="$TMPROOT/bud197"; mk_repo "$R" 0; S="br-bud197-$$"; mkdir -p "$R.cache"
 seed "$S" '{"tests/bin/t.sh":124}' tests/bin/t.sh
 rtb "$R.cache" "$R" "$S" RTB_BUDGET_TOTAL=197
-ck "bud197: exit 0 (the base stage has no reserve and still fits)" 0 "$RTB_RC"
+ck "bud197: exit 8 (the branch copy never ran, re-run requested)" 8 "$RTB_RC"
 absent "bud197: no branch re-run on a zero slice" "$R.marks/branch"
 lacks_line "bud197: not classified flaky" "flaky-timeout-on-branch"
-has_line "bud197: goes on to base (preexisting)" "BASELINE: preexisting tests/bin/t.sh"
+has_line "bud197: not-run branch is budget-exhausted" "BASELINE: undetermined tests/bin/t.sh budget-exhausted"
+lacks_line "bud197: not a base-only preexisting" "BASELINE: preexisting tests/bin/t.sh"
 case_end
 
 case_begin "budget-boundary-257-still-reruns" "bin/lib/run-tests-baseline-branch.sh"
@@ -70,8 +71,15 @@ rtb "$R.cache" "$R" "c1b-$$"
 ck "cache: second run exit 0" 0 "$RTB_RC"
 absent "cache: second run did not re-run (same input_version)" "$R.marks/branch"
 has_line "cache: second run still flaky" "BASELINE: flaky-timeout-on-branch tests/bin/t.sh"
-ls "$R.cache"/branch.v1.*.seg >/dev/null 2>&1 && pass "cache: a branch.v1 segment was written" \
-  || fail "cache: a branch.v1 segment was written" "$(ls -A "$R.cache" 2>&1)"
+ls "$R.cache"/branch.v2.*.seg >/dev/null 2>&1 && pass "cache: a branch.v2 segment was written" \
+  || fail "cache: a branch.v2 segment was written" "$(ls -A "$R.cache" 2>&1)"
+if awk -F'\t' 'NF != 7 || $1 != "b2" { bad = 1 } END { exit bad ? 1 : (NR ? 0 : 1) }' "$R.cache"/branch.v2.*.seg 2>/dev/null; then
+  pass "cache: every branch.v2 row is b2 with 7 fields"
+else
+  fail "cache: every branch.v2 row is b2 with 7 fields" "$(cat "$R.cache"/branch.v2.*.seg 2>&1)"
+fi
+ls "$R.cache"/branch.v1.*.seg >/dev/null 2>&1 && fail "cache: no branch.v1 segment is written" "$(ls -A "$R.cache" 2>&1)" \
+  || pass "cache: no branch.v1 segment is written"
 case_end
 
 case_begin "changed-input-version-reruns" "bin/lib/run-tests-baseline-branch.sh"
@@ -104,9 +112,10 @@ present "fails-alone: first run re-ran the branch copy" "$R.marks/branch"
 rm -f "$R.marks/branch"
 seed "c4b-$$" '{"tests/bin/t.sh":124}' tests/bin/t.sh
 rtb "$R.cache" "$R" "c4b-$$"
-ck "fails-alone: second run exit 0 (preexisting)" 0 "$RTB_RC"
+ck "fails-alone: second run exit 0 (file verdict, auto)" 0 "$RTB_RC"
 absent "fails-alone: cached result skips the branch re-run" "$R.marks/branch"
-has_line "fails-alone: still goes on to base (preexisting)" "BASELINE: preexisting tests/bin/t.sh"
+has_line "fails-alone: still goes on to base (file verdict, test changed)" \
+  "BASELINE: file-verdict-preexisting tests/bin/t.sh test-file-changed"
 lacks_line "fails-alone: cached fails-alone is not read as a pass" "flaky-timeout-on-branch"
 case_end
 
@@ -116,13 +125,13 @@ case_begin "broken-or-old-segment-falls-back-to-rerun" "bin/lib/run-tests-baseli
 R="$TMPROOT/cache5"; mk_repo "$R" 0; mkdir -p "$R.cache"
 seed "c5a-$$" '{"tests/bin/t.sh":124}' tests/bin/t.sh
 rtb "$R.cache" "$R" "c5a-$$"
-cat "$R.cache"/branch.v1.*.seg > "$R.saved" 2>/dev/null || : > "$R.saved"
-[ -s "$R.saved" ] && pass "broken-segment: precondition — the first run wrote a branch.v1 segment" \
-  || fail "broken-segment: precondition — the first run wrote a branch.v1 segment" "$(ls -A "$R.cache" 2>&1)"
+cat "$R.cache"/branch.v2.*.seg > "$R.saved" 2>/dev/null || : > "$R.saved"
+[ -s "$R.saved" ] && pass "broken-segment: precondition — the first run wrote a branch.v2 segment" \
+  || fail "broken-segment: precondition — the first run wrote a branch.v2 segment" "$(ls -A "$R.cache" 2>&1)"
 for variant in garbage old-tag old-layout unknown-result; do
   [ -s "$R.saved" ] || break
-  rm -f "$R.cache"/branch.v1.*.seg "$R.marks/branch"
-  seg_variant "$variant" "$R.saved" "$R.cache/branch.v1.fixture-0-0.seg" || fail "$variant: fixture error"
+  rm -f "$R.cache"/branch.v2.*.seg "$R.marks/branch"
+  seg_variant "$variant" "$R.saved" "$R.cache/branch.v2.fixture-0-0.seg" || fail "$variant: fixture error"
   seed "c5-$variant-$$" '{"tests/bin/t.sh":124}' tests/bin/t.sh
   rtb "$R.cache" "$R" "c5-$variant-$$"
   present "$variant: the segment is not trusted, the branch copy re-runs" "$R.marks/branch"
