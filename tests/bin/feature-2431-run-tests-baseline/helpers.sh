@@ -84,6 +84,12 @@ rtb_cli_run() {
     || RTB_CLI_RC=$?
 }
 
+# baseline_summary <pre> <inh> <brk> <und> <file_verdict> <new_on_branch> — the exact
+# BASELINE_SUMMARY line (#2956 S8 adds the last two counts), for `grep -qxF`.
+baseline_summary() {
+  printf 'BASELINE_SUMMARY: preexisting=%s inherited=%s broken=%s undetermined=%s file_verdict=%s new_on_branch=%s' "$@"
+}
+
 # mk_fixture_repo <dest> — git repo with main@base + feature@HEAD, so merge-base resolves
 # RESOLVED against `main` (bin/resolve-merge-base.sh layer 2). Prints the base SHA.
 # The repo is built once per process (_mk_fixture_template) and copied, since every git
@@ -114,8 +120,9 @@ _mk_fixture_template() {
   git -C "$repo" symbolic-ref HEAD refs/heads/main
   mkdir -p "$repo/tests/bin"
 
-  # Test that always fails at base → preexisting.
-  printf '#!/usr/bin/env bash\nexit 1\n' > "$repo/tests/bin/test-preexisting.sh"
+  # Test that always fails at base with one case record and its detail (#2956): an unchanged
+  # branch copy fails with the same line, so the comparison proves it preexisting.
+  detail_fail_body "violation X" > "$repo/tests/bin/test-preexisting.sh"
   # Test that always passes at base → broken (fails at HEAD, passes at base).
   printf '#!/usr/bin/env bash\nexit 0\n' > "$repo/tests/bin/test-broken.sh"
   # Test that sleeps → timeout-at-base with short per-test-timeout.
@@ -141,12 +148,38 @@ _mk_fixture_template() {
   printf '%s\n' "$base_sha"
 }
 
-# feat_commit_failing <repo> <test-path...> — on the checked-out feature branch, each test becomes
-# a plain `exit 1` (no sentinel, no home reference). The branch stage (#2688) re-runs a failing test
-# in this checkout first, so a case about the base copy needs a branch copy that fails alone there.
+# detail_fail_body <detail> [<line>...] — a failing bash test that, after the given lines, writes
+# one FAIL case record (`case-a`) and its detail into the launcher's result dir (#2956 S3:
+# cases.tsv `<seq>\t<STATE>\t<case>\t<target>`, fail-details.tsv `<seq>\t<case>\t<text>`) and
+# exits 1. Without a result dir it is a plain `exit 1`. <detail> must hold no tab, quote or newline.
+detail_fail_body() {
+  local detail="$1"; shift
+  printf '%s\n' '#!/usr/bin/env bash' "$@" \
+    'd="${RUN_ALL_RESULT_DIR:-}"' \
+    'if [ -n "$d" ]; then' \
+    "  printf '1\\tFAIL\\tcase-a\\t-\\n' >>\"\$d/cases.tsv\"" \
+    "  printf '1\\tcase-a\\t%s\\n' '$detail' >>\"\$d/fail-details.tsv\"" \
+    'fi' \
+    'exit 1'
+}
+
+# feat_commit_failing [--detail <text>] <repo> <test-path...> — on the checked-out feature branch,
+# each test becomes a plain `exit 1` (no sentinel, no home reference), or with --detail a
+# detail_fail_body test that records <text>. The branch stage (#2688) re-runs a failing test in this
+# checkout first, so a case about the base copy needs a branch copy that fails alone there. The
+# branch copy differs from the base copy, so a base failure is `file-verdict-preexisting
+# test-file-changed` (#2956 S8), never a proof.
 feat_commit_failing() {
-  local repo="$1" p; shift
-  for p in "$@"; do printf '#!/usr/bin/env bash\nexit 1\n' > "$repo/$p"; done
+  local detail="" repo p
+  if [[ "${1:-}" == --detail ]]; then detail="$2"; shift 2; fi
+  repo="$1"; shift
+  for p in "$@"; do
+    if [[ -n "$detail" ]]; then
+      detail_fail_body "$detail" > "$repo/$p"
+    else
+      printf '#!/usr/bin/env bash\nexit 1\n' > "$repo/$p"
+    fi
+  done
   git -C "$repo" add -- "$@"
   git -C "$repo" commit -q -m "branch copy fails alone"
 }

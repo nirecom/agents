@@ -18,6 +18,11 @@ const AUTO_UNDETERMINED = new Set([
 ]);
 const RERUN_UNDETERMINED = new Set(["budget-exhausted", "worktree-create-failed", "exec-setup-failed"]);
 const RERUN_STATE_RE = /^state-[A-Za-z0-9_]+-at-base$/;
+// #2956 table 1: a file-level verdict (no case lines to compare) is auto for these details only;
+// new-case-failure-on-branch is never in the allow-list, so it stays pending.
+const FILE_VERDICT_CLASS = "file-verdict-preexisting";
+const AUTO_FILE_VERDICT = new Set(["test-file-changed", "no-case-records"]);
+const RENAME_SUFFIX_RE = /-via-rename:.*$/;
 
 const BASIS = { PROOF: "baseline-preexisting", AUTO: "baseline-auto-accepted" };
 const NOTE_MAX = 200;
@@ -26,6 +31,9 @@ const NOTE_MAX = 200;
 function dispositionOf(e) {
   if (PROOF_CLASSES.includes(e.class)) return "proof";
   if (AUTO_CLASSES.includes(e.class)) return "auto";
+  if (e.class === FILE_VERDICT_CLASS) {
+    return AUTO_FILE_VERDICT.has(String(e.detail).replace(RENAME_SUFFIX_RE, "")) ? "auto" : "pending";
+  }
   if (e.class !== "undetermined") return "pending";
   if (AUTO_UNDETERMINED.has(e.detail)) return "auto";
   if (RERUN_UNDETERMINED.has(e.detail) || RERUN_STATE_RE.test(e.detail)) return "rerun";

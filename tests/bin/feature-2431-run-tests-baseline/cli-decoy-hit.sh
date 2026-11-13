@@ -50,14 +50,16 @@ run_cli_decoy_hit_cases() {
   done
 
   # Control: the same run still judges and records a base failure that reached no decoy.
+  # t_pre writes the same case detail on both sides, so the comparison is `same` (#2956 S8 table 1).
   got="$(ledger_call "$cache" "$repo" rtb_ledger_lookup_same_base "$base" "$t_pre" 2>/dev/null)"
+  got="${got%%[[:space:]]*}"
   if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: preexisting[[:space:]]+$t_pre[[:space:]]+fails-at-base-exit-1\$" \
     && [ "$got" = "fail" ]; then
     pass "C3-root-decoy-hit-control: a base failure without a hit stays preexisting and is recorded fail"
   else
     fail "C3-root-decoy-hit-control: expected preexisting + ledger fail for $t_pre; ledger=[$got] ($(cli_baseline_lines))"
   fi
-  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE '^BASELINE_SUMMARY: preexisting=1 inherited=0 broken=0 undetermined=2$' \
+  if printf '%s\n' "$RTB_CLI_OUT" | grep -qxF "$(baseline_summary 1 0 0 2 0 0)" \
     && [ "$RTB_CLI_RC" -eq 0 ]; then
     pass "C3-root-decoy-hit: summary preexisting=1 undetermined=2 and exit 0 (auto + proof)"
   else

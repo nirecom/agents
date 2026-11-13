@@ -88,7 +88,7 @@ bec_record_row() {
       *"cannot read classification"*) pass "record-classification-$clabel: reason names the file" ;;
       *) fail "record-classification-$clabel: reason" "stderr=$REC_ERR" ;;
     esac
-    printf 'tests/bin/omega.sh\tpreexisting\tbase-fail\n' > "$TMPROOT/cls-ok-$clabel.txt"
+    printf 'tests/bin/omega.sh\tpreexisting\tbase-fail\t0\t[]\n' > "$TMPROOT/cls-ok-$clabel.txt"
     run_record "$SID" "${SEQ_VAL:-1}" "$TMPROOT/cls-ok-$clabel.txt"
     bec_ck "record-classification-$clabel: control — a valid file then records" "0" "$REC_RC"
     bec_ck "record-classification-$clabel: control — and completes run_tests" '"complete"' \
@@ -99,11 +99,11 @@ bec_record_row() {
 }
 
 case_begin "record-classification-invalid-class-is-usage-error" "bin/workflow/lib/run-tests-baseline-evidence.js"
-bec_record_row invalid-class 'tests/bin/omega.sh\tfixed\tbase-fail\n'
+bec_record_row invalid-class 'tests/bin/omega.sh\tfixed\tbase-fail\t0\t[]\n'
 case_end
 
 case_begin "record-classification-class-case-mismatch-is-usage-error" "bin/workflow/lib/run-tests-baseline-evidence.js"
-bec_record_row class-case-mismatch 'tests/bin/omega.sh\tPreexisting\tbase-fail\n'
+bec_record_row class-case-mismatch 'tests/bin/omega.sh\tPreexisting\tbase-fail\t0\t[]\n'
 case_end
 
 case_begin "record-classification-no-tab-separator-is-usage-error" "bin/workflow/lib/run-tests-baseline-evidence.js"
@@ -111,11 +111,11 @@ bec_record_row no-tab-separator 'tests/bin/omega.sh preexisting base-fail\n'
 case_end
 
 case_begin "record-classification-empty-path-is-usage-error" "bin/workflow/lib/run-tests-baseline-evidence.js"
-bec_record_row empty-path '\tpreexisting\tbase-fail\n'
+bec_record_row empty-path '\tpreexisting\tbase-fail\t0\t[]\n'
 case_end
 
 case_begin "record-classification-valid-then-garbage-is-usage-error" "bin/workflow/lib/run-tests-baseline-evidence.js"
-bec_record_row valid-then-garbage 'tests/bin/omega.sh\tpreexisting\tbase-fail\nnot a classification line\n'
+bec_record_row valid-then-garbage 'tests/bin/omega.sh\tpreexisting\tbase-fail\t0\t[]\nnot a classification line\n'
 case_end
 
 case_begin "record-classification-missing-file-is-usage-error" "bin/workflow/lib/run-tests-baseline-evidence.js"

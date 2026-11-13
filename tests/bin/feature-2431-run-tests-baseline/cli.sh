@@ -4,8 +4,9 @@
 # Tags: run-tests, baseline, cli, scope:issue-specific, pwsh-not-required, TL2
 # Sourced by the dispatcher; never run standalone.
 # Plan contract: bin/run-tests-baseline --session <sid> [--worktree <path>] [--per-test-timeout <s>]
-# prints `BASELINE: <class> <path> [detail]` + `BASELINE_SUMMARY: preexisting=N inherited=N
-# broken=N undetermined=N`; exit 0 all-preexisting, 1 otherwise, 3 no failing list, 4 bad base.
+# prints `BASELINE: <class> <path> [detail] [new=<N> head=<json>]` + `BASELINE_SUMMARY: preexisting=N
+# inherited=N broken=N undetermined=N file_verdict=N new_on_branch=N` (#2956); exit 0 all-preexisting,
+# 1 otherwise, 3 no failing list, 4 bad base.
 
 # isolation (#2512): re-pin to helpers.sh's private dirs (a sibling's pin is invisible to the scanner).
 : "${WF_DIR:?helpers.sh must be sourced first}" "${PLANS_DIR:?helpers.sh must be sourced first}"
@@ -66,8 +67,7 @@ appendEvents(process.argv[2], [
   printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: preexisting[[:space:]]+$t_pre" \
     && pass "C4: BASELINE: <class> <path> line shows preexisting" \
     || fail "C4: no 'BASELINE: preexisting $t_pre' line ($(cli_baseline_lines))"
-  printf '%s\n' "$RTB_CLI_OUT" \
-    | grep -qE '^BASELINE_SUMMARY: preexisting=1 inherited=0 broken=0 undetermined=0$' \
+  printf '%s\n' "$RTB_CLI_OUT" | grep -qxF "$(baseline_summary 1 0 0 0 0 0)" \
     && pass "C5: BASELINE_SUMMARY counts match" \
     || fail "C5: BASELINE_SUMMARY missing or wrong ($(cli_baseline_lines))"
   if printf '%s\n' "$RTB_CLI_OUT" | grep -qE '^(RUN_CONTRACT:|FAIL:)'; then
@@ -196,8 +196,7 @@ cli_assert_undetermined_only() {
   else
     pass "$1: $2 not classified preexisting"
   fi
-  if printf '%s\n' "$RTB_CLI_OUT" \
-      | grep -qE '^BASELINE_SUMMARY: preexisting=0 inherited=0 broken=0 undetermined=1$' \
+  if printf '%s\n' "$RTB_CLI_OUT" | grep -qxF "$(baseline_summary 0 0 0 1 0 0)" \
     && [ "$RTB_CLI_RC" -eq "$want" ]; then
     pass "$1: summary undetermined=1 and exit $want"
   else
@@ -318,27 +317,29 @@ run_cli_same_base_pass_cases() {
   # The sentinel must mean a base run, so the branch copy the branch stage runs has none.
   feat_commit_failing "$repo" "$t"
 
-  # Control: with an empty ledger the test really is re-run at base and fails there.
+  # Control: with an empty ledger the test really is re-run at base and fails there. The branch
+  # copy differs from the base copy, so the base failure is a file verdict (#2956 S8 table 1).
   seed_failing "sbp0-$$" "$t"
   rtb_cli_run "$(cli_case_cache sbp0)" "$repo" "sbp0-$$"
-  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: preexisting[[:space:]]+$t[[:space:]]+fails-at-base" \
+  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: file-verdict-preexisting[[:space:]]+$t[[:space:]]+test-file-changed" \
     && [ -e "$ran" ]; then
     pass "C3-same-base-pass-control: without a ledger record the base re-run happens and fails"
   else
-    fail "C3-same-base-pass-control: expected re-run + preexisting; rc=$RTB_CLI_RC ran=$([ -e "$ran" ] && echo y || echo n) ($(cli_baseline_lines))"
+    fail "C3-same-base-pass-control: expected re-run + file-verdict-preexisting test-file-changed; rc=$RTB_CLI_RC ran=$([ -e "$ran" ] && echo y || echo n) ($(cli_baseline_lines))"
   fi
 
   rm -f "$ran"
   cache="$(cli_case_cache sbp)"
   ledger_call "$cache" "$repo" rtb_ledger_append "$base" "$t" pass >/dev/null 2>&1
-  if [ "$(ledger_call "$cache" "$repo" rtb_ledger_lookup_same_base "$base" "$t" 2>/dev/null)" != "pass" ]; then
+  local got; got="$(ledger_call "$cache" "$repo" rtb_ledger_lookup_same_base "$base" "$t" 2>/dev/null)"
+  if [ "${got%%[[:space:]]*}" != "pass" ]; then
     fail "C3-same-base-pass: fixture error — seeded pass record not readable at $base"
     return
   fi
   seed_failing "sbp-$$" "$t"
   rtb_cli_run "$cache" "$repo" "sbp-$$"
   if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: broken[[:space:]]+$t[[:space:]]+ledger-same-base\$" \
-    && printf '%s\n' "$RTB_CLI_OUT" | grep -qE '^BASELINE_SUMMARY: preexisting=0 inherited=0 broken=1 undetermined=0$'; then
+    && printf '%s\n' "$RTB_CLI_OUT" | grep -qxF "$(baseline_summary 0 0 1 0 0 0)"; then
     pass "C3-same-base-pass: cached same-base pass classified broken ledger-same-base"
   else
     fail "C3-same-base-pass: expected broken ledger-same-base; rc=$RTB_CLI_RC ($(cli_baseline_lines))"

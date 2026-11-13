@@ -218,9 +218,9 @@ if [[ ${#stems[@]} -gt 0 ]]; then
   _load_registry
   while IFS= read -r test; do
     [[ -f "${test}" ]] || continue
-    fname="${test##*/}"
+    sts_name_key_into "${test}"
     for stem in "${stems[@]}"; do
-      if sts_name_matches "${fname}" "${stem}"; then
+      if sts_name_matches "${STS_KEY}" "${stem}"; then
         _emit_if_new "${test}"
         break
       fi

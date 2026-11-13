@@ -138,16 +138,18 @@ run_identity_baseline_cases() {
   local out tok line LM_S="$LM_W26300" LM_HOST=stubhost LM_R="3.5.4-0.x86_64" LM_LIBSET=base
   out="$(lm_run "$(lm_cache)" c_base)"
   tok="$(lm_v "$out" tok)"
-  if [ -n "$tok" ] && printf '%s\n' "$(lm_v "$out" name)" | grep -qE "^v2\\.$tok-[0-9]+-[0-9]+\\.seg\$"; then
-    pass "n16/7/baseline-segment-named-v2"
+  # The ledger is v3 with 8 fields, the fingerprint `-` when none is given (#2956 S7).
+  if [ -n "$tok" ] && printf '%s\n' "$(lm_v "$out" name)" | grep -qE "^v3\\.$tok-[0-9]+-[0-9]+\\.seg\$"; then
+    pass "n16/7/baseline-segment-named-v3"
   else
-    fail "n16/7/baseline-segment-named-v2" "name=$(lm_v "$out" name) tok=$tok"
+    fail "n16/7/baseline-segment-named-v3" "name=$(lm_v "$out" name) tok=$tok"
   fi
   line="$(lm_v "$out" line)"
-  if printf '%s\n' "$line" | grep -qE "^v2~abcdef1234567~$tok~tests/x\\.sh~fail~[0-9]+~Windows/10\\.0\\.26300\$"; then
-    pass "n16/7/baseline-line-7-fields-with-attr"
+  if printf '%s\n' "$line" | grep -qE "^v3~abcdef1234567~$tok~tests/x\\.sh~fail~-~[0-9]+~Windows/10\\.0\\.26300\$"; then
+    pass "n16/7/baseline-line-8-fields-with-attr"
   else
-    fail "n16/7/baseline-line-7-fields-with-attr" "line=[$line]"
+    fail "n16/7/baseline-line-8-fields-with-attr" "line=[$line]"
   fi
-  ck "n16/7/baseline-record-readable" "fail" "$(lm_v "$out" same)"
+  local same; same="$(lm_v "$out" same)"
+  ck "n16/7/baseline-record-readable" "fail" "${same%%[[:space:]]*}"
 }

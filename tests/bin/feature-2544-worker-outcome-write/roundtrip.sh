@@ -82,7 +82,12 @@ group_roundtrip_fail() {
 group_roundtrip_fail_baseline() {
     local sid="s2544rtbaseline" stem="worker-test-runner-1" base out rc=0
     mkdir -p "$REPO_RAW/tests/bin"
-    printf '#!/usr/bin/env bash\nexit 1\n' > "$REPO_RAW/tests/bin/a.sh"
+    # The failure writes one case record and its detail (#2956 S3), so the unchanged copy
+    # compares `same` and stays a proof; an `exit 1` alone would be no-case-records (auto).
+    printf '%s\n' '#!/usr/bin/env bash' 'd="${RUN_ALL_RESULT_DIR:-}"' 'if [ -n "$d" ]; then' \
+        "  printf '1\\tFAIL\\tcase-a\\t-\\n' >>\"\$d/cases.tsv\"" \
+        "  printf '1\\tcase-a\\tviolation X\\n' >>\"\$d/fail-details.tsv\"" 'fi' 'exit 1' \
+        > "$REPO_RAW/tests/bin/a.sh"
     rt_dispatch "roundtrip-baseline" "$sid" "$stem" "$FAIL_CANNED" || return 0
     rt_hook "$sid" "$RT_LATER_CMD"
     assert_eq "roundtrip-baseline/hook-exit-0" "0" "$RT_HOOK_RC"
