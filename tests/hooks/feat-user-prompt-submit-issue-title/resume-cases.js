@@ -103,6 +103,97 @@ function resumeNames(F) {
     const s = R.named(null);
     assertSilent(R.resume(s.sid, s.tpath));
   });
+  test("#2993 manual custom-title and last_emitted null: no none name, no origin lookup", () => {
+    const sid = crypto.randomUUID();
+    const tpath = R.transcript(sid);
+    fs.writeFileSync(tpath, titleRecord(sid, "[PM] manual"));
+    const d = F.deps();
+    for (let i = 0; i < 2; i++) {
+      const r = require(F.ENTRY).run(Object.assign(F.input(sid, "hello"), { transcript_path: tpath }), d);
+      assert.notStrictEqual(typeof r, "string", `call ${i + 1} must not give a name`);
+      assert.strictEqual(r, null);
+    }
+    assert.strictEqual(F.spawned(d, "git").length, 0, "no origin lookup");
+    assert.strictEqual((F.readRecord(sid) || {}).last_emitted == null, true);
+  });
+  test("#2993 transcript without a custom-title: none name as before", () => {
+    const sid = crypto.randomUUID();
+    const tpath = R.transcript(sid);
+    fs.writeFileSync(tpath, `${JSON.stringify({ type: "user" })}\n`);
+    assert.strictEqual(R.prompt(sid, "hello", tpath), `neutral${sfx(sid)}`);
+    const sid2 = crypto.randomUUID();
+    const tpath2 = R.transcript(crypto.randomUUID());
+    assert.strictEqual(R.prompt(sid2, "hello", tpath2), `neutral${sfx(sid2)}`);
+  });
+  test("#2993 empty custom-title record: no none name", () => {
+    const sid = crypto.randomUUID();
+    const tpath = R.transcript(sid);
+    fs.writeFileSync(tpath, titleRecord(sid, ""));
+    assert.strictEqual(R.prompt(sid, "hello", tpath), null);
+  });
+  test("#2993 transcript path from session_start_context, input without it", () => {
+    const sid = crypto.randomUUID();
+    const tpath = R.transcript(sid);
+    fs.writeFileSync(tpath, titleRecord(sid, "[PM] manual"));
+    F.seed(sid, { transcript: tpath });
+    assert.ok(F.quiet(F.call(sid, "hello", F.deps())));
+    assert.strictEqual((F.readRecord(sid) || {}).last_emitted == null, true);
+    fs.writeFileSync(tpath, `${JSON.stringify({ type: "user" })}\n`);
+    assert.strictEqual(F.call(sid, "hello", F.deps()), `neutral${sfx(sid)}`);
+  });
+  test("#2993 input transcript_path takes priority over session_start_context", () => {
+    const plain = `${JSON.stringify({ type: "user" })}\n`;
+    const sid = crypto.randomUUID();
+    const tState = R.transcript(crypto.randomUUID());
+    const tInput = R.transcript(sid);
+    fs.writeFileSync(tState, plain);
+    fs.writeFileSync(tInput, titleRecord(sid, "[PM] manual"));
+    F.seed(sid, { transcript: tState });
+    const d = F.deps();
+    const r = require(F.ENTRY).run(Object.assign(F.input(sid, "hello"), { transcript_path: tInput }), d);
+    assert.notStrictEqual(typeof r, "string", "input transcript with a custom-title must suppress the none name");
+    assert.strictEqual(r, null);
+    assert.strictEqual(F.spawned(d, "git").length, 0, "no origin lookup");
+    assert.strictEqual((F.readRecord(sid) || {}).last_emitted == null, true);
+    // control: the opposite placement; the input (no custom-title) wins over the state (custom-title).
+    const sid2 = crypto.randomUUID();
+    const tState2 = R.transcript(crypto.randomUUID());
+    const tInput2 = R.transcript(sid2);
+    fs.writeFileSync(tState2, titleRecord(sid2, "[PM] manual"));
+    fs.writeFileSync(tInput2, plain);
+    F.seed(sid2, { transcript: tState2 });
+    assert.strictEqual(R.prompt(sid2, "hello", tInput2), `neutral${sfx(sid2)}`);
+  });
+  test("#2993 empty-string input transcript_path does not take priority over session_start_context", () => {
+    const sid = crypto.randomUUID();
+    const tpath = R.transcript(sid);
+    fs.writeFileSync(tpath, titleRecord(sid, "[PM] manual"));
+    F.seed(sid, { transcript: tpath });
+    const r = require(F.ENTRY).run(Object.assign(F.input(sid, "hello"), { transcript_path: "" }), F.deps());
+    assert.strictEqual(r, null);
+    assert.strictEqual((F.readRecord(sid) || {}).last_emitted == null, true);
+    // control: the same placement with a transcript without a custom-title gives the none name.
+    const sid2 = crypto.randomUUID();
+    const tpath2 = R.transcript(sid2);
+    fs.writeFileSync(tpath2, `${JSON.stringify({ type: "user" })}\n`);
+    F.seed(sid2, { transcript: tpath2 });
+    assert.strictEqual(R.prompt(sid2, "hello", ""), `neutral${sfx(sid2)}`);
+  });
+  test("#2993 no transcript path in input or state: fail-open, none name", () => {
+    const sid = crypto.randomUUID();
+    assert.strictEqual(F.call(sid, "hello", F.deps()), `neutral${sfx(sid)}`);
+  });
+  test("#2993 transcript mentioning custom-title without a valid custom-title record: none name", () => {
+    const sid = crypto.randomUUID();
+    const tpath = R.transcript(sid);
+    const lines = [
+      JSON.stringify({ type: "user", message: { content: "please explain custom-title records" } }),
+      '{"type":"custom-title", "customTitle": broken-json custom-title',
+      JSON.stringify({ type: "assistant", note: "custom-title" }),
+    ];
+    fs.writeFileSync(tpath, `${lines.join("\n")}\n`);
+    assert.strictEqual(R.prompt(sid, "hello", tpath), `neutral${sfx(sid)}`);
+  });
 }
 
 module.exports = { resumeNames };
