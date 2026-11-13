@@ -200,3 +200,7 @@ Changes: run-tests-baseline no longer lets a branch hide new failures inside a t
 ### FEATURE: PR #3017 (2026-11-13)
 Background: feat(#3013): pass the bulk-sub-of manifest path, warn on title fallba...
 Changes: `/issue-create` bulk-sub-of now takes the manifest path from the caller and warns when a row's title cannot be read instead of silently using the shared title. The manifest is removed after recording, and kept when a row needs follow-up.;Final Report merges Related Tasks, Bugs Found and Next Tasks entries with identical text into one line that lists all their issue numbers.
+
+### FEATURE: PR #3018 (2026-11-13)
+Background: feat(#2994 #2970): keep intent dialogs with the user and catch lines with fewer dialog IDs than AskUserQuestion mentions
+Changes: Dialogs that ask for your own intent (the clarify-intent interview, the outline intent choice, the meta sub-issue choice) are no longer auto-answered by Jev; they always come back to you.;The dialog ID checker now catches a line that names `AskUserQuestion` more often than it carries dialog IDs, so a second dialog on the same line can no longer slip through without its own level.
