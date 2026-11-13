@@ -14,7 +14,8 @@ const { recordParts } = require("./run-parts");
 // Evidence that belongs to ONE observed run: baseline (#2431), an UNRUNNABLE accept
 // (#2501 D5-7) and a baseline note (#2688). Any new run clears it, so a later state never
 // inherits an older verdict. baseline_accept is the retired #2517 grant: never written now,
-// still cleared so a legacy state does not carry it past a new run.
+// still cleared so a legacy state does not carry it past a new run. baseline_new_lines_seen
+// (#2956 S9) is deliberately absent: the PR must still disclose new lines a later run hides.
 const RUN_TOMBSTONES = {
   baseline_classification: null,
   completion_basis: null,

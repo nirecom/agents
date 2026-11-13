@@ -51,9 +51,10 @@ _ralm_sweep_temps() {
 
 _ralm_sum() { cksum <"$1" 2>/dev/null || printf 'none'; }
 
-# _ralm_current_seg <name> — 0 for a segment of a current format (v2 ledger, branch.v1 cache, #2688).
+# _ralm_current_seg <name> — 0 for a segment of a current format (v2/v3 ledger and its v3.lines.* row
+# files (#2956 S7), branch.* caches, #2688).
 _ralm_current_seg() {
-    case "$1" in v2.*|branch.*) return 0 ;; esac
+    case "$1" in v2.*|v3.*|branch.*) return 0 ;; esac
     return 1
 }
 

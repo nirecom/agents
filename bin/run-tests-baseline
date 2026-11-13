@@ -1,23 +1,24 @@
 #!/usr/bin/env bash
 # bin/run-tests-baseline — classify the failing tests of the last /run-tests run (#2431, #2688)
 # and complete run_tests when every failure pre-existed at the merge base or has an auto-accepted
-# cause. Stages: failing list -> solo re-run on the branch -> ledger -> rename source -> base.
+# cause. Stages: failing list -> solo re-run on the branch -> ledger -> rename source -> base;
+# a base failure is compared line by line with the branch (#2956; classes: test-result-contract.md).
 #
 # Usage: bin/run-tests-baseline --session <sid> [--worktree <path>] [--per-test-timeout <sec>] [--note <text>]
 # Timeout: omitted -> derived from the duration ledger (2x measured, 300-540 s; unmeasured 300); any value is cut by one 600 s budget.
 # --note: what the user knows about the failures; kept as baseline_note and shown in the PR body.
-# Output: `BASELINE: <class> <path> [detail]` lines, then
-#         `BASELINE_SUMMARY: preexisting=N inherited=N broken=N undetermined=N`.
+# Output: `BASELINE: <class> <path> <detail>[ new=<N> head=<json>]` lines, then `BASELINE_SUMMARY:
+#   preexisting=N inherited=N broken=N undetermined=N file_verdict=N new_on_branch=N`.
 # Exit:   0 run_tests completed (`RECORDED completion_basis=<basis>` on stderr), 1 otherwise,
 #   2 usage, 3 no hook-recorded failing list (or state moved), 4 merge base not trustworthy,
-#   5 no baseline (base predates the root names), 6 unattributed hits (HITS>0): `BASELINE_HITS: count=N`
-#   then `HIT: <line>` lines, 8 re-run requested (budget, worktree or setup left a failure unclassified).
+#   5 no baseline (base predates the root names or the case details: merge main and re-run),
+#   6 unattributed hits: `BASELINE_HITS: count=N` then `HIT: <line>` lines, 8 re-run requested.
 # Child test output goes to log files only, never to stdout.
 
 set -uo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-for _lib in ledger timeout worktree exec homeref branch rename; do
+for _lib in ledger timeout worktree exec homeref branch rename compare classify; do
   # shellcheck source=/dev/null
   . "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-$_lib.sh"
 done
@@ -82,13 +83,17 @@ mkdir -p "$TMP_BASE" 2>/dev/null || TMP_BASE="$(mktemp -d)"
 find "$TMP_BASE" -mindepth 1 -maxdepth 1 -mmin +$((RTB_LEDGER_RETENTION_DAYS * 1440)) \
   -exec rm -rf {} + 2>/dev/null || true
 LOGDIR="$TMP_BASE/logs-$(date +%s)-$$"
+RTB_LINES_WRITTEN_LOG="$TMP_BASE/lines-written-$$"
+: >"$RTB_LINES_WRITTEN_LOG" 2>/dev/null || RTB_LINES_WRITTEN_LOG=""
+trap '[ -z "$RTB_LINES_WRITTEN_LOG" ] || rm -f "$RTB_LINES_WRITTEN_LOG"' EXIT
 if [ "$PTT_EXPLICIT" = 0 ]; then
   ledger_args=()
   for i in "${!TESTS[@]}"; do ledger_args+=("$i:${TESTS[$i]}"); done
   rtb_timeout_load_ledger "$ROOT" "$TMP_BASE" "${ledger_args[@]}"
 fi
 
-declare -a CLS=() DET=() RERUN=()
+# shellcheck disable=SC2034  # BR_RES/BR_END/BR_NOREC are filled by the branch stage and read by classify
+declare -a CLS=() DET=() RERUN=() NEWC=() NEWH=() BR_RES=() BR_END=() BR_NOREC=()
 
 # 2. Each failing test alone on the branch: one that passes there is no base question.
 rtb_branch_stage
@@ -123,44 +128,20 @@ if [ "$REST" -gt 0 ]; then
   { . "$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh" && tlr_load; } || die 2 "test language registry not readable"
 fi
 
-# Entry point minus its language's nameStrip: the test's own data directory.
-test_dir_of() {
-  local t="$1" s
-  s="$(tlr_stem "${t##*/}")"
-  case "$t" in
-    */*) printf '%s' "${t%/*}/$s" ;;
-    *) printf '%s' "$s" ;;
-  esac
-}
-
-# 4. Ledger: (a) same base, then (b) inheritance from an ancestor base.
-for i in "${!TESTS[@]}"; do
-  [ -z "${CLS[i]:-}" ] || continue
-  t="${TESTS[$i]}"
-  same="$(rtb_ledger_lookup_same_base "$B2" "$t")"
-  case "$same" in
-    fail) CLS[i]="preexisting"; DET[i]="ledger-same-base"; continue ;;
-    pass) CLS[i]="broken"; DET[i]="ledger-same-base"; continue ;;
-    und:*) CLS[i]="undetermined"; DET[i]="${same#und:}"; continue ;;
-  esac
-  d="$(test_dir_of "$t")"
-  while IFS= read -r b1; do
-    [ -n "$b1" ] && [ "$b1" != "$B2" ] || continue
-    git -C "$ROOT" cat-file -e "$b1^{commit}" 2>/dev/null || continue
-    git -C "$ROOT" merge-base --is-ancestor "$b1" "$B2" 2>/dev/null || continue
-    git --literal-pathspecs -C "$ROOT" diff --quiet "$b1" "$B2" -- "$t" "$d/" 2>/dev/null || continue
-    CLS[i]="preexisting-inherited"; DET[i]="inherited-from-$b1"
-    break
-  done < <(rtb_ledger_lookup_inheritable "$t")
-  [ -n "${CLS[i]:-}" ] || RERUN+=("$i")
-done
+# 4. Ledger: (a) same base, then (b) inheritance from an ancestor base (run-tests-baseline-classify.sh).
+[ -z "$B2" ] || rtb_cls_ledger_stage
 
 # 5. Re-run the rest in a marked, detached checkout of the merge base; a test the base lacks
 #    runs under its rename source when git names one (detail gains `-via-rename:<old>`).
 if [ "${#RERUN[@]}" -gt 0 ]; then
   WT="$(rtb_wt_create "$ROOT" "$B2")" || WT=""
+  # A base harness that writes no fail-details.tsv leaves nothing to compare (#2956 S3).
+  if [ -n "$WT" ] && rtb_base_predates_case_detail "$WT"; then
+    rtb_wt_remove "$ROOT" "$WT" || true
+    die 5 "no baseline, merge main and re-run: merge base $B2 predates the case details (its tests/lib/harness.sh writes no fail-details.tsv)"
+  fi
   for i in "${RERUN[@]}"; do
-    t="${TESTS[$i]}" run="${TESTS[$i]}" via=""
+    t="${TESTS[$i]}" run="${TESTS[$i]}" via="" old=""
     if [ -z "$WT" ]; then
       CLS[i]="undetermined"; DET[i]="worktree-create-failed"; continue
     fi
@@ -169,9 +150,9 @@ if [ "${#RERUN[@]}" -gt 0 ]; then
       if [ -z "$RTB_RENAME_OUT" ]; then
         CLS[i]="undetermined"; DET[i]="missing-at-base"; continue
       fi
-      run="$RTB_RENAME_OUT" via="-via-rename:$RTB_RENAME_OUT"
+      run="$RTB_RENAME_OUT" via="-via-rename:$RTB_RENAME_OUT" old="$RTB_RENAME_OUT"
     fi
-    d="$(test_dir_of "$run")"
+    d="$(rtb_test_data_dir "$run")"
     targets=("$WT/$run")
     [ -d "$WT/$d" ] && targets+=("$WT/$d")
     if rtb_has_home_ref "${targets[@]}"; then
@@ -211,9 +192,9 @@ if [ "${#RERUN[@]}" -gt 0 ]; then
       # test's own failure; only a signal death (137/143) stays ambiguous.
       case "$RTB_EXEC_STATE:$RTB_EXEC_RC" in
         SKIP:*) CLS[i]="undetermined"; DET[i]="skip-at-base" ;;
-        PASS:*) CLS[i]="broken"; DET[i]="passes-at-base"; rtb_ledger_append "$B2" "$run" pass ;;
+        PASS:*) rtb_cls_base_pass "$i" "passes-at-base"; rtb_ledger_append "$B2" "$run" pass ;;
         FAIL:137|FAIL:143) CLS[i]="undetermined"; DET[i]="ambiguous-exit-$RTB_EXEC_RC" ;;
-        FAIL:*) CLS[i]="preexisting"; DET[i]="fails-at-base-exit-$RTB_EXEC_RC"; rtb_ledger_append "$B2" "$run" fail ;;
+        FAIL:*) rtb_cls_base_fail "$i" "$run" "$old" ;;
         *) CLS[i]="undetermined"; DET[i]="state-$RTB_EXEC_STATE-at-base" ;;
       esac
     elif tlr_match "$run" && _tlr_get "$TLR_ID" launch.wrapper && [ -n "$_TLR_V" ]; then
@@ -224,8 +205,8 @@ if [ "${#RERUN[@]}" -gt 0 ]; then
       case "$RTB_EXEC_RC" in
         77) CLS[i]="undetermined"; DET[i]="skip-at-base" ;;
         124|137|142|143) CLS[i]="undetermined"; DET[i]="ambiguous-exit-$RTB_EXEC_RC" ;;
-        0) CLS[i]="broken"; DET[i]="passes-at-base"; rtb_ledger_append "$B2" "$run" pass ;;
-        *) CLS[i]="preexisting"; DET[i]="fails-at-base-exit-$RTB_EXEC_RC"; rtb_ledger_append "$B2" "$run" fail ;;
+        0) rtb_cls_base_pass "$i" "passes-at-base"; rtb_ledger_append "$B2" "$run" pass ;;
+        *) rtb_cls_base_fail "$i" "$run" "$old" ;;
       esac
     fi
     DET[i]="${DET[i]}$via"
@@ -239,13 +220,15 @@ fi
 #    output goes to stderr so a refusal's reason reaches the user (stdout stays BASELINE lines).
 CLS_FILE="$TMP_BASE/classification-$(date +%s)-$$.tsv"
 : >"$CLS_FILE" 2>/dev/null || die 1 "cannot write $CLS_FILE"
-N_PRE=0 N_INH=0 N_BRK=0 N_UND=0
+N_PRE=0 N_INH=0 N_BRK=0 N_UND=0 N_FV=0 N_NEW=0
 for i in "${!TESTS[@]}"; do
-  printf '%s\t%s\t%s\n' "${TESTS[$i]}" "${CLS[i]}" "${DET[i]}" >>"$CLS_FILE"
+  printf '%s\t%s\t%s\t%s\t%s\n' "${TESTS[$i]}" "${CLS[i]}" "${DET[i]}" "${NEWC[i]:-0}" "${NEWH[i]:-[]}" >>"$CLS_FILE"
   case "${CLS[i]}" in
     preexisting) N_PRE=$((N_PRE + 1)) ;;
     preexisting-inherited) N_INH=$((N_INH + 1)) ;;
     broken) N_BRK=$((N_BRK + 1)) ;;
+    file-verdict-preexisting) N_FV=$((N_FV + 1)) ;;
+    new-case-failure-on-branch) N_NEW=$((N_NEW + 1)) ;;
     *) N_UND=$((N_UND + 1)) ;;
   esac
 done
@@ -257,10 +240,14 @@ REC_RC=$?
 rm -f "$CLS_FILE"
 
 for i in "${!TESTS[@]}"; do
-  printf 'BASELINE: %s %s %s\n' "${CLS[i]}" "${TESTS[$i]}" "${DET[i]}"
+  if [ "${NEWC[i]:-0}" -gt 0 ] 2>/dev/null; then
+    printf 'BASELINE: %s %s %s new=%s head=%s\n' "${CLS[i]}" "${TESTS[$i]}" "${DET[i]}" "${NEWC[i]}" "${NEWH[i]}"
+  else
+    printf 'BASELINE: %s %s %s\n' "${CLS[i]}" "${TESTS[$i]}" "${DET[i]}"
+  fi
 done
-printf 'BASELINE_SUMMARY: preexisting=%s inherited=%s broken=%s undetermined=%s\n' \
-  "$N_PRE" "$N_INH" "$N_BRK" "$N_UND"
+printf 'BASELINE_SUMMARY: preexisting=%s inherited=%s broken=%s undetermined=%s file_verdict=%s new_on_branch=%s\n' \
+  "$N_PRE" "$N_INH" "$N_BRK" "$N_UND" "$N_FV" "$N_NEW"
 
 # 8. The state side's verdict is the exit: it alone applies the #2688 allow-list.
 case "$REC_RC" in

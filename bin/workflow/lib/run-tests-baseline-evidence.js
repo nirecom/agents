@@ -14,7 +14,7 @@ const ORIGIN = "run-tests-baseline-evidence";
 // "unrunnable" is excluded: a missing runtime is fixed by installing it, never by a baseline.
 const FAILING_OUTCOMES = ["fail", "timeout", "runner-error"];
 const VALID_CLASSES = ["preexisting", "preexisting-inherited", "broken", "undetermined",
-  "flaky-timeout-on-branch", "passes-alone-on-branch"];
+  "flaky-timeout-on-branch", "passes-alone-on-branch", "file-verdict-preexisting", "new-case-failure-on-branch"];
 const NO_LIST = "failing_tests is not a non-empty list";
 
 // Exit codes: 0 completed / listed, 1 classification does not authorize
@@ -106,16 +106,47 @@ function exitLines(entry) {
     .map((p) => `EXIT\t${exits[p]}\t${p}`);
 }
 
-// `<rel-path>\t<class>\t<detail>` per line; blank lines ignored, bad lines are errors.
+// The 5th column: a JSON array of strings (the comparer's first new lines).
+function parseHead(text) {
+  let head;
+  try {
+    head = JSON.parse(text);
+  } catch {
+    throw new Error("malformed classification line (new-lines head is not JSON)");
+  }
+  if (!Array.isArray(head) || !head.every((l) => typeof l === "string")) {
+    throw new Error("malformed classification line (new-lines head is not a string list)");
+  }
+  return head;
+}
+
+// `<rel-path>\t<class>\t<detail>\t<new-count>\t<new-head-json>` per line (#2956 S8);
+// blank lines ignored, bad lines (the pre-#2956 3-column form included) are errors.
 function parseClassification(text) {
   const entries = [];
   for (const raw of String(text).replace(/\r\n/g, "\n").split("\n")) {
     if (raw.trim() === "") continue;
-    const [p, cls, ...rest] = raw.split("\t");
-    if (!p || !VALID_CLASSES.includes(cls)) throw new Error("malformed classification line");
-    entries.push({ path: p, class: cls, detail: rest.join("\t") });
+    const cols = raw.split("\t");
+    const [p, cls, detail, count, head] = cols;
+    if (cols.length !== 5 || !p || !VALID_CLASSES.includes(cls)) throw new Error("malformed classification line");
+    if (!/^(0|[1-9][0-9]*)$/.test(count)) throw new Error("malformed classification line (new-lines count)");
+    entries.push({ path: p, class: cls, detail, new_lines: { count: Number(count), head: parseHead(head) } });
   }
   return entries;
+}
+
+// baseline_new_lines_seen: the prior value plus this record's rows with new lines, per path.
+// Not a RUN_TOMBSTONE, so a later run or a green completion still discloses it (#2956 S9).
+function newLinesSeen(entry, entries) {
+  const add = {};
+  for (const e of entries) {
+    if (!e.new_lines || e.new_lines.count <= 0) continue;
+    add[e.path] = { count: e.new_lines.count, head: e.new_lines.head, class: e.class, detail: e.detail };
+  }
+  if (Object.keys(add).length === 0) return [];
+  const prior = entry.baseline_new_lines_seen;
+  const base = prior && typeof prior === "object" && !Array.isArray(prior) ? prior : {};
+  return [annotation("baseline_new_lines_seen", Object.assign({}, base, add))];
 }
 
 // Set cover by path identity: duplicates never stand in for an omitted path.
@@ -144,23 +175,24 @@ function record(sessionId, seq, entries, base, note) {
       verdict.reason = why;
       return [];
     }
-    const classification = annotation("baseline_classification", { base: base || null, entries });
+    const classification = [annotation("baseline_classification", { base: base || null, entries })]
+      .concat(newLinesSeen(entry, entries));
     const cover = coverStatus(entry.failing_tests, entries);
     if (!cover.covered) {
       verdict.code = EXIT.UNMET;
       verdict.reason = `classification does not cover failing_tests (missing=${cover.missing.length}, foreign=${cover.foreign.length})`;
-      return [classification];
+      return classification;
     }
     const agg = disposition.aggregate(entries);
     if (agg.verdict === "pending") {
       verdict.code = EXIT.UNMET;
       verdict.reason = `${agg.count} failing test(s) are neither pre-existing at the merge base nor an auto-accepted cause`;
-      return [classification];
+      return classification;
     }
     if (agg.verdict === "rerun") {
       verdict.code = EXIT.RERUN;
       verdict.reason = `${agg.count} failing test(s) could not be classified this time; re-run /run-tests, then bin/run-tests-baseline`;
-      return [classification];
+      return classification;
     }
     // A selected test that never ran (UNRUNNABLE) proves nothing about itself, so the step stays
     // pending however the failures classify; only the hook's own exact 0 clears this.
@@ -169,7 +201,7 @@ function record(sessionId, seq, entries, base, note) {
       verdict.reason = Number.isInteger(entry.unrunnable_count)
         ? `${entry.unrunnable_count} selected test(s) were UNRUNNABLE; install the missing runtime and re-run /run-tests`
         : "the failing run recorded no unrunnable_count; re-run /run-tests";
-      return [classification];
+      return classification;
     }
     verdict.code = EXIT.OK;
     verdict.reason = null;
@@ -177,13 +209,12 @@ function record(sessionId, seq, entries, base, note) {
     const clean = disposition.sanitizeNote(note);
     // run_outcome "pass": a failing value would make write-code-resume reopen
     // write_code; the real nature of this completion lives in completion_basis.
-    return [
-      classification,
+    return classification.concat([
       annotation("run_outcome", "pass"),
       annotation("completion_basis", agg.basis),
     ].concat(clean === null ? [] : [annotation("baseline_note", clean)], [
       { kind: "step_status", step: "run_tests", status: "complete", provenance: "observed", origin: ORIGIN },
-    ]);
+    ]));
   });
   return verdict;
 }

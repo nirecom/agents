@@ -43,8 +43,8 @@ if sts_ready "stem-rules-table"; then
     if [ "$got" = "$want" ]; then pass "stem-rules-table/$name: $path -> $want"; else fail "stem-rules-table/$name" "path='$path' want='$want' got='$got'"; fi
   done <<'ROWS'
 skill-md|skills/run-tests/SKILL.md|run-tests
-skill-md-nested|skills/a/b/SKILL.md|a/b
-skill-md-under-scripts|skills/x/scripts/SKILL.md|x/scripts
+skill-md-nested|skills/a/b/SKILL.md|b
+skill-md-under-scripts|skills/x/scripts/SKILL.md|scripts
 script-area-then-file|skills/sweep-tests/scripts/run.sh|sweep-tests,run
 script-last-ext-only|skills/sweep-tests/scripts/a.b.sh|sweep-tests,a.b
 script-short-file-dropped|skills/sweep-tests/scripts/ab.sh|sweep-tests
@@ -55,7 +55,8 @@ skill-other-file|skills/run-tests/README.md|-
 agent-md|agents/survey-code.md|survey-code
 agent-non-md|agents/notes.txt|-
 hook-js|hooks/block-case-markers.js|block-case-markers
-hook-lib-js|hooks/lib/foo-bar.js|lib/foo-bar
+hook-lib-js|hooks/lib/foo-bar.js|foo-bar
+hook-workflow-js|hooks/workflow-gate/early-gate.js|early-gate
 hook-no-ext|hooks/pre-commit|-
 hook-sh|hooks/foo.sh|-
 bin-sh|bin/select-tests.sh|select-tests
@@ -129,6 +130,30 @@ ROWS
 fi
 case_end
 
+# sts_name_key (#2757): the one matching key of a test path — its basename without the extension.
+case_begin "name-key-table" "bin/lib/select-tests-stem.sh"
+if ! declare -F sts_name_key >/dev/null; then
+  fail "name-key-table" "sts_name_key not defined (not implemented: $STS_REL)"
+else
+  while IFS='|' read -r name path want; do
+    [ -n "$name" ] || continue
+    got="$(sts_name_key "$path")"
+    if [ "$got" = "$want" ]; then pass "name-key-table/$name: $path -> $want"; else fail "name-key-table/$name" "path='$path' want='$want' got='$got'"; fi
+  done <<'ROWS'
+sh-under-dir|tests/bin/feature-run-tests-x.sh|feature-run-tests-x
+js-under-dir|tests/hooks/feature-foo-bar.js|feature-foo-bar
+bare-basename|run-tests.sh|run-tests
+no-ext|tests/bin/noext|noext
+ROWS
+  got="$(sts_name_key tests/bin/lib-z.sh)"
+  if sts_name_matches "$got" "lib" && ! sts_name_matches "$got" "bin/lib" && ! sts_name_matches "$(sts_name_key tests/bin/x-sh.sh)" ".sh"; then
+    pass "name-key-table/no-dir-no-ext: the key carries neither the directory nor the extension"
+  else
+    fail "name-key-table/no-dir-no-ext" "key of tests/bin/lib-z.sh='$got'"
+  fi
+fi
+case_end
+
 # The selector end to end: one fixture commit per changed path, against a fixed tests/bin in the
 # target repo, listed through its .agents.json (#2473). The selector's own checkout holds a
 # same-stem decoy that no row may select.
@@ -141,7 +166,7 @@ install_repo_settings "$FAKE" "$SCRIPT_CHECKOUT_ROOT" || fail "fixture" "repo se
 install_test_language_registry "$FAKE" "$SCRIPT_CHECKOUT_ROOT" || fail "fixture" "registry install failed"
 : >"$FAKE/tests/bin/select-tests-checkout-decoy.sh"
 for n in feature-run-tests-a.sh bin-sweep-tests-b.sh lab-z.sh hook-block-case-markers-d.sh \
-  survey-code-e.sh select-tests-f.sh ab-short.sh runner-h.sh unrelated-g.sh; do
+  survey-code-e.sh select-tests-f.sh ab-short.sh runner-h.sh unrelated-g.sh foo-bar-k.sh early-gate-m.sh foo-baz-n.sh; do
   : >"$FREPO/tests/bin/$n"
 done
 harness_git_init "$FREPO"
@@ -180,6 +205,28 @@ bin/select-tests.sh|select-tests-f.sh
 bin/ab.sh|
 docs/x.md|
 ROWS
+case_end
+
+# #2757: a nested source path yields its last name part, so the selector now reaches these tests.
+case_begin "selector-nested-last-name" "bin/select-tests.sh"
+while IFS='|' read -r path want; do
+  [ -n "$path" ] || continue
+  got="$(selected_for "$path")"
+  got="${got% }"
+  if [ "$got" = "$want" ]; then pass "selector-nested-last-name: $path -> $want"; else fail "selector-nested-last-name" "$path want='$want' got='$got'"; fi
+done <<'ROWS'
+hooks/lib/foo-bar.js|foo-bar-k.sh
+hooks/workflow-gate/early-gate.js|early-gate-m.sh
+bin/lib/foo-baz.sh|foo-baz-n.sh
+ROWS
+case_end
+
+case_begin "selector-matches-through-name-key" "bin/select-tests.sh"
+if grep -q 'sts_name_key' "$SCRIPT_CHECKOUT_ROOT/bin/select-tests.sh"; then
+  pass "selector-matches-through-name-key: select-tests.sh matches test names through sts_name_key"
+else
+  fail "selector-matches-through-name-key" "bin/select-tests.sh does not call sts_name_key (the matching rule lives in $STS_REL)"
+fi
 case_end
 
 case_begin "selector-uses-stem-lib" "bin/select-tests.sh"

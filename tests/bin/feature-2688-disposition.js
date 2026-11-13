@@ -32,7 +32,7 @@ const { appendEvents } = require(path.join(ROOT, "hooks", "workflow-state", "sta
 const { readState } = require(path.join(ROOT, "hooks", "workflow-state"));
 
 let serial = 0;
-const sid = (label) => `dp-${label}-${process.pid}-${++serial}`;
+const sid = (label) => `dp-${label.replace(/[^A-Za-z0-9-]/g, "_")}-${process.pid}-${++serial}`;
 const ann = (key, value) => ({ kind: "step_annotation", step: "run_tests", key, value,
   provenance: "observed", origin: "run-tests-hook" });
 
@@ -53,14 +53,20 @@ function entry(id) {
   return (s && s.steps && s.steps.run_tests) || {};
 }
 
-// record - rows are [path, class, detail]. seed, then get seq via failing, then record.
+// record - rows are [path, class, detail], written as the #2956 S8 5-column TSV
+// (new_count 0, empty head). seed, then get seq via failing, then record.
 function record(label, rows, unrunnable = 0) {
   const id = sid(label);
   seed(id, rows.map((r) => r[0]), unrunnable);
+  return recordTsv(id, rows.map((r) => [...r, "0", "[]"].join("\t")).join("\n") + "\n");
+}
+
+// recordTsv - record an already seeded session with the TSV text as given (no padding).
+function recordTsv(id, text) {
   const f = cli(["failing", "--session", id]);
   const m = /^SEQ=(\S+)/m.exec(f.out);
-  const file = path.join(TMP, `${id}.tsv`);
-  fs.writeFileSync(file, rows.map((r) => r.join("\t")).join("\n") + "\n");
+  const file = path.join(TMP, `${id}-${++serial}.tsv`);
+  fs.writeFileSync(file, text);
   const r = cli(["record", "--session", id, "--seq", m ? m[1] : "1", "--classification", file]);
   return Object.assign(r, { id });
 }
@@ -103,6 +109,17 @@ const ROWS = [
   ["undetermined", "missing-at-base", 1, null],
   ["undetermined", "no-such-cause-2688", 1, null],
   ["undetermined", "state-RUNNING", 1, null],
+  // #2956 S8 table 1: a file-level verdict is auto for its two details only (a rename suffix is
+  // stripped before matching); a new failure on the branch is never registered, so it is pending.
+  ["file-verdict-preexisting", "test-file-changed", 0, AUTO],
+  ["file-verdict-preexisting", "no-case-records", 0, AUTO],
+  ["file-verdict-preexisting", "test-file-changed-via-rename:tests/bin/old-t.sh", 0, AUTO],
+  ["file-verdict-preexisting", "no-case-records-via-rename:tests/bin/old-t.sh", 0, AUTO],
+  ["file-verdict-preexisting", "fails-at-base-exit-1", 1, null],
+  ["file-verdict-preexisting", "test-file-changedx", 1, null],
+  ["new-case-failure-on-branch", "case-records-missing-on-branch", 1, null],
+  ["new-case-failure-on-branch", "case-records-missing-at-base", 1, null],
+  ["new-case-failure-on-branch", "fails-at-base-exit-1-new-lines", 1, null],
 ];
 // ambiguous-exit-137 / -143 must match exactly. Similar values stay pending.
 const AMBIGUOUS_BOUNDARY = ["ambiguous-exit-1", "ambiguous-exit-13", "ambiguous-exit-1370", "ambiguous-exit-137x"];
@@ -153,6 +170,57 @@ test("aggregate-basis-from-any-auto-accept", () => {
     ["tests/bin/c2.sh", "undetermined", "timeout-at-base"]]), 0, AUTO);
   expectOutcome(record("agg4", [["tests/bin/d1.sh", "preexisting", "base-fail"],
     ["tests/bin/d2.sh", "preexisting-inherited", "same-base"]]), 0, PRE);
+});
+caseEnd();
+
+caseBegin("aggregate-new-case-failure-beats-file-verdict", "bin/workflow/lib/run-tests-baseline-evidence/disposition.js");
+test("aggregate-new-case-failure-beats-file-verdict", () => {
+  expectOutcome(record("agg5", [["tests/bin/g1.sh", "file-verdict-preexisting", "no-case-records"],
+    ["tests/bin/g2.sh", "new-case-failure-on-branch", "case-records-missing-on-branch"]]), 1, null);
+  expectOutcome(record("agg6", [["tests/bin/h1.sh", "preexisting", "base-fail"],
+    ["tests/bin/h2.sh", "file-verdict-preexisting", "test-file-changed"]]), 0, AUTO);
+});
+caseEnd();
+
+// #2956 S8: the classification file has 5 columns; the 3-column form is a usage error.
+caseBegin("three-column-classification-is-usage-error", "bin/workflow/lib/run-tests-baseline-evidence.js");
+test("three-column-classification-is-usage-error", () => {
+  const id = sid("three-col");
+  seed(id, ["tests/bin/t.sh"]);
+  const r = recordTsv(id, "tests/bin/t.sh\tpreexisting\tbase-fail\n");
+  assert.equal(r.rc, 2, `stderr=${r.err}`);
+  assert.equal(entry(id).status, "pending");
+  expectOutcome(recordTsv(id, "tests/bin/t.sh\tpreexisting\tbase-fail\t0\t[]\n"), 0, PRE);
+});
+caseEnd();
+
+// #2956 S9: a row with new lines is kept in baseline_new_lines_seen; a new run (the hook's own
+// RUN_TOMBSTONES) and a later green record leave it in place, so the PR can still disclose it.
+caseBegin("new-lines-seen-written-and-kept-across-runs", "bin/workflow/lib/run-tests-baseline-evidence.js");
+test("new-lines-seen-written-and-kept-across-runs", () => {
+  const { markStep } = require(path.join(ROOT, "hooks", "workflow-state"));
+  const { RUN_TOMBSTONES } = require(path.join(ROOT, "hooks", "workflow-run-tests", "record-run.js"));
+  const id = sid("nls");
+  const p = "tests/bin/n1.sh";
+  seed(id, [p, "tests/bin/n2.sh"]);
+  const r1 = recordTsv(id, `${p}\tnew-case-failure-on-branch\tfails-at-base-exit-1-new-lines\t2\t["line L1","line L2"]\n`
+    + "tests/bin/n2.sh\tpreexisting\tbase-fail\t0\t[]\n");
+  expectOutcome(r1, 1, null);
+  const want = (e, label) => {
+    const seen = e.baseline_new_lines_seen || {};
+    assert.ok(seen[p], `${label}: ${p} missing in ${JSON.stringify(seen)}`);
+    assert.equal(seen[p].count, 2, label);
+    assert.equal(seen[p].class, "new-case-failure-on-branch", label);
+    assert.match(JSON.stringify(seen[p].head), /line L1/, label);
+    assert.equal(seen["tests/bin/n2.sh"], undefined, `${label}: a row with no new lines is not kept`);
+  };
+  want(entry(id), "written");
+  markStep(id, "run_tests", "pending", Object.assign({ run_outcome: "fail", failing_tests: [p],
+    unrunnable_count: 0 }, RUN_TOMBSTONES));
+  assert.equal(entry(id).baseline_classification ?? null, null, "control: the next run cleared the classification");
+  want(entry(id), "after the next run");
+  expectOutcome(recordTsv(id, `${p}\tpreexisting\tbase-fail\t0\t[]\n`), 0, PRE);
+  want(entry(id), "after the fixed run completes");
 });
 caseEnd();
 

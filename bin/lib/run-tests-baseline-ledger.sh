@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
 # Baseline result ledger for bin/run-tests-baseline (#2431). Source-only.
 # One append-only segment per process at
-#   $(run_all_cache_dir)/baseline/<repo_id>/v2.<host>-<epoch>-<pid>.seg
-# with lines `v2\t<base-sha>\t<host>\t<rel-path>\t<fail|pass|und:<detail>>\t<epoch>\t<os-attr>`.
-# The format sits in the file name so legacy segments are told apart unread (#2079 S7);
-# rtb_ledger_seg_open / rtb_ledger_seg_list take that prefix, so other caches (branch.v1) share them.
-# Time-limited carry-over of legacy segments lives in run-all-ledger-migrate.sh: every old
-# token on Windows, only a same-token format rewrite elsewhere.
-# Identity helpers are reused from the duration ledger; reads are capped and
-# corrupt lines skipped; a write failure only warns (the ledger is a cache).
+#   $(run_all_cache_dir)/baseline/<repo_id>/v3.<host>-<epoch>-<pid>.seg
+# with lines `v3\t<base-sha>\t<host>\t<rel-path>\t<fail|pass|und:..>\t<fp|->\t<epoch>\t<os-attr>`;
+# <fp> names the row file v3.lines.<fp> (run-tests-baseline-lines.sh). v1/v2 rows are never read.
+# Legacy carry-over: run-all-ledger-migrate.sh. Reads are capped, corrupt lines skipped, and a
+# write failure only warns (the ledger is a cache). Format: docs/architecture/claude-code/test-result-contract.md.
 
 case "${BASH_SOURCE[0]}" in
   */*) RTB_LEDGER_LIB_DIR="${BASH_SOURCE[0]%/*}" ;;
@@ -18,8 +15,10 @@ esac
 . "$RTB_LEDGER_LIB_DIR/run-all-parallelism.sh"
 # shellcheck source=bin/lib/run-all-durations.sh
 . "$RTB_LEDGER_LIB_DIR/run-all-durations.sh"
+# shellcheck source=bin/lib/run-tests-baseline-lines.sh
+. "$RTB_LEDGER_LIB_DIR/run-tests-baseline-lines.sh"
 
-RTB_LEDGER_SCHEMA="v2"
+RTB_LEDGER_SCHEMA="v3"
 RTB_LEDGER_RETENTION_DAYS=30
 RTB_LEDGER_MAX_SEGMENTS_READ=256
 RTB_LEDGER_MAX_RECORDS=60000
@@ -57,12 +56,12 @@ rtb_ledger_valid_path() {
     [ "${#p}" -le 400 ]
 }
 
-# Delete this repo's segments whose mtime is past the retention window.
+# Delete this repo's segments and row files whose mtime is past the retention window.
 rtb_ledger_sweep() {
     local dir
     dir="$(rtb_ledger_dir)"
     [ -d "$dir" ] || return 0
-    find "$dir" -maxdepth 1 -type f -name '*.seg' \
+    find "$dir" -maxdepth 1 -type f \( -name '*.seg' -o -name 'v3.lines.*' \) \
         -mmin +$((RTB_LEDGER_RETENTION_DAYS * 1440)) -exec rm -f {} + 2>/dev/null || true
     return 0
 }
@@ -134,23 +133,25 @@ rtb_ledger_writer_init() {
     return 0
 }
 
-# rtb_ledger_append <base-sha> <rel-path> <fail|pass|und:<detail>> — always returns 0.
+# rtb_ledger_append <base-sha> <rel-path> <fail|pass|und:<detail>> [<fp>] — always returns 0.
+# <fp> (default `-`) names the row file holding the side's failure lines.
 rtb_ledger_append() {
-    local sha="${1:-}" rel="${2:-}" res="${3:-}"
+    local sha="${1:-}" rel="${2:-}" res="${3:-}" fp="${4:--}"
     [[ "$res" =~ ^(fail|pass|und:[a-z0-9][a-z0-9-]*)$ && "${#res}" -le 80 ]] \
         || { rtb_ledger_warn "bad result '$res'"; return 0; }
     rtb_ledger_valid_sha "$sha" || { rtb_ledger_warn "bad sha"; return 0; }
     rtb_ledger_valid_path "$rel" || { rtb_ledger_warn "bad path"; return 0; }
+    [[ "$fp" == "-" ]] || rtb_ledger_valid_fp "$fp" || { rtb_ledger_warn "bad fp"; fp="-"; }
     rtb_ledger_writer_init
     [ "$RTB_LEDGER_WRITE_OK" -eq 1 ] || return 0
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$RTB_LEDGER_SCHEMA" "$sha" "$RUN_ALL_DUR_HOST_TOKEN" \
-        "$rel" "$res" "$(date +%s)" "$RUN_ALL_DUR_OS_ATTR" >>"$RTB_LEDGER_SEGMENT" 2>/dev/null \
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$RTB_LEDGER_SCHEMA" "$sha" "$RUN_ALL_DUR_HOST_TOKEN" \
+        "$rel" "$res" "$fp" "$(date +%s)" "$RUN_ALL_DUR_OS_ATTR" >>"$RTB_LEDGER_SEGMENT" 2>/dev/null \
         || rtb_ledger_warn "append to $RTB_LEDGER_SEGMENT failed"
     return 0
 }
 
 # rtb_ledger_scan <sha-or-empty> <rel-path> <min-epoch> — prints valid records for this
-# host and path as `<epoch>\t<sha>\t<result>`; only fixed-shape fields enter awk.
+# host and path as `<epoch>\t<sha>\t<result>\t<fp|->`; only fixed-shape fields enter awk.
 rtb_ledger_scan() {
     local want_sha="${1:-}" rel="${2:-}" min_epoch="${3:-0}"
     rtb_ledger_seg_list "$RTB_LEDGER_SCHEMA"
@@ -163,27 +164,39 @@ rtb_ledger_scan() {
 BEGIN { REL = ENVIRON["RTB_AWK_REL"] }
 {
     if (++n > MAXREC) exit
-    if (length($0) > MAXLEN || NF != 7) next
+    if (length($0) > MAXLEN || NF != 8) next
     if ($1 != SCHEMA || $3 != HOST || $4 != REL) next
-    s = index($7, "/")
-    if (s < 2 || s > 33 || length($7) - s < 1 || length($7) - s > 64) next
-    if ($7 !~ ATTRRE) next
+    s = index($8, "/")
+    if (s < 2 || s > 33 || length($8) - s < 1 || length($8) - s > 64) next
+    if ($8 !~ ATTRRE) next
     if ($2 !~ /^[0-9a-f]+$/ || length($2) < 7 || length($2) > 64) next
     if ($5 != "fail" && $5 != "pass" && $5 !~ /^und:[a-z0-9][a-z0-9-]*$/) next
-    if ($6 !~ /^[0-9]+$/ || ($6 + 0) < (MIN + 0)) next
+    if ($6 != "-" && ($6 !~ /^[0-9a-f]+$/ || length($6) != 64)) next
+    if ($7 !~ /^[0-9]+$/ || ($7 + 0) < (MIN + 0)) next
     if (SHA != "" && $2 != SHA) next
-    print $6 "\t" $2 "\t" $5
+    print $7 "\t" $2 "\t" $5 "\t" $6
 }' "${RTB_LEDGER_SEGS[@]}" 2>/dev/null || true
 }
 
 # rtb_ledger_lookup_same_base <sha> <rel-path> — prints the newest reusable result (fail|pass,
-# or a deterministic und:<detail>) or nothing.
+# or a deterministic und:<detail>) and its fp as `<result>\t<fp|->`, or nothing.
 rtb_ledger_lookup_same_base() {
     rtb_ledger_valid_sha "${1:-}" || return 0
     rtb_ledger_valid_path "${2:-}" || return 0
     rtb_ledger_scan "$1" "$2" 0 | awk -F '\t' -v UND="$RTB_LEDGER_UND_CACHEABLE_RE" \
         '$3 == "fail" || $3 == "pass" || $3 ~ UND' \
-        | sort -t "$(printf '\t')" -k1,1n | tail -n 1 | cut -f3
+        | sort -t "$(printf '\t')" -k1,1n | tail -n 1 | cut -f3,4
+}
+
+# rtb_ledger_lookup_inheritable_fp <rel-path> — `<sha>\t<fp>` for each base SHA whose newest
+# `fail` record in the retention window carries a row file fp, newest first.
+rtb_ledger_lookup_inheritable_fp() {
+    local now min
+    rtb_ledger_valid_path "${1:-}" || return 0
+    now="$(date +%s)"
+    min=$((now - RTB_LEDGER_RETENTION_DAYS * 86400))
+    rtb_ledger_scan "" "$1" "$min" | awk -F '\t' '$3 == "fail" && $4 != "-"' \
+        | sort -t "$(printf '\t')" -k1,1nr | awk -F '\t' '!seen[$2]++ { print $2 "\t" $4 }'
 }
 
 # rtb_ledger_lookup_inheritable <rel-path> — base SHAs with a `fail` record for this host

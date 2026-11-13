@@ -60,16 +60,17 @@ cli_assert_completed() {
   fi
 }
 
-# ch_assert_preexisting <label> <test> <sentinel> — the comment-only verdict: the test really ran
-# at base, failed there, and run_tests completed.
-ch_assert_preexisting() {
-  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: preexisting[[:space:]]+$2[[:space:]]+fails-at-base-exit-1"; then
-    pass "$1: classified preexisting fails-at-base-exit-1"
+# ch_assert_ran_at_base <label> <test> <sentinel> <sid> — the comment-only verdict: the test really
+# ran at base, failed there, and run_tests completed. ch_repo_end gives the branch a different copy,
+# so the base failure is a file verdict (#2956 S8 table 1: test-file-changed, auto).
+ch_assert_ran_at_base() {
+  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: file-verdict-preexisting[[:space:]]+$2[[:space:]]+test-file-changed"; then
+    pass "$1: classified file-verdict-preexisting test-file-changed"
   else
-    fail "$1: expected preexisting fails-at-base-exit-1; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
+    fail "$1: expected file-verdict-preexisting test-file-changed; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
   fi
-  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE '^BASELINE_SUMMARY: preexisting=1 inherited=0 broken=0 undetermined=0$'; then
-    pass "$1: summary preexisting=1 undetermined=0"
+  if printf '%s\n' "$RTB_CLI_OUT" | grep -qxF "$(baseline_summary 0 0 0 0 1 0)"; then
+    pass "$1: summary file_verdict=1 undetermined=0"
   else
     fail "$1: summary mismatch ($(cli_baseline_lines))"
   fi
@@ -99,7 +100,7 @@ ch_assert_undetermined() {
   cli_assert_auto_accepted "$1" "$4" "$2"
 }
 
-# ch_lang_case <id> <rel-file-in-datadir> <expect: preexisting|undetermined> <content-line...>
+# ch_lang_case <id> <rel-file-in-datadir> <expect: ran-at-base|undetermined> <content-line...>
 # One fixture repo per language case, so the cases cannot influence each other.
 ch_lang_case() {
   local id="$1" rel="$2" want="$3"; shift 3
@@ -110,8 +111,8 @@ ch_lang_case() {
   printf '%s\n' "$@" > "$repo/tests/bin/test-$id/$rel"
   ch_repo_end "$repo" "$t"
   ch_run "$id" "$repo" "$t"
-  if [ "$want" = preexisting ]; then
-    ch_assert_preexisting "$id" "$t" "$ran" "$id-$$"
+  if [ "$want" = ran-at-base ]; then
+    ch_assert_ran_at_base "$id" "$t" "$ran" "$id-$$"
   else
     ch_assert_undetermined "$id" "$t" "$ran" "$id-$$"
   fi
@@ -134,7 +135,7 @@ run_cli_homeref_cases() {
   ch_mk_test "$repo" "$t" "$ran" '# ~/.claude is only mentioned here' '  # $HOME/.claude too'
   ch_repo_end "$repo" "$t"
   ch_run ch1 "$repo" "$t"
-  ch_assert_preexisting "CH1" "$t" "$ran" "ch1-$$"
+  ch_assert_ran_at_base "CH1" "$t" "$ran" "ch1-$$"
 
   # ---- CH3: comment reference plus an executable one -> undetermined ----
   repo="$TMPROOT/repo-ch3" t="tests/bin/test-homemixed.sh" ran="$TMPROOT/ch3-executed"
@@ -161,7 +162,7 @@ run_cli_homeref_cases() {
   printf '%s\n' '# ~/.claude is only mentioned here' 'true' > "$repo/tests/bin/test-homedata/lib.sh"
   ch_repo_end "$repo" "$t"
   ch_run ch5 "$repo" "$t"
-  ch_assert_preexisting "CH5" "$t" "$ran" "ch5-$$"
+  ch_assert_ran_at_base "CH5" "$t" "$ran" "ch5-$$"
 }
 
 # CH6-CH9 run in their own entrypoint (feature-2431-run-tests-baseline-homeref-lang.sh), so the two
@@ -177,12 +178,12 @@ run_cli_homeref_lang_cases() {
   local repo t ran d
 
   # ---- CH6: per-language comment syntax inside the data directory ----
-  ch_lang_case ch6a m.js preexisting '// ~/.claude'
+  ch_lang_case ch6a m.js ran-at-base '// ~/.claude'
   ch_lang_case ch6b m.js undetermined '# ~/.claude'
   ch_lang_case ch6c m.sh undetermined '// ~/.claude'
-  ch_lang_case ch6d test_m.py preexisting '# ~/.claude'
+  ch_lang_case ch6d test_m.py ran-at-base '# ~/.claude'
   # shellcheck disable=SC2016
-  ch_lang_case ch6e m.Tests.ps1 preexisting '# $env:USERPROFILE'
+  ch_lang_case ch6e m.Tests.ps1 ran-at-base '# $env:USERPROFILE'
 
   # ---- CH7: unregistered extension gets no comment exclusion -> undetermined ----
   ch_lang_case ch7 notes.txt undetermined '# ~/.claude'

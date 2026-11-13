@@ -1,5 +1,5 @@
 # bin/lib/test-wrappers/pester.ps1 — runs one *.Tests.ps1 file for tests/run-all.sh (#2501).
-# Writes <RUN_ALL_RESULT_DIR>/cases.tsv and testResults.xml; exit 0 pass, 1 any failure,
+# Writes <RUN_ALL_RESULT_DIR>/cases.tsv, fail-details.tsv (#2956) and testResults.xml; exit 0 pass, 1 any failure,
 # 77 no test ran or all skipped, 79 + an `unrunnable` marker when Pester < -MinVersion.
 [CmdletBinding()]
 param(
@@ -29,6 +29,35 @@ function Add-CaseRecord {
     $clean = { param($s) ($s -replace "[`t`r`n]", ' ') }
     $line = "{0}`t{1}`t{2}`t{3}`n" -f $Seq, $State, (& $clean $Name), (& $clean $Path)
     [System.IO.File]::AppendAllText($casesFile, $line, $utf8)
+}
+
+# One fail-details.tsv text: the fold of test-result-contract.md (fail-details.tsv section), cut at the byte level.
+function ConvertTo-FoldBytes {
+    param([string]$Text)
+    $lines = @(($Text -replace "`r`n?", "`n").Split("`n") | ForEach-Object { $_ -replace '[ \t]+$', '' })
+    $n = $lines.Count
+    while ($n -gt 0 -and $lines[$n - 1] -eq '') { $n-- }
+    $body = if ($n -gt 0) { (@($lines[0..($n - 1)] | ForEach-Object { $_.Replace('\', '\\').Replace("`t", '\t') }) -join '\n') } else { '' }
+    $bytes = $utf8.GetBytes($body)
+    if ($bytes.Length -le 8192) { return , $bytes }
+    return , ([byte[]]($bytes[0..8191] + $utf8.GetBytes('\n[cut]')))
+}
+
+function Add-DetailRecord {
+    param([int]$Seq, [string]$Name, [object[]]$ErrorRecords)
+    $text = (@($ErrorRecords | Where-Object { $null -ne $_ } | ForEach-Object { $_.Exception.Message }) -join "`n")
+    $headText = "{0}`t{1}`t" -f $Seq, ($Name -replace "[`t`r`n]", ' ')
+    $head = $utf8.GetBytes($headText)
+    $record = [byte[]]($head + (ConvertTo-FoldBytes -Text $text) + [byte[]](10))
+    $stream = [System.IO.File]::Open((Join-Path -Path $resultDir -ChildPath 'fail-details.tsv'), 'Append', 'Write')
+    try { $stream.Write($record, 0, $record.Length) } finally { $stream.Dispose() }
+}
+
+function Get-ErrorRecordList {
+    param($Item)
+    $prop = $Item.PSObject.Properties['ErrorRecord']
+    if ($null -eq $prop) { return , @() }
+    return , @($prop.Value)
 }
 
 # Only an absent or too-old Pester is a missing runtime; an installed one that fails to import must fail.
@@ -63,12 +92,15 @@ foreach ($test in @($run.Tests)) {
     $state = $stateOf[$result]
     if ($state -eq 'FAIL') { $failed++ } elseif ($state -eq 'SKIP') { $skipped++ }
     Add-CaseRecord -Seq $seq -State $state -Name $test.ExpandedPath
+    if ($state -eq 'FAIL') { Add-DetailRecord -Seq $seq -Name $test.ExpandedPath -ErrorRecords (Get-ErrorRecordList -Item $test) }
 }
 # A file that fails to load, or a BeforeAll that throws, fails no It of its own.
 if (($run.FailedContainersCount + $run.FailedBlocksCount) -gt 0) {
     $seq++
     $failed++
     Add-CaseRecord -Seq $seq -State 'FAIL' -Name '(container)'
+    $errs = @(@($run.Containers) + @($run.Failed) | ForEach-Object { Get-ErrorRecordList -Item $_ } | ForEach-Object { $_ })
+    Add-DetailRecord -Seq $seq -Name '(container)' -ErrorRecords $errs
 }
 
 if ($failed -gt 0) { exit 1 }
