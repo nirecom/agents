@@ -196,3 +196,7 @@ Changes: `bin/run-tests-baseline` now carries `RUN_TL3` / `RUN_TL4` to the base 
 ### FEATURE: PR #3014 (2026-11-13)
 Background: fix(#2956): compare normalized FAIL lines in run-tests-baseline so ne...
 Changes: run-tests-baseline no longer lets a branch hide new failures inside a test that already fails on the base: failures are compared line by line, and a new failing line keeps the test pending with the first lines shown and the full list saved to a file.;Test selection now matches by file-name stem more reliably, and the recorded merge base follows merges of main into your branch.
+
+### FEATURE: PR #3017 (2026-11-13)
+Background: feat(#3013): pass the bulk-sub-of manifest path, warn on title fallba...
+Changes: `/issue-create` bulk-sub-of now takes the manifest path from the caller and warns when a row's title cannot be read instead of silently using the shared title. The manifest is removed after recording, and kept when a row needs follow-up.;Final Report merges Related Tasks, Bugs Found and Next Tasks entries with identical text into one line that lists all their issue numbers.
