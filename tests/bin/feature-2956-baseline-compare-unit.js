@@ -1,5 +1,5 @@
 // tests/bin/feature-2956-baseline-compare-unit.js
-// Tests: bin/lib/run-tests-baseline-compare.js, bin/lib/run-tests-baseline-compare/normalize.js, bin/lib/run-tests-baseline-compare/markers.js, bin/lib/run-tests-baseline-compare/diff.js
+// Tests: bin/lib/run-tests-baseline-compare.js, bin/lib/run-tests-baseline-compare/normalize.js, bin/lib/run-tests-baseline-compare/markers.js, bin/lib/run-tests-baseline-compare/diff.js, bin/lib/run-tests-baseline-compare/records.js
 // Tags: scope:issue-specific, run-tests-baseline, baseline-compare, fail-details, tl2
 // #2956 S4/S5: the comparer of bin/run-tests-baseline. Each case builds a base and a branch result
 // dir (cases.tsv + fail-details.tsv), runs the CLI and reads its one line
@@ -32,8 +32,8 @@ const TARGET = "tests/bin/t.sh";
 const CUT = `${"a".repeat(8192)}\\n[cut]`;
 let dirN = 0;
 
-// side(spec) — a result dir. spec: { fail: { <case>: [detail, ...] }, pass: [<case>...], outside: [detail...] }
-// A FAIL case with an empty detail list gets no fail-details line. null -> an empty result dir.
+// side(spec) — a result dir. spec: { fail|open: { <case>: [detail, ...] }, pass: [<case>...], outside: [detail...] }
+// An open case is begun, never ended. A FAIL case with an empty detail list gets no fail-details line. null -> an empty result dir.
 function side(spec) {
   const dir = path.join(TMP, `r${dirN++}`);
   fs.mkdirSync(dir);
@@ -48,6 +48,10 @@ function side(spec) {
   for (const [c, ds] of Object.entries(spec.fail || {})) {
     seq += 1;
     cases.push(`${seq}\tOPEN\t${c}\t${TARGET}`, `${seq}\tFAIL\t${c}\t${TARGET}`);
+    for (const d of ds) details.push(`${seq}\t${c}\t${d}`);
+  }
+  for (const [c, ds] of Object.entries(spec.open || {})) {
+    cases.push(`${++seq}\tOPEN\t${c}\t${TARGET}`);
     for (const d of ds) details.push(`${seq}\t${c}\t${d}`);
   }
   for (const d of spec.outside || []) details.push(`0\t-\t${d}`);
@@ -274,5 +278,23 @@ test("--new-lines-out keeps every new line, including those past the head of thr
   assert.equal(got.count, 5, got.raw);
   const kept = fs.readFileSync(out, "utf8").split("\n").filter(Boolean);
   assert.deepEqual(kept, ["X\tn1", "X\tn2", "X\tn3", "X\tn4", "X\tn5"], `file rows: ${JSON.stringify(kept)}`);
+});
+caseEnd();
+
+caseBegin("open-at-end-case-is-a-failure", "bin/lib/run-tests-baseline-compare/records.js");
+test("readSide: an OPEN-at-end case gives one [name, ''] line, unless it has a detail row; never seen", () => {
+  const { readSide } = require(path.join(ROOT, "bin", "lib", "run-tests-baseline-compare", "records.js"));
+  const bare = readSide(side({ fail: { A: ["X"] }, open: { B: [] } }));
+  assert.deepEqual(bare.lines, [["A", "X"], ["B", ""]], JSON.stringify(bare.lines));
+  assert.ok(!bare.seenCases.has("B") && bare.hasRecords, "OPEN-at-end: a record, not in seenCases");
+  const withDetail = readSide(side({ open: { B: ["d"] } }));
+  assert.deepEqual(withDetail.lines, [["B", "d"]], `no duplicate "" line: ${JSON.stringify(withDetail.lines)}`);
+});
+test("compare: a new OPEN-at-end case on the branch is new; the same one on both sides is same", () => {
+  check([
+    { name: "open-case-added", base: one("X"), branch: { fail: { X: ["X"] }, open: { B: [] } }, verdict: "new", count: 1 },
+    { name: "open-case-both-sides", base: { open: { B: [] } }, branch: { open: { B: [] } }, verdict: "same", count: 0 },
+    { name: "open-case-with-detail-no-dup", base: { fail: { B: ["d"] } }, branch: { open: { B: ["d"] } }, verdict: "same", count: 0 },
+  ]);
 });
 caseEnd();
