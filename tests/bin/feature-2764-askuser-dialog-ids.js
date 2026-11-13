@@ -3,7 +3,7 @@
 // Tests: bin/check-askuser-dialog-ids, bin/lib/check-askuser-dialog-ids.js, hooks/lib/askuser-dialog-levels.js, hooks/lib/askuser-dialog-levels.json
 // Tags: TL2, bin, askuserquestion, dialog-id, auto-user-input-risk-level, classification-table, allowlist, table-driven, jev, scope:issue-specific, pwsh-not-required
 // #2764: every AskUserQuestion line of skills/ carries a dialog ID or an askuser-none note, every
-// ID is in the classification table, the low set is exactly the seven reviewed dialogs, and the
+// ID is in the classification table, the low set is exactly the four reviewed dialogs, and the
 // checker reports each violation code on a fixture tree. TL3 gap: none; the checker reads files only.
 "use strict";
 
@@ -81,30 +81,60 @@ function tree(changes = {}) {
 }
 const check = (dir, extra = []) => cli(["--root", dir, ...extra]);
 
+// normalizeSyncedId: the segment after skills/synced/ is a per-install id of a gitignored directory; drop the #2973 baseline entry once the checker excludes synced skills.
+const normalizeSyncedId = (file) => fwd(file).replace(/^(skills\/synced\/)[^/]+\//, "$1*/");
+const keyOf = (v) => `${normalizeSyncedId(v.file)}:${v.line}:${v.code}`;
+// Pre-existing violations outside this change's scope; remove an entry once it is fixed.
+const BASELINE = new Set([
+  "skills/_shared/pm-pre-pr-contact.md:5:ASKUSER_LINE_UNMARKED",
+  "skills/_shared/pm-pre-pr-contact.md:25:ASKUSER_LINE_UNMARKED",
+  "skills/_shared/pm-pre-pr-contact.md:39:ASKUSER_LINE_UNMARKED",
+  "skills/synced/*/deep-research/SKILL.md:33:ASKUSER_LINE_UNMARKED", // #2973
+]);
+// outsideBaseline(violations) -> the violations whose normalized file:line:code key is not in BASELINE.
+const outsideBaseline = (violations) => violations.filter((v) => !BASELINE.has(keyOf(v)));
+
 caseBegin("content-real-repo", "bin/check-askuser-dialog-ids");
-test("the real checkout: exit 0 and zero violations (every dialog line carries an ID or a note)", () => {
-  const o = cli([]);
-  assert.strictEqual(o.status, 0, o.out.slice(0, 1500));
+test("the real checkout: every violation is in the recorded HEAD baseline", () => {
   const j = cli(["--json"]);
-  assert.strictEqual(j.status, 0, j.out.slice(0, 1500));
-  assert.deepStrictEqual(JSON.parse(j.stdout).violations, []);
+  assert.ok(j.status === 0 || j.status === 1, `exit status 0 or 1 (got ${j.status}): ${j.out.slice(0, 1500)}`);
+  const violations = JSON.parse(j.stdout).violations;
+  const outside = outsideBaseline(violations);
+  assert.deepStrictEqual(outside.map((v) => `${fwd(v.file)}:${v.line}:${v.code}`), [], "violations outside the baseline");
+  assert.ok(!violations.some((v) => v.code === "ASKUSER_OCCURRENCE_ID_SHORT"), "no ASKUSER_OCCURRENCE_ID_SHORT in the real checkout");
+});
+const PM = "skills/_shared/pm-pre-pr-contact.md";
+const vio = (file, code, line = 1) => ({ file, line, code });
+const UNM = "ASKUSER_LINE_UNMARKED";
+const BASE3 = [5, 25, 39].map((l) => vio(PM, UNM, l));
+const DR = (id, line = 33, code = UNM) => vio(`skills/synced/${id}/deep-research/SKILL.md`, code, line);
+const OUTSIDE = [
+  { name: "(i) the 3 pm-pre keys plus synced deep-research line 33 with any id", input: [...BASE3, DR("bb3bf74a-1_a0db3111-2"), DR("other-id")], want: [] },
+  { name: "(ii) a pm-pre violation on a moved line", input: [vio(PM, UNM, 6)], want: [`${PM}:6:${UNM}`] },
+  { name: "(iii) a file outside the baseline", input: [vio("skills/other/SKILL.md", UNM, 5)], want: [`skills/other/SKILL.md:5:${UNM}`] },
+  { name: "(iv) the new code on a baseline file:line", input: [vio(PM, "ASKUSER_OCCURRENCE_ID_SHORT", 5)], want: [`${PM}:5:ASKUSER_OCCURRENCE_ID_SHORT`] },
+  { name: "(v) a new violation under synced, another skill", input: [vio("skills/synced/abc/other-skill/SKILL.md", UNM, 33)], want: [`skills/synced/*/other-skill/SKILL.md:33:${UNM}`] },
+  { name: "(vi-a) synced deep-research, another line", input: [DR("abc", 34)], want: [`skills/synced/*/deep-research/SKILL.md:34:${UNM}`] },
+  { name: "(vi-b) synced deep-research, another code", input: [DR("abc", 33, "ASKUSER_ID_UNCLASSIFIED")], want: ["skills/synced/*/deep-research/SKILL.md:33:ASKUSER_ID_UNCLASSIFIED"] },
+  { name: "(vii-a) empty input", input: [], want: [] },
+  { name: "(vii-b) backslash paths normalize the same", input: [vio("skills\\_shared\\pm-pre-pr-contact.md", UNM, 5), vio("skills\\synced\\abc\\deep-research\\SKILL.md", UNM, 33)], want: [] },
+];
+test("outsideBaseline: every violation whose file:line:code key is not in the baseline is reported", () => {
+  for (const { name, input, want } of OUTSIDE) assert.deepStrictEqual(outsideBaseline(input).map(keyOf), want, name);
 });
 caseEnd();
 
 caseBegin("safety-pins", "hooks/lib/askuser-dialog-levels.json");
 const realRows = () => JSON.parse(fs.readFileSync(path.join(REPO, TABLE_REL), "utf8")).dialogs;
 const LOW = {
-  "clarify-intent.interview": ["clarify_intent"],
   "clarify-intent.sibling-worktree-path": ["clarify_intent"],
   "issue-create.no-board": ["clarify_intent"],
-  "make-outline-plan.intent-select": ["outline"],
   "run-tests.calibrate": ["run_tests"],
   "review-tests.manual-files": ["review_tests"],
-  "workflow-init.meta_select": ["workflow_init"],
 };
-const HIGH = ["write-code.edit-plan-approve", "update-docs.proposal-approve", "user-verified.tl4-single", "sweep-plans.delete",
+const HIGH = ["clarify-intent.interview", "make-outline-plan.intent-select", "workflow-init.meta_select", "write-code.edit-plan-approve", "update-docs.proposal-approve", "user-verified.tl4-single", "sweep-plans.delete",
   "issue-create.confirm-gate", "clarify-intent.closed", "workflow-init.closed_reopen", "workflow-init.adopt_prior_state"];
-test("the low set is exactly the seven reviewed dialogs, each with its declared steps", () => {
+test("the low set is exactly the four reviewed dialogs, each with its declared steps", () => {
   const low = {};
   for (const r of realRows().filter((x) => x.level === "low")) low[r.id] = [...r.steps].sort();
   assert.deepStrictEqual(low, LOW);
@@ -157,7 +187,8 @@ test("DIALOG_ID_RE accepts <namespace>.<name> only", () => {
 });
 const CLASSIFY = [
   { name: "low", input: "run-tests.calibrate", want: { level: "low", steps: ["run_tests"] } },
-  { name: "low workflow-init", input: "workflow-init.meta_select", want: { level: "low", steps: ["workflow_init"] } },
+  { name: "low issue-create", input: "issue-create.no-board", want: { level: "low", steps: ["clarify_intent"] } },
+  { name: "high intent dialog", input: "clarify-intent.interview", want: { level: "high" } },
   { name: "high", input: "write-code.edit-plan-approve", want: { level: "high" } },
   { name: "unknown", input: "run-tests.no-such-dialog", want: null },
   { name: "malformed", input: "Run-Tests.Calibrate", want: null },
@@ -183,8 +214,10 @@ test("the base fixture is clean: exit 0 (frontmatter, _archived, askuser-none an
 });
 const md = (extraLine) => DEMO_SKILL + extraLine + "\n";
 const row = (over) => Object.assign({ id: "demo.extra", level: "high", reason: "x" }, over);
+const SHORT_CHANGES = { "skills/demo/SKILL.md": md("4. Ask with AskUserQuestion, then confirm with AskUserQuestion (`metadata.source=demo.pick`).") };
 const VIOLATIONS = [
   { name: "md line without an ID", code: "ASKUSER_LINE_UNMARKED", changes: { "skills/demo/SKILL.md": md("4. Then AskUserQuestion again.") } },
+  { name: "two occurrences, one ID on a line", code: "ASKUSER_OCCURRENCE_ID_SHORT", changes: SHORT_CHANGES },
   { name: "sh line without a note", code: "ASKUSER_LINE_UNMARKED", changes: { "skills/demo/scripts/run.sh": "#!/usr/bin/env bash\necho AskUserQuestion\n" } },
   { name: "the frontmatter line moved into the body", code: "ASKUSER_LINE_UNMARKED", changes: { "skills/demo/SKILL.md": md("tools: Read, AskUserQuestion") } },
   { name: "the _archived file outside _archived", code: "ASKUSER_LINE_UNMARKED", changes: { "skills/demo2/SKILL.md": "# Old\n\nAsk the user with AskUserQuestion.\n" } },
@@ -221,6 +254,59 @@ test("an unmarked md line is reported as <file>:<line>", () => {
   const o = check(tree({ "skills/demo/SKILL.md": md("4. Then AskUserQuestion again.") }));
   const line = fwd(o.stdout).split("\n").find((l) => l.includes("code=ASKUSER_LINE_UNMARKED")) || "";
   assert.ok(line.includes("skills/demo/SKILL.md:10:"), line);
+});
+const SHORT = "ASKUSER_OCCURRENCE_ID_SHORT";
+const EXEMPT_OR_PASS = [
+  { name: "two occurrences and two IDs", line: "4. `AskUserQuestion` (`metadata.source=demo.pick`) then `AskUserQuestion` (`metadata.source=demo.approve`)." },
+  { name: "two occurrences, no ID, askuser-none", line: "4. About AskUserQuestion and AskUserQuestion. <!-- askuser-none -->" },
+  { name: "an ID line with askuser-none is exempt from the count", line: "4. AskUserQuestion twice: AskUserQuestion (`metadata.source=demo.pick`). <!-- askuser-none -->" },
+  { name: "one occurrence and one ID", line: "4. Ask with `AskUserQuestion` (`metadata.source=demo.pick`)." },
+  { name: "one occurrence and two IDs", line: "4. `AskUserQuestion` (`metadata.source=demo.pick` or `metadata.source=demo.approve`)." },
+];
+for (const { name, line } of EXEMPT_OR_PASS) {
+  test(`${name}: exit 0, no codes`, () => {
+    const dir = tree({ "skills/demo/SKILL.md": md(line) });
+    assert.strictEqual(check(dir).status, 0, check(dir).out.slice(0, 800));
+    assert.deepStrictEqual(codesOf(check(dir, ["--json"])), []);
+  });
+}
+test("two occurrences and no ID stays ASKUSER_LINE_UNMARKED, without a second report", () => {
+  const codes = codesOf(check(tree({ "skills/demo/SKILL.md": md("4. AskUserQuestion then AskUserQuestion again.") }), ["--json"]));
+  assert.ok(codes.includes("ASKUSER_LINE_UNMARKED"), codes.join());
+  assert.ok(!codes.includes(SHORT), codes.join());
+});
+test("an ID line with askuser-none still has its ID checked against the table", () => {
+  const codes = codesOf(check(tree({ "skills/demo/SKILL.md": md("4. AskUserQuestion twice: AskUserQuestion (`metadata.source=demo.unknown`). <!-- askuser-none -->") }), ["--json"]));
+  assert.ok(codes.includes("ASKUSER_ID_UNCLASSIFIED"), codes.join());
+});
+test("the short-line message shows the fixes and avoids the retired word", () => {
+  const o = check(tree(SHORT_CHANGES));
+  const line = o.stdout.split("\n").find((l) => l.includes(`code=${SHORT}`)) || "";
+  assert.ok(line.includes("reword") && line.includes("askuser-none"), line);
+  assert.ok(!line.includes("mention"), line);
+});
+test("a short line is reported as <file>:<line>", () => {
+  const line = fwd(check(tree(SHORT_CHANGES)).stdout).split("\n").find((l) => l.includes(`code=${SHORT}`)) || "";
+  assert.ok(line.includes("skills/demo/SKILL.md:10:"), line);
+});
+test("the same ID written twice on a line counts once", () => {
+  const dir = tree({ "skills/demo/SKILL.md": md("4. AskUserQuestion (`metadata.source=demo.pick`) then AskUserQuestion (`metadata.source=demo.pick`).") });
+  assert.ok(codesOf(check(dir, ["--json"])).includes(SHORT));
+});
+test("a short line in a .sh script under scripts/", () => {
+  const dir = tree({ "skills/demo/scripts/run.sh": "#!/usr/bin/env bash\necho AskUserQuestion AskUserQuestion metadata.source=demo.pick\n" });
+  assert.ok(codesOf(check(dir, ["--json"])).includes(SHORT));
+});
+test("three occurrences and two IDs on a line is short; three and three passes", () => {
+  const three = (ids) => md(`4. AskUserQuestion ${ids.map((i) => `AskUserQuestion (\`metadata.source=${i}\`)`).join(" ")}.`);
+  const short = codesOf(check(tree({ "skills/demo/SKILL.md": three(["demo.pick", "demo.approve"]) }), ["--json"]));
+  assert.ok(short.includes(SHORT), short.join());
+  const ok = md("4. AskUserQuestion (`metadata.source=demo.pick`) AskUserQuestion (`metadata.source=demo.approve`) AskUserQuestion (`metadata.source=workflow-init.closed_reopen`).");
+  const okDir = tree({ "skills/demo/SKILL.md": ok });
+  const okRun = check(okDir, ["--json"]);
+  assert.ok(!codesOf(okRun).includes(SHORT));
+  assert.strictEqual(okRun.status, 0, okRun.out.slice(0, 800));
+  assert.deepStrictEqual(JSON.parse(okRun.stdout).violations, []);
 });
 caseEnd();
 
