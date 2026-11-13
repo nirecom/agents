@@ -39,20 +39,11 @@ SUB_DIR="$SCRIPT_DIR/feature-issue-create-skill"
 # case-runner.sh owns PASS/FAIL, pass/fail, run_with_timeout and the parallel runner.
 # shellcheck source=/dev/null
 . "$SUB_DIR/case-runner.sh"
-# shellcheck source=/dev/null
-. "$SUB_DIR/section-mock.sh"
-# shellcheck source=/dev/null
-. "$SUB_DIR/section-create-sh.sh"
-# shellcheck source=/dev/null
-. "$SUB_DIR/section-doc-content-date.sh"
-# shellcheck source=/dev/null
-. "$SUB_DIR/section-dispatch-core.sh"
-# shellcheck source=/dev/null
-. "$SUB_DIR/section-dispatch-bulk.sh"
-# shellcheck source=/dev/null
-. "$SUB_DIR/section-phase5-resolver.sh"
-# shellcheck source=/dev/null
-. "$SUB_DIR/section-scripts-existence.sh"
+# Sections load in this order (definition order = output order); section-scripts-existence defines BULK_SCRIPT / PHASE5_SCRIPT for the two #3013 sections after it.
+for SECTION in section-mock section-create-sh section-doc-content-date section-dispatch-core section-dispatch-bulk section-phase5-resolver section-scripts-existence section-bulk-manifest-path section-phase5-bulk-record; do
+    # shellcheck source=/dev/null
+    . "$SUB_DIR/$SECTION.sh"
+done
 collect_cases
 
 # ---------------------------------------------------------------------------

@@ -5,6 +5,8 @@
 // now every entry collapses to a title line except `<!-- severity: high -->`
 // entries, which stay verbatim. Every line leads with `#N ` or `[issue-TBD] `
 // (#2904); one backup pointer line appears only when something was omitted.
+// Promoted non-high entries with an identical body share one `#N #M ` line
+// (#3013); COMPRESSED_LIST_MAX counts those output lines, not entries.
 //
 // Pure functions only (Stop hook critical path) — no file access, subprocess, network, or model calls.
 
@@ -49,6 +51,31 @@ function displayBody(entry) {
     : entry.body;
 }
 
+// Returns one { head, body } per output line, in order of first appearance.
+function mergeEntries(entries) {
+  const groups = [];
+  const byBody = new Map();
+  for (const entry of entries) {
+    const body = displayBody(entry);
+    if (!entry.promotedNumber) {
+      groups.push({ head: entryHead(entry), body });
+      continue;
+    }
+    const group = byBody.get(body);
+    if (group) {
+      if (!group.numbers.includes(entry.promotedNumber)) group.numbers.push(entry.promotedNumber);
+      continue;
+    }
+    const fresh = { numbers: [entry.promotedNumber], body };
+    byBody.set(body, fresh);
+    groups.push(fresh);
+  }
+  return groups.map((g) => ({
+    head: g.head || g.numbers.map((n) => `#${n} `).join(""),
+    body: g.body,
+  }));
+}
+
 // Returns { BugsFound, RelatedTasks, NextTasks }, each a ready-to-emit string
 // ("(none)" when the section yields nothing).
 function compressNotesSections(text, options) {
@@ -59,17 +86,16 @@ function compressNotesSections(text, options) {
     const { entries, strayCount, stoppedAtSubHeading, subHeading } =
       scanSection(text, section);
     const high = entries.filter((e) => e.severity === "high");
-    const rest = entries.filter((e) => e.severity !== "high");
+    const rest = mergeEntries(entries.filter((e) => e.severity !== "high"));
 
     const lines = [];
     for (const entry of high) {
       lines.push(`- ${entryHead(entry)}${sanitizeTokens(displayBody(entry))}`);
     }
     let truncatedCount = 0;
-    for (const entry of rest.slice(0, COMPRESSED_LIST_MAX)) {
-      const body = displayBody(entry);
+    for (const { head, body } of rest.slice(0, COMPRESSED_LIST_MAX)) {
       if (isTitleTruncated(body)) truncatedCount += 1;
-      lines.push(`- ${entryHead(entry)}${sanitizeTokens(titleLine(body))}`);
+      lines.push(`- ${head}${sanitizeTokens(titleLine(body))}`);
     }
 
     const parts = [];
