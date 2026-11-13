@@ -143,7 +143,10 @@ const NEVER = [
   ["a low ID outside its step", { source: CAL, seed: "writeCode" }, { dialog_id: CAL, route: "step-mismatch", step: "write_code" }],
   ["a low ID at user_verification", { source: CAL, seed: "userVerification" }, { dialog_id: CAL, route: "step-mismatch", step: "user_verification" }],
   ["a low ID with every step settled", { source: CAL, seed: "noStep" }, { dialog_id: CAL, route: "no-step", step: null }],
-  ["a low ID while a plan approval is awaited", { source: "clarify-intent.interview", seed: "approvalWait" }, { dialog_id: "clarify-intent.interview", route: "approval-wait", step: "clarify_intent" }],
+  ["a low ID while a plan approval is awaited", { source: "issue-create.no-board", seed: "approvalWait" }, { dialog_id: "issue-create.no-board", route: "approval-wait", step: "clarify_intent" }],
+  ["a user-intent ID (clarify-intent.interview) at clarify_intent", { source: "clarify-intent.interview", seed: "approvalWait" }, { dialog_id: "clarify-intent.interview", route: "high", step: null }],
+  ["a user-intent ID (workflow-init.meta_select) at workflow_init", { source: "workflow-init.meta_select", seed: "workflowInit" }, { dialog_id: "workflow-init.meta_select", route: "high", step: null }],
+  ["a user-intent ID (make-outline-plan.intent-select)", { source: "make-outline-plan.intent-select", seed: "started" }, { dialog_id: "make-outline-plan.intent-select", route: "high", step: null }],
   ["a multiSelect question", { source: CAL, questions: [Q("Which sections should be included?", ["Summary", "Details"], true)] }, { route: "multiselect", step: "run_tests" }],
   ["multiSelect on the second question", { source: CAL, questions: [ONE[0], Q("Which sections?", ["Summary", "Details"], true)] }, { route: "multiselect" }],
   ...MALFORMED_Q.map(([n, questions]) => [n, { source: CAL, questions }, { dialog_id: CAL, route: "adapter-reject" }]),
@@ -218,12 +221,12 @@ console.log(JSON.stringify({ cur, state: !!st, wait: w ? w.reason : null }));`, 
 caseEnd();
 
 caseBegin("step-match", "hooks/lib/askuser-jev-decide.js");
-test("workflow-init.meta_select at workflow_init: Jev answers", () => {
+test("run-tests.calibrate at run_tests: Jev answers", () => {
   mock.conv(0.02, { q0o1: 0.97 });
-  const r = ask("meta-select", { source: "workflow-init.meta_select", seed: "workflowInit" });
+  const r = ask("calibrate-step", { source: CAL, seed: "runTests" });
   assert.strictEqual(r.q, 1, r.o.stderr.slice(0, 300));
   assert.ok(r.out && r.out.permissionDecision === "allow", r.o.stdout.slice(0, 300));
-  routed(r, { dialog_id: "workflow-init.meta_select", route: "answered", step: "workflow_init", jev_called: true });
+  routed(r, { dialog_id: CAL, route: "answered", step: "run_tests", jev_called: true });
 });
 test("a low ID raised while a Skill runs in the turn: step matches, so Jev answers (no skill-in-turn guard)", () => {
   mock.conv(0.02, { q0o1: 0.97 });
