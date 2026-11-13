@@ -204,3 +204,7 @@ Changes: `/issue-create` bulk-sub-of now takes the manifest path from the caller
 ### FEATURE: PR #3018 (2026-11-13)
 Background: feat(#2994 #2970): keep intent dialogs with the user and catch lines with fewer dialog IDs than AskUserQuestion mentions
 Changes: Dialogs that ask for your own intent (the clarify-intent interview, the outline intent choice, the meta sub-issue choice) are no longer auto-answered by Jev; they always come back to you.;The dialog ID checker now catches a line that names `AskUserQuestion` more often than it carries dialog IDs, so a second dialog on the same line can no longer slip through without its own level.
+
+### FEATURE: PR #3023 (2026-11-14)
+Background: fix(#2993): keep a session name set by a manual /rename before the title hook existed
+Changes: Fixed: a session you named by hand with /rename before the title hook existed is no longer renamed by the hook.
