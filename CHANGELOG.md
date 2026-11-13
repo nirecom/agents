@@ -192,3 +192,7 @@ Changes: Fixed the test-language registry residue check so it passes on main; la
 ### FEATURE: PR #3011 (2026-11-12)
 Background: fix(#2997): carry RUN_TL3 / RUN_TL4 to the baseline re-run; fix(#3007...
 Changes: `bin/run-tests-baseline` now carries `RUN_TL3` / `RUN_TL4` to the base re-run, so a TL3 failure that already failed on main is classified as preexisting instead of blocking run_tests as undetermined (#2997).
+
+### FEATURE: PR #3014 (2026-11-13)
+Background: fix(#2956): compare normalized FAIL lines in run-tests-baseline so ne...
+Changes: run-tests-baseline no longer lets a branch hide new failures inside a test that already fails on the base: failures are compared line by line, and a new failing line keeps the test pending with the first lines shown and the full list saved to a file.;Test selection now matches by file-name stem more reliably, and the recorded merge base follows merges of main into your branch.
