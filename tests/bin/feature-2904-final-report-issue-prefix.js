@@ -1,7 +1,7 @@
 "use strict";
 // tests/bin/feature-2904-final-report-issue-prefix.js
 // Tests: bin/render-final-report/notes.js, hooks/lib/final-report-schema.js
-// Tags: final-report, worktree-notes, issue-prefix, schema, table-driven, scope:issue-specific, TL1
+// Tags: final-report, worktree-notes, issue-prefix, schema, table-driven, scope:issue-specific, TL1, notes-merge
 // #2904: every notes entry in the Final Report leads with `#N ` (promoted) or `[issue-TBD] `; the
 // `compressed:` summary is gone and one backup pointer appears only when something was omitted;
 // Merged PR / Worktree / Backup collapse to shorter lines. #2903: userAcknowledged is never shown.
@@ -162,6 +162,59 @@ test("schema: runTestsNote goes right after the URL line", () => {
     const i = lines.indexOf("- URL: https://x/pr/42");
     assert.ok(i >= 0, `${name}: URL line present`);
     assert.strictEqual(lines[i + 1], want, `${name}: note follows URL`);
+  }
+});
+caseEnd();
+
+// #3013: promoted entries with an identical displayed body fold into one `#N #M ` line, in all 3 sections.
+caseBegin("notes: same-body promoted entries merge into one line", "bin/render-final-report/notes.js");
+test("notes: same-body promoted entries merge into one line", () => {
+  const long = (tail) => `${"x".repeat(130)}${tail}`;
+  const cases = [
+    { name: "three merge, interleaved entry keeps its place", lines: [`- T${PRO(11)}`, `- O${PRO(20)}`, `- T${PRO(12)}`, `- T${PRO(13)}`], want: "- #11 #12 #13 T\n- #20 O" },
+    { name: "numbers follow appearance order", lines: [`- T${PRO(13)}`, `- T${PRO(11)}`, `- T${PRO(12)}`], want: "- #13 #11 #12 T" },
+    { name: "mode A and mode B merge after (#N) removal", lines: [`- T (#11)${PRO(11)}`, `- T${PRO(12)}`], want: "- #11 #12 T" },
+    { name: "differ before truncation, equal after: not merged", lines: [`- ${long("a")}${PRO(31)}`, `- ${long("b")}${PRO(32)}`], wantLines: ["- #31 ", "- #32 "] },
+    { name: "[issue-TBD] same body: not merged", lines: ["- T", "- T"], want: "- [issue-TBD] T\n- [issue-TBD] T" },
+    { name: "promoted and unpromoted same body: not merged", lines: ["- T", `- T${PRO(1)}`], want: "- [issue-TBD] T\n- #1 T" },
+    { name: "severity high stays verbatim, first", lines: [`- H${SEV}${PRO(41)}`, `- H${SEV}${PRO(42)}`, `- T${PRO(43)}`, `- T${PRO(44)}`], want: "- #41 H\n- #42 H\n- #43 #44 T" },
+    { name: "severity high long identical body stays verbatim, not merged, not truncated", lines: [`- ${long("h")}${SEV}${PRO(61)}`, `- ${long("h")}${SEV}${PRO(62)}`], wantContains: long("h"), want: `- #61 ${long("h")}\n- #62 ${long("h")}` },
+    { name: "duplicate number appears once", lines: [`- T${PRO(11)}`, `- T${PRO(11)}`, `- T${PRO(12)}`], want: "- #11 #12 T" },
+    { name: "token in a merged body is escaped", lines: [`- <FOO_BAR> x${PRO(51)}`, `- <FOO_BAR> x${PRO(52)}`], want: "- #51 #52 &lt;FOO_BAR&gt; x" },
+  ];
+  for (const section of N.NOTES_SECTIONS) {
+    for (const { name, lines, want, wantLines, wantContains } of cases) {
+      const out = inSection(section, lines);
+      if (wantContains) {
+        const got = out.split("\n").filter((l) => l.startsWith("- #"));
+        assert.strictEqual(got.length, 2, `${section}: ${name}: two separate lines`);
+        got.forEach((l, i) => assert.ok(l.includes(wantContains), `${section}: ${name}: line ${i} holds the full body`));
+      } else if (wantLines) {
+        const got = out.split("\n");
+        assert.strictEqual(got.length, wantLines.length + (pointerLines(out).length), `${section}: ${name}: line count`);
+        wantLines.forEach((head, i) => assert.ok(got[i].startsWith(head), `${section}: ${name}: line ${i} head`));
+      } else {
+        assert.strictEqual(out, want, `${section}: ${name}`);
+      }
+    }
+  }
+});
+caseEnd();
+
+caseBegin("notes: a merged line is not split and counts as one toward the list max", "bin/render-final-report/notes.js");
+test("notes: a merged line is not split and counts as one toward the list max", () => {
+  const same = (n, first) => Array.from({ length: n }, (_, i) => `- S${PRO(first + i)}`);
+  const nums25 = Array.from({ length: 25 }, (_, i) => `#${100 + i}`).join(" ");
+  for (const section of N.NOTES_SECTIONS) {
+    assert.strictEqual(inSection(section, same(25, 100)), `- ${nums25} S`, `${section}: 25 numbers on one line`);
+    const distinct = Array.from({ length: 15 }, (_, i) => `- D${i}${PRO(200 + i)}`);
+    const out = inSection(section, distinct);
+    assert.strictEqual(out.split("\n").length, N.COMPRESSED_LIST_MAX + 1, `${section}: 10 lines + pointer`);
+    assert.ok(pointerLines(out)[0].includes("5 not listed above"), `${section}: 5 not listed above`);
+    const groups = [...same(30, 300), ...Array.from({ length: 30 }, (_, i) => `- U${PRO(400 + i)}`), ...Array.from({ length: 30 }, (_, i) => `- V${PRO(500 + i)}`)];
+    const merged = inSection(section, groups);
+    assert.strictEqual(merged.split("\n").length, 3, `${section}: three groups are three lines`);
+    assert.strictEqual(pointerLines(merged).length, 0, `${section}: no pointer when nothing is omitted`);
   }
 });
 caseEnd();
