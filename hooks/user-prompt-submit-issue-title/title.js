@@ -1,7 +1,8 @@
 "use strict";
-// run(input, deps) -> the session name to emit, or null (#299, #2668). A session with issues gets
-// the work name, one without gets the none name once; the record makes each name emit once, so a
-// later /rename stays. After a resume the first prompt gives the name again while it is still ours.
+// run(input, deps) -> the session name to emit, or null (#299, #2668, #2993). A session with issues gets
+// the work name, one without gets the none name once, unless its transcript already holds a custom-title
+// (a /rename from before the hook): that name stays. The record makes each name emit once, so a later
+// /rename stays too. After a resume the first prompt gives the name again while it is still ours.
 // deps: {fetchTitle?(ref), now?(), spawnSync?} — test seams; fail-open, never throws.
 
 const fs = require("fs");
@@ -88,10 +89,12 @@ function resumeName(sid, state, input, rec, toWindowsPath) {
   return m ? rec.last_emitted.slice(0, m.index) + SN.sessionSuffix(sid) : rec.last_emitted;
 }
 
-// candidateFor(target, rec, d, cwd, now, sid) -> the name this prompt asks for, or null.
-function candidateFor(target, rec, d, cwd, now, sid) {
+// candidateFor(target, rec, d, cwd, now, sid, transcriptPath) -> the name this prompt asks for, or null.
+// A transcript that already carries a custom-title (a /rename from before the record, even an empty one) is the user's: no none name.
+function candidateFor(target, rec, d, cwd, now, sid, transcriptPath) {
   if (target.kind === "none") {
     if (rec.last_emitted !== null) return null;
+    if (transcriptPath && latestCustomTitle(transcriptPath) !== null) return null;
     const repo = repoFor(cwd, d.spawnSync);
     return repo ? SN.composeSessionName({ kind: "none", repo, sessionId: sid }) : null;
   }
@@ -117,7 +120,10 @@ function run(input, deps) {
     const before = JSON.stringify(rec);
     const now = typeof d.now === "function" ? d.now() : Date.now();
     const cwd = toWindowsPath(typeof input.cwd === "string" && input.cwd ? input.cwd : process.cwd());
-    let name = candidateFor(target, rec, d, cwd, now, sid);
+    const ctx = state && state.session_start_context;
+    const rawT = typeof input.transcript_path === "string" && input.transcript_path ? input.transcript_path : ctx && ctx.transcript_path;
+    const transcriptPath = typeof rawT === "string" && rawT ? toWindowsPath(rawT) : null;
+    let name = candidateFor(target, rec, d, cwd, now, sid, transcriptPath);
     if (name === rec.last_emitted) name = null;
     if (!name && resumed) name = resumeName(sid, state, input, rec, toWindowsPath);
     if (!name) {
