@@ -38,8 +38,8 @@ CI-3. Interview via `AskUserQuestion` (`metadata.source=clarify-intent.interview
 CI-3a. **Decomposition impact** — computed non-interactively by `precheck-companions.sh` (CI-2b) across baseline (seed-only), full-set, and per-candidate trials. No standalone probe here.
    - Read `skills/_shared/judge-decomposition.md` for the signal table and provenance rules.
    - The precheck snapshot records `VERDICT: wf-meta | <signal IDs>` or `VERDICT: wf-code | none` per trial, with `(companion-driven)` annotations.
-   - **wf-code**: proceed silently to CI-4 (no user prompt).
-   - **wf-meta** (≥2 signals): the sub-deliverable list is displayed in the MAIN CONVERSATION per `reference/companion-batch-presentation.md` (#1096 — never inside AskUserQuestion). Ask at most ONE wf-meta confirmation AskUserQuestion (`metadata.source=clarify-intent.wf-meta-confirm`, pre-announced): "Proceed in WF-META mode (planning only, no implementation this session)?" — options "Yes, WF-META (planning only)" / "No, WF-CODE (implement this session)".
+   - **`wf-code`**: proceed silently to CI-4 (no user prompt).
+   - **`wf-meta`** (≥2 signals): the sub-deliverable list is displayed in the MAIN CONVERSATION per `reference/companion-batch-presentation.md` (#1096 — never inside the dialog). Ask at most ONE WF-META confirmation AskUserQuestion (`metadata.source=clarify-intent.wf-meta-confirm`, pre-announced): "Proceed in WF-META mode (planning only, no implementation this session)?" — options "Yes, WF-META (planning only)" / "No, WF-CODE (implement this session)".
      - **WF-META**: use `$CLAUDE_CODE_SESSION_ID` as `SESSION_ID`; run `node "$AGENTS_MAIN_ROOT/bin/workflow/set-deliverable-type" "$SESSION_ID" "wf-meta"` (separate Bash call); proceed to CI-4. After CI-5, route to `make-outline-plan`; next-step auto-skips the non-applicable WF-CODE steps.
      - **WF-CODE**: proceed silently to CI-4. Never auto-switch to wf-meta without this confirmation.
 

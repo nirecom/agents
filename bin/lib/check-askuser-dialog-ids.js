@@ -2,7 +2,8 @@
 // bin/lib/check-askuser-dialog-ids.js — the full-coverage check behind bin/check-askuser-dialog-ids
 // (#2764). Every line of skills/**/*.md and skills/**/scripts/*.sh (outside _archived, outside a
 // YAML frontmatter) that names AskUserQuestion must carry a dialog ID (`metadata.source=<id>`) or
-// the askuser-none note; every ID must be in the classification table, every table row must be
+// the askuser-none note; a line naming AskUserQuestion n times must carry n distinct IDs, or be
+// reworded, or carry askuser-none; every ID must be in the classification table, every table row must be
 // used and valid, and every ASK_ID of the workflow-init driver must be classified.
 
 const fs = require("fs");
@@ -49,20 +50,25 @@ function bodyLines(text) {
   return lines.slice(start).map((t, i) => ({ n: start + i + 1, text: t }));
 }
 
-// scanSkills(root) -> {marks: [{file, n, ids}], unmarked: [{file, n}]}.
+// scanSkills(root) -> {marks: [{file, n, ids}], unmarked: [{file, n}], short: [{file, n, occurrences, ids}]}.
 function scanSkills(root) {
   const marks = [];
   const unmarked = [];
+  const short = [];
   for (const file of walk(path.join(root, "skills")).filter(isTarget).sort()) {
     const rel = fwd(path.relative(root, file));
     for (const { n, text } of bodyLines(fs.readFileSync(file, "utf8"))) {
       if (!text.includes("AskUserQuestion")) continue;
       const ids = [...text.matchAll(ID_ON_LINE_RE)].map((m) => m[1].replace(/\.+$/, ""));
-      if (ids.length) marks.push({ file: rel, n, ids });
-      else if (!text.includes("askuser-none")) unmarked.push({ file: rel, n });
+      const occurrences = text.split("AskUserQuestion").length - 1;
+      const distinct = new Set(ids).size;
+      if (ids.length) {
+        marks.push({ file: rel, n, ids });
+        if (occurrences > distinct && !text.includes("askuser-none")) short.push({ file: rel, n, occurrences, ids: distinct });
+      } else if (!text.includes("askuser-none")) unmarked.push({ file: rel, n });
     }
   }
-  return { marks, unmarked };
+  return { marks, unmarked, short };
 }
 
 const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -141,9 +147,12 @@ function check({ root, base }) {
   const rows = readTable(root);
   const violations = tableViolations(rows, stepNamesOf(root));
   const tableIds = new Set(rows.filter((r) => r && typeof r.id === "string").map((r) => r.id));
-  const { marks, unmarked } = scanSkills(root);
+  const { marks, unmarked, short } = scanSkills(root);
   for (const u of unmarked) {
     violations.push({ code: "ASKUSER_LINE_UNMARKED", file: u.file, line: u.n, message: "an AskUserQuestion line without a dialog ID or askuser-none" });
+  }
+  for (const s of short) {
+    violations.push({ code: "ASKUSER_OCCURRENCE_ID_SHORT", file: s.file, line: s.n, message: `${s.occurrences} AskUserQuestion occurrences but ${s.ids} dialog ID(s) on one line: give each question its own ID, reword descriptive occurrences (e.g. "the dialog"), or add askuser-none to the line` });
   }
   const driver = driverAskIds(root);
   for (const u of driver.unparsed) violations.push({ code: "ASKUSER_ASK_ID_UNPARSED", file: u.file, message: `askId value not read statically: ${u.text}` });
