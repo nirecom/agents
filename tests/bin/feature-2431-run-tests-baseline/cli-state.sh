@@ -3,8 +3,9 @@
 # Tests: bin/run-tests-baseline
 # Tags: run-tests, baseline, cli, test-result-contract, scope:issue-specific, pwsh-not-required, TL2
 # Sourced by the dispatcher after cli.sh and exec-state.sh; never run standalone.
-# #2501: a base state decides (FAIL 124/142 preexisting, 137/143 ambiguous, UNRUNNABLE
+# #2501: a base state decides (FAIL 124/142 a base failure, 137/143 ambiguous, UNRUNNABLE
 # unrunnable-at-base); a legacy launcher with no state keeps the exit-code classification.
+# #2956: a base failure without case records on either side is file-verdict-preexisting no-case-records.
 
 # amb_repo <repo> [<launcher>] — base adds tests/bin/test-exit-<rc>.sh per ambiguous rc,
 # plus <launcher> as bin/lib/run-all-launch.sh when given.
@@ -59,13 +60,14 @@ run_cli_ambiguous_exit_cases() {
     t="tests/bin/test-exit-$rc.sh"
     seed_failing "amb$rc-$$" "$t"
     rtb_cli_run "$(cli_case_cache "amb$rc")" "$repo" "amb$rc-$$"
-    # The detail after the path is the CLI's to word; the class is the contract.
-    if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: preexisting[[:space:]]+$t([[:space:]]|\$)" \
-      && printf '%s\n' "$RTB_CLI_OUT" | grep -qE '^BASELINE_SUMMARY: preexisting=1 inherited=0 broken=0 undetermined=0$' \
+    # A FAIL state is a real base failure; the test writes no case records on either side, so
+    # #2956 S8 table 1 judges it at file level (no-case-records, auto), not as proof.
+    if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: file-verdict-preexisting[[:space:]]+$t[[:space:]]+no-case-records\$" \
+      && printf '%s\n' "$RTB_CLI_OUT" | grep -qxF "$(baseline_summary 0 0 0 0 1 0)" \
       && [ "$RTB_CLI_RC" -eq 0 ]; then
-      pass "C3-state-fail-exit-$rc: FAIL state with exit $rc at base is preexisting, exit 0"
+      pass "C3-state-fail-exit-$rc: FAIL state with exit $rc at base is file-verdict-preexisting, exit 0"
     else
-      fail "C3-state-fail-exit-$rc: expected preexisting + summary preexisting=1 + exit 0; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
+      fail "C3-state-fail-exit-$rc: expected file-verdict-preexisting no-case-records + summary file_verdict=1 + exit 0; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
     fi
   done
   for rc in 137 143; do
@@ -103,10 +105,11 @@ run_cli_launcher_setup_failed_cases() {
       fi
       cli_assert_undetermined_only "C3-launcher-setup-failed" "$t" 8
       cli_assert_not_completed "C3-launcher-setup-failed" "lsf$launched-$$" "$t"
-    elif printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: preexisting[[:space:]]+$t([[:space:]]|\$)"; then
-      pass "C3-launched-exit-2: a launched test exiting 2 at base is preexisting"
+    elif printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: file-verdict-preexisting[[:space:]]+$t[[:space:]]+no-case-records\$"; then
+      # The stub launcher runs nothing on either side, so there are no case records (#2956 S8 table 1).
+      pass "C3-launched-exit-2: a launched test exiting 2 at base is file-verdict-preexisting no-case-records"
     else
-      fail "C3-launched-exit-2: expected preexisting; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
+      fail "C3-launched-exit-2: expected file-verdict-preexisting no-case-records; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
     fi
   done
 }

@@ -41,6 +41,18 @@ rtb_base_predates_root_names() {
     return 0
 }
 
+# rtb_base_predates_case_detail <base-wt> — 0 when <base-wt> has a tests/lib/harness.sh that does
+# not write fail-details.tsv (#2956: its failures leave no detail to compare); 1 otherwise,
+# including a base with no harness.sh (a fixture). A tree git cannot grep is read directly.
+rtb_base_predates_case_detail() {
+    local wt="${1:-}" rc
+    [ -n "$wt" ] && [ -f "$wt/tests/lib/harness.sh" ] || return 1
+    git -C "$wt" grep -q -F 'fail-details.tsv' -- tests/lib/harness.sh 2>/dev/null
+    rc=$?
+    [ "$rc" -gt 1 ] && { grep -q -F 'fail-details.tsv' "$wt/tests/lib/harness.sh" 2>/dev/null; rc=$?; }
+    [ "$rc" -eq 1 ]
+}
+
 rtb_exec_one() {
     local wt="${1:-}" rel="${2:-}" timeout="${3:-$RTB_TIMEOUT_DEFAULT}" logdir="${4:-}"
     local launcher i cpid wpid rc iso restore_m=0 carried cur line
@@ -76,6 +88,9 @@ rtb_exec_one() {
     i="$RTB_EXEC_SEQ"
     rm -f "$logdir/$i.timedout" "$logdir/$i.nolaunch" "$logdir/$i.unsupported" "$logdir/$i.decoyhit" \
         "$logdir/$i.state" "$logdir/$i.unrunnable"
+    # The result dir, as tests/run-all.sh gives it: cases.tsv and fail-details.tsv land there (#2956).
+    rm -rf "$logdir/$i.res"
+    mkdir -p "$logdir/$i.res" 2>/dev/null || { rm -rf "$iso"; return 2; }
 
     # Job control gives each background job its own process group, so the watchdog
     # can take down the whole test tree, not just the launching subshell.
@@ -110,7 +125,7 @@ rtb_exec_one() {
         if declare -F run_all_pin_worktree_change_detect >/dev/null 2>&1; then
             run_all_pin_worktree_change_detect "$logdir/$i.worktree-change" || { : >"$logdir/$i.nolaunch"; exit 2; }
         fi
-        run_all_exec "$wt/$rel" "$logdir/$i.out" "$logdir/$i.err"
+        run_all_exec "$wt/$rel" "$logdir/$i.out" "$logdir/$i.err" "$logdir/$i.res"
         rc=$?
         [ "$rc" = 78 ] && [ "${RUN_ALL_EXEC_LAUNCHED:-1}" = 0 ] && : >"$logdir/$i.unsupported"
         # The launcher could not set the test up (its own rc 2): the test never ran, so no verdict.

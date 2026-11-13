@@ -96,12 +96,13 @@ mk_repo() {
   git -C "$repo" commit -q -m head
 }
 
-# seg_variant <variant> <saved-seg> <out> - corrupt a valid branch.v1 segment (b1 TAB iv TAB host TAB path TAB result TAB epoch).
-# garbage=content is not a segment, old-tag=version b0, old-layout=last column missing, unknown-result=result column has an unknown value.
+# seg_variant <variant> <saved-seg> <out> - corrupt a valid branch.v2 segment
+# (b2 TAB iv TAB host TAB path TAB result TAB fp TAB epoch; #2956 S7).
+# garbage=content is not a segment, old-tag=version b1, old-layout=last column missing, unknown-result=result column has an unknown value.
 seg_variant() {
   case "$1" in
-    garbage) printf 'not a segment\nb1\t\n' > "$3" ;;
-    old-tag) awk 'BEGIN { FS = OFS = "\t" } { $1 = "b0"; print }' "$2" > "$3" ;;
+    garbage) printf 'not a segment\nb2\t\n' > "$3" ;;
+    old-tag) awk 'BEGIN { FS = OFS = "\t" } { $1 = "b1"; print }' "$2" > "$3" ;;
     old-layout) awk 'BEGIN { FS = OFS = "\t" } { NF = NF - 1; print }' "$2" > "$3" ;;
     unknown-result) awk 'BEGIN { FS = OFS = "\t" } { $5 = "pass-maybe"; print }' "$2" > "$3" ;;
     *) return 1 ;;

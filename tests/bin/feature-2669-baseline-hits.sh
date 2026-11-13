@@ -113,8 +113,9 @@ run_failing_test_with_a_hit() {
   rtb_cli_run "$(mkdir -p "$TMPROOT/cache-t1" && np "$TMPROOT/cache-t1")" "$repo" "$sid"
   [[ "$RTB_CLI_RC" != 3 ]] && pass "T1: the CLI does not exit 3 (a failing list exists)" \
     || fail "T1: the CLI exited 3 — out: $RTB_CLI_OUT"
-  bh_has "T1: the CLI classifies the test preexisting" "$RTB_CLI_OUT" \
-    "^BASELINE: preexisting $T_PRE fails-at-base-exit-1\$"
+  # The HEAD copy differs from the base copy: test-file-changed, auto (#2956 S8 table 1).
+  bh_has "T1: the CLI classifies the test file-verdict-preexisting" "$RTB_CLI_OUT" \
+    "^BASELINE: file-verdict-preexisting $T_PRE test-file-changed\$"
   bh_ck "T1: every failure pre-existed, so the CLI exits 0" "0" "$RTB_CLI_RC"
 }
 

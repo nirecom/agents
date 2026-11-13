@@ -113,6 +113,8 @@ emit_and_exit() { # <exit-code>
     printf 'base=%s\n' "$BASE"
     printf 'state=%s\n' "$STATE"
     printf 'source=%s\n' "$SOURCE"
+    printf 'recorded_base=%s\n' "${RECORDED_BASE:--}"
+    printf 'base_advanced=%s\n' "${BASE_ADVANCED:-0}"
     printf 'base_is_head=%s\n' "$BASE_IS_HEAD"
     printf 'safe_base=%s\n' "HEAD"
     printf 'uncommitted_lines=%s\n' "$UNCOMMITTED_LINES"
@@ -256,25 +258,24 @@ if [[ -n "$SESSION_ID" && -f "$READ_CLI" ]]; then
   fi
 fi
 
+# The MERGE_HEAD reading rule and the base advance (#2757). Absent in a standalone copy, which
+# also lacks the layer-1 reader, so layer 1 never runs there.
+ADVANCE_LIB="$SCRIPT_DIR/lib/resolve-merge-base-advance.sh"
+# shellcheck source=bin/lib/resolve-merge-base-advance.sh
+[[ -f "$ADVANCE_LIB" ]] && . "$ADVANCE_LIB"
+RECORDED_BASE="-"
+BASE_ADVANCED="0"
+
 # A recorded base is accepted when it is an ancestor of HEAD or, during a merge, of a valid
 # MERGE_HEAD commit (same reading rule as review-comment-block-size.d/baseline.sh).
 base_reachable() {
-  local cand="$1" gitdir mh_file line sha n=0
+  local cand="$1" sha
   g merge-base --is-ancestor "$cand" HEAD >/dev/null 2>&1 && return 0
-  gitdir="$(g rev-parse --git-dir 2>/dev/null)" || return 1
-  [[ -n "$gitdir" ]] || return 1
-  [[ "$gitdir" == /* || "$gitdir" =~ ^[A-Za-z]:[/\\] ]] || gitdir="$TARGET_CHECKOUT_ROOT/$gitdir"
-  mh_file="$gitdir/MERGE_HEAD"
-  [[ -f "$mh_file" ]] || return 1
-  while IFS= read -r line || [[ -n "${line:-}" ]]; do
-    line="${line%$'\r'}"
-    [[ "$line" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || continue
-    [[ "$n" -ge 8 ]] && break
-    sha="$(g rev-parse --verify --quiet "${line}^{commit}" 2>/dev/null)" || continue
-    [[ "$sha" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || continue
-    n=$((n + 1))
+  declare -F rmba_merge_heads >/dev/null || return 1
+  rmba_merge_heads
+  for sha in ${RMBA_MERGE_HEADS[@]+"${RMBA_MERGE_HEADS[@]}"}; do
     g merge-base --is-ancestor "$cand" "$sha" >/dev/null 2>&1 && return 0
-  done < "$mh_file"
+  done
   return 1
 }
 
@@ -298,6 +299,11 @@ if [[ $REC_PRESENT -eq 1 ]]; then
     DEMOTE_REASON="recorded baseline ignored: the recorded base is not a verified ancestor of HEAD"
   else
     BASE="$REC_BASE"
+    RECORDED_BASE="$REC_BASE"
+    if declare -F rmba_advance >/dev/null; then
+      rmba_advance "$REC_BASE"
+      [[ "$RMBA_BASE" != "$REC_BASE" ]] && BASE="$RMBA_BASE" && BASE_ADVANCED="1"
+    fi
     STATE="RECORDED"
     SOURCE="$REC_SOURCE"
     [[ "$REC_POST" == "true" ]] && WARN="post-session-head"

@@ -1,6 +1,6 @@
 """Runs one pytest file for the run-all launcher (#2501).
 
-argv: <path> <minVersion>. Writes <RUN_ALL_RESULT_DIR>/cases.tsv; exit 0 pass, 1 any failure,
+argv: <path> <minVersion>. Writes <RUN_ALL_RESULT_DIR>/cases.tsv and fail-details.tsv; exit 0 pass, 1 any failure,
 77 no test ran or all skipped, 79 + an `unrunnable` marker when pytest < minVersion.
 pytest runs in a child (argv: --run <casesFile> <path>) that is never told the result directory,
 so test code can neither write the marker nor choose this wrapper's exit code.
@@ -18,6 +18,8 @@ from pathlib import Path
 
 CHILD_FLAG = "--run"
 FINISHED_NAME = "finished"
+DETAILS_NAME = "fail-details.tsv"
+DETAIL_MAX = 8192
 NO_TESTS_COLLECTED = 5
 
 
@@ -33,6 +35,15 @@ def clean(text: object) -> str:
     return str(text).replace("\t", " ").replace("\r", " ").replace("\n", " ")
 
 
+def fold(text: str) -> bytes:
+    """One fail-details.tsv text: the fold rule of test-result-contract.md (fail-details.tsv section)."""
+    lines = [ln.rstrip(" \t") for ln in text.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
+    while lines and not lines[-1]:
+        lines.pop()
+    out = "\\n".join(ln.replace("\\", "\\\\").replace("\t", "\\t") for ln in lines).encode("utf-8")
+    return out[:DETAIL_MAX] + b"\\n[cut]" if len(out) > DETAIL_MAX else out
+
+
 class Collector:
     """pytest plugin: cases.tsv records in report order, one seq per test.
 
@@ -45,10 +56,22 @@ class Collector:
         self.cases_file = cases_file
         self.seqs: dict[str, int] = {}
 
+    def seq_of(self, name: str) -> int:
+        return self.seqs.setdefault(name, len(self.seqs) + 1)
+
     def record(self, state: str, name: str) -> None:
-        seq = self.seqs.setdefault(name, len(self.seqs) + 1)
+        seq = self.seq_of(name)
         with self.cases_file.open("a", encoding="utf-8", newline="\n") as fh:
             fh.write(f"{seq}\t{state}\t{clean(name)}\t{clean(self.path)}\n")
+
+    def pytest_exception_interact(self, node, call, report) -> None:
+        # pytest calls this once per failure (test phase or collection), never for skip or xfail.
+        if call.excinfo is None:
+            return
+        name = node.nodeid or self.path
+        head = f"{self.seq_of(name)}\t{clean(name)}\t".encode()
+        with self.cases_file.with_name(DETAILS_NAME).open("ab") as fh:
+            fh.write(head + fold(str(call.excinfo.value)) + b"\n")
 
     def pytest_runtest_logreport(self, report) -> None:
         xfail = hasattr(report, "wasxfail")
@@ -120,6 +143,8 @@ def main() -> int:
             shutil.copyfile(cases, result_dir / "cases.tsv")
             lines = cases.read_text(encoding="utf-8").splitlines()
             states = [fields[1] for fields in (line.split("\t") for line in lines) if len(fields) > 1]
+        if (Path(scratch) / DETAILS_NAME).exists():
+            shutil.copyfile(Path(scratch) / DETAILS_NAME, result_dir / DETAILS_NAME)
         if (Path(scratch) / FINISHED_NAME).exists():
             finished = (Path(scratch) / FINISHED_NAME).read_text(encoding="utf-8").strip()
     # "No tests collected" only when pytest ended the session saying so; the bare rc can be a test's own exit.

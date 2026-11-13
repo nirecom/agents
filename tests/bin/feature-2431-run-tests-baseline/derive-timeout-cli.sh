@@ -3,7 +3,7 @@
 # Tests: bin/run-tests-baseline
 # Tags: run-tests, baseline, timeout, ledger, cli, scope:issue-specific, pwsh-not-required, TL2
 # Sourced by the dispatcher; never run standalone. Needs derive-timeout.sh (dt_seed_dur) and
-# cli-homeref.sh (ch_repo_begin, ch_repo_end, ch_mk_test, ch_assert_preexisting) sourced first.
+# cli-homeref.sh (ch_repo_begin, ch_repo_end, ch_mk_test, ch_assert_ran_at_base) sourced first.
 # #2547 CLI group: the diagnostic line `run-tests-baseline: timeout: <test> <n>s (<source>)` is the
 # observation window for the value handed to rtb_exec_one; no case waits for a real 300 s.
 
@@ -66,22 +66,26 @@ dt_assert_budget_exhausted() {
   cli_assert_not_completed "$1" "$DT_SID" "$DT_T"
 }
 
-# Two failing tests share one budget: with TOTAL=100 (deadline 55) the first one (25 s) leaves less than
-# MIN_SLICE (30 s) for the second, which is budget-exhausted and never run; a rerun with the full budget
-# serves the first from the ledger and runs only the second.
+# Two failing tests share one budget. A branch copy that never ran is budget-exhausted (#2956 S8 table 2),
+# so the budget is spent in the branch stage: with TOTAL=240 the branch slice (240 - 45 - 2 - 150 reserve -
+# SECONDS) fits the first branch copy, whose 25 s sleep leaves less than MIN_SLICE (30 s) for the second,
+# which is budget-exhausted and never run at base; a rerun with the full budget serves the first from the
+# ledger and runs only the second.
 dt_shared_budget_cases() {
   local repo="$TMPROOT/repo-dt-shared" cache sid="dt-shared-$$"
   local t1="tests/bin/test-dt-shared-a.sh" t2="tests/bin/test-dt-shared-b.sh"
   local ran1="$TMPROOT/dt-shared-a-executed" ran2="$TMPROOT/dt-shared-b-executed"
   ch_repo_begin "$repo"
-  ch_mk_test "$repo" "$t1" "$ran1" 'sleep 25'
+  ch_mk_test "$repo" "$t1" "$ran1"
   ch_mk_test "$repo" "$t2" "$ran2"
   ch_repo_end "$repo" "$t1" "$t2"
+  printf '%s\n' '#!/usr/bin/env bash' 'sleep 25' 'exit 1' > "$repo/$t1"
+  git -C "$repo" commit -q -am "branch copy of the first test sleeps"
   cache="$(cli_case_cache dt-shared)"
   seed_failing "$sid" "$t1" "$t2"
-  dt_cli_run "$cache" "$repo" "$sid" RTB_BUDGET_TOTAL=100
-  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: preexisting[[:space:]]+$t1[[:space:]]+fails-at-base-exit-1" && [ -e "$ran1" ]; then
-    pass "S1: the first test ran and was classified preexisting"
+  dt_cli_run "$cache" "$repo" "$sid" RTB_BUDGET_TOTAL=240
+  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: file-verdict-preexisting[[:space:]]+$t1[[:space:]]+test-file-changed" && [ -e "$ran1" ]; then
+    pass "S1: the first test ran and was classified file-verdict-preexisting"
   else
     fail "S1: first test not classified; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
   fi
@@ -93,8 +97,8 @@ dt_shared_budget_cases() {
   cli_assert_not_completed "S3" "$sid" "$t2"
   rm -f "$ran1"
   dt_cli_run "$cache" "$repo" "$sid"
-  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: preexisting[[:space:]]+$t2[[:space:]]+fails-at-base-exit-1" && [ -e "$ran2" ]; then
-    pass "S4: with the full budget the second test runs and is classified preexisting"
+  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: file-verdict-preexisting[[:space:]]+$t2[[:space:]]+test-file-changed" && [ -e "$ran2" ]; then
+    pass "S4: with the full budget the second test runs and is classified file-verdict-preexisting"
   else
     fail "S4: rerun did not run the second test; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
   fi
@@ -177,10 +181,10 @@ run_timeout_cli_derived_cases() {
   else
     fail "F1: no derived-540s diagnostic line; rc=$RTB_CLI_RC ($(printf '%s\n' "$RTB_CLI_OUT" | grep 'timeout:' | tr '\n' '|'))"
   fi
-  ch_assert_preexisting "F1" "$DT_T" "$DT_RAN" "$DT_SID"
+  ch_assert_ran_at_base "F1" "$DT_T" "$DT_RAN" "$DT_SID"
   dt_case f-short 5
   dt_assert_timeout_line "F2" "$DT_T" "300s (derived)"
-  ch_assert_preexisting "F2" "$DT_T" "$DT_RAN" "$DT_SID"
+  ch_assert_ran_at_base "F2" "$DT_T" "$DT_RAN" "$DT_SID"
   dt_case f-limited 400 RTB_BUDGET_TOTAL=300
   # TOTAL=300 -> deadline 255; slice = 255 - elapsed - 2 <= 253 and, for a start-up under 223s, >= 30.
   slice="$(printf '%s\n' "$RTB_CLI_OUT" | sed -n "s|^run-tests-baseline: timeout: ${DT_T//./\\.} \([0-9]*\)s (derived, limited from 540s by budget)\$|\1|p")"
@@ -189,12 +193,12 @@ run_timeout_cli_derived_cases() {
   else
     fail "F3: no 'limited from 540s by budget' diagnostic; rc=$RTB_CLI_RC ($(printf '%s\n' "$RTB_CLI_OUT" | grep 'timeout:' | tr '\n' '|'))"
   fi
-  ch_assert_preexisting "F3" "$DT_T" "$DT_RAN" "$DT_SID"
+  ch_assert_ran_at_base "F3" "$DT_T" "$DT_RAN" "$DT_SID"
 
   # ---- (g) unmeasured test: fallback 300, behaves as before ----
   dt_case g-unmeasured ""
   dt_assert_timeout_line "G1" "$DT_T" "300s (default)"
-  ch_assert_preexisting "G1" "$DT_T" "$DT_RAN" "$DT_SID"
+  ch_assert_ran_at_base "G1" "$DT_T" "$DT_RAN" "$DT_SID"
 
   # ---- explicit 590 is cut by the budget (deadline 555 - 2 -> about 553, varies with elapsed seconds) ----
   dt_case x590 "" -- --per-test-timeout 590
@@ -204,7 +208,7 @@ run_timeout_cli_derived_cases() {
   else
     fail "X1: no 'explicit, limited from 590s by budget' diagnostic; rc=$RTB_CLI_RC ($(printf '%s\n' "$RTB_CLI_OUT" | grep 'timeout:' | tr '\n' '|'))"
   fi
-  ch_assert_preexisting "X1" "$DT_T" "$DT_RAN" "$DT_SID"
+  ch_assert_ran_at_base "X1" "$DT_T" "$DT_RAN" "$DT_SID"
 
   # ---- (h'') the value shown is the value handed to rtb_exec_one ----
   if grep -qE 'rtb_exec_one[^#]*"\$T_USE"' "$BASELINE_CLI"; then

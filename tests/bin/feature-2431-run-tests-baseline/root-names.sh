@@ -123,10 +123,11 @@ run_root_names_cli_cases() {
   _rn_cli_repo "$repo" new new "$ran"
   seed_failing "rn-new-$$" "$t"
   _rn_cli "$(cli_case_cache rn-new)" "$repo" "rn-new-$$"
-  if [ "$_RN_RC" -eq 0 ] && grep -qE "^BASELINE: preexisting[[:space:]]+$t" "$TMPROOT/rn-out.txt" && [ -e "$ran" ]; then
-    pass "RN-cli-new: a post-rename base is run and classified (exit 0, preexisting)"
+  # The branch copy differs from the base copy: test-file-changed, auto (#2956 S8 table 1).
+  if [ "$_RN_RC" -eq 0 ] && grep -qE "^BASELINE: file-verdict-preexisting[[:space:]]+$t[[:space:]]+test-file-changed" "$TMPROOT/rn-out.txt" && [ -e "$ran" ]; then
+    pass "RN-cli-new: a post-rename base is run and classified (exit 0, file-verdict-preexisting)"
   else
-    fail "RN-cli-new: expected exit 0 + preexisting + a launched test; rc=$_RN_RC out=$(tr '\n' '|' < "$TMPROOT/rn-out.txt")"
+    fail "RN-cli-new: expected exit 0 + file-verdict-preexisting test-file-changed + a launched test; rc=$_RN_RC out=$(tr '\n' '|' < "$TMPROOT/rn-out.txt")"
   fi
 
   # ---- other verdict: the snippet is absent at the base; only HEAD has a pre-rename one ----
@@ -134,10 +135,10 @@ run_root_names_cli_cases() {
   _rn_cli_repo "$repo" none old "$ran"
   seed_failing "rn-none-$$" "$t"
   _rn_cli "$(cli_case_cache rn-none)" "$repo" "rn-none-$$"
-  if [ "$_RN_RC" -eq 0 ] && grep -qE "^BASELINE: preexisting[[:space:]]+$t" "$TMPROOT/rn-out.txt" && [ -e "$ran" ]; then
+  if [ "$_RN_RC" -eq 0 ] && grep -qE "^BASELINE: file-verdict-preexisting[[:space:]]+$t[[:space:]]+test-file-changed" "$TMPROOT/rn-out.txt" && [ -e "$ran" ]; then
     pass "RN-cli-none: a base without the snippet is run; the HEAD content does not decide"
   else
-    fail "RN-cli-none: expected exit 0 + preexisting; rc=$_RN_RC out=$(tr '\n' '|' < "$TMPROOT/rn-out.txt")"
+    fail "RN-cli-none: expected exit 0 + file-verdict-preexisting test-file-changed; rc=$_RN_RC out=$(tr '\n' '|' < "$TMPROOT/rn-out.txt")"
   fi
 }
 

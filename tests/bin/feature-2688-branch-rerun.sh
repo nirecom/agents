@@ -65,12 +65,13 @@ case_begin "fails-alone-goes-on-to-base" "bin/run-tests-baseline"
 R="$TMPROOT/j4"; mk_repo "$R" 1; S="br-j4-$$"; mkdir -p "$R.cache"
 seed "$S" '{"tests/bin/t.sh":124}' tests/bin/t.sh
 rtb "$R.cache" "$R" "$S"
-ck "j4: exit 0 (preexisting at base)" 0 "$RTB_RC"
+# #2956 S8 table 1: the branch copy differs from base, so the base failure is a file verdict (auto), not proof.
+ck "j4: exit 0 (file verdict at base, auto)" 0 "$RTB_RC"
 present "j4: the branch copy ran alone first" "$R.marks/branch"
 present "j4: then the base copy ran" "$R.marks/base"
-has_line "j4: preexisting line" "BASELINE: preexisting tests/bin/t.sh"
+has_line "j4: file-verdict line" "BASELINE: file-verdict-preexisting tests/bin/t.sh test-file-changed"
 lacks_line "j4: no flaky line" "flaky-timeout-on-branch"
-ck "j4: completion_basis" "baseline-preexisting" "$(field "$S" completion_basis)"
+ck "j4: completion_basis" "baseline-auto-accepted" "$(field "$S" completion_basis)"
 case_end
 
 # With multiple failing tests, each is judged individually. If even one is pending, the whole result is pending (exit 1).
@@ -92,40 +93,48 @@ case_begin "mixed-flaky-and-fails-alone-is-recorded" "bin/run-tests-baseline"
 R="$TMPROOT/mix2"; mk_repo "$R" 0; add_test "$R" u.sh 1 1; S="br-mix2-$$"; mkdir -p "$R.cache"
 seed "$S" '{"tests/bin/t.sh":124,"tests/bin/u.sh":124}' tests/bin/t.sh tests/bin/u.sh
 rtb "$R.cache" "$R" "$S"
-ck "mix2: exit 0 (flaky + preexisting)" 0 "$RTB_RC"
+ck "mix2: exit 0 (flaky + file verdict)" 0 "$RTB_RC"
 has_line "mix2: t is flaky" "BASELINE: flaky-timeout-on-branch tests/bin/t.sh"
-has_line "mix2: u is preexisting" "BASELINE: preexisting tests/bin/u.sh"
+has_line "mix2: u is a file verdict" "BASELINE: file-verdict-preexisting tests/bin/u.sh test-file-changed"
 absent "mix2: t never ran at base" "$R.marks/base"
 present "mix2: u ran at base" "$R.marks/base-u"
 ck "mix2: completion_basis (one auto-accept wins)" "baseline-auto-accepted" "$(field "$S" completion_basis)"
 ck "mix2: run_tests complete" "complete" "$(field "$S" status)"
 case_end
 
-# When the standalone re-run itself cannot be judged (timeout, decoy HIT, UNRUNNABLE), the branch side
-# makes no judgment and proceeds to the base stage. The seed is exit 124, so misreading it as "standalone pass" would emit a flaky line.
+# When the standalone re-run itself cannot be judged, #2956 S8 table 2 decides: an outer timeout is
+# undetermined budget-exhausted (exit 8); a decoy HIT or UNRUNNABLE leaves no branch records, so it is
+# new-case-failure-on-branch case-records-missing-on-branch (pending, fail-closed). The seed is exit 124, so
+# misreading it as "standalone pass" would emit a flaky line.
 # commit_branch <repo> - commit the changes on feature (keeps the own checkout clean).
 commit_branch() { git -C "$1" add -A; git -C "$1" commit -q -m "branch variant"; }
-# goes_on_to_base <label> <repo> <sid> - base runs and yields preexisting, and no branch-side line appears.
-goes_on_to_base() {
-  ck "$1: exit 0 (preexisting at base)" 0 "$RTB_RC"
-  present "$1: the base copy ran" "$2.marks/base"
-  has_line "$1: preexisting line" "BASELINE: preexisting tests/bin/t.sh"
+# no_branch_verdict <label> - no branch-side pass line appears and no base-only preexisting is emitted.
+no_branch_verdict() {
   lacks_line "$1: no flaky line" "flaky-timeout-on-branch"
   lacks_line "$1: no passes-alone line" "passes-alone-on-branch"
-  ck "$1: completion_basis" "baseline-preexisting" "$(field "$3" completion_basis)"
+  lacks_line "$1: not a base-only preexisting" "BASELINE: preexisting tests/bin/t.sh"
+}
+# records_missing_pending <label> <sid> - the unjudgeable branch copy holds run_tests pending.
+records_missing_pending() {
+  ck "$1: exit 1 (pending)" 1 "$RTB_RC"
+  has_line "$1: records-missing line" "BASELINE: new-case-failure-on-branch tests/bin/t.sh case-records-missing-on-branch"
+  no_branch_verdict "$1"
+  ck "$1: run_tests stays pending" "pending" "$(field "$2" status)"
 }
 
-case_begin "branch-rerun-timeout-goes-on-to-base" "bin/lib/run-tests-baseline-branch.sh"
+case_begin "branch-rerun-timeout-is-budget-exhausted" "bin/lib/run-tests-baseline-branch.sh"
 R="$TMPROOT/inc-to"; mk_repo "$R" 0; S="br-inc-to-$$"; mkdir -p "$R.cache"
 printf '#!/usr/bin/env bash\ntouch "%s"\nsleep 30\nexit 0\n' "$(np "$R.marks")/branch" > "$R/tests/bin/t.sh"
 commit_branch "$R"
 seed "$S" '{"tests/bin/t.sh":124}' tests/bin/t.sh
 rtb "$R.cache" "$R" "$S"
 present "inc-to: the branch copy started alone" "$R.marks/branch"
-goes_on_to_base "inc-to" "$R" "$S"
+ck "inc-to: exit 8 (outer timeout, re-run requested)" 8 "$RTB_RC"
+has_line "inc-to: budget-exhausted line" "BASELINE: undetermined tests/bin/t.sh budget-exhausted"
+no_branch_verdict "inc-to"
 case_end
 
-case_begin "branch-rerun-decoy-hit-goes-on-to-base" "bin/lib/run-tests-baseline-branch.sh"
+case_begin "branch-rerun-decoy-hit-is-records-missing" "bin/lib/run-tests-baseline-branch.sh"
 R="$TMPROOT/inc-decoy"; mk_repo "$R" 0; S="br-inc-decoy-$$"; mkdir -p "$R.cache"
 ROOT_VAR="AGENTS_MAIN""_ROOT"
 printf '#!/usr/bin/env bash\ntouch "%s"\nnode "$%s/hooks/lib/load-env.js" >/dev/null 2>&1 || true\nexit 0\n' \
@@ -134,10 +143,10 @@ commit_branch "$R"
 seed "$S" '{"tests/bin/t.sh":124}' tests/bin/t.sh
 rtb "$R.cache" "$R" "$S" ROOT_DECOY_DIR="$(np "$TMPROOT/decoy-inc")"
 present "inc-decoy: the branch copy ran alone" "$R.marks/branch"
-goes_on_to_base "inc-decoy" "$R" "$S"
+records_missing_pending "inc-decoy" "$S"
 case_end
 
-case_begin "branch-rerun-unrunnable-goes-on-to-base" "bin/lib/run-tests-baseline-branch.sh"
+case_begin "branch-rerun-unrunnable-is-records-missing" "bin/lib/run-tests-baseline-branch.sh"
 # shellcheck source=tests/lib/test-language-registry-fixture.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-language-registry-fixture.sh"
 R="$TMPROOT/inc-unr"; mk_repo "$R" 0; S="br-inc-unr-$$"; mkdir -p "$R.cache"
@@ -158,7 +167,7 @@ fs.writeFileSync(p, JSON.stringify(t, null, 2) + "\n");' "$(np "$R/hooks/lib/tes
   seed "$S" '{"tests/bin/t.sh":124}' tests/bin/t.sh
   rtb "$R.cache" "$R" "$S"
   absent "inc-unr: the branch copy never ran (UNRUNNABLE)" "$R.marks/branch"
-  goes_on_to_base "inc-unr" "$R" "$S"
+  records_missing_pending "inc-unr" "$S"
 else
   fail "inc-unr: fixture error — could not install the branch registry"
 fi

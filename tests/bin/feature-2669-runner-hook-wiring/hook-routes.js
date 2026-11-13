@@ -194,8 +194,10 @@ function outcomeReplayIsIdempotent() {
 const SENTINEL_OPEN = "<<" + "WORKFLOW_FAKE: r>>";
 const CTL_HIT = `command-guard tests/ctl.sh gh \u001b[31m--version\u0007 a\u007fb\tc ${SENTINEL_OPEN}`;
 const CTL_WANT = "command-guard tests/ctl.sh gh  [31m--version  a b\tc <<_REDACTED_WORKFLOW_FAKE: r>>";
-const LF_HIT = "command-guard tests/lf.sh gh\nBASELINE_SUMMARY: preexisting=1 inherited=0 broken=0 undetermined=0";
-const LF_WANT = "command-guard tests/lf.sh gh BASELINE_SUMMARY: preexisting=1 inherited=0 broken=0 undetermined=0";
+// The summary carries the #2956 S8 terms file_verdict / new_on_branch.
+const LF_SUM = "BASELINE_SUMMARY: preexisting=1 inherited=0 broken=0 undetermined=0 file_verdict=0 new_on_branch=0";
+const LF_HIT = `command-guard tests/lf.sh gh\n${LF_SUM}`;
+const LF_WANT = `command-guard tests/lf.sh gh ${LF_SUM}`;
 // eslint-disable-next-line no-control-regex -- matching control characters is the purpose
 const UNSAFE_RE = /[\u0000-\u0008\u000b-\u001f\u007f]|<<\s*WORKFLOW/i;
 

@@ -96,7 +96,7 @@ run_ledger_inherit_reject_cases() {
       [ -n "$seg" ] || continue
       dir="$(dirname "$seg")"; base="$(basename "$seg")"
       awk -F '\t' 'BEGIN { OFS = "\t" } { $3 = "otherhost9"; print }' "$seg" \
-        > "$dir/v2.otherhost9-${base#*-}"
+        > "$dir/v3.otherhost9-${base#*-}"
       rm -f "$seg"
       rewritten=$((rewritten + 1))
     done < <(find "$cache/baseline" -path '*/worktrees' -prune -o -type f -name '*.seg' -print 2>/dev/null)
@@ -117,7 +117,8 @@ run_ledger_inherit_reject_cases() {
 ir_glob_repo() {
   mk_inherit_repo "$1" >/dev/null
   git -C "$1" checkout -q main
-  printf '#!/usr/bin/env bash\n[ -f flag-pass ] && exit 0\nexit 1\n' > "$1/tests/bin/test-[a].sh"
+  # Writes a case detail, so the unchanged copy compares `same` and stays a proof (#2956 S8).
+  detail_fail_body "flag missing" '[ -f flag-pass ] && exit 0' > "$1/tests/bin/test-[a].sh"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$1/tests/bin/test-a.sh"
   chmod +x "$1/tests/bin/test-[a].sh" "$1/tests/bin/test-a.sh"
   git -C "$1" add -A tests

@@ -174,7 +174,9 @@ scan "$SCRIPT_CHECKOUT_ROOT" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/test-language-regi
 if [ "$SC_RC" = "0" ]; then
   pass "no residue outside the registry ($(printf '%s\n' "$SC_OUT" | tail -n 1))"
 else
-  fail "no residue outside the registry" "rc=$SC_RC $(printf '%s\n' "$SC_OUT" | head -n 15 | tr '\n' '|')"
+  # Every flagged line goes in one marked list (#2956 S5), so the baseline compares the whole set.
+  mapfile -t residue_lines < <(printf '%s\n' "$SC_OUT")
+  fail "no residue outside the registry" "rc=$SC_RC $(harness_list_detail "${#residue_lines[@]}" "${residue_lines[@]}")"
 fi
 case_end
 
