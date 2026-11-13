@@ -58,6 +58,7 @@
     { "kind": "issue-create-dispatch", "source": "issue-create-dispatch\\.txt", "retention": "non-plan" },
     { "kind": "issue-create-survey", "source": "issue-create-survey\\.json", "retention": "non-plan" },
     { "kind": "issue-create-confirm", "source": "issue-create-confirm\\.log", "retention": "non-plan" },
+    { "kind": "issue-create-bulk-manifest", "source": "bulk-dispatch-[^/]*\\.tsv", "retention": "non-plan" },
     { "kind": "sweep-issues", "source": "sweep-issues-(?:survivors|decisions)\\.tsv", "retention": "non-plan" },
     { "kind": "refactor-prompts-scan", "source": "refactor-prompts-scan\\.json", "retention": "non-plan" },
     { "kind": "note", "source": "note-[a-z0-9]+(?:-[a-z0-9]+)*\\.(?:md|txt|json|tsv)", "retention": "non-plan" },
