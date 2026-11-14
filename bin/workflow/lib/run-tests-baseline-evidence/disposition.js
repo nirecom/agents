@@ -36,7 +36,9 @@ function dispositionOf(e) {
   }
   if (e.class !== "undetermined") return "pending";
   if (AUTO_UNDETERMINED.has(e.detail)) return "auto";
-  if (RERUN_UNDETERMINED.has(e.detail) || RERUN_STATE_RE.test(e.detail)) return "rerun";
+  // A re-run request holds under a rename source too; auto stays exact so a suffixed auto detail is pending.
+  const base = String(e.detail).replace(RENAME_SUFFIX_RE, "");
+  if (RERUN_UNDETERMINED.has(base) || RERUN_STATE_RE.test(base)) return "rerun";
   return "pending";
 }
 

@@ -37,6 +37,13 @@ cmp_expect_new "S4: a list whose items fall short of total= shrinking is (c)" cu
 cmp_expect_summary "summary: preexisting=2 new_on_branch=2, exit 1 (pending (c) lines)" 1 2 0 2
 case_end
 
+# #3015: a cached branch timeout is a hit; two CLI runs on their own repo and cache.
+# shellcheck source=./feature-2956-baseline-compare-cli/timeout-cache.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2956-baseline-compare-cli/timeout-cache.sh"
+case_begin "compare-cli-cached-branch-timeout-is-a-hit" "bin/run-tests-baseline"
+run_compare_cli_timeout_cache_cases
+case_end
+
 echo ""
 echo "Total: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]
