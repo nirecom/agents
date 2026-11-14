@@ -1,6 +1,6 @@
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, worktree, enforce, hook, env, scope:common
-# Sourced by tests/hooks/main-enforce-worktree-guard.sh
+# Sourced by the tests/hooks/main-enforce-worktree-guard-<group>.sh that MEWG_TABLE (tests/lib/mewg-groups.sh) assigns
 # Origin: tests/fix-enforce-worktree-hooks-bypass.sh (all cases).
 # Cases: U1-U39 (unit, hasGitHooksBypass) and I1-I13 (hook + linked worktree).
 # Illegitimate bypass attempts only; sanctioned routes live in sanctioned-bypass.sh

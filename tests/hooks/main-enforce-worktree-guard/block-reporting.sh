@@ -1,6 +1,6 @@
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, enforce-worktree, context-populate, block-extras, scope:common
-# Sourced by tests/hooks/main-enforce-worktree-guard.sh
+# Sourced by the tests/hooks/main-enforce-worktree-guard-<group>.sh that MEWG_TABLE (tests/lib/mewg-groups.sh) assigns
 # Origin: tests/feature-885-enforce-worktree-context-populate.sh (all cases).
 # Cases: W1-W3.
 # What the block path REPORTS, not whether it blocks: done() must populate
