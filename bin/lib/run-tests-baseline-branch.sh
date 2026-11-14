@@ -6,14 +6,16 @@
 #   $(run_all_cache_dir)/branch.v2.<host>-<epoch>-<pid>.seg
 # with lines `b2\t<input_version>\t<host>\t<rel-path>\t<result>\t<fp|->\t<epoch>`; <fp> names the
 # ledger row file of the branch lines. A line of any other shape is never trusted (re-run).
+# `timeout-after-<N>s` (#3015) is a timeout the budget did not shorten, N = REQUESTED_TEST_TIMEOUT of
+# the test file; it is a hit only while N >= the current REQUESTED_TEST_TIMEOUT.
 
 RTB_BRANCH_PREFIX="branch.v2"
 RTB_BRANCH_TAG="b2"
-RTB_BRANCH_RESULTS_RE='^(pass-after-124|pass-after-other|fails-alone|inconclusive:(skip|rc-124|rc-142|kill-137|kill-143|unsupported|decoy|unrunnable))$'
+RTB_BRANCH_RESULTS_RE='^(pass-after-124|pass-after-other|fails-alone|timeout-after-[1-9][0-9]*s|inconclusive:(skip|rc-124|rc-142|kill-137|kill-143|unsupported|decoy|unrunnable))$'
 # Results whose branch lines the base comparison reads: a cache hit needs their row file.
 RTB_BRANCH_LINES_RE='^(fails-alone|inconclusive:rc-124|inconclusive:rc-142)$'
 # Seconds of the shared budget the branch stage leaves for the base stage, so a test that
-# never settles on the branch (always timing out, never cached) cannot starve the base runs.
+# never settles on the branch (a timeout that cannot be recorded) cannot starve the base runs.
 RTB_BRANCH_BASE_RESERVE=150
 RTB_BRANCH_SEG=""
 RTB_BRANCH_RESULT=""
@@ -146,17 +148,22 @@ rtb_branch_classify() {
         # cause; any base verdict besides is records missing on the branch (rtb_cls_table1 / _base_pass).
         inconclusive:decoy|inconclusive:unrunnable) BR_END[i]="normal"; BR_NOREC[i]=1 ;;
         inconclusive:rc-124|inconclusive:rc-142) BR_END[i]="interrupted" ;;
+        # A recorded timeout leaves no branch records either; the base decides (rtb_cls_base_timeout).
+        timeout-after-*) BR_END[i]="normal"; BR_TIMEOUT[i]=1 ;;
         *) BR_END[i]="normal" ;;
     esac
 }
 
 # rtb_branch_stage — fills CLS/DET (table 2) or BR_RES/BR_END for each test. Reads the caller's
 # TESTS, BR_EXIT (path -> recorded exit), ROOT, SID, RTB_EVIDENCE, LOGDIR, TMP_BASE, PTT_EXPLICIT,
-# PER_TEST_TIMEOUT and RTB_TIMEOUT_LEDGER. A test not run (zero budget slice), cut by the outer
-# timeout or not set up is undetermined: its re-run is requested (exit 8).
+# PER_TEST_TIMEOUT and RTB_TIMEOUT_LEDGER. A test not run (budget exhausted), cut by the budget or
+# by an unrecordable timeout, or not set up is undetermined: its re-run is requested (exit 8).
 # shellcheck disable=SC2034  # CLS/DET/BR_RES are the caller's arrays
 rtb_branch_stage() {
-    local i t iv code res fp order rc bl="$LOGDIR-branch"
+    local i t iv code res fp order rc n requested applied derived applied_max explicit="" bl="$LOGDIR-branch"
+    [[ "$PTT_EXPLICIT" != 1 ]] || explicit="$PER_TEST_TIMEOUT"
+    rtb_timeout_budget_into "" "$((SECONDS + RTB_BRANCH_BASE_RESERVE))"
+    applied_max="$RTB_TIMEOUT_APPLIED_OUT"
     iv="$(rtb_branch_input_version "$ROOT" "$RTB_EVIDENCE" "$SID")"
     # Shortest measured first (unmeasured last): one slow test that spends the whole budget
     # slice must not starve the quick ones, whose result is cached once it settles.
@@ -164,9 +171,17 @@ rtb_branch_stage() {
     for i in $order; do
         t="${TESTS[$i]}"
         code="${BR_EXIT[$t]:-}"
+        rtb_timeout_requested_into "${RTB_TIMEOUT_LEDGER[$i]:-}" "$explicit"
+        requested="$RTB_TIMEOUT_REQUESTED_OUT" derived="$RTB_TIMEOUT_DERIVED_OUT"
         rtb_branch_cache_get "$iv" "$t"
         res="$RTB_BRANCH_RESULT"
         BR_RES[i]="$bl/cache-$i.res"
+        if [[ "$res" == timeout-after-* ]]; then
+            # A timeout recorded under a shorter REQUESTED_TEST_TIMEOUT is a miss.
+            n="${res#timeout-after-}"
+            rtb_timeout_num_into "${n%s}" "" ""
+            [[ -n "$RTB_TIMEOUT_NUM_OUT" && "$RTB_TIMEOUT_NUM_OUT" -ge "$requested" ]] || res=""
+        fi
         if [[ "$res" =~ $RTB_BRANCH_LINES_RE ]]; then
             # A hit whose lines cannot be read back is a miss: the branch re-runs.
             mkdir -p "$bl" 2>/dev/null
@@ -175,19 +190,22 @@ rtb_branch_stage() {
             rm -rf "${BR_RES[i]}"; mkdir -p "${BR_RES[i]}" 2>/dev/null
         fi
         if [[ -z "$res" ]]; then
-            if [[ "$PTT_EXPLICIT" == 1 ]]; then
-                rtb_timeout_budget_into "$PER_TEST_TIMEOUT" "$((SECONDS + RTB_BRANCH_BASE_RESERVE))"
-            else
-                rtb_timeout_slice_into "${RTB_TIMEOUT_LEDGER[$i]:-}" "$((SECONDS + RTB_BRANCH_BASE_RESERVE))"
-            fi
-            if [[ "$RTB_TIMEOUT_SLICE_OUT" -le 0 ]]; then
+            rtb_timeout_budget_into "$requested" "$((SECONDS + RTB_BRANCH_BASE_RESERVE))"
+            applied="$RTB_TIMEOUT_APPLIED_OUT"
+            if [[ "$applied" -le 0 ]]; then
                 CLS[i]="undetermined"; DET[i]="budget-exhausted"; continue
             fi
-            printf 'run-tests-baseline: branch re-run: %s %ss\n' "$t" "$RTB_TIMEOUT_SLICE_OUT" >&2
+            printf 'run-tests-baseline: branch re-run: %s %ss\n' "$t" "$applied" >&2
             rc=0
-            rtb_branch_run_one "$ROOT" "$t" "$RTB_TIMEOUT_SLICE_OUT" "$bl" "$code" || rc=$?
+            rtb_branch_run_one "$ROOT" "$t" "$applied" "$bl" "$code" || rc=$?
             case "$rc" in
-                1) CLS[i]="undetermined"; DET[i]="budget-exhausted"; continue ;;
+                1)
+                    if rtb_timeout_recordable "$applied" "$requested" "$derived"; then
+                        RTB_BRANCH_RESULT="timeout-after-${requested}s"
+                    else
+                        rtb_timeout_unrecordable_note "$t" "$requested" "$derived" "$applied_max"
+                        CLS[i]="undetermined"; DET[i]="budget-exhausted"; continue
+                    fi ;;
                 2) CLS[i]="undetermined"; DET[i]="exec-setup-failed"; continue ;;
             esac
             res="$RTB_BRANCH_RESULT" fp="-"

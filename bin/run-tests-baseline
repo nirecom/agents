@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # bin/run-tests-baseline — classify the failing tests of the last /run-tests run (#2431, #2688)
 # and complete run_tests when every failure pre-existed at the merge base or has an auto-accepted
-# cause. Stages: failing list -> solo re-run on the branch -> ledger -> rename source -> base;
+# cause. Stages: failing list -> solo re-run on the branch -> rename source + ledger -> base;
 # a base failure is compared line by line with the branch (#2956; classes: test-result-contract.md).
 #
 # Usage: bin/run-tests-baseline --session <sid> [--worktree <path>] [--per-test-timeout <sec>] [--note <text>]
@@ -86,14 +86,14 @@ LOGDIR="$TMP_BASE/logs-$(date +%s)-$$"
 RTB_LINES_WRITTEN_LOG="$TMP_BASE/lines-written-$$"
 : >"$RTB_LINES_WRITTEN_LOG" 2>/dev/null || RTB_LINES_WRITTEN_LOG=""
 trap '[ -z "$RTB_LINES_WRITTEN_LOG" ] || rm -f "$RTB_LINES_WRITTEN_LOG"' EXIT
-if [ "$PTT_EXPLICIT" = 0 ]; then
-  ledger_args=()
-  for i in "${!TESTS[@]}"; do ledger_args+=("$i:${TESTS[$i]}"); done
-  rtb_timeout_load_ledger "$ROOT" "$TMP_BASE" "${ledger_args[@]}"
-fi
+# Loaded even with an explicit --per-test-timeout: the derived value decides whether a timeout
+# under that REQUESTED_TEST_TIMEOUT may be recorded (#3015).
+ledger_args=()
+for i in "${!TESTS[@]}"; do ledger_args+=("$i:${TESTS[$i]}"); done
+rtb_timeout_load_ledger "$ROOT" "$TMP_BASE" "${ledger_args[@]}"
 
-# shellcheck disable=SC2034  # BR_RES/BR_END/BR_NOREC are filled by the branch stage and read by classify
-declare -a CLS=() DET=() RERUN=() NEWC=() NEWH=() BR_RES=() BR_END=() BR_NOREC=()
+# shellcheck disable=SC2034  # BR_* are filled by the branch stage, RUN_REL/RUN_OLD by the ledger stage
+declare -a CLS=() DET=() RERUN=() NEWC=() NEWH=() BR_RES=() BR_END=() BR_NOREC=() BR_TIMEOUT=() RUN_REL=() RUN_OLD=()
 
 # 2. Each failing test alone on the branch: one that passes there is no base question.
 rtb_branch_stage
@@ -140,17 +140,15 @@ if [ "${#RERUN[@]}" -gt 0 ]; then
     rtb_wt_remove "$ROOT" "$WT" || true
     die 5 "no baseline, merge main and re-run: merge base $B2 predates the case details (its tests/lib/harness.sh writes no fail-details.tsv)"
   fi
+  EXPLICIT=""
+  [ "$PTT_EXPLICIT" != 1 ] || EXPLICIT="$PER_TEST_TIMEOUT"
   for i in "${RERUN[@]}"; do
-    t="${TESTS[$i]}" run="${TESTS[$i]}" via="" old=""
+    t="${TESTS[$i]}" run="${RUN_REL[i]:-}" old="${RUN_OLD[i]:-}"
     if [ -z "$WT" ]; then
       CLS[i]="undetermined"; DET[i]="worktree-create-failed"; continue
     fi
-    if ! git -C "$ROOT" cat-file -e "$B2:$t" 2>/dev/null; then
-      rtb_rename_source_into "$ROOT" "$B2" "$t"
-      if [ -z "$RTB_RENAME_OUT" ]; then
-        CLS[i]="undetermined"; DET[i]="missing-at-base"; continue
-      fi
-      run="$RTB_RENAME_OUT" via="-via-rename:$RTB_RENAME_OUT" old="$RTB_RENAME_OUT"
+    if [ -z "$run" ]; then
+      CLS[i]="undetermined"; DET[i]="missing-at-base"; continue
     fi
     d="$(rtb_test_data_dir "$run")"
     targets=("$WT/$run")
@@ -158,29 +156,20 @@ if [ "${#RERUN[@]}" -gt 0 ]; then
     if rtb_has_home_ref "${targets[@]}"; then
       CLS[i]="undetermined"; DET[i]="home-claude-ref"; continue
     fi
-    rtb_timeout_derive_into "${RTB_TIMEOUT_LEDGER[$i]:-}"
-    DERIVED="$RTB_TIMEOUT_DERIVED_OUT"
-    if [ "$PTT_EXPLICIT" = 1 ]; then
-      WANT="$PER_TEST_TIMEOUT" SRC="explicit"
-    else
-      WANT="$DERIVED" SRC="default"
-      [ -z "${RTB_TIMEOUT_LEDGER[$i]:-}" ] || SRC="derived"
-    fi
-    rtb_timeout_budget_into "$WANT" "$SECONDS"
-    if [ "$RTB_TIMEOUT_SLICE_OUT" -eq 0 ]; then
+    rtb_timeout_requested_into "${RTB_TIMEOUT_LEDGER[$i]:-}" "$EXPLICIT"
+    REQUESTED_TEST_TIMEOUT="$RTB_TIMEOUT_REQUESTED_OUT" DERIVED="$RTB_TIMEOUT_DERIVED_OUT" SRC="$RTB_TIMEOUT_SRC_OUT"
+    rtb_timeout_budget_into "$REQUESTED_TEST_TIMEOUT" "$SECONDS"
+    if [ "$RTB_TIMEOUT_APPLIED_OUT" -eq 0 ]; then
       CLS[i]="undetermined"; DET[i]="budget-exhausted"; continue
     fi
-    T_USE="$RTB_TIMEOUT_SLICE_OUT"
-    [ "$T_USE" -ge "$WANT" ] || SRC="$SRC, limited from ${WANT}s by budget"
-    printf 'run-tests-baseline: timeout: %s %ss (%s)\n' "$t" "$T_USE" "$SRC" >&2
-    if ! rtb_exec_one "$WT" "$run" "$T_USE" "$LOGDIR"; then
+    APPLIED_TEST_TIMEOUT="$RTB_TIMEOUT_APPLIED_OUT"
+    [ "$APPLIED_TEST_TIMEOUT" -ge "$REQUESTED_TEST_TIMEOUT" ] || SRC="$SRC, limited from ${REQUESTED_TEST_TIMEOUT}s by budget"
+    printf 'run-tests-baseline: timeout: %s %ss (%s)\n' "$t" "$APPLIED_TEST_TIMEOUT" "$SRC" >&2
+    if ! rtb_exec_one "$WT" "$run" "$APPLIED_TEST_TIMEOUT" "$LOGDIR"; then
       CLS[i]="undetermined"; DET[i]="exec-setup-failed"; continue
     fi
     if [ "$RTB_EXEC_TIMEDOUT" = "1" ]; then
-      # A timeout cut short by the budget, or by an explicit value below the derived one, says
-      # nothing about the test: ask for a re-run.
-      if [ "$T_USE" -lt "$WANT" ] || [ "$WANT" -lt "$DERIVED" ]; then DET[i]="budget-exhausted"; else DET[i]="timeout-at-base"; fi
-      CLS[i]="undetermined"
+      rtb_cls_base_timeout "$i" "$run" "$APPLIED_TEST_TIMEOUT" "$REQUESTED_TEST_TIMEOUT" "$DERIVED"
     elif [ "$RTB_EXEC_UNSUPPORTED" = "1" ]; then
       CLS[i]="undetermined"; DET[i]="unsupported-at-base"; rtb_ledger_append "$B2" "$run" und:unsupported-at-base
     elif [ "$RTB_EXEC_DECOY" = "1" ]; then
@@ -209,7 +198,7 @@ if [ "${#RERUN[@]}" -gt 0 ]; then
         *) rtb_cls_base_fail "$i" "$run" "$old" ;;
       esac
     fi
-    DET[i]="${DET[i]}$via"
+    rtb_cls_append_via "$i" "$old"
   done
   # 6. Removal failure only warns; the classification stands.
   [ -z "$WT" ] || rtb_wt_remove "$ROOT" "$WT" || true
