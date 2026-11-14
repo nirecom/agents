@@ -133,7 +133,7 @@ function extractInlineBashWriteContent(command) {
     }
   }
 
-  const echoRe = /^\s*(?:echo|printf)\s+((?:'[^']*'|"[^"]*"|[^\s>])+)\s*>/;
+  const echoRe = /^\s*(?:echo|printf)\s+((?:'[^']*'|"[^"]*"|[^\s>'"])+)\s*>/;
   const echoM = command.match(echoRe);
   if (echoM) {
     let arg = echoM[1].trim();
