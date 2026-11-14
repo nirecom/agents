@@ -216,3 +216,7 @@ Changes: `install.ps1` updates PowerShell Core again for releases that ship no M
 ### FEATURE: PR #3034 (2026-11-14)
 Background: feat(#2937 #2952 #2938): fix codex review loop terminal handling, han...
 Changes: Codex review loop: the printed verdict now always matches the exit code, and a review that ended with unresolved HIGH findings asks for your acceptance before it can be re-run, unless those findings were closed.;Codex review loop: each review round is now recorded per step, so the total review count survives loop resets.
+
+### FEATURE: PR #3032 (2026-11-14)
+Background: fix(#3015): cache run-tests-baseline timeouts so re-runs converge
+Changes: `run-tests-baseline` no longer loops on exit 8 when a test file times out: timeouts are cached per test file and reused on the next run, and a timeout that cannot be recorded says why on stderr.
