@@ -132,6 +132,34 @@ has_line "nl run2: still new-case-failure-on-branch" "BASELINE: new-case-failure
 has_line "nl run2: one new line counted from the cache" "new_on_branch=1"
 case_end
 
+# #3037 table: which und:<reason> verdicts RTB_LEDGER_UND_CACHEABLE_RE lets the ledger cache (yes) and which it never caches (no).
+# The regex is read from the sourced lib in a child shell and evaluated here, so the table pins the real constant.
+case_begin "und-cacheable-regex-table" "bin/lib/run-tests-baseline-ledger.sh"
+UND_RE="$(lp_lib "$C" "$R" 'printf "%s" "$RTB_LEDGER_UND_CACHEABLE_RE"')"
+[[ -n "$UND_RE" ]] && pass "und-re: the lib defines RTB_LEDGER_UND_CACHEABLE_RE" || fail "und-re: the lib defines RTB_LEDGER_UND_CACHEABLE_RE" "empty"
+while IFS='|' read -r name input want; do
+  [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
+  name="${name//[[:space:]]/}"; want="${want//[[:space:]]/}"
+  input="${input#"${input%%[![:space:]]*}"}"; input="${input%"${input##*[![:space:]]}"}"
+  [[ "$input" == "(empty)" ]] && input=""
+  if [[ -n "$UND_RE" && "$input" =~ $UND_RE ]]; then got=yes; else got=no; fi
+  ck "und-re $name" "$want" "$got"
+done <<'TABLE'
+cache-unsupported-at-base                | und:unsupported-at-base                        | yes
+cache-launcher-predates-conversion       | und:base-launcher-predates-result-conversion   | yes
+cache-timeout-after-600s                 | und:timeout-at-base-after-600s                 | yes
+cache-root-decoy-hit-at-base             | und:root-decoy-hit-at-base                     | yes
+nocache-unrunnable-at-base               | und:unrunnable-at-base                         | no
+nocache-skip-at-base                     | und:skip-at-base                               | no
+nocache-root-decoy-suffix                | und:root-decoy-hit-at-base-x                   | no
+nocache-root-decoy-prefix                | und:xroot-decoy-hit-at-base                    | no
+nocache-timeout-without-digits           | und:timeout-at-base-after-s                    | no
+nocache-empty-string                     | (empty)                                        | no
+nocache-fail-verdict                     | fail                                           | no
+nocache-pass-verdict                     | pass                                           | no
+TABLE
+case_end
+
 echo ""
 echo "Total: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
