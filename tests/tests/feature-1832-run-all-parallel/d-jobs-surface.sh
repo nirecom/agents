@@ -165,14 +165,18 @@ fi
 
 # --- D4: -j 1 stdout matches a hand-built golden --------------------------
 GOLDEN="$FX_TMP_ROOT/golden.out"
+DUMMIES="$(fx_dummy_dir "$ROOT")"
 {
     printf 'g1 line 1\n'
-    printf 'PASS: %s/g1.sh\n' "$TESTS"
-    printf 'SKIP: %s/g2.sh\n' "$TESTS"
-    printf 'FAIL: %s/g3.sh (exit 3)\n' "$TESTS"
+    printf 'PASS: %s/g1.sh\n' "$DUMMIES"
+    printf 'PASS %s/g1.sh::(file) target=%s/g1.sh\n' "$DUMMIES" "$DUMMIES"
+    printf 'SKIP: %s/g2.sh\n' "$DUMMIES"
+    printf 'SKIP %s/g2.sh::(file) target=%s/g2.sh\n' "$DUMMIES" "$DUMMIES"
+    printf 'FAIL: %s/g3.sh (exit 3)\n' "$DUMMIES"
+    printf 'FAIL %s/g3.sh::(file) target=%s/g3.sh\n' "$DUMMIES" "$DUMMIES"
     printf '\n'
-    printf 'Results: PASS=1  FAIL=1  SKIP=1\n'
-    printf 'RUN_CONTRACT: PASS=1 FAIL=1 SKIP=1 EXECUTED=3\n'
+    printf 'Results: PASS=1  FAIL=1  SKIP=1  UNRUNNABLE=0  TIMEOUT=0\n'
+    printf 'RUN_CONTRACT: PASS=1 FAIL=1 SKIP=1 EXECUTED=3 UNRUNNABLE=0 TIMEOUT=0\n'
 } > "$GOLDEN"
 
 fx_exec "$ROOT" 60 "$FX_TMP_ROOT/j1.out" "$FX_TMP_ROOT/j1.err" -j 1 --all

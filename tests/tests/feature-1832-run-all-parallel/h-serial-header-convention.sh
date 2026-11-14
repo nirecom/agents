@@ -18,7 +18,6 @@ export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_D
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 RUNNER="$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh"
-REAL_TESTS="$SCRIPT_CHECKOUT_ROOT/tests"
 DESIGN_DOC="$SCRIPT_CHECKOUT_ROOT/skills/_shared/test-design.md"
 
 PASS=0
@@ -55,16 +54,23 @@ unset CLAUDE_CODE_SESSION_ID
 export RUN_ALL_CACHE_DIR="$TMPD/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 
-# 1. Writer-side convention, read-only against the REAL top-level tests/*.sh.
+# The real corpus is the runner's own sweep: the entrypoint *.sh directly under each sweep dir
+# (rsf_sweep_dirs_into, the runner's SSOT). Listed once; ~3000 files go to grep/awk through xargs.
+CORPUS_LST="$TMPD/corpus.lst"
+( . "$SCRIPT_CHECKOUT_ROOT/bin/lib/repo-settings.sh" && rsf_sweep_dirs_into "$SCRIPT_CHECKOUT_ROOT" "" \
+    && for d in "${RSF_SWEEP_DIRS[@]}"; do for f in "$d"/*.sh; do [ -f "$f" ] && printf '%s\n' "$f"; done; done ) > "$CORPUS_LST" 2>/dev/null
+corpus_xargs() { tr '\n' '\0' < "$CORPUS_LST" | xargs -0 "$@"; }
+
+# 1. Writer-side convention, read-only against the REAL sweep corpus.
 case_static_convention() {
     local f rel line_no tags_no reason count hits
     local declared=0
     local bad_window="" bad_order="" bad_reason="" bad_count=""
     # ONE grep over the corpus, per-file work only for declaring files (Windows fan-out cost).
-    hits="$(grep -nE '^# Serial:' "$REAL_TESTS"/*.sh 2>/dev/null || true)"
+    hits="$(corpus_xargs grep -nHE '^# Serial:' 2>/dev/null || true)"
     for f in $(printf '%s\n' "$hits" | sed -n 's/^\([^:]*\):.*/\1/p' | LC_ALL=C sort -u); do
         [ -f "$f" ] || continue
-        rel="tests/$(basename "$f")"
+        rel="${f#"$SCRIPT_CHECKOUT_ROOT"/}"
         count="$(printf '%s\n' "$hits" | grep -c "^$f:" || true)"
         declared=$((declared + 1))
         [ "$count" -gt 1 ] && bad_count="$bad_count $rel"
@@ -84,7 +90,7 @@ case_static_convention() {
     # Fence: the four rows above pass vacuously on a tree with no declarations.
     if [ "$declared" -gt 0 ]; then pass "h-serial/static/inventory-non-empty"
     else fail "h-serial/static/inventory-non-empty" \
-        "no tests/*.sh declares '# Serial:' — the S2-4 serial inventory has not landed"; fi
+        "no test in the runner's sweep dirs declares '# Serial:' (corpus list: $(grep -c . "$CORPUS_LST" 2>/dev/null || echo 0) file(s))"; fi
 }
 
 # 1b. Static audit: every hazardous test must CARRY the header. Criteria pinned here:
@@ -108,22 +114,22 @@ HAZARD_PROG='
 
 case_hazard_audit() {
     local raw hazard_files valid_headers f rel unclassified="" n_haz=0 n_files=0
-    raw="$(awk "$HAZARD_PROG" "$REAL_TESTS"/*.sh 2>/dev/null || true)"
+    raw="$(corpus_xargs awk "$HAZARD_PROG" 2>/dev/null || true)"
     n_haz="$(printf '%s' "$raw" | grep -c . || true)"
     hazard_files="$(printf '%s\n' "$raw" | cut -f1 | LC_ALL=C sort -u | grep -v '^$' || true)"
 
     # Floor: a detector matching nothing would make the next row pass on an empty set.
     if [ "${n_haz:-0}" -gt 0 ]; then pass "h-serial/audit/detector-matched-something"
     else fail "h-serial/audit/detector-matched-something" \
-        "the pinned H1-H3 criteria matched 0 lines across tests/*.sh — the detector is broken"; fi
+        "the pinned H1-H3 criteria matched 0 lines across the runner's sweep corpus — the detector is broken"; fi
 
     # Valid = inside the shared 10-line window with a non-empty reason.
-    valid_headers="$(grep -nE '^# Serial:[[:space:]]*[^[:space:]]' "$REAL_TESTS"/*.sh 2>/dev/null \
+    valid_headers="$(corpus_xargs grep -nHE '^# Serial:[[:space:]]*[^[:space:]]' 2>/dev/null \
         | awk -F: '$2 <= 10 { print $1 }' | LC_ALL=C sort -u || true)"
 
     for f in $hazard_files; do
         n_files=$((n_files + 1))
-        rel="tests/$(basename "$f")"
+        rel="${f#"$SCRIPT_CHECKOUT_ROOT"/}"
         printf '%s\n' "$valid_headers" | grep -qxF "$f" || unclassified="$unclassified $rel"
     done
 
@@ -168,7 +174,7 @@ case_documented() {
 # 4. Cross-check: --print-plan's `serial` set equals an independent awk scan (fixture TESTS_DIR only).
 case_print_plan() {
     local FX="$TMPD/fx" ran="$TMPD/fx-ran" out rc plan_serial awk_serial n
-    mkdir -p "$FX"
+    mkdir -p "$FX/bin"
     for n in 1 2 3 4 5 6; do
         {
             printf '#!/usr/bin/env bash\n'
@@ -181,7 +187,7 @@ case_print_plan() {
             esac
             printf 'echo ran >> "%s"\n' "$ran"
             printf 'exit 0\n'
-        } > "$FX/p$n.sh"
+        } > "$FX/bin/p$n.sh"
     done
 
     rc=0
@@ -208,7 +214,7 @@ case_print_plan() {
     plan_serial="$(printf '%s\n' "$out" \
         | awk -F'\t' '$1 == "plan" && $3 == "serial" { n = split($4, a, /[\/\\]/); print a[n] }' \
         | LC_ALL=C sort -u | tr '\n' ' ')"
-    awk_serial="$(awk 'FNR<=10 && /^# Serial:/ {print FILENAME}' "$FX"/*.sh \
+    awk_serial="$(awk 'FNR<=10 && /^# Serial:/ {print FILENAME}' "$FX"/bin/*.sh \
         | LC_ALL=C sort -u | while read -r p; do basename "$p"; done | LC_ALL=C sort -u | tr '\n' ' ')"
     assert_eq "h-serial/plan/serial-set-equals-awk-scan" "$awk_serial" "$plan_serial"
     assert_eq "h-serial/plan/awk-scan-found-both-fixtures" "p2.sh p5.sh " "$awk_serial"
