@@ -70,6 +70,16 @@ _srn_rollback() {
     fi
   fi
 }
+# srn_commits <rc> — true when <rc> consumes the counter round (the review record takes a
+# row for it, #2938 D2): 0/1/2/5/6, and 7 once the reduce committed. A prestaged JOIN never does.
+srn_commits() {
+  [[ "${PRESTAGED_MODE:-0}" == "1" && "${PRESTAGED_ADVANCED:-0}" != "1" ]] && return 1
+  case "$1" in
+    0|1|2|5|6) return 0 ;;
+    7) [[ "${REDUCE_COMMITTED:-false}" == "true" ]] ;;
+    *) return 1 ;;
+  esac
+}
 settle_round_counter() {
   local rc="$1"
   # A prestaged JOIN re-enters a round the reviewer pass already opened and owns

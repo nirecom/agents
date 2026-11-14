@@ -4,8 +4,8 @@
 # Tags: feature-2434, control-dir, exit6-accept, codex-review-loop, TL1, TL2, terminal-guard, risk-signal, scope:issue-specific, pwsh-not-required
 #
 # #2434 Step 5-7: the exit-6 residual-HIGH accept marker is a control file with
-# one writer, bin/accept-exit6-residual. It serves security-code, security-plan
-# and test-review only; outline/detail escalate instead (exit-codes.md, C4).
+# one writer, bin/accept-exit6-residual. Since #2952 D6 it serves all five formats
+# and accepts only against a current exit-6 terminal, whose lines 2-3 it records.
 # The wrappers point at the CLI, never at `touch`.
 set -uo pipefail
 
@@ -28,6 +28,11 @@ accept() {
     run_bin "$CLI" "$@" >/dev/null 2>"$TMP/accept.err" || A_RC=$?
     A_ERR="$(cat "$TMP/accept.err" 2>/dev/null)"
 }
+# terminal6 <sid> <fmt> — the exit-6 terminal (rc, fingerprint, ledger path) the accept binds to.
+terminal6() {
+    mkdir -p "$(ctl "$1")"
+    printf '6\nfp-%s\n%s/%s-ledger.txt\n' "$1" "$(ctl "$1")" "$2" > "$(ctl "$1")/$2-terminal.txt"
+}
 
 # format | marker name in the control dir | skill
 ROWS="security-code|security-code-exit6-accepted.txt|review-code-security
@@ -37,6 +42,7 @@ test-review|review-tests-exit6-accepted.txt|review-tests"
 case_begin "cli-writes-the-marker-per-format" "bin/accept-exit6-residual"
 while IFS='|' read -r FMT MARK SKILL; do
     SID="ac-$FMT"
+    terminal6 "$SID" "$FMT"
     accept --session "$SID" --format "$FMT" --reason "user accepted residual HIGH"
     assert_eq "$FMT: accept exits 0" "0" "$A_RC"
     assert_eq "$FMT: marker $MARK in the control dir" "present" "$(state "$(ctl "$SID")/$MARK")"
@@ -44,27 +50,32 @@ while IFS='|' read -r FMT MARK SKILL; do
 done <<EOF
 $ROWS
 EOF
-SID="ac-date"
+terminal6 20260601-120000 security-code
 accept --session 20260601-120000 --format security-code --reason "date-shaped sid"
 assert_eq "a date-shaped sid is accepted" "0" "$A_RC"
 assert_eq "its marker lands in <sid>.control" "present" \
     "$(state "$(ctl 20260601-120000)/security-code-exit6-accepted.txt")"
 case_end
 
-case_begin "cli-rejects-outline-detail-and-bad-input" "bin/accept-exit6-residual"
-# outline/detail have no accept step: exit 2 and a pointer to the table.
+case_begin "cli-accepts-outline-detail-and-rejects-bad-input" "bin/accept-exit6-residual"
+# #2952 D6: outline/detail accept against their exit-6 terminal like the other three.
 for FMT in outline-plan detail-plan; do
-    SID="rj-$FMT"
-    accept --session "$SID" --format "$FMT" --reason "should not be accepted"
-    assert_eq "$FMT is refused with exit 2" "2" "$A_RC"
-    assert_contains "$FMT refusal points at exit-codes.md" "exit-codes.md" "$A_ERR"
-    assert_eq "$FMT: no control dir was created" "absent" "$(state "$(ctl "$SID")")"
+    SID="od-$FMT"
+    terminal6 "$SID" "$FMT"
+    accept --session "$SID" --format "$FMT" --reason "user accepted residual HIGH"
+    assert_eq "$FMT is accepted with exit 0" "0" "$A_RC"
+    assert_eq "$FMT: marker in the control dir" "present" "$(state "$(ctl "$SID")/$FMT-exit6-accepted.txt")"
 done
+accept --session rj-noterm --format security-code --reason "x"
+assert_eq "no exit-6 terminal is refused with exit 2" "2" "$A_RC"
+assert_eq "and leaves no marker" "absent" "$(state "$(ctl rj-noterm)/security-code-exit6-accepted.txt")"
 accept --session rj-bogus --format bogus --reason "x"
 assert_eq "an unknown format is refused with exit 2" "2" "$A_RC"
+assert_contains "the unknown-format refusal points at exit-codes.md" "exit-codes.md" "$A_ERR"
 accept --session "../escape" --format security-code --reason "x"
 assert_eq "a traversing sid is refused with exit 2" "2" "$A_RC"
 assert_eq "no directory escaped the workflow dir" "absent" "$(state "$TMP/escape.control")"
+terminal6 rj-noreason security-code
 accept --session rj-noreason --format security-code
 assert_ne "a missing --reason is refused" "0" "$A_RC"
 assert_eq "and leaves no marker" "absent" \
@@ -76,6 +87,7 @@ case_begin "idempotent-accept" "bin/accept-exit6-residual"
 [ -f "$CLI" ] || fail "implementation missing: bin/accept-exit6-residual"
 if [ -f "$CLI" ]; then
     SID_I="idem-sc"
+    terminal6 "$SID_I" security-code
     accept --session "$SID_I" --format security-code --reason "first accept"
     assert_eq "idempotent: first accept exits 0" "0" "$A_RC"
     MARK_I="$(ctl "$SID_I")/security-code-exit6-accepted.txt"
@@ -123,8 +135,11 @@ printf 'hand-placed reason\n' > "$(ctl "$SID")/security-plan-risk-signal.txt"
 printf 'hand-placed reason\n' > "$P/$SID-security-plan-risk-signal.txt"
 wrap review-plan-security "$SID" 0
 assert_eq "round 1 continues" "1" "$W_RC"
+# #2938 D3: the record, not the caller, counts the extension, so round 2 spends it (exit 5).
+wrap review-plan-security "$SID" 0
+assert_eq "round 2 at cap auto-extends (precondition)" "5" "$W_RC"
 wrap review-plan-security "$SID" 1
-assert_eq "round 2 at cap stays HIGH_UNRESOLVED (exit 6), not ESCALATE" "6" "$W_RC"
+assert_eq "round 3 past the extension stays HIGH_UNRESOLVED (exit 6), not ESCALATE" "6" "$W_RC"
 assert_eq "the wrapper source no longer reads a risk-signal file" "0" \
     "$(grep -c 'risk-signal' "$SCRIPT_CHECKOUT_ROOT/skills/review-plan-security/scripts/run-codex-review-loop.sh")"
 case_end

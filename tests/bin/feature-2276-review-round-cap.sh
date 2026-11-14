@@ -120,8 +120,9 @@ echo ""
 echo "--- C: round-counter lifecycle (review-only format) ---"
 
 FAKE_ROOT="$TMPDIR_BASE/fake-agents"
-mkdir -p "$FAKE_ROOT/rules"
-cp -R "$AGENTS_ROOT/bin" "$FAKE_ROOT/bin"
+mkdir -p "$FAKE_ROOT/rules" "$FAKE_ROOT/hooks"
+# The review record (#2938): bin/review-rounds requires hooks/ from the same tree.
+cp -R "$AGENTS_ROOT/bin" "$FAKE_ROOT/bin"; cp -R "$AGENTS_ROOT/hooks/lib" "$AGENTS_ROOT/hooks/workflow-state" "$FAKE_ROOT/hooks/"
 cp "$AGENTS_ROOT/rules/core-principles.md" "$FAKE_ROOT/rules/core-principles.md"
 
 STUB="$FAKE_ROOT/bin/review-plan-codex"
@@ -180,8 +181,8 @@ assert_eq "C1: round 3 at the ceiling is HIGH_UNRESOLVED and drops the counter" 
 
 new_loop_env
 loop_run
-assert_eq "C2: precondition — round 1 continues" "1" "$L_RC"
-loop_run no "## Codex Review: PERFORMED" 1 "hook-blocked"
+assert_eq "C2: precondition — round 1 continues" "1" "$L_RC"; loop_run
+assert_eq "C2: precondition — round 2 spends the extension the record counts (#2938 D3)" "5" "$L_RC"; loop_run no "## Codex Review: PERFORMED" 1 "hook-blocked"
 assert_eq "C2: a risk signal at the ceiling escalates and drops the counter" \
     "rc=2 counter=deleted" "rc=$L_RC counter=$(counter_state)"
 

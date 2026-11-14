@@ -55,12 +55,17 @@ run_prestaged_pass() {
     PRESTAGED_ADVANCED=1
     release_round_lock
   fi
+  rr_apply_extensions_used "$ROUND"
 
   TMP_OUT=$(mktemp) || die "mktemp failed"
   rk_load_prestaged
 
   FINAL_EXIT=0
   HIGH_N=0; MED_N=0; LOW_N=0
+
+  # Checked before the reduce commits the round: a missing verdict engine halts while
+  # REDUCE_COMMITTED is still false, so the counter rolls back instead of leaving a record gap.
+  require_verdict_bin
 
   if ! ledger_cli stage --round "$ROUND" --producer "$PRESTAGED_PRODUCER" \
         --exec "$PRESTAGED_EXEC" --parser anchored --from-report "$TMP_OUT" >/dev/null 2>&1; then
@@ -100,10 +105,12 @@ run_prestaged_pass() {
     echo "run-codex-review-loop: reduce reports ${HIGH_N}/${MED_N}/${LOW_N} open concerns for round ${ROUND} but the ledger holds no concern entries; refusing to judge from an inconsistent ledger" >&2
     exit 4
   fi
+  # Committed only after the sanity check: its exit 4 leaves the round unsettled, so
+  # _srn_rollback restores ROUND_PREV instead of consuming a round the record has no row for.
+  # shellcheck disable=SC2034  # read by round-counter.sh (srn_commits, _srn_rollback)
+  REDUCE_COMMITTED=true
 
   dispatch_prestaged_verdict
 
-  cat "$TMP_OUT"
-  FINAL_RC="$FINAL_EXIT"
-  exit "$FINAL_EXIT"
+  vs_emit "$FINAL_EXIT"
 }

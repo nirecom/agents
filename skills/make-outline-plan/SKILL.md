@@ -101,11 +101,11 @@ MOP-6. **Cap outcome dispatch.**
 
    Apply only when the per-stage wrapper script (MOP-5) returns a non-zero non-one exit code:
 
-   **Exit 5 (AUTO_EXTEND):** Increment `EXTENSIONS_USED` by 1, then loop back to MOP-5 (no user confirmation). `EXTENSIONS_USED` tracking is the caller's responsibility (see `skills/_shared/codex-review-loop.md`).
+   **Exit 5 (AUTO_EXTEND):** save stdout to the exit 1 `-raw.md` (`<N>` from `<CONTROL_DIR>/outline-plan-round-number.txt`), increment `EXTENSIONS_USED` by 1, then loop back to MOP-5 (no user confirmation). The wrapper derives `EXTENSIONS_USED` from the review record and only cross-checks the exported value.
 
    **exit 2 (ESCALATE):** Run `bash "$AGENTS_MAIN_ROOT/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <CONTROL_DIR>/outline-plan-concern-ledger-cap-snapshot.txt --raw <RAW_FILE>` and present the output to the user. Then stop the loop and re-run `/clarify-intent` (outline-specific override: `adjust` path means scope needs revision).
 
-   **exit 6 (HIGH_UNRESOLVED):** run `bash "$AGENTS_MAIN_ROOT/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <CONTROL_DIR>/outline-plan-concern-ledger.txt --raw <RAW_FILE> --label outline-plan`; confirm artifact via `bash "$AGENTS_MAIN_ROOT/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format outline-plan`; stop loop, then re-run `/clarify-intent`.
+   **exit 6 (HIGH_UNRESOLVED):** run `bash "$AGENTS_MAIN_ROOT/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <CONTROL_DIR>/outline-plan-concern-ledger.txt --raw <RAW_FILE> --label outline-plan`; confirm artifact via `bash "$AGENTS_MAIN_ROOT/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format outline-plan`; stop loop, then re-run `/clarify-intent` or accept the residual HIGH per exit-codes.md "Escalation by format". Exit 9 on a later re-run → return to that accept step.
 
    `<RAW_FILE>` for terminal exits (2 or 6) = `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md`; `<N>` = value from `<CONTROL_DIR>/outline-plan-last-round.txt`. Exit 8: AskUserQuestion (`metadata.source=codex-review-loop.unchanged-rerun`) per exit-codes.md "Escalation by format".
 

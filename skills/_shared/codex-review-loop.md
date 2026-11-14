@@ -4,7 +4,7 @@ Used by `make-outline-plan` MOP-5, `make-detail-plan` MDP-5, `review-plan-securi
 parts (context build → codex invocation → verdict parse) are enforced by the
 `bin/run-codex-review-loop` wrapper.
 
-`EXTENSIONS_USED` is owned by the caller.
+`EXTENSIONS_USED` is derived by the wrapper from the review record (`bin/review-rounds`); the caller's value is only cross-checked.
 
 ACCEPTED_TRADEOFFS_FILE is resolved by `bin/resolve-accepted-tradeoffs-file` from the suffix chain below into one merged file in the control dir holding every stage's Accepted Tradeoffs (fallback: the first readable chain member); a non-zero exit reaches the caller as exit 4.
 
@@ -52,6 +52,7 @@ Exit 3 = codex CLI unusable → caller silently launches CC REVIEWER_AGENT fallb
 Before that launch, run `bin/resolve-accepted-tradeoffs-file` with the format's chain and pass its stdout path to the REVIEWER_AGENT prompt as the Accepted Tradeoffs file.
 Every REVIEWER_AGENT (and `security-scanner`) launch passes `model:` = the `model=` line of `node "$AGENTS_MAIN_ROOT/bin/resolve-role-model" --role reviewer`.
 Every such prompt carries the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section; the `security-scanner` JSON prompt carries it under the `dispatch_directive` key.
+Right after the fallback verdict (outline / detail included), run `node "$AGENTS_MAIN_ROOT/bin/review-rounds" record-fallback --session <session-id> --format <FORMAT> --verdict <APPROVED or the NON_APPROVED_VERDICT of the Parameters table, colon dropped>` as one standalone command; non-zero → HALT as exit 4. `security-code` records none (its fallback re-enters the loop).
 Exit 4 = HALT — same as Contract B; no fallback.
 
 ## FORMAT vs LEDGER_FORMAT
@@ -146,6 +147,8 @@ planner-cap budget: `limit = 1 + cap + extensions_used`. On exit 1
 
 ## Exit code → orchestrator action (SSOT) {#exit-code--orchestrator-action-ssot}
 
+Read the verdict from the exit code and the final `REVIEW_LOOP_VERDICT:` line, never from the reviewer body.
+
 Quick reference (public exit codes — Contract B):
 
 | Exit | Name | Orchestrator action |
@@ -153,13 +156,13 @@ Quick reference (public exit codes — Contract B):
 | 0 | APPROVED | Write/confirm phase. |
 | 1 | CONTINUE | Capture RAW → append round log → re-invoke planner with `model: PLANNER_MODEL`. |
 | 2 | ESCALATE | Present concern summary → stop loop; per-format follow-up: exit-codes.md "Escalation by format". |
-| 3 | codex CLI unusable | Silently launch `REVIEWER_AGENT` fallback with the `resolve-role-model --role reviewer` model. |
+| 3 | codex CLI unusable | Silently launch `REVIEWER_AGENT` fallback with the `resolve-role-model --role reviewer` model; then `bin/review-rounds record-fallback` (see "Exit 3 = " above). |
 | 4 | HALT | Surface stderr verbatim; do not fall back. |
-| 5 | AUTO_EXTEND | `EXTENSIONS_USED += 1` → re-enter loop. |
+| 5 | AUTO_EXTEND | Capture RAW → re-enter loop; the wrapper derives `EXTENSIONS_USED` from the review record. |
 | 6 | HIGH_UNRESOLVED | Present HIGH concern summary → stop loop; do not proceed to write/confirm. |
 | 7 | FINALIZE_FAILED | HALT; surface `## Concern Ledger: FINALIZE-FAILED` line; do not emit sentinel. |
-| 8 | re-invoked after terminal (all three wrappers) | HALT; unchanged since last terminal exit — AskUserQuestion (`metadata.source=codex-review-loop.unchanged-rerun`) per "Escalation by format". |
-| 9 | exit 6 termination, content changed but residual HIGH not accepted (all three wrappers) | HALT; accept via `bin/accept-exit6-residual` (or `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED` for review-tests) then re-run. |
+| 8 | re-invoked after terminal (every stage wrapper) | HALT; unchanged since last terminal exit — AskUserQuestion (`metadata.source=codex-review-loop.unchanged-rerun`) per "Escalation by format". |
+| 9 | exit 6 termination, content changed but residual HIGH neither closed in the ledger nor accepted (every stage wrapper) | HALT; accept via `node "$AGENTS_MAIN_ROOT/bin/accept-exit6-residual"` (or `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED` for review-tests) then re-run. |
 
 A concern tagged `[upstream-inconsistency …]` pauses the loop for the user's decision: [`skills/_shared/codex-review-loop/upstream-inconsistency-pause.md`](codex-review-loop/upstream-inconsistency-pause.md).
 

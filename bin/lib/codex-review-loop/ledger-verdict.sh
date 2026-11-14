@@ -44,8 +44,8 @@ finalize_ledger() {
   msg="$(printf '%s\n' "$out" | grep -F '## Concern Ledger: FINALIZE-FAILED — ' | head -n 1)"
   [[ -n "$msg" ]] || msg="## Concern Ledger: FINALIZE-FAILED — the unresolved-concerns artifact could not be written"
   msg="$msg (would-be verdict: $wouldbe)"
-  cat "$TMP_OUT"
-  printf '%s\n' "$msg"
+  # shellcheck disable=SC2034  # printed by vs_emit after the body, before the sentinel
+  VS_DIAG="$msg"
   printf '%s\n' "$msg" >&2
-  exit 7
+  vs_emit 7
 }

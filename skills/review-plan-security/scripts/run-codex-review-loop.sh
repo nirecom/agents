@@ -88,7 +88,8 @@ for v in CTX_SURVEY_CODE CTX_SURVEY_HISTORY CTX_CONCERNS_LOG; do
 done
 # No risk signal: security-plan has no writer for one, and reading one would let
 # a model-written file turn HIGH_UNRESOLVED into ESCALATE past the exit-6 accept (#2434).
+rwc_input_fp_args "$CUR_FP"
 RC=0
-"$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" || RC=$?
+"$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" ${RWC_FP_ARGS[@]+"${RWC_FP_ARGS[@]}"} || RC=$?
 arm_terminal_guard "$RC" || true
 exit "$RC"

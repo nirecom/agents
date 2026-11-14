@@ -146,6 +146,10 @@ TABLE2
     new_env
     mk_body "$LW/body.txt" "$LLINE"
     RL_CODEX_BODY="$LW/body.txt"
+    # Cap 3 keeps round 2 below the cap: a seeded counter has no round-1 review record,
+    # so at cap 2 the extension budget would count as spent (#2938 D3) and round 2 would
+    # be terminal, retiring the counter this case reads.
+    RL_CAP=3
     printf '1\n' > "$(round_file "$PLANS" "$SID")"
     run_loop
     assert_eq "L5b: a recorded round is resumed as the next one, and staged into" \
