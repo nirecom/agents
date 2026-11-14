@@ -14,4 +14,8 @@ if [[ ! -f "$cli" ]]; then
     echo "Error: scanner implementation not found at $cli — cannot scan" >&2
     exit 4
 fi
+# Windows native node cannot resolve MSYS /tmp-style paths; cygpath exists only under MSYS/Git Bash.
+if command -v cygpath >/dev/null 2>&1; then
+    cli="$(cygpath -m "$cli")"
+fi
 exec node "$cli" "$@"

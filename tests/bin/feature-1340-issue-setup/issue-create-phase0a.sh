@@ -135,13 +135,6 @@ REMOTE_EOF
 chmod +x "$SHARED_MOCK_BIN/is-github-dotcom-remote"
 export PATH="$SHARED_MOCK_BIN:$PATH"
 
-# gh_outbound_guard (sourced by issue-create.sh before the real gh call)
-# runs the scanner copied into the fake checkout, which reads its allow/block
-# lists from $AGENTS_MAIN_ROOT and fails CLOSED when the blocklist is missing.
-# Empty lists let it scan the clean placeholder title/body and return rc=0.
-: > "$FAKE_MAIN_ROOT/.private-info-allowlist"
-: > "$FAKE_MAIN_ROOT/.private-info-blocklist"
-
 TMP=""
 
 setup_mock() {
@@ -155,11 +148,15 @@ setup_mock() {
     export WORKFLOW_PLANS_DIR="$TMP/plans"
     export WORKFLOW_STATE_DIR="$TMP/workflow"
     export AGENTS_MAIN_ROOT="$FAKE_MAIN_ROOT"
+    # gh_outbound_guard runs the scanner copied into the fake checkout; it reads its
+    # allow/block lists from the script checkout and fails CLOSED without the blocklist.
+    : > "$FAKE_SCRIPT_CHECKOUT_ROOT/.private-info-allowlist"
+    : > "$FAKE_SCRIPT_CHECKOUT_ROOT/.private-info-blocklist"
 }
 
 teardown_mock() {
     TMP=""
-    # TICA-4 places allow/block lists in the shared checkout; later cases must not see them.
+    # setup_mock places allow/block lists in the shared checkout; later cases must not see them.
     rm -f "$FAKE_SCRIPT_CHECKOUT_ROOT/.private-info-allowlist" "$FAKE_SCRIPT_CHECKOUT_ROOT/.private-info-blocklist"
     export WORKFLOW_STATE_DIR="$FIXTURE_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$FIXTURE_ROOT/plans"
     unset MOCK_LOG AGENTS_MAIN_ROOT \
@@ -273,13 +270,9 @@ teardown_mock
 # preflight and sync-labels beside its own path, so an absent AGENTS_MAIN_ROOT (and
 # every retired root name) must not skip the label repair. Asserted on the calls:
 # preflight ran, sync-labels ran, gh issue create ran, and no skip warning.
-# The scanner then anchors its allow/block lists at the script checkout, so the
-# empty lists are placed there for this case.
 # ===========================================================================
 setup_mock
 export GH_MOCK_LABELS_HAVE_TASK=0
-: > "$FAKE_SCRIPT_CHECKOUT_ROOT/.private-info-allowlist"
-: > "$FAKE_SCRIPT_CHECKOUT_ROOT/.private-info-blocklist"
 TICA4_UNSET=(-u AGENTS_MAIN_ROOT)
 while IFS= read -r TICA4_NAME; do
     TICA4_NAME="${TICA4_NAME%$'\r'}"

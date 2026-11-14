@@ -358,36 +358,30 @@ LL_TABLE
 
 # Case 12 isSentinel — DQ form accepted by isSentinel().
 cmd12='echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: all warnings reviewed>>"'
-got12_is="$(eval_is_sentinel "$cmd12")"
-assert_eq "T12.isSentinel" "YES" "$got12_is"
+assert_eq "T12.isSentinel" "YES" "$(eval_is_sentinel "$cmd12")"
 
 # Case 12 isStrictSentinel — DQ form accepted by isStrictSentinel().
-got12_strict="$(eval_is_strict "$cmd12")"
-assert_eq "T12.isStrictSentinel" "YES" "$got12_strict"
+assert_eq "T12.isStrictSentinel" "YES" "$(eval_is_strict "$cmd12")"
 
 # Case 13 isSentinel — bare form (no reason) IS recognized by isSentinel (LOOKSLIKE fallthrough).
 cmd13='echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED>>"'
-got13_is="$(eval_is_sentinel "$cmd13")"
-assert_eq "T13.isSentinel(bare-lookslike)" "YES" "$got13_is"
+assert_eq "T13.isSentinel(bare-lookslike)" "YES" "$(eval_is_sentinel "$cmd13")"
 
 # Case 13 isStrictSentinel — bare form NOT a strict sentinel.
-got13_strict="$(eval_is_strict "$cmd13")"
-assert_eq "T13.isStrictSentinel(bare-NOT-strict)" "NO" "$got13_strict"
+assert_eq "T13.isStrictSentinel(bare-NOT-strict)" "NO" "$(eval_is_strict "$cmd13")"
 
 # Case 16 — reason containing > must NOT be a strict sentinel (reason text contains >).
-cmd15='echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: r>x>>"'
-got15_strict="$(eval_is_strict "$cmd15")"
-assert_eq "T15.isStrictSentinel(reason-with->)" "NO" "$got15_strict"
+assert_eq "T15.isStrictSentinel(reason-with->)" "NO" "$(eval_is_strict 'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: r>x>>"')"
 
 # Case 17 — mutation probe. The probe rewrites its target with `sed -i` in place, so probe and
 # target are copied under TMPDIR_BASE and the real checkout is never written (parallel run-all).
-# Oracle (--test-cmd): one positive sample per exported *_RE_DQ / *_LOOKSLIKE_RE, checked on the
+# Oracle (--test-cmd): one positive sample per exported *_RE_DQ / *_LOOKSLIKE_RE / RE_*_DQ / LOOKSLIKE_*, checked on the
 # regex and on isStrictSentinel / isSentinel; this file covers only a few regexes, so re-running
 # it per mutant would leave most mutants LIVE. --threshold 100: every mutant must be KILLED.
 MUTATION_PROBE="$SCRIPT_CHECKOUT_ROOT/bin/mutation-probe.sh"
 T17_ROOT="$TMPDIR_BASE/t17-probe"
 mkdir -p "$T17_ROOT/bin" "$T17_ROOT/hooks/lib" && cp "$MUTATION_PROBE" "$T17_ROOT/bin/" && cp "$SENTINEL_PATTERNS" "$T17_ROOT/hooks/lib/"
-printf '%s\n' 'const sp=require(process.argv[2]),q=String.fromCharCode(34);let n=0,bad=0;for(const[k,re]of Object.entries(sp)){const m=/^(.+?)_(RE_DQ|LOOKSLIKE_RE)$/.exec(k);if(!m||!(re instanceof RegExp))continue;const dq=m[2]==="RE_DQ",st=m[1].replace(/_RETIRED$/,"").replace(/^RESET_FROM$/,"RESET_FROM_x").replace(/^MARKER$/,"MARK_STEP_x_complete"),p=!dq||/^(CLARIFY_INTENT_COMPLETE|MARK_STEP_)/.test(st)?"":st==="GLOSSARY_ACCEPTED"?": term=t — r":st.startsWith("SUPERVISOR_")?": run-1 r":": r",s="echo "+q+"<<WORKFLOW_"+st+p+">>"+q;n++;if(!re.test(s)||!(dq?sp.isStrictSentinel(s):sp.isSentinel(s))){bad++;console.error("MISS "+k);}}process.exit(n>0&&bad===0?0:1);' > "$T17_ROOT/oracle.js"
+printf '%s\n' 'const sp=require(process.argv[2]),q=String.fromCharCode(34);let n=0,bad=0;for(const[k,re]of Object.entries(sp)){const m=/^(.+?)_(RE_DQ|LOOKSLIKE_RE)$/.exec(k)||/^RE_(.+)_(DQ)$/.exec(k)||/^LOOKSLIKE_(.+)$/.exec(k);if(!m||!(re instanceof RegExp))continue;const dq=m[2]==="RE_DQ"||m[2]==="DQ",st=m[1].replace(/^WORKFLOW_/,"").replace(/_RETIRED$/,"").replace(/^RESET_FROM$/,"RESET_FROM_x").replace(/^MARKER$/,"MARK_STEP_x_complete"),p=!dq||/^(CLARIFY_INTENT_COMPLETE|MARK_STEP_)/.test(st)?"":st==="GLOSSARY_ACCEPTED"?": term=t — r":st.startsWith("SUPERVISOR_")?": run-1 r":": r",s="echo "+q+"<<WORKFLOW_"+st+p+">>"+q;n++;if(!re.test(s)||!(dq?sp.isStrictSentinel(s):sp.isSentinel(s))){bad++;console.error("MISS "+k);}}process.exit(n>0&&bad===0?0:1);' > "$T17_ROOT/oracle.js"
 t17_cmd="node $(printf '%q' "$T17_ROOT/oracle.js") $(printf '%q' "$T17_ROOT/hooks/lib/sentinel-patterns.js")"
 t17_real_before=$(cksum < "$SENTINEL_PATTERNS")
 oracle_out=$(bash -c "$t17_cmd" 2>&1); oracle_rc=$?
@@ -415,9 +409,9 @@ echo "=== Section 4: REVIEW_TESTS_WARNINGS_ACCEPTED injection guard cases ==="
 # For injection guards we assert NO_MATCH on DQ_RE AND not isStrictSentinel.
 # Helper: assert the command is neither a DQ match nor a strict sentinel.
 assert_injection_blocked() {
-    local desc="$1" cmd="$2"
+    local desc="$1" cmd="$2" re="${3:-REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ}"
     local dq_got strict_got
-    dq_got=$(eval_sentinel_regex "REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ" "$cmd")
+    dq_got=$(eval_sentinel_regex "$re" "$cmd")
     strict_got=$(eval_is_strict "$cmd")
     # NOT_EXPORTED means the regex constant is missing — the injection guard is untestable.
     # Treat as a test failure so the false-green is surfaced explicitly.
@@ -437,18 +431,27 @@ assert_injection_blocked() {
 }
 
 # Command-substitution injection: $() in reason text. Anchored DQ form prevents it.
-assert_injection_blocked "C3.subshell-dollar-paren" \
-    'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: $(evil)>>"'
-assert_injection_blocked "C3.subshell-backtick" \
-    'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: `evil`>>"'
-assert_injection_blocked "C3.semicolon-in-reason" \
-    'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: foo; rm -f bar>>"'
-assert_injection_blocked "C3.redirect-in-reason" \
-    'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: foo > /tmp/x>>"'
-assert_injection_blocked "C3.pipe-in-reason" \
-    'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: foo | cat>>"'
-assert_injection_blocked "C3.and-chain-in-reason" \
-    'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: foo && bar>>"'
+while IFS='|' read -r c3_desc c3_cmd; do assert_injection_blocked "$c3_desc" "$c3_cmd"; done <<'C3_TABLE'
+C3.subshell-dollar-paren|echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: $(evil)>>"
+C3.subshell-backtick|echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: `evil`>>"
+C3.semicolon-in-reason|echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: foo; rm -f bar>>"
+C3.redirect-in-reason|echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: foo > /tmp/x>>"
+C3.pipe-in-reason|echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: foo | cat>>"
+C3.and-chain-in-reason|echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: foo && bar>>"
+C3_TABLE
+
+# RE_WORKFLOW_ABORT_ACCEPTED_DQ rejection side (the T17 oracle covers acceptance only): a positive
+# control proves the regex is exported and accepts the well-formed form; a missing reason and
+# command chaining must then be NO_MATCH on the regex and NO on isStrictSentinel.
+AB_RE="RE_WORKFLOW_ABORT_ACCEPTED_DQ"; ab_ok='echo "<<WORKFLOW_ABORT_ACCEPTED: user asked to stop>>"'
+assert_eq "C4.abort-accepted.control" "MATCH/YES" "$(eval_sentinel_regex "$AB_RE" "$ab_ok")/$(eval_is_strict "$ab_ok")"
+while IFS='|' read -r ab_desc ab_cmd; do assert_injection_blocked "$ab_desc" "$ab_cmd" "$AB_RE"; done <<'AB_TABLE'
+C4.abort-accepted.no-reason|echo "<<WORKFLOW_ABORT_ACCEPTED>>"
+C4.abort-accepted.empty-reason|echo "<<WORKFLOW_ABORT_ACCEPTED: >>"
+C4.abort-accepted.and-chain-after|echo "<<WORKFLOW_ABORT_ACCEPTED: r>>" && rm -f /tmp/x
+C4.abort-accepted.semicolon-chain-after|echo "<<WORKFLOW_ABORT_ACCEPTED: r>>"; rm -f /tmp/x
+C4.abort-accepted.chain-before|rm -f /tmp/x && echo "<<WORKFLOW_ABORT_ACCEPTED: r>>"
+AB_TABLE
 
 # ---------------------------------------------------------------------------
 # Results
