@@ -173,7 +173,7 @@ if [ "${#RERUN[@]}" -gt 0 ]; then
     elif [ "$RTB_EXEC_UNSUPPORTED" = "1" ]; then
       CLS[i]="undetermined"; DET[i]="unsupported-at-base"; rtb_ledger_append "$B2" "$run" und:unsupported-at-base
     elif [ "$RTB_EXEC_DECOY" = "1" ]; then
-      CLS[i]="undetermined"; DET[i]="root-decoy-hit-at-base"
+      CLS[i]="undetermined"; DET[i]="root-decoy-hit-at-base"; rtb_ledger_append "$B2" "$run" und:root-decoy-hit-at-base
     elif [ "$RTB_EXEC_UNRUNNABLE" = "1" ]; then
       CLS[i]="undetermined"; DET[i]="unrunnable-at-base"
     elif [ -n "$RTB_EXEC_STATE" ]; then

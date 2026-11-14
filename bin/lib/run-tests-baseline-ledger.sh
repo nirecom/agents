@@ -29,7 +29,7 @@ RTB_LEDGER_OPENED=""
 RTB_LEDGER_SEGS=()
 # und: results the same base reproduces every time, including a timeout the budget did not shorten
 # (keyed on the base SHA and its REQUESTED_TEST_TIMEOUT N, #3015); any other und: is never reused.
-RTB_LEDGER_UND_CACHEABLE_RE='^und:(unsupported-at-base|base-launcher-predates-result-conversion|timeout-at-base-after-[1-9][0-9]*s)$'
+RTB_LEDGER_UND_CACHEABLE_RE='^und:(unsupported-at-base|base-launcher-predates-result-conversion|root-decoy-hit-at-base|timeout-at-base-after-[1-9][0-9]*s)$'
 
 # The repository the ledger is keyed on: RTB_LEDGER_REPO when set, else the cwd.
 rtb_ledger_dir() {
