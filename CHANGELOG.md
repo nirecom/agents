@@ -224,3 +224,7 @@ Changes: `run-tests-baseline` no longer loops on exit 8 when a test file times o
 ### FEATURE: PR #3039 (2026-11-14)
 Background: fix(#3037): cache root-decoy hit at base in the run-tests-baseline ledger
 Changes: Fixed `run-tests-baseline` re-running tests that hit a root decoy at the base on every re-run; the result is now cached and the re-run converges.
+
+### FEATURE: PR #3046 (2026-11-15)
+Background: fix(#3027): approve standalone sentinel echoes in scan-outbound before the gh check
+Changes: Workflow sentinel echoes (`echo "<<WORKFLOW_...>>"`) no longer trigger a slow outbound check that ends in a permission prompt.
