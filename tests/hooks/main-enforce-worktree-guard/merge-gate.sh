@@ -1,6 +1,6 @@
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, worktree, enforce, hook, merge, scope:common
-# Sourced by tests/hooks/main-enforce-worktree-guard.sh
+# Sourced by the tests/hooks/main-enforce-worktree-guard-<group>.sh that MEWG_TABLE (tests/lib/mewg-groups.sh) assigns
 # Origin: tests/fix-enforce-worktree-merge-gate.sh (all cases).
 # Cases: the `<desc> -> allow|reject` family produced by assert_ff below.
 # isAllowedFastForwardMerge() is called through require() rather than the CLI,
@@ -9,7 +9,8 @@
 
 # The guard path travels as an argument, never spliced into the program text.
 ff_check() {
-    run_with_timeout 30 node -e "
+    # NO_PATHCONV: MSYS would rewrite the /judged/repo argument; GUARD_JS is already node-form.
+    MSYS_NO_PATHCONV=1 run_with_timeout 30 node -e "
       const { isAllowedFastForwardMerge } = require(process.argv[1]);
       console.log(isAllowedFastForwardMerge(process.argv[2], process.argv[3]) ? 'allow' : 'reject');
     " -- "$GUARD_JS" "$1" "$2" 2>/dev/null
