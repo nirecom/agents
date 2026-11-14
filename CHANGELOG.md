@@ -208,3 +208,7 @@ Changes: Dialogs that ask for your own intent (the clarify-intent interview, the
 ### FEATURE: PR #3023 (2026-11-14)
 Background: fix(#2993): keep a session name set by a manual /rename before the title hook existed
 Changes: Fixed: a session you named by hand with /rename before the title hook existed is no longer renamed by the hook.
+
+### FEATURE: PR #3028 (2026-11-14)
+Background: fix(#3021): fall back to winget when the pwsh release ships no MSI
+Changes: `install.ps1` updates PowerShell Core again for releases that ship no MSI (7.7.0 and later): it falls back to `winget upgrade`, and without winget it shows the download page URL.
