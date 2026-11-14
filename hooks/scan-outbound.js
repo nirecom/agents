@@ -15,6 +15,7 @@ const { resolveGitArgvForSegment } = require("./lib/bash-write-patterns/git-writ
 const { resolveCommitRepoDir, extractInlineBashWriteContent } = require("./lib/commit-target");
 const { extractStagedFilesRelative } = require("./lib/bash-write-targets/staged");
 const { readHookInput, readFailureReason, readFailOpenDiagnostic } = require("./lib/read-stdin");
+const { isStrictSentinel } = require("./lib/sentinel-patterns");
 
 const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..");
 
@@ -28,6 +29,15 @@ function approve() {
 function block(reason) {
   console.log(JSON.stringify({ decision: "block", reason }));
   process.exit(0);
+}
+
+// A strict sentinel echo whose double-quoted body cannot close the quote or expand (#3027);
+// the single-quoted MARK_STEP form has a fixed body.
+function isStandaloneSentinelEcho(cmd) {
+  if (!isStrictSentinel(cmd)) return false;
+  if (/^echo\s+'[^']*'$/.test(cmd)) return true;
+  const m = cmd.match(/^echo\s+"([\s\S]*)"$/);
+  return !!m && !/["`$\\\r\n]/.test(m[1]);
 }
 
 // Normalize path for shell commands (Windows backslashes → forward slashes)
@@ -84,6 +94,7 @@ const OFFENSIVE_SCANNER = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "scan-offensive
     content = toolInput.new_string || "";
   } else if (toolName === "Bash") {
     const command = toolInput.command || "";
+    if (isStandaloneSentinelEcho(command)) approve();
     // Check forge write commands (gh issue/pr create|edit|close|comment|review)
     if (isForgeScanTarget(command)) {
       const { inline, filePaths } = extractTexts(command);
