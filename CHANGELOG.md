@@ -212,3 +212,7 @@ Changes: Fixed: a session you named by hand with /rename before the title hook e
 ### FEATURE: PR #3028 (2026-11-14)
 Background: fix(#3021): fall back to winget when the pwsh release ships no MSI
 Changes: `install.ps1` updates PowerShell Core again for releases that ship no MSI (7.7.0 and later): it falls back to `winget upgrade`, and without winget it shows the download page URL.
+
+### FEATURE: PR #3034 (2026-11-14)
+Background: feat(#2937 #2952 #2938): fix codex review loop terminal handling, han...
+Changes: Codex review loop: the printed verdict now always matches the exit code, and a review that ended with unresolved HIGH findings asks for your acceptance before it can be re-run, unless those findings were closed.;Codex review loop: each review round is now recorded per step, so the total review count survives loop resets.
