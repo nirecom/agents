@@ -243,8 +243,8 @@ fx_add_dummy "$SP" s0 --sleep 2
     printf '# Tags: fixture, parallel, scope:issue-specific\n'
     printf 'sleep 2\n'
     printf 'exit 0\n'
-} > "$SP/tests/with space.sh"
-chmod +x "$SP/tests/with space.sh" 2>/dev/null || true
+} > "$(fx_dummy_dir "$SP")/with space.sh"
+chmod +x "$(fx_dummy_dir "$SP")/with space.sh" 2>/dev/null || true
 
 SP_OUT="$FX_TMP_ROOT/sp.out"; SP_ERR="$FX_TMP_ROOT/sp.err"
 fx_ledger_clear

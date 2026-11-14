@@ -196,7 +196,7 @@ fx_add_dummy "$S" p1
 fx_add_dummy "$S" p2
 S_OUT="$FX_TMP_ROOT/s.out"; S_ERR="$FX_TMP_ROOT/s.err"
 
-fx_exec "$S" 60 "$S_OUT" "$S_ERR" --print-plan "$(fx_tests_dir "$S")/p1.sh"
+fx_exec "$S" 60 "$S_OUT" "$S_ERR" --print-plan "$(fx_dummy_dir "$S")/p1.sh"
 RC=$?
 S_TIER="$(plan_tier "$S_OUT" p1.sh)"
 S_ROWS="$(grep -c '^plan	' "$S_OUT" || true)"
