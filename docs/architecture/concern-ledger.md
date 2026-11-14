@@ -101,6 +101,14 @@ Writing the resulting file safely is a separate question from naming it safely, 
 
 A reviewer that finds a term used outside its glossary definition, a coined term, or a variant the deterministic check cannot see raises it as an ordinary concern whose text carries the tag `[glossary-drift term=<term>]`. Triage would otherwise dismiss such a concern with one `reject`, and the drift the glossary exists to prevent would land unnoticed. So the rule lives in the ledger, which all four tagged formats (`outline-plan`, `detail-plan`, `test-review`, `review-security-shared`) already pass through: a tagged `reject` is refused with exit 4 and writes nothing, and the only dismissal is `accept`, which succeeds only when the user granted `WORKFLOW_GLOSSARY_ACCEPTED` for the same term and the same DISCRIM. The grant lives in workflow state, read through `bin/check-glossary-ledger-grant`, so the ledger row keeps its 11 fields and no new STATE is added; an accepted concern is stored as `rejected` with an `accepted(glossary-drift)` reason prefix. Recognition keys on the tag in the text, never on exit codes, because a `reject` after the ledger is deleted returns 1, not 4. Every failure to confirm a grant — no grant, no ledger, a malformed tag, a format with no stage — refuses (fail-closed).
 
+## Why the terminal step and the round record are the wrapper's job
+
+The wrapper, not the calling skill, owns what happens after a review ends and how many rounds a step has used. Exit codes, the accept flow and the record's sub-cases are specified in `skills/_shared/codex-review-loop/exit-codes.md` (SSOT); this section gives only the reasons.
+
+- **Verdict sentinel.** The wrapper used to print the reviewer's raw output and let a separate step decide the exit code, so the printed sentinel and the exit could disagree (for example a MEDIUM downgrade that exited 0 under a non-approving sentinel). `verdict-sentinel.sh` makes the printed sentinel follow the final exit in both the codex and the prestaged dispatch paths.
+- **Terminal reopen after exit 6.** A changed fingerprint alone no longer releases the guard. It releases only through a matching accept marker (`bin/accept-exit6-residual`) or when every HIGH of the ledger that exit 6 recorded is closed (exit 9 otherwise). Tying the release to that ledger path means an old accept cannot excuse a new terminal.
+- **Per-round review record.** `bin/review-rounds` keeps a per-step record of every review round, so the count survives resets of the loop's own state and a later cap or ask decision (#2929) has real data. Fallback (CC reviewer) rounds are staged, then recorded; a round missing from the record is a gap that only the user can accept. Enforcing the 2+1 cap on fallback rounds stays with #2478.
+
 ## Where the code lives
 
 | Path | Role |
@@ -114,6 +122,9 @@ A reviewer that finds a term used outside its glossary definition, a coined term
 | `bin/lib/safe-state-path.sh` | Shared primitive for every write under the session control dir: token validation, atomic publish, symlink/directory-pre-placement defense, containment |
 | `bin/concern-ledger` | CLI front end; the only sanctioned entry point (`accept` / `list-drift` and exit 4 for tagged concerns) |
 | `bin/run-codex-review-loop` | Plan / test / security-code review loops; owns the round counter and the exit-7 contract |
+| `bin/lib/codex-review-loop/` | Wrapper internals: `verdict-sentinel.sh` (sentinel follows exit), `review-wrapper-control.sh` (terminal guard and ledger handover), `review-record.sh` + `review-rounds*.js` + `state-interval.js` (per-round record) |
+| `bin/review-rounds` | CLI for the per-round review record (fallback staging, gap acceptance) |
+| `bin/accept-exit6-residual` | Records the accept marker for an exit 6 terminal |
 | `bin/review-code-codex` | The security-code primary reviewer (diff-based); invoked by the loop's ref-kind branch |
 | `bin/review-loop-summarize-concerns` | Renders the ledger for the cap-reach dialog |
 | `skills/_shared/concern-ledger.md` | Schema and CLI specification (SSOT) |

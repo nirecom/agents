@@ -356,8 +356,12 @@ run_case_h() {
     local plans fake repo term accept rc2
     plans=$(mk_root); fake=$(build_fake_config yes); repo=$(build_repo)
     term="$(term_of "$plans" sid1361)"
-    seed_control "$plans" sid1361 test-review-terminal.txt 6 deadbeefcafebabe0000   # pre-seed exit-6 marker
-    seed_control "$plans" sid1361 "$ACCEPT_NAME" accepted                           # sanction the residual HIGH
+    # #2952 D6: the terminal file carries the ledger path on line 3, and an accept
+    # marker only counts when it names that terminal's fingerprint and ledger.
+    local ledger_ref="/fixture/sid1361.control/test-review-concern-ledger.txt"
+    seed_control "$plans" sid1361 test-review-terminal.txt 6 deadbeefcafebabe0000 "$ledger_ref"   # pre-seed exit-6 marker
+    seed_control "$plans" sid1361 "$ACCEPT_NAME" "accepted_at=2026-01-01T00:00:00Z" "reason=fixture" \
+        "terminal_fp=deadbeefcafebabe0000" "terminal_ledger=$ledger_ref"                      # sanction the residual HIGH
     rc2=$(run_loop "$plans" "$fake" "$repo" 1)
     if [ "$rc2" = "1" ] && no_marker "$plans" sid1361; then
         pass "(h) exit-6 marker + accept file → rc=$rc2, marker deleted (guard stood down, accept path cleared marker)"

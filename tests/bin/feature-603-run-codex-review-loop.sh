@@ -11,6 +11,10 @@ AGENTS_WORKTREE="$(cd "$(dirname "$0")/../.." && pwd)"
 # The wrapper resolves its siblings from its own checkout — a mock checkout is built per test
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$AGENTS_WORKTREE/tests/lib/harness.sh"
+# setup_plans_dir runs inside $(...), so its export never reaches this shell; pin here
+# (rules/test/fixture-isolation.md) so the wrapper's control dir and review record stay in the fixture.
+harness_isolate
+unset CLAUDE_CODE_SESSION_ID
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -74,6 +78,11 @@ EOF
   if [[ -d "$AGENTS_WORKTREE/bin/lib" ]]; then
     cp -r "$AGENTS_WORKTREE/bin/lib/." "$agents_dir/bin/lib/"
   fi
+  # The review record (#2938): the wrapper's preflight runs bin/review-rounds, which requires
+  # hooks/workflow-state and hooks/lib from the same tree.
+  cp "$AGENTS_WORKTREE/bin/review-rounds" "$agents_dir/bin/review-rounds"
+  mkdir -p "$agents_dir/hooks"
+  cp -r "$AGENTS_WORKTREE/hooks/lib" "$AGENTS_WORKTREE/hooks/workflow-state" "$agents_dir/hooks/"
 
   echo "$agents_dir"
 }

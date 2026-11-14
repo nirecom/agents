@@ -91,18 +91,21 @@ if [[ "$COMMIT_TARGET" == "NOSTATE" || -z "$COMMIT_TARGET" ]]; then
       exit "$EXIT_REINVOKE_AFTER_TERMINAL"
     fi
     echo "[review-tests] WARNING: no session state and not in a git repo; skipping test review." >&2
+    rwc_stage_fallback test-review || { echo "[review-tests] ERROR: the CC fallback could not be staged in the review record (HALT, exit 4)." >&2; record_codex_exit 4 "HALT"; exit 4; }
     exit 3
   fi
 fi
 REPO_ROOT_VAL="$COMMIT_TARGET"
 
+# Also the review record's reviewed-input fingerprint (#2938), so it is computed on every run.
+CUR_FP=""
+FP_RC=0
+CUR_FP="$(compute_review_scope_fingerprint "$REPO_ROOT_VAL")" || FP_RC=$?
+
 # --- #1361 re-invoke guard ---
 if [[ -f "$TERMINAL_FILE" ]]; then
   # fail-CLOSED: a compare failure is not evidence that the review scope changed;
   # only a git error (rc 4) HALTs instead of arming exit 8.
-  CUR_FP=""
-  FP_RC=0
-  CUR_FP="$(compute_review_scope_fingerprint "$REPO_ROOT_VAL")" || FP_RC=$?
   if (( FP_RC == 4 )); then
     echo "[review-tests] ERROR: the review-scope fingerprint calculation failed (git error in $REPO_ROOT_VAL). HALT." >&2
     record_codex_exit 4 "HALT"
@@ -203,7 +206,8 @@ if ! rwc_clear_unreviewed "$CC_SID"; then
   record_codex_exit 4 "HALT"
   exit 4
 fi
-"$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" | tee "$REVIEW_OUT" || RC=${PIPESTATUS[0]}
+rwc_input_fp_args "$CUR_FP"
+"$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" ${RWC_FP_ARGS[@]+"${RWC_FP_ARGS[@]}"} | tee "$REVIEW_OUT" || RC=${PIPESTATUS[0]}
 DETECT_RC=0
 bash "$SCRIPT_DIR/detect-input-error.sh" "$REVIEW_OUT" || DETECT_RC=$?
 rm -f "$REVIEW_OUT"

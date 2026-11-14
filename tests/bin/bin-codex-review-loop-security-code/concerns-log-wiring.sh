@@ -34,6 +34,20 @@ script_checkout_fixture_copy "$_EW_WRAPPER_TREE" \
     skills/make-outline-plan/scripts skills/review-plan-security/scripts \
     skills/review-tests/scripts bin/lib/codex-review-loop bin/lib/safe-state-path.sh
 
+# The plan wrappers resolve plan paths via `node bin/plan-artifact-path` (#2722);
+# this stub prints <plans-dir>/<session>-<step>.md, clarify_intent -> intent.
+mkdir -p "$_EW_WRAPPER_TREE/bin"
+cat > "$_EW_WRAPPER_TREE/bin/plan-artifact-path" <<'EW_PAP_STUB'
+'use strict';
+const path = require('path');
+const opts = {};
+const argv = process.argv.slice(2);
+for (let i = 0; i < argv.length; i += 2) opts[argv[i]] = argv[i + 1];
+const step = opts['--step'] === 'clarify_intent' ? 'intent' : opts['--step'];
+if (!step || !opts['--session'] || !opts['--plans-dir']) process.exit(2);
+process.stdout.write(path.join(opts['--plans-dir'], `${opts['--session']}-${step}.md`) + '\n');
+EW_PAP_STUB
+
 # _ew_setup <render-exit> <carrier-path-or-empty> — initialises per-case stub dirs.
 # render-exit: 0 carrier, 3 no-ledger, 5 write-error.
 # Outputs: EW_SDIR EW_PLANS EW_SID EW_CAP EW_CL_LOG EW_ERR

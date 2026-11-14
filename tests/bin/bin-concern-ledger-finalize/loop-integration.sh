@@ -43,7 +43,7 @@ STUB
     chmod +x "$MOCKD/bin/build-codex-context"
 
     local f
-    for f in run-codex-review-loop review-loop-verdict concern-ledger; do
+    for f in run-codex-review-loop review-loop-verdict concern-ledger review-rounds; do
         [ -f "$AGENTS_ROOT/bin/$f" ] || continue
         cp "$AGENTS_ROOT/bin/$f" "$MOCKD/bin/$f"
         chmod +x "$MOCKD/bin/$f"
@@ -55,6 +55,9 @@ STUB
     [ -d "$AGENTS_ROOT/bin/lib/concern-ledger" ] && cp -r "$AGENTS_ROOT/bin/lib/concern-ledger" "$MOCKD/bin/lib/"
     # run-codex-review-loop sources its split-out ledger helpers from this dir.
     [ -d "$AGENTS_ROOT/bin/lib/codex-review-loop" ] && cp -r "$AGENTS_ROOT/bin/lib/codex-review-loop" "$MOCKD/bin/lib/"
+    # The review record (#2938): bin/review-rounds requires hooks/ from the same tree.
+    mkdir -p "$MOCKD/hooks"
+    cp -r "$AGENTS_ROOT/hooks/lib" "$AGENTS_ROOT/hooks/workflow-state" "$MOCKD/hooks/"
 }
 
 # mk_reviewer <body> — the review-plan-codex stub. It deliberately does not

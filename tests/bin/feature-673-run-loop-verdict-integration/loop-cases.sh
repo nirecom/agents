@@ -1,4 +1,4 @@
-case_begin "risk-signal-flag-arg-parse" "bin/run-codex-review-loop"
+case_begin "risk-flag-arg-parse" "bin/run-codex-review-loop"
 # ---------------------------------------------------------------------------
 # 3d. --risk-signal accepted by run-codex-review-loop arg parser (no exit 4)
 # ---------------------------------------------------------------------------
@@ -31,14 +31,22 @@ case_begin "verdict-round3-auto-extend" "bin/review-loop-verdict"
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
   MOCK=$(setup_mock_env "$TMP")
   PLANS=$(setup_plans_dir "$TMP")
-  LEDGER="$TMP/ledger.txt"
-  printf 'C1|HIGH|big issue\n' > "$LEDGER"
+  # #2938 D3: EXTENSIONS_USED comes from the review record, so rounds 1-2 really run
+  # (a forced round 3 with no round-2 row would count the budget as spent).
+  i4() {
+    invoke "$MOCK" --format detail-plan --session-id i4 --plans-dir "$PLANS" \
+      --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
+      --accepted-tradeoffs "$PLANS/outline.md" >/dev/null 2>&1
+  }
+  make_review_codex_mock "$MOCK" "NEEDS_REVISION
+1. [HIGH] big issue"
+  rc=0; i4 || rc=$?
+  [[ $rc -eq 1 ]] || fail "4: precondition round 1 HIGH → CONTINUE (exit 1), got $rc"
   make_review_codex_mock "$MOCK" "NEEDS_REVISION
 C1: unresolved — still big"
-  rc=0
-  invoke "$MOCK" --format detail-plan --session-id i4 --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --force-round 3 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
+  rc=0; i4 || rc=$?
+  [[ $rc -eq 1 ]] || fail "4: precondition round 2 HIGH → CONTINUE (exit 1), got $rc"
+  rc=0; i4 || rc=$?
   if [[ $rc -eq 5 ]]; then
     pass "4: round 3 HIGH with budget=2 remaining → AUTO_EXTEND (exit 5)"
   else
@@ -80,15 +88,17 @@ case_begin "verdict-medium-only-converges" "bin/review-loop-verdict"
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
   MOCK=$(setup_mock_env "$TMP")
   PLANS=$(setup_plans_dir "$TMP")
-  LEDGER="$TMP/ledger.txt"
+  # #2938 D3: the round comes from the review record, so both rounds really run; round 2 sits at --cap 2.
+  i6() {
+    invoke "$MOCK" --format detail-plan --session-id i6 --plans-dir "$PLANS" \
+      --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
+      --accepted-tradeoffs "$PLANS/outline.md" >/dev/null 2>&1
+  }
 
   # Round 1: MEDIUM only → CONTINUE
   make_review_codex_mock "$MOCK" "NEEDS_REVISION
 1. [MEDIUM] medium one"
-  rc=0
-  invoke "$MOCK" --format detail-plan --session-id i6 --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 1 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
+  rc=0; i6 || rc=$?
   if [[ $rc -eq 1 ]]; then
     pass "6a: round 1 MEDIUM only → CONTINUE"
   else
@@ -98,10 +108,7 @@ case_begin "verdict-medium-only-converges" "bin/review-loop-verdict"
   # Round 2: same MEDIUM concern persists → APPROVED (MEDIUM-only round>=2)
   make_review_codex_mock "$MOCK" "NEEDS_REVISION
 C1: unresolved — medium one still"
-  rc=0
-  invoke "$MOCK" --format detail-plan --session-id i6 --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 2 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
+  rc=0; i6 || rc=$?
   if [[ $rc -eq 0 ]]; then
     pass "6b: round 2 MEDIUM persists → APPROVED"
   else

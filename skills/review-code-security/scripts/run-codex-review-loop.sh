@@ -41,6 +41,8 @@ compute_diff_fingerprint() {
 }
 
 REPO_ROOT_VAL="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+# fail-CLOSED: an uncomparable fingerprint is not evidence the diff changed.
+CUR_FP="$(compute_diff_fingerprint "$REPO_ROOT_VAL" 2>/dev/null)" || CUR_FP=""
 
 # The fallback re-run (--prestaged-report) JOINS the round the codex pass just opened
 # (S8-d); it is never a fresh invocation, so the terminal guard must not see it.
@@ -50,8 +52,6 @@ for a in "$@"; do
 done
 
 if [[ "$PRESTAGED_RERUN" -eq 0 && -f "$TERMINAL_FILE" ]]; then
-  # fail-CLOSED: an uncomparable fingerprint is not evidence the diff changed.
-  CUR_FP="$(compute_diff_fingerprint "$REPO_ROOT_VAL" 2>/dev/null)" || CUR_FP=""
   TG_RC=0
   rwc_check_terminal review-code-security "$CUR_FP" security-code-exit6-accepted.txt security-code || TG_RC=$?
   (( TG_RC == 0 )) || exit "$TG_RC"
@@ -106,7 +106,8 @@ done
 
 # Extra flags (--prestaged-report / --prestaged-producer / --prestaged-exec on the
 # security-scanner fallback re-run) are forwarded verbatim; the loop owns their semantics.
+rwc_input_fp_args "$CUR_FP"
 RC=0
-"$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" "$@" || RC=$?
+"$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" ${RWC_FP_ARGS[@]+"${RWC_FP_ARGS[@]}"} "$@" || RC=$?
 arm_terminal_guard "$RC" || true
 exit "$RC"

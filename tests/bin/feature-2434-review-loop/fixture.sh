@@ -29,7 +29,6 @@ cd "$TMP" || exit 1
 P="$WORKFLOW_PLANS_DIR"
 ROOT="$TMP/agents"
 clf_make_root "$ROOT" "$SCRIPT_CHECKOUT_ROOT"
-cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$ROOT/hooks"
 # The stage wrappers find bin/ from their own location, so they run from the copy.
 script_checkout_fixture_copy "$ROOT" skills
 clf_stub_reviewer "$ROOT"
