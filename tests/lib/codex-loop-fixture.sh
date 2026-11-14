@@ -80,6 +80,8 @@ clf_make_root() {
     local root="$1" src="$2"
     mkdir -p "$root/rules"
     cp -r "$src/bin" "$root/bin"
+    # The review record (bin/review-rounds, #2938) requires hooks/workflow-state from the same tree.
+    [[ -d "$root/hooks" ]] || cp -r "$src/hooks" "$root/hooks"
     cp "$src/rules/core-principles.md" "$root/rules/core-principles.md" 2>/dev/null || \
         printf '# stub\n' > "$root/rules/core-principles.md"
     cat > "$root/bin/build-codex-context" <<'STUB'

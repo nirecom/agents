@@ -324,7 +324,10 @@ new_env
 printf 'none\n' > "$PLANS/$SID-detail.md"
 printf '6\nstale-fingerprint-never-matches-live-tree\n' > "$(term_file)"
 # The exit-6 residual is accepted, so the mismatch clears the guard instead of exit 9.
-: > "$(ctl_file security-code-exit6-accepted.txt)"
+# #2938 D6: the marker binds this terminal's fingerprint and ledger (line 3, empty on a
+# 2-line terminal); an empty marker no longer releases the guard.
+printf 'accepted_at=x\nreason=c3\nterminal_fp=stale-fingerprint-never-matches-live-tree\nterminal_ledger=\n' \
+    > "$(ctl_file security-code-exit6-accepted.txt)"
 
 C3_SLOT="$(run_cli slot --path 'reviewed.txt' --anchor 3 \
     --category 'unvalidated input' 2>/dev/null | tr -d '\r\n')"

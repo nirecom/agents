@@ -21,16 +21,21 @@ cl_allowed_producers_list() {
   )
 }
 
+# require_verdict_bin — resolve review-loop-verdict into VERDICT_BIN (the caller's local when it
+# declares one); exit 4 when it is missing or not executable.
+require_verdict_bin() {
+  VERDICT_BIN="${_VERDICT_DISPATCH_SCRIPT_CHECKOUT_ROOT}/bin/review-loop-verdict"
+  [[ -x "$VERDICT_BIN" ]] && return 0
+  echo "run-codex-review-loop: review-loop-verdict not found or not executable: $VERDICT_BIN" >&2
+  exit 4
+}
+
 # dispatch_codex_verdict — the reviewer-pass mapping (planner formats and the
 # security-code codex pass). Sets FINAL_EXIT; the per-round-cap finalize is the
 # only place a reviewer pass writes an artifact.
 dispatch_codex_verdict() {
   local VERDICT_BIN BUDGET_REMAINING VERDICT_DECISION VERDICT_RC
-  VERDICT_BIN="${_VERDICT_DISPATCH_SCRIPT_CHECKOUT_ROOT}/bin/review-loop-verdict"
-  [[ -x "$VERDICT_BIN" ]] || {
-    echo "run-codex-review-loop: review-loop-verdict not found or not executable: $VERDICT_BIN" >&2
-    exit 4
-  }
+  require_verdict_bin
   BUDGET_REMAINING=$(( MAX_EXT - EXT_USED ))
   local -a VERDICT_ARGS=("$ROUND" "$HIGH_N" "$MED_N" "$LOW_N" "--cap" "$CAP" "--budget-remaining" "$BUDGET_REMAINING")
   [[ -n "$RISK_SIGNAL" ]] && VERDICT_ARGS+=("--risk-signal" "$RISK_SIGNAL")
@@ -49,6 +54,9 @@ dispatch_codex_verdict() {
 
   case "$VERDICT_RC" in
     0)
+      # An APPROVED with open MEDIUM is the cap downgrade; vs_emit notes it (#2937 D7).
+      # shellcheck disable=SC2034
+      if (( MED_N > 0 )); then DOWNGRADED_MEDIUM="$MED_N"; fi
       cleanup_ledger
       FINAL_EXIT=0
       ;;
@@ -111,11 +119,7 @@ dispatch_codex_verdict() {
 # ledger, so the round persists for the next pass; a refused finalize exits 7.
 dispatch_prestaged_verdict() {
   local VERDICT_BIN BUDGET_REMAINING VERDICT_RC
-  VERDICT_BIN="${_VERDICT_DISPATCH_SCRIPT_CHECKOUT_ROOT}/bin/review-loop-verdict"
-  [[ -x "$VERDICT_BIN" ]] || {
-    echo "run-codex-review-loop: review-loop-verdict not found or not executable: $VERDICT_BIN" >&2
-    exit 4
-  }
+  require_verdict_bin
   BUDGET_REMAINING=$(( MAX_EXT - EXT_USED ))
   local -a VERDICT_ARGS=("$ROUND" "$HIGH_N" "$MED_N" "$LOW_N" "--cap" "$CAP" "--budget-remaining" "$BUDGET_REMAINING")
   [[ -n "$RISK_SIGNAL" ]] && VERDICT_ARGS+=("--risk-signal" "$RISK_SIGNAL")
@@ -132,6 +136,8 @@ dispatch_prestaged_verdict() {
   case "$VERDICT_RC" in
     0)
       # Converged: no open concerns remain — no artifact, drop the ledger.
+      # shellcheck disable=SC2034  # an open MEDIUM here is the cap downgrade vs_emit notes
+      if (( MED_N > 0 )); then DOWNGRADED_MEDIUM="$MED_N"; fi
       cleanup_ledger
       FINAL_EXIT=0
       return 0

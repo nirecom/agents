@@ -20,7 +20,7 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 [ -f "$SCRIPT_CHECKOUT_ROOT/bin/record-risk-signal" ] || fail "implementation missing: bin/record-risk-signal"
 
-case_begin "detail-risk-signal-escalates-at-cap" "bin/record-risk-signal"
+case_begin "detail-risk-escalates-at-cap" "bin/record-risk-signal"
 SID="rs-detail"
 seed_sid "$SID"
 RS_RC=0
@@ -32,8 +32,11 @@ assert_eq "signal written to the control dir" "touches a security boundary" \
 assert_eq "nothing written under PLANS_DIR" "absent" "$(state "$P/$SID-detail-risk-signal.txt")"
 wrap make-detail-plan "$SID" 0
 assert_eq "round 1 continues" "1" "$W_RC"
+# #2938 D3: the record counts the extension, so round 2 at cap spends it (exit 5) first.
+wrap make-detail-plan "$SID" 0
+assert_eq "round 2 at cap auto-extends (precondition)" "5" "$W_RC"
 wrap make-detail-plan "$SID" 1
-assert_eq "round 2 at cap with the signal -> ESCALATE (exit 2)" "2" "$W_RC"
+assert_eq "round 3 past the extension with the signal -> ESCALATE (exit 2)" "2" "$W_RC"
 case_end
 
 case_begin "detail-without-signal-stays-high-unresolved" "skills/make-detail-plan/scripts/run-codex-review-loop.sh"
@@ -42,8 +45,10 @@ case_begin "detail-without-signal-stays-high-unresolved" "skills/make-detail-pla
 SID="rs-detail-none"
 seed_sid "$SID"
 wrap make-detail-plan "$SID" 0
+wrap make-detail-plan "$SID" 0
+assert_eq "round 2 at cap auto-extends (precondition)" "5" "$W_RC"
 wrap make-detail-plan "$SID" 1
-assert_eq "round 2 at cap without a signal -> HIGH_UNRESOLVED (exit 6)" "6" "$W_RC"
+assert_eq "round 3 past the extension without a signal -> HIGH_UNRESOLVED (exit 6)" "6" "$W_RC"
 case_end
 
 # ── TL1: bin/record-risk-signal argument rules ──────────────────────────────

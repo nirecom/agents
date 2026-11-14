@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// bin/accept-exit6-residual --session <sid> --format <security-code|security-plan|test-review> --reason <text>
+// bin/accept-exit6-residual --session <sid> --format <outline-plan|detail-plan|security-plan|security-code|test-review> --reason <text>
 // The one writer of the exit-6 residual-HIGH accept marker (<CONTROL_DIR>/<marker>).
-// Run only after the user accepted the residual via AskUserQuestion; outline/detail
-// have no accept step (skills/_shared/codex-review-loop/exit-codes.md, Escalation by format).
-// Exit: 0 recorded or already recorded; 2 usage / refused format / invalid sid; 3 migration error; 1 other.
+// Run only after the user accepted the residual via AskUserQuestion. The marker binds to the
+// current exit-6 terminal (<format>-terminal.txt lines 2-3), so it never outlives that terminal.
+// Exit: 0 recorded, already recorded or a stale marker replaced; 2 usage / refused format /
+// invalid sid / no exit-6 terminal; 3 migration error; 1 other.
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -12,11 +13,13 @@ const CD = require(path.join(__dirname, "..", "hooks", "workflow-state", "state-
 const { assertValidSessionId } = require(path.join(__dirname, "..", "hooks", "workflow-state", "state-io", "core.js"));
 
 const MARKERS = {
-  "security-code": "security-code-exit6-accepted.txt",
+  "outline-plan": "outline-plan-exit6-accepted.txt",
+  "detail-plan": "detail-plan-exit6-accepted.txt",
   "security-plan": "review-plan-security-exit6-accepted.txt",
+  "security-code": "security-code-exit6-accepted.txt",
   "test-review": "review-tests-exit6-accepted.txt",
 };
-const NO_ACCEPT = new Set(["outline-plan", "detail-plan"]);
+const FORMATS = Object.keys(MARKERS).join("|");
 
 function die(code, msg) {
   process.stderr.write(`accept-exit6-residual: ${msg}\n`);
@@ -34,12 +37,24 @@ function parseArgs(argv) {
   return out;
 }
 
+function readLines(file) {
+  try {
+    return fs.readFileSync(file, "utf8").split(/\r?\n/);
+  } catch (e) {
+    if (e.code === "ENOENT") return null;
+    die(1, `cannot read ${file}: ${e.message}`);
+  }
+  return null;
+}
+
+function markerValue(lines, key) {
+  const hit = lines.find((l) => l.startsWith(`${key}=`));
+  return hit === undefined ? null : hit.slice(key.length + 1);
+}
+
 const args = parseArgs(process.argv.slice(2));
 if (!args.session || !args.format || args.reason === undefined) {
-  die(2, "usage: accept-exit6-residual --session <sid> --format <security-code|security-plan|test-review> --reason <text>");
-}
-if (NO_ACCEPT.has(args.format)) {
-  die(2, `${args.format} has no residual-HIGH accept step; follow the Escalation by format table in skills/_shared/codex-review-loop/exit-codes.md`);
+  die(2, `usage: accept-exit6-residual --session <sid> --format <${FORMATS}> --reason <text>`);
 }
 const marker = MARKERS[args.format];
 if (!marker) die(2, `unknown --format ${JSON.stringify(args.format)} (see skills/_shared/codex-review-loop/exit-codes.md)`);
@@ -48,19 +63,39 @@ if (!reason || /[\r\n]/.test(reason) || reason.length > 300) die(2, "--reason mu
 try { assertValidSessionId(args.session); } catch (e) { die(2, e.message); }
 
 let file;
+let terminalFile;
 try {
   file = CD.controlPath(args.session, marker, { forWrite: true });
+  terminalFile = CD.controlPath(args.session, `${args.format}-terminal.txt`);
 } catch (e) {
   if (e instanceof CD.ControlMigrationError) die(3, e.message);
   die(1, e.message);
 }
+const terminal = readLines(terminalFile);
+if (!terminal) die(2, `no exit-6 terminal for ${args.format} (${terminalFile}); there is no residual to accept`);
+if (terminal[0] !== "6") die(2, `the ${args.format} terminal ended with exit ${terminal[0] || "?"}, not 6; there is no residual to accept`);
+const terminalFp = terminal[1] || "";
+const terminalLedger = terminal[2] || "";
+const body = `accepted_at=${new Date().toISOString()}\nreason=${reason}\nterminal_fp=${terminalFp}\nterminal_ledger=${terminalLedger}\n`;
+
 try {
-  fs.writeFileSync(file, `accepted_at=${new Date().toISOString()}\nreason=${reason}\n`, { flag: "wx" });
+  fs.writeFileSync(file, body, { flag: "wx" });
 } catch (e) {
-  if (e.code === "EEXIST") {
+  if (e.code !== "EEXIST") die(1, `cannot write ${file}: ${e.message}`);
+  const old = readLines(file) || [];
+  if (markerValue(old, "terminal_fp") === terminalFp && markerValue(old, "terminal_ledger") === terminalLedger) {
     process.stdout.write(`already accepted: ${args.format} (${file})\n`);
     process.exit(0);
   }
-  die(1, `cannot write ${file}: ${e.message}`);
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(tmp, body);
+    fs.renameSync(tmp, file);
+  } catch (err) {
+    try { fs.rmSync(tmp, { force: true }); } catch { /* best effort */ }
+    die(1, `cannot replace ${file}: ${err.message}`);
+  }
+  process.stdout.write(`replaced stale accept marker: ${args.format} (${file})\n`);
+  process.exit(0);
 }
 process.stdout.write(`accepted: ${args.format} (${file})\n`);

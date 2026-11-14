@@ -6,8 +6,8 @@
 # #2434 Step 2-1 / Step 5-9: a session that started before the upgrade keeps its
 # review state in every one of the five review-loop formats. A legacy PLANS_DIR
 # round counter and concern ledger are migrated into <sid>.control/ and continued:
-# the next run is round 2 (budget resumed, not restarted) and the prior ledger
-# entries survive. The detail-plan-only multi-run variant stays in
+# the next run is round 2 (not restarted; with no review record the extension budget
+# counts as spent, #2938 D3) and the prior ledger entries survive. The detail-plan-only multi-run variant stays in
 # tests/skills/fix-776-748-exit4-cleanup-and-recovery.sh (legacy-round-number-continues).
 set -uo pipefail
 
@@ -70,7 +70,7 @@ case_begin "legacy-round-and-ledger-continue-all-formats" "bin/run-codex-review-
 # One wrapper run per format. Seed only the pre-#2434 PLANS names, shaped like a
 # real round-1 state: round counter 1 and a v2 ledger holding the open HIGH C1 that
 # the stub reviewer's round-2 "C1: still open" line refers to, plus a MEDIUM C7 it
-# never mentions. Continued state keeps C1 open (rc 5); a lost ledger turns C1 into
+# never mentions. Continued state keeps C1 open (rc 6); a lost ledger turns C1 into
 # an unknown MEDIUM and the loop approves (rc 0), so the rc alone separates the two.
 LEGACY_TEXT="legacy seeded concern survives the control-dir migration"
 C1_TEXT="a high severity concern that must never be absorbed as approved"
@@ -87,9 +87,12 @@ while IFS='|' read -r NAME SKILL FMT LFMT PROD; do
     : > "$CLF_ROUND_LOG"
     wrap "$SKILL" "$SID"
     C="$(ctl "$SID")"
-    assert_eq "$NAME: resumed round 2 with an open HIGH auto-extends (rc 5, not a restart or a ledger refusal)" \
-        "5" "$W_RC"
-    assert_eq "$NAME: control-dir round counter continued to 2" "2" "$(clf_read "$C/$FMT-round-number.txt")"
+    # #2938 D3: a pre-record session has no round-1 row, so the extension budget counts as
+    # spent and round 2 at the cap is terminal (rc 6) and retires the counter.
+    assert_eq "$NAME: resumed round 2 with an open HIGH is HIGH_UNRESOLVED (rc 6, not a restart or a ledger refusal)" \
+        "6" "$W_RC"
+    assert_eq "$NAME: the terminal records round 2's exit 6" "6" "$(head -n 1 "$C/$FMT-terminal.txt" 2>/dev/null | tr -d '\r')"
+    assert_eq "$NAME: the terminal retires the control-dir round counter" "absent" "$(clf_read "$C/$FMT-round-number.txt")"
     assert_eq "$NAME: the resumed run produced the round-2 delta" "present" \
         "$(state "$C/$LFMT-round-2-delta-$PROD.txt")"
     assert_eq "$NAME: no round-1 delta (the round was not restarted)" "absent" \
