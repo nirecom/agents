@@ -24,7 +24,7 @@ INTENT_FILE="$(plan_file intent)" || { echo "make-detail-plan: cannot resolve th
 DRAFT_FILE="$(plan_file detail)" || { echo "make-detail-plan: cannot resolve the detail path" >&2; exit 4; }
 CUR_FP="$(git hash-object -- "$DRAFT_FILE" 2>/dev/null || true)"
 TG_RC=0
-rwc_check_terminal make-detail-plan "$CUR_FP" || TG_RC=$?
+rwc_check_terminal make-detail-plan "$CUR_FP" detail-plan-exit6-accepted.txt detail-plan || TG_RC=$?
 (( TG_RC == 0 )) || exit "$TG_RC"
 
 args=(
@@ -59,6 +59,9 @@ RISK_FILE="$(sp_control_dir "$SESSION_ID" detail-risk-signal.txt)" || exit 4
 if [[ -s "$RISK_FILE" ]]; then
   args+=(--risk-signal "$(head -n1 "$RISK_FILE")")
 fi
+rwc_input_fp_args "$CUR_FP"
 RC=0
-"$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" || RC=$?
+"$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" ${RWC_FP_ARGS[@]+"${RWC_FP_ARGS[@]}"} || RC=$?
+# Only exit 6 arms: outline/detail escalate 2/3/7 to the user without a re-invoke guard.
+(( RC == 6 )) && rwc_arm_terminal 6 "$CUR_FP"
 exit "$RC"

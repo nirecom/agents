@@ -1,0 +1,96 @@
+#!/usr/bin/env node
+"use strict";
+// bin/review-rounds — CLI of the step-wide review record (#2938 D5). Dispatch only: the record
+// lives in bin/lib/codex-review-loop/review-rounds-store.js, classification in review-rounds.js.
+// Exit: 0 ok, 2 usage / rejected value, 3 cannot derive (derive-ext), 4 HALT, 5 row parked (append).
+
+const fs = require("fs");
+const path = require("path");
+const LIB = path.join(__dirname, "lib", "codex-review-loop");
+const store = require(path.join(LIB, "review-rounds-store"));
+const rounds = require(path.join(LIB, "review-rounds"));
+const { readInterval } = require(path.join(LIB, "state-interval"));
+
+function parse(argv) {
+  const o = {};
+  for (let i = 0; i < argv.length; i++) {
+    const m = /^--([a-z-]+)$/.exec(argv[i]);
+    if (!m) throw new store.StoreError(2, `unexpected argument: ${argv[i]}`);
+    o[m[1]] = argv[i + 1];
+    i += 1;
+  }
+  return o;
+}
+
+const need = (o, ...keys) => {
+  for (const k of keys) if (o[k] === undefined || o[k] === "") throw new store.StoreError(2, `--${k} is required`);
+};
+const int = (v, name) => {
+  if (!/^-?\d+$/.test(String(v))) throw new store.StoreError(2, `--${name} must be an integer: ${v}`);
+  return Number(v);
+};
+const optInt = (v, name) => (v === undefined || v === "" ? null : int(v, name));
+const base = (o) => ({ sid: o.session, format: o.format });
+
+const COMMANDS = {
+  append: (o) => {
+    need(o, "counter-round", "exit", "verdict", "source", "run-id");
+    store.appendFromWrapper(Object.assign(base(o), {
+      counter_round: int(o["counter-round"], "counter-round"), exit: int(o.exit, "exit"), verdict: o.verdict,
+      source: o.source, run_id: o["run-id"], fingerprint: o.fingerprint || null,
+    }));
+  },
+  "stage-fallback": (o) => {
+    const p = store.stageFallback(Object.assign(base(o), {
+      counterRound: optInt(o["counter-round"], "counter-round"), fingerprint: o.fingerprint || null,
+    }));
+    return `counter_round=${p.counter_round}`;
+  },
+  "inflight-close": (o) => { need(o, "run-id"); store.closeInflight(Object.assign(base(o), { runId: o["run-id"] })); },
+  "record-fallback": (o) => { need(o, "verdict"); store.recordFallback(Object.assign(base(o), { verdict: o.verdict })); },
+  "discard-fallback": (o) => { need(o, "reason"); store.discardFallback(Object.assign(base(o), { reason: o.reason })); },
+  "accept-gap": (o) => { need(o, "reason"); return `accepted=${store.acceptGap(Object.assign(base(o), { reason: o.reason }))}`; },
+  preflight: (o) => store.preflight(base(o)),
+  summary: (o) => {
+    const s = rounds.summarize({ sid: o.session, format: o.format });
+    const lines = ["rows", "current_cycle", "extensions_used", "duplicate_rows", "unreadable_rows"].map((k) => `${k}=${s[k]}`);
+    lines.push(`explore=${s.by_kind.explore}`, `confirm=${s.by_kind.confirm}`, `codex=${s.by_source.codex}`, `cc_fallback=${s.by_source.cc_fallback}`);
+    for (const f of s.fingerprints) lines.push(`fingerprint ${f.loop_cycle} ${f.row_no} ${f.counter_round} ${f.fingerprint}`);
+    return lines.join("\n");
+  },
+  "derive-ext": (o) => {
+    need(o, "counter-round");
+    const v = rounds.deriveExtensions(o.session, o.format, int(o["counter-round"], "counter-round"));
+    if (v === null) throw new store.StoreError(3, "the review record cannot derive EXTENSIONS_USED for this cycle");
+    return `extensions_used=${v}`;
+  },
+  "older-input": (o) => {
+    need(o, "ledger");
+    const text = fs.existsSync(o.ledger) ? fs.readFileSync(o.ledger, "utf8") : "";
+    return rounds.olderInput(store.readRows(o.session, o.format).parsed, text, o.fingerprint || null)
+      .map((c) => `${c.id} ${c.round}`).join("\n");
+  },
+  interval: (o) => {
+    const iv = readInterval(o.session, optInt(o["since-seq"], "since-seq") || 0, optInt(o["until-seq"], "until-seq"),
+      o.format ? { format: o.format, sinceAt: o["since-at"] || null } : {});
+    return ["state", "head_seq", "has_reset", "has_write_code", "has_audit_block"]
+      .map((k) => `${k}=${typeof iv[k] === "boolean" ? Number(iv[k]) : iv[k]}`).concat(`kinds=${iv.kinds.join(",")}`).join("\n");
+  },
+};
+
+function main(argv) {
+  const cmd = COMMANDS[argv[0]];
+  if (!cmd) throw new store.StoreError(2, `usage: review-rounds <${Object.keys(COMMANDS).join("|")}> --session S --format F ...`);
+  const o = parse(argv.slice(1));
+  need(o, "session");
+  if (argv[0] !== "interval") need(o, "format");
+  const out = cmd(o);
+  if (out) process.stdout.write(`${out}\n`);
+}
+
+try {
+  main(process.argv.slice(2));
+} catch (e) {
+  process.stderr.write(`review-rounds: ${e.message}\n`);
+  process.exit(e instanceof store.StoreError ? e.code : 4);
+}

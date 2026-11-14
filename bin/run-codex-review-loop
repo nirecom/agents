@@ -61,6 +61,7 @@ BASE_STATE_ARG=""
 PRESTAGED_REPORT=""
 PRESTAGED_PRODUCER=""
 PRESTAGED_EXEC=""
+INPUT_FP=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -132,6 +133,9 @@ while [[ $# -gt 0 ]]; do
     --prestaged-exec)
       require_value "--prestaged-exec" "${2:-}"
       PRESTAGED_EXEC="$2"; shift 2 ;;
+    --input-fingerprint)
+      require_value "--input-fingerprint" "${2:-}"
+      INPUT_FP="$2"; shift 2 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -242,6 +246,10 @@ source "$CRL_LIB/ref-kind-input.sh" || die "required library failed to load: ref
 source "$CRL_LIB/verdict-dispatch.sh" || die "required library failed to load: verdict-dispatch.sh"
 # shellcheck source=bin/lib/codex-review-loop/prestaged-pass.sh
 source "$CRL_LIB/prestaged-pass.sh"  || die "required library failed to load: prestaged-pass.sh"
+# shellcheck source=bin/lib/codex-review-loop/verdict-sentinel.sh
+source "$CRL_LIB/verdict-sentinel.sh" || die "required library failed to load: verdict-sentinel.sh"
+# shellcheck source=bin/lib/codex-review-loop/review-record.sh
+source "$CRL_LIB/review-record.sh"   || die "required library failed to load: review-record.sh"
 
 resolve_concern_ledger || die "concern-ledger not found in this checkout (${SCRIPT_CHECKOUT_ROOT}) or beside the wrapper ($(dirname "$(dirname "$0")")); repair the agents checkout"
 
@@ -255,7 +263,8 @@ if (( PRESTAGED_MODE == 1 )); then
 fi
 
 FINAL_RC=4
-trap 'settle_round_counter "$FINAL_RC"; release_round_lock; rm -f "${TMP_OUT:-}"' EXIT
+trap 'settle_round_counter "$FINAL_RC"; release_round_lock; rr_close_inflight; rm -f "${TMP_OUT:-}"' EXIT
+rr_preflight
 
 # PRESTAGED (scanner fallback) pass — joins the current round, no reviewer run,
 # no counter advance (#2276 S8-d). Body extracted to prestaged-pass.sh under
@@ -297,6 +306,7 @@ fi
 write_round_file "$ROUND"
 ROUND_WRITTEN="$ROUND"
 release_round_lock
+rr_apply_extensions_used "$ROUND"
 # --- End round counter management ---
 
 # test-review: always rebuild context to avoid stale compacted-conversation bleed (#1376)
@@ -342,7 +352,7 @@ RV=$?
 
 if [[ $RV -ne 0 ]]; then
   echo "run-codex-review-loop: codex unavailable ($REVIEWER_BIN exited $RV)" >&2
-  exit 3
+  rr_exit_codex_unavailable
 fi
 
 # S8-f unified every shared reviewer (review-plan-codex and review-code-codex)
@@ -365,11 +375,11 @@ case "$STATUS" in
     # must see that before the fallback fires, so emit it, then exit 3.
     cat "$TMP_OUT"
     echo "run-codex-review-loop: codex unavailable or verdict malformed (header=$HEADER)" >&2
-    exit 3 ;;
+    rr_exit_codex_unavailable ;;
   FAILED*)
     cat "$TMP_OUT"
     echo "run-codex-review-loop: codex unavailable or verdict malformed (header=$HEADER)" >&2
-    exit 3 ;;
+    rr_exit_codex_unavailable ;;
   *)
     die "unrecognized status header: $HEADER" ;;
 esac
@@ -410,6 +420,9 @@ elif [[ "$INPUT_KIND" != "path" ]] && [[ -f "$LEDGER" ]] \
 fi
 
 if (( NEEDS_LEDGER_PASS == 1 )); then
+  # Checked before the reduce commits the round: a missing verdict engine halts while
+  # REDUCE_COMMITTED is still false, so the counter rolls back instead of leaving a record gap.
+  require_verdict_bin
   # Exclusively created beside TMP_OUT, not the predictable "${TMP_OUT}.delta":
   # that name is derivable from a mktemp in the shared $TMPDIR (#2025 C6).
   DELTA_SRC="$(sp_mktemp_beside "$TMP_OUT")" \
@@ -451,12 +464,14 @@ if (( NEEDS_LEDGER_PASS == 1 )); then
     echo "run-codex-review-loop: round ${ROUND} could not be folded into the ledger (reduce rc=${REDUCE_RC}); refusing to judge it from the previous round's tally" >&2
     exit 4
   fi
-  REDUCE_COMMITTED=true
 
   if [[ -f "$LEDGER" ]] && ! grep -qE '^C[0-9]+\|' "$LEDGER"; then
     echo "run-codex-review-loop: ledger exists but contains no valid concern entries after reduce (round ${ROUND}); refusing to judge from a header-only ledger" >&2
     exit 4
   fi
+  # Committed only after the sanity check: its exit 4 leaves the round unsettled, so
+  # _srn_rollback restores ROUND_PREV instead of consuming a round the record has no row for.
+  REDUCE_COMMITTED=true
 
   # The tally the verdict reads is the ledger's own view of what is still open,
   # not a count of this round's bullets.
@@ -478,6 +493,4 @@ else
 fi
 # --- END concern-ID ledger + verdict-script block ---
 
-cat "$TMP_OUT"
-FINAL_RC="$FINAL_EXIT"
-exit "$FINAL_EXIT"
+vs_emit "$FINAL_EXIT"

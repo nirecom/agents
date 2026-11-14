@@ -17,6 +17,7 @@ All paths derive from (`<session-id>`, `<format>`) — no caller passes one in. 
 | `<CTL>/<format>-unresolved-concerns.json` | Finalize artifact, schema `unresolved-concerns/v1` |
 | `<PLANS_DIR>/<session-id>-<format>-finalize-diagnostic.txt` | Why a finalize failed |
 | `<CTL>/<format>-concern-carrier.md` | DISCRIM-keyed carrier: open re-derived + rejected preserved, for `CTX_CONCERNS_LOG` |
+| `<first-sid CTL>/<FORMAT>-review-rounds.jsonl` | Step-wide review record, one row per committed round, keyed by the loop `FORMAT`; owner `bin/review-rounds` |
 
 Formats in use: `outline-plan`, `detail-plan`, `security-plan`, `test-review`, `review-security-shared`.
 
@@ -45,6 +46,7 @@ Two auxiliary line kinds carry what is not a concern: `#unparsed|<raw line>` (re
 A round 1 that meets a live ledger opens a new cycle rather than colliding with its IDs.
 
 The header's `cycle=<K>` is not the return cycle `<CTL>/<format>-review-cycle.txt` that `bin/review-loop-upstream` counts for B returns; neither reads nor writes the other.
+The review record's `loop_cycle` is a third count, of review-loop runs; it is neither the header's `cycle=<K>` nor the return cycle.
 
 ## Lifecycle
 

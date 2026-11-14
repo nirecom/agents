@@ -7,9 +7,9 @@ Two contracts govern exit codes. The internal contract (between `review-loop-ver
 | exit | `outline-plan` | `detail-plan` | `security-plan` / `security-code` / `test-review` |
 |---|---|---|---|
 | 2 ESCALATE | Present the concern summary, stop the loop, confirm direction via AskUserQuestion (`metadata.source=codex-review-loop.escalate`), then re-clarify with `/clarify-intent` (MOP-6). No accept CLI. | Present the `review-loop-summarize-concerns` summary, stop the loop, wait for the user's decision. No accept CLI. | Not applicable (no risk signal). |
-| 6 HIGH_UNRESOLVED | Present the summary, stop, return to `/clarify-intent`. No accept CLI. | Present the summary, stop, AskUserQuestion (`metadata.source=codex-review-loop.high-unresolved`): fix the plan and re-run / abort. No accept CLI. | Present the summary, stop, AskUserQuestion (`metadata.source=codex-review-loop.high-unresolved-accept`): fix and re-run / accept residual HIGH / abort. Accept → `node "$AGENTS_MAIN_ROOT/bin/accept-exit6-residual" --session <session-id> --format <security-plan\|security-code\|test-review> --reason "<text>"` (review-tests may use its sentinel instead). |
+| 6 HIGH_UNRESOLVED | Present the summary, stop, ask with the last column's dialog: return to `/clarify-intent` / accept residual HIGH / abort. Accept as in the last column. | Present the summary, stop, ask with the last column's dialog: fix the plan and re-run / accept residual HIGH / abort. Accept as in the last column. | Present the summary, stop, AskUserQuestion (`metadata.source=codex-review-loop.high-unresolved-accept`): fix and re-run / accept residual HIGH / abort. Accept → `node "$AGENTS_MAIN_ROOT/bin/accept-exit6-residual" --session <session-id> --format <outline-plan\|detail-plan\|security-plan\|security-code\|test-review> --reason "<text>"` (review-tests may use its sentinel instead). |
 | 8 unchanged re-run after terminal | AskUserQuestion (`metadata.source=codex-review-loop.unchanged-rerun`): fix the content / abort. | Same. | Same (review-tests may emit its sentinel instead). |
-| 9 re-run after exit 6 without accept | Does not occur. | Does not occur. | Return to the exit 6 accept step. |
+| 9 re-run after exit 6 without accept | Return to the exit 6 accept step. A HIGH since closed in the ledger needs no accept (the wrapper releases the guard); an accept applies only to that exit 6 terminal and lapses when a new terminal is armed. | Same. | Same. |
 | 4 infrastructure failure (incl. control-dir migration failure) | HALT; surface stderr verbatim. | Same. | Same. |
 
 - The model never creates, edits, or deletes a control file; when a guard refuses a write, return to this table.
@@ -43,12 +43,12 @@ An accepted warning releases a gate only when the review ended non-blocking and 
 | 1 | NON_APPROVED_VERDICT (CONTINUE) | Capture stdout to `RAW_FILE` (step d.1) → append round log + planner trailer to `CONCERNS_LOG` (step e) → re-invoke `PLANNER_AGENT` with `model: PLANNER_MODEL`. |
 | 2 | ESCALATE (risk signal + ceiling) | Present concern summary → stop loop. Invoke `review-loop-summarize-concerns --budget-remaining 0` per MOP-6 / MDP-6. |
 | 3 | **codex CLI unusable** (SKIPPED / FAILED-other / verdict malformed) | Append `<ISO-timestamp> round=<N> codex unavailable: <stderr>` to `DEBUG_LOG`; **silently launch `REVIEWER_AGENT` subagent** with `model:` = the `model=` line of `node "$AGENTS_MAIN_ROOT/bin/resolve-role-model" --role reviewer`. Do NOT emit to chat. |
-| 4 | **Wrapper / config / parser failure** (unset `AGENTS_MAIN_ROOT`, missing `core-principles.md`, missing arg, missing option value, missing binary, unrecognized status header, etc., including a control-dir migration failure — `ControlMigrationError`) | **HALT with blocking error.** Surface the wrapper's stderr verbatim to the user. Do **NOT** fall back to `REVIEWER_AGENT` — exit 4 means the enforcement infrastructure itself is broken, and silent fallback would hide that. Append diagnostic to `DEBUG_LOG` then abort the skill. Sub-case: when round >= 2 is requested but the ledger file is absent, exit 4 is returned regardless of whether `--ledger` was supplied explicitly. |
-| 5 | AUTO_EXTEND | `EXTENSIONS_USED += 1` → re-enter review loop (no user dialog). |
+| 4 | **Wrapper / config / parser failure** (unset `AGENTS_MAIN_ROOT`, missing `core-principles.md`, missing arg, missing option value, missing binary, unrecognized status header, etc., including a control-dir migration failure — `ControlMigrationError`) | **HALT with blocking error.** Surface the wrapper's stderr verbatim to the user. Do **NOT** fall back to `REVIEWER_AGENT` — exit 4 means the enforcement infrastructure itself is broken, and silent fallback would hide that. Append diagnostic to `DEBUG_LOG` then abort the skill. Sub-case: when round >= 2 is requested but the ledger file is absent, exit 4 is returned regardless of whether `--ledger` was supplied explicitly. Review record sub-cases (`bin/review-rounds`): a preflight failure starts no round; an unconsumed fallback pending, a leftover inflight, or a committed round missing from the record prints its exits (`record-fallback` / `discard-fallback`, or fix and re-run / `accept-gap`) — run a `--reason` exit only after the user approves it via AskUserQuestion (`metadata.source=codex-review-loop.review-record-exit`). |
+| 5 | AUTO_EXTEND | Capture stdout to `RAW_FILE` (step d.1) → re-enter review loop (no user dialog). The wrapper derives `EXTENSIONS_USED` from the review record; the caller's value is only cross-checked. |
 | 6 | **HIGH_UNRESOLVED** — budget ceiling with unresolved HIGH concerns and no risk signal | Present unresolved HIGH concern summary → stop loop; do not proceed to the write/confirm phase. Invoke `review-loop-summarize-concerns --budget-remaining 0` with the live ledger (not a cap-snapshot — the ledger is finalized but not deleted). |
 | 7 | **FINALIZE_FAILED** — the unresolved-concerns artifact could not be written | **HALT.** Surface the `## Concern Ledger: FINALIZE-FAILED` line (it names the recovered ledger copy) and the would-be verdict it replaced. Do NOT emit the step's completion sentinel and do NOT fall back to `REVIEWER_AGENT`. Re-run after fixing the cause; the ledger is intact. |
-| 8 | **all three wrappers** — re-invoked after a terminal exit with the reviewed content unchanged | **HALT.** The terminal guard detected no change in the reviewed-content fingerprint since the last terminal exit. |
-| 9 | **all three wrappers** — exit 6 termination occurred; content changed but residual HIGH not accepted; re-run blocked | **HALT.** The fingerprint changed after an exit 6 terminal, but no exit6-accept marker exists. Accept the residual HIGH (`bin/accept-exit6-residual`, or the `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED` sentinel for review-tests) before re-running. |
+| 8 | **every stage wrapper** — re-invoked after a terminal exit with the reviewed content unchanged | **HALT.** The terminal guard detected no change in the reviewed-content fingerprint since the last terminal exit. |
+| 9 | **every stage wrapper** — exit 6 termination occurred; content changed but residual HIGH neither closed in the ledger nor accepted; re-run blocked | **HALT.** Accept the residual HIGH via AskUserQuestion (`metadata.source=codex-review-loop.high-unresolved-accept`), then run `node "$AGENTS_MAIN_ROOT/bin/accept-exit6-residual" --session <session-id> --format <format> --reason "<text>"` (or the `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED` sentinel for review-tests) before re-running. |
 
 **Note: exit 6 means HIGH_UNRESOLVED in both contracts** — internal exit 6 (from `review-loop-verdict`) maps directly to public exit 6; the meaning is the same in both directions.
 
@@ -56,13 +56,13 @@ An accepted warning releases a gate only when the review ended non-blocking and 
 
 SKILL.md callers MUST NOT reproduce this table — they reference it by link.
 
-### d.1. Raw-codex persistence (on exit 1, 2, and 6)
+### d.1. Raw-codex persistence (on exit 1, 2, 5, and 6)
 
-Extract content between `<!-- begin-codex-output -->` and `<!-- end-codex-output -->` from the captured wrapper stdout and write to `RAW_FILE`. RAW is persisted for exit 1 (CONTINUE), exit 2 (ESCALATE), and exit 6 (HIGH_UNRESOLVED). If a RAW_FILE with the same name already exists it is NOT overwritten — `<N>` uniqueness ensures collision is a contract violation.
+Extract content between `<!-- begin-codex-output -->` and `<!-- end-codex-output -->` from the captured wrapper stdout and write to `RAW_FILE`. RAW is persisted for exit 1 (CONTINUE), exit 2 (ESCALATE), exit 5 (AUTO_EXTEND), and exit 6 (HIGH_UNRESOLVED). If a RAW_FILE with the same name already exists it is NOT overwritten — `<N>` uniqueness ensures collision is a contract violation.
 
 `<N>` source:
-- Terminal exits (0, 2, 6 for all formats; 1 for single-round formats `security-plan`/`test-review`): read `<CONTROL_DIR>/<format>-last-round.txt` (written by the wrapper's `_srn_terminate` path).
-- Continuing exits (1 for multi-round formats `detail-plan`/`outline-plan`): read `<CONTROL_DIR>/<format>-round-number.txt`.
+- Terminal exits (0, 2, 6, 7 for all formats): read `<CONTROL_DIR>/<format>-last-round.txt` (written by the wrapper's `_srn_terminate` path).
+- Continuing exits (1 and 5 for all formats): read `<CONTROL_DIR>/<format>-round-number.txt` (the counter survives).
 - `<CONTROL_DIR>`: the path printed by `node "$AGENTS_MAIN_ROOT/bin/workflow-control-dir" --session <session-id>`.
 - No arithmetic (`- 1`) is needed — both files hold the actual round number directly.
 
@@ -88,10 +88,10 @@ Append to `CONCERNS_LOG`: a `## Round <N> (<ISO-timestamp>)` header, `Verdict: <
 - Public exit 2 → caller presents concern summary and stops the loop (ESCALATE path).
 - Public exit 3 → caller silently falls back to `REVIEWER_AGENT` subagent.
 - **Public exit 4 → caller HALTS with blocking error; no fallback.**
-- **Public exit 5 → caller increments `EXTENSIONS_USED` and re-enters review loop (AUTO_EXTEND path).**
+- **Public exit 5 → caller re-enters review loop (AUTO_EXTEND path); the wrapper derives `EXTENSIONS_USED` from the review record.**
 - **Public exit 6 → caller presents unresolved HIGH concern summary and stops the loop (HIGH_UNRESOLVED path); does not proceed to write/confirm phase.**
 - **Public exit 7 → caller HALTS, withholds the completion sentinel, and reports the FINALIZE-FAILED line.**
-- **Public exit 9 → caller HALTS: exit 6 termination occurred and content changed, but residual HIGH is not accepted; accept it (`bin/accept-exit6-residual`, or `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED` for review-tests) then re-run.**
+- **Public exit 9 → caller HALTS: exit 6 termination occurred and content changed, but residual HIGH is neither closed in the ledger nor accepted; accept it (`node "$AGENTS_MAIN_ROOT/bin/accept-exit6-residual"`, or `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED` for review-tests) then re-run.**
 
 ## Rationale: why a wrapper and not prose
 

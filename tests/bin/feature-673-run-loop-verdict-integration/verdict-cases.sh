@@ -52,14 +52,19 @@ case_begin "verdict-budget-and-risk-signal" "bin/review-loop-verdict"
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
   MOCK=$(setup_mock_env "$TMP")
   PLANS=$(setup_plans_dir "$TMP")
-  LEDGER="$TMP/ledger.txt"
-  printf 'C1|HIGH|big issue\n' > "$LEDGER"
+  # #2938 D3: EXTENSIONS_USED comes from the review record, so round 1 really runs and round 2 sits at --cap 2.
+  i3() {
+    invoke "$MOCK" --format detail-plan --session-id i3 --plans-dir "$PLANS" \
+      --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
+      --accepted-tradeoffs "$PLANS/outline.md" >/dev/null 2>&1
+  }
+  make_review_codex_mock "$MOCK" "NEEDS_REVISION
+1. [HIGH] big issue"
+  rc=0; i3 || rc=$?
+  [[ $rc -eq 1 ]] || fail "3: precondition round 1 HIGH → CONTINUE (exit 1), got $rc"
   make_review_codex_mock "$MOCK" "NEEDS_REVISION
 C1: unresolved — still big"
-  rc=0
-  invoke "$MOCK" --format detail-plan --session-id i3 --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
+  rc=0; i3 || rc=$?
   if [[ $rc -eq 5 ]]; then
     pass "3: round 2 HIGH with budget=2 remaining → AUTO_EXTEND (exit 5)"
   else
@@ -68,7 +73,7 @@ C1: unresolved — still big"
 }
 
 # ---------------------------------------------------------------------------
-# 3b. Round 2, HIGH persists, budget=0, no --risk-signal → HIGH_UNRESOLVED
+# 3b. Round 3, HIGH persists, budget=0, no --risk-signal → HIGH_UNRESOLVED
 #     (exit 6). Used to be exit 0, reporting an unresolved HIGH as approved
 #     (#2068). Ledger and artifact must outlive the refusal for the caller.
 # ---------------------------------------------------------------------------
@@ -76,25 +81,32 @@ C1: unresolved — still big"
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
   MOCK=$(setup_mock_env "$TMP")
   PLANS=$(setup_plans_dir "$TMP")
-  LEDGER="$TMP/ledger.txt"
-  printf 'C1|HIGH|big issue\n' > "$LEDGER"
+  # #2938 D3: the budget is spent only by a recorded AUTO_EXTEND, so rounds 1-2 really run (round 2 extends).
+  i3b() {
+    invoke "$MOCK" --format detail-plan --session-id i3b --plans-dir "$PLANS" \
+      --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 1 --extensions-used 0 \
+      --accepted-tradeoffs "$PLANS/outline.md" >/dev/null 2>&1
+  }
+  make_review_codex_mock "$MOCK" "NEEDS_REVISION
+1. [HIGH] big issue"
+  rc=0; i3b || rc=$?
+  [[ $rc -eq 1 ]] || fail "3b: precondition round 1 HIGH → CONTINUE (exit 1), got $rc"
   make_review_codex_mock "$MOCK" "NEEDS_REVISION
 C1: unresolved — still big"
-  rc=0
-  invoke "$MOCK" --format detail-plan --session-id i3b --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 1 --extensions-used 1 \
-    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
+  rc=0; i3b || rc=$?
+  [[ $rc -eq 5 ]] || fail "3b: precondition round 2 HIGH budget=1 → AUTO_EXTEND (exit 5), got $rc"
+  rc=0; i3b || rc=$?
   if [[ $rc -eq 6 ]]; then
-    pass "3b: round 2 HIGH budget=0 no risk → HIGH_UNRESOLVED (exit 6)"
+    pass "3b: round 3 HIGH budget=0 no risk → HIGH_UNRESOLVED (exit 6)"
   else
-    fail "3b: round 2 HIGH budget=0 no risk → expected HIGH_UNRESOLVED (exit 6), got $rc"
+    fail "3b: round 3 HIGH budget=0 no risk → expected HIGH_UNRESOLVED (exit 6), got $rc"
   fi
-  if [[ -f "$LEDGER" ]]; then
+  if [[ -f "$WORKFLOW_STATE_DIR/i3b.control/detail-plan-concern-ledger.txt" ]]; then
     pass "3b: the ledger survives the refusal, so the concern keeps its identity"
   else
     fail "3b: the ledger was dropped, losing the HIGH the exit is about"
   fi
-  if [[ -f "$PLANS/i3b-detail-plan-unresolved-concerns.json" ]]; then
+  if [[ -f "$WORKFLOW_STATE_DIR/i3b.control/detail-plan-unresolved-concerns.json" ]]; then
     pass "3b: and the unresolved concern is written out for the caller to read"
   else
     fail "3b: no unresolved-concerns artifact was written for the refused round"
@@ -102,25 +114,31 @@ C1: unresolved — still big"
 }
 
 # ---------------------------------------------------------------------------
-# 3c. Round 2, HIGH persists, budget=0, WITH --risk-signal → ESCALATE (exit 2)
+# 3c. Round 3, HIGH persists, budget=0, WITH --risk-signal → ESCALATE (exit 2)
 # ---------------------------------------------------------------------------
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
   MOCK=$(setup_mock_env "$TMP")
   PLANS=$(setup_plans_dir "$TMP")
-  LEDGER="$TMP/ledger.txt"
-  printf 'C1|HIGH|big issue\n' > "$LEDGER"
+  # #2938 D3: the budget is spent only by a recorded AUTO_EXTEND, so rounds 1-2 really run (round 2 extends).
+  i3c() {
+    invoke "$MOCK" --format detail-plan --session-id i3c --plans-dir "$PLANS" \
+      --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 1 --extensions-used 0 \
+      --accepted-tradeoffs "$PLANS/outline.md" --risk-signal "intent-unachievable" >/dev/null 2>&1
+  }
+  make_review_codex_mock "$MOCK" "NEEDS_REVISION
+1. [HIGH] big issue"
+  rc=0; i3c || rc=$?
+  [[ $rc -eq 1 ]] || fail "3c: precondition round 1 HIGH → CONTINUE (exit 1), got $rc"
   make_review_codex_mock "$MOCK" "NEEDS_REVISION
 C1: unresolved — still big"
-  rc=0
-  invoke "$MOCK" --format detail-plan --session-id i3c --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 1 --extensions-used 1 \
-    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 --ledger "$LEDGER" \
-    --risk-signal "intent-unachievable" >/dev/null 2>&1 || rc=$?
+  rc=0; i3c || rc=$?
+  [[ $rc -eq 5 ]] || fail "3c: precondition round 2 HIGH budget=1 → AUTO_EXTEND (exit 5), got $rc"
+  rc=0; i3c || rc=$?
   if [[ $rc -eq 2 ]]; then
-    pass "3c: round 2 HIGH budget=0 risk-signal → ESCALATE (exit 2)"
+    pass "3c: round 3 HIGH budget=0 risk-signal → ESCALATE (exit 2)"
   else
-    fail "3c: round 2 HIGH budget=0 risk-signal → expected ESCALATE (exit 2), got $rc"
+    fail "3c: round 3 HIGH budget=0 risk-signal → expected ESCALATE (exit 2), got $rc"
   fi
 }
 case_end

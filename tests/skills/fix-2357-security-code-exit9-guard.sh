@@ -137,8 +137,15 @@ run_case_sec_b() {
     plans=$(make_tmp); fake=$(build_fake_config_sec); repo=$(build_repo_sec)
     term="$plans/sid1361$TERMINAL_SUFFIX_SEC"
     accept="$plans/sid1361$ACCEPT_SUFFIX_SEC"
+    # #2952 D6: the loop publishes the ledger it used and the arm copies it into
+    # line 3 of the terminal file; the stubbed loop cannot, so the case seeds it.
+    mkdir -p "$plans/sid1361.control"
+    printf '%s\n' "$plans/sid1361.control/review-security-shared-concern-ledger.txt" \
+        > "$plans/sid1361.control/security-code-terminal-ledger.txt"
     run_loop_sec "$plans" "$fake" "$repo" 6 >/dev/null   # arm exit-6 marker
-    printf 'accepted\n' > "$accept"                      # sanction the residual HIGH
+    # An accept marker only counts for the terminal it names (#2952 D6).
+    printf 'accepted_at=2026-01-01T00:00:00Z\nreason=fixture\nterminal_fp=%s\nterminal_ledger=%s\n' \
+        "$(sed -n '2p' "$term" 2>/dev/null)" "$(sed -n '3p' "$term" 2>/dev/null)" > "$accept"
     echo "changed" > "$repo/extra.sh"                    # legitimate re-edit
     rc2=$(run_loop_sec "$plans" "$fake" "$repo" 1)
     if [ "$rc2" = "1" ] && [ ! -f "$term" ]; then

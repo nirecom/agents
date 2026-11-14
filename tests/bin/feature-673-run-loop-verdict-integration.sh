@@ -81,7 +81,11 @@ EOF
       cp "$AGENTS_WORKTREE/bin/lib/codex-review-loop/ledger-verdict.sh" \
          "$agents_dir/bin/lib/codex-review-loop/ledger-verdict.sh"
     fi
-    cp "$AGENTS_WORKTREE"/bin/lib/codex-review-loop/*.sh "$agents_dir/bin/lib/codex-review-loop/"
+    cp "$AGENTS_WORKTREE"/bin/lib/codex-review-loop/*.sh "$AGENTS_WORKTREE"/bin/lib/codex-review-loop/*.js "$agents_dir/bin/lib/codex-review-loop/"
+    # The review record (#2938): the preflight runs bin/review-rounds, which requires hooks/.
+    cp "$AGENTS_WORKTREE/bin/review-rounds" "$agents_dir/bin/review-rounds"
+    mkdir -p "$agents_dir/hooks"
+    cp -r "$AGENTS_WORKTREE/hooks/lib" "$AGENTS_WORKTREE/hooks/workflow-state" "$agents_dir/hooks/"
     [[ -f "$AGENTS_WORKTREE/bin/lib/safe-state-path.sh" ]] && cp "$AGENTS_WORKTREE/bin/lib/safe-state-path.sh" "$agents_dir/bin/lib/safe-state-path.sh"
     cp "$AGENTS_WORKTREE/bin/concern-ledger" "$agents_dir/bin/concern-ledger"
     chmod +x "$agents_dir/bin/concern-ledger"
