@@ -55,18 +55,18 @@ tier_sole() { awk -F'\t' -v pat="$2" -v anti="$3" \
 # whichever ran last the other's duration.
 D="$(fx_new_root)"
 fx_add_dummy "$D" a --sleep 2
-mkdir -p "$D/tests/sub"
+mkdir -p "$(fx_dummy_dir "$D")/sub"
 {
     printf '#!/usr/bin/env bash\n'
     printf '# Tests: tests/run-all.sh\n'
     printf '# Tags: fixture, parallel, scope:issue-specific\n'
     printf 'sleep 8\n'
     printf 'exit 0\n'
-} > "$D/tests/sub/a.sh"
-chmod +x "$D/tests/sub/a.sh" 2>/dev/null || true
+} > "$(fx_dummy_dir "$D")/sub/a.sh"
+chmod +x "$(fx_dummy_dir "$D")/sub/a.sh" 2>/dev/null || true
 
-D_TOP="$(fx_tests_dir "$D")/*.sh"
-D_SUB="$(fx_tests_dir "$D")/sub/*.sh"
+D_TOP="$(fx_dummy_dir "$D")/*.sh"
+D_SUB="$(fx_dummy_dir "$D")/sub/*.sh"
 D_OUT="$FX_TMP_ROOT/d.out"; D_ERR="$FX_TMP_ROOT/d.err"
 DP_OUT="$FX_TMP_ROOT/dp.out"; DP_ERR="$FX_TMP_ROOT/dp.err"
 
@@ -121,8 +121,8 @@ EVIL_SUBST='injSUBST1SUBST2.sh'
     printf '# Tags: fixture, parallel, scope:issue-specific\n'
     printf 'sleep 2\n'
     printf 'exit 0\n'
-} > "$E/tests/$EVIL_BASE"
-chmod +x "$E/tests/$EVIL_BASE" 2>/dev/null || true
+} > "$(fx_dummy_dir "$E")/$EVIL_BASE"
+chmod +x "$(fx_dummy_dir "$E")/$EVIL_BASE" 2>/dev/null || true
 
 E_OUT="$FX_TMP_ROOT/e.out"; E_ERR="$FX_TMP_ROOT/e.err"
 EP_OUT="$FX_TMP_ROOT/ep.out"; EP_ERR="$FX_TMP_ROOT/ep.err"

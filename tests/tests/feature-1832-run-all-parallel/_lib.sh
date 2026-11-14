@@ -268,6 +268,8 @@ fx_new_git_root() {
 fx_runner()    { echo "$1/bin/run-all.sh"; }
 fx_tests_dir() { echo "$1/tests"; }
 fx_log()       { echo "$1/overlap.log"; }
+# fx_dummy_dir <root> — the one directory the sweep reads dummies from (the fx_add_repo_settings category).
+fx_dummy_dir() { echo "$1/tests/bin"; }
 
 # fx_add_dummy <root> <id> [opts] — writes one generated dummy test.
 #   --sleep/--exit/--lines/--err-lines/--serial <reason>/--grandchild (spawns sleep 300)/--contract <stdout|stderr|indented>
@@ -293,7 +295,7 @@ fx_add_dummy() {
             *) echo "fx_add_dummy: unknown option: $1" >&2; return 2 ;;
         esac
     done
-    local f="$root/tests/bin/$id.sh"
+    local f; f="$(fx_dummy_dir "$root")/$id.sh"
     {
         printf '#!/usr/bin/env bash\n'
         printf '# Tests: tests/run-all.sh\n'
