@@ -2,11 +2,9 @@
 # Tags: installer, pwsh-required, scope:common, TL2
 # Pester 5 behavioral tests for install/win/pwsh.ps1
 # TL3 gap: real winget/MSI execution on a Windows host; only unit/stub assertions run here.
-# Strategy: Get-LatestPwshRelease is defined AND called within one script invocation,
-# so a Pester Mock cannot intercept it (the script-local definition shadows it).
-# Behavioral tests instead run the equivalent logic in a ScriptBlock wrapper that
-# injects test doubles (Get-Command, Get-LatestPwshRelease, winget, Invoke-WebRequest,
-# Start-Process).
+# Strategy: Get-LatestPwshRelease is defined AND called within one script invocation, so a
+# Pester Mock cannot intercept it. Behavioral tests run the equivalent logic in a ScriptBlock
+# wrapper that injects test doubles (Get-Command, Get-LatestPwshRelease, winget, Invoke-WebRequest, Start-Process).
 
 BeforeAll {
     $script:ScriptPath    = (Resolve-Path "$PSScriptRoot\..\..\install\win\pwsh.ps1").Path
@@ -19,11 +17,7 @@ BeforeAll {
         $PSVersionTable.PSVersion
     }
     # Compute patch (3rd component) portably — [Version] uses .Build, SemanticVersion uses .Patch.
-    $script:CurrentPatch = if ($script:CurrentVersion -is [System.Version]) {
-        [Math]::Max(0, $script:CurrentVersion.Build)
-    } else {
-        $script:CurrentVersion.Patch
-    }
+    $script:CurrentPatch = if ($script:CurrentVersion -is [System.Version]) { [Math]::Max(0, $script:CurrentVersion.Build) } else { $script:CurrentVersion.Patch }
 
     # ---------------------------------------------------------------------------
     # Helper: build a fake release object
@@ -53,7 +47,8 @@ BeforeAll {
         }
     }
 
-    # Runs equivalent script logic with injected stubs; returns .Output/.Warnings; $script:LastCapturedSP holds Start-Process args.
+    # Runs equivalent script logic with injected stubs; returns .Output/.Warnings.
+    # $script:LastCapturedSP holds Start-Process args; $script:LastWingetArgs holds the winget args.
     function script:Invoke-PwshScript {
         param(
             [object] $FakeRelease    = $null,
@@ -65,29 +60,11 @@ BeforeAll {
             [bool]   $Is64Bit        = $true
         )
 
-        # Reset captured SP args
         $script:LastCapturedSP = $null
 
-        # --- Build Get-LatestPwshRelease stub body ---
-        if ($ApiThrows) {
-            $apiBody = 'throw "Simulated API error"'
-        } else {
-            # Serialise the release object to JSON so the scriptblock is self-contained
-            $releaseJson = $FakeRelease | ConvertTo-Json -Depth 10 -Compress
-            # Escape for embedding inside a here-string value (single quotes safe since JSON uses double quotes)
-            $apiBody = @"
-`$r = '$releaseJson' | ConvertFrom-Json
-`$assetsList = @()
-if (`$r.assets) {
-    foreach (`$a in `$r.assets) {
-        `$assetsList += [PSCustomObject]@{
-            name                 = `$a.name
-            browser_download_url = `$a.browser_download_url
-        }
-    }
-}
-return [PSCustomObject]@{ tag_name = `$r.tag_name; assets = `$assetsList }
-"@
+        # --- Build Get-LatestPwshRelease stub body (release serialised to JSON so the scriptblock is self-contained) ---
+        $apiBody = if ($ApiThrows) { 'throw "Simulated API error"' } else {
+            "return ('$($FakeRelease | ConvertTo-Json -Depth 10 -Compress)' | ConvertFrom-Json)"
         }
 
         # --- Build Get-Command stub ---
@@ -100,25 +77,15 @@ if (`$Name -eq 'winget') { return $wingetResult }
 return `$null
 "@
 
-        # --- Build winget stub ---
-        $wingetBody = "`$global:LASTEXITCODE = $WingetExitCode"
+        # --- Build winget stub (records its args) ---
+        $wingetBody = "`$script:__winget_args = `$args -join ' '; `$global:LASTEXITCODE = $WingetExitCode"
 
-        # --- Build Invoke-WebRequest stub (no-op) ---
-        $iwrBody = @'
-param([string]$Uri, [string]$OutFile)
-# no-op stub: prevents real HTTP calls in tests
-'@
+        # --- Build Invoke-WebRequest stub (no-op: prevents real HTTP calls in tests) ---
+        $iwrBody = 'param([string]$Uri, [string]$OutFile)'
 
-        # --- Build Start-Process stub ---
-        # Must use [switch] for -Wait and -PassThru to match original call signature
+        # --- Build Start-Process stub ([switch] -Wait/-PassThru match the original call signature) ---
         $startProcessBody = @"
-param(
-    [string]`$FilePath,
-    [string]`$ArgumentList,
-    [string]`$Verb,
-    [switch]`$Wait,
-    [switch]`$PassThru
-)
+param([string]`$FilePath, [string]`$ArgumentList, [string]`$Verb, [switch]`$Wait, [switch]`$PassThru)
 `$script:__sp_args = @{
     FilePath     = `$FilePath
     ArgumentList = `$ArgumentList
@@ -190,24 +157,35 @@ if (`$latestVersion -le `$currentVersion) {
     Write-Host "PowerShell Core is already up to date (`$currentVersion)." -ForegroundColor DarkGray
     return
 }
-
 Write-Host "Updating PowerShell Core: `$currentVersion -> `$latestVersion ..."
 `$arch = $archValue
 `$msiAsset = `$release.assets | Where-Object { `$_.name -match "`$arch\.msi`$" } | Select-Object -First 1
 if (-not `$msiAsset) {
-    Write-Warning "Could not find MSI asset for `$latestVersion (`$arch)."
-    return
-}
-
-`$msiPath = Join-Path ([System.IO.Path]::GetTempPath()) `$msiAsset.name
-Write-Host "Downloading `$(`$msiAsset.name)..."
-Invoke-WebRequest -Uri `$msiAsset.browser_download_url -OutFile `$msiPath
-
-`$proc = Start-Process msiexec -ArgumentList "/i ```"`$msiPath```" /quiet /norestart" -Verb RunAs -Wait -PassThru
-if (`$proc.ExitCode -eq 0) {
-    Write-Host "PowerShell Core updated to `$latestVersion. Restart your terminal." -ForegroundColor Green
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        Write-Warning "No MSI asset for `$latestVersion (`$arch) and winget not found. Update PowerShell Core manually: https://github.com/PowerShell/PowerShell/releases/latest"
+    } else {
+        Write-Host "No MSI asset for `$latestVersion (`$arch); updating via winget..."
+        winget upgrade --id Microsoft.PowerShell --accept-source-agreements --accept-package-agreements
+        if (`$LASTEXITCODE -eq 0) {
+            Write-Host "PowerShell Core updated via winget. Restart your terminal." -ForegroundColor Green
+        } elseif (`$LASTEXITCODE -eq -1978335189) {
+            Write-Warning "winget has no update for `$latestVersion yet. Re-run install.ps1 later."
+        } else {
+            Write-Warning "winget upgrade failed (exit code: `$LASTEXITCODE). Re-run install.ps1 to retry."
+        }
+        `$global:LASTEXITCODE = 0
+    }
 } else {
-    Write-Warning "MSI install failed (exit code: `$(`$proc.ExitCode))."
+    `$msiPath = Join-Path ([System.IO.Path]::GetTempPath()) `$msiAsset.name
+    Write-Host "Downloading `$(`$msiAsset.name)..."
+    Invoke-WebRequest -Uri `$msiAsset.browser_download_url -OutFile `$msiPath
+
+    `$proc = Start-Process msiexec -ArgumentList "/i ```"`$msiPath```" /quiet /norestart" -Verb RunAs -Wait -PassThru
+    if (`$proc.ExitCode -eq 0) {
+        Write-Host "PowerShell Core updated to `$latestVersion. Restart your terminal." -ForegroundColor Green
+    } else {
+        Write-Warning "MSI install failed (exit code: `$(`$proc.ExitCode))."
+    }
 }
 "@
 
@@ -225,11 +203,13 @@ if (`$proc.ExitCode -eq 0) {
             }
         }
 
-        # Propagate captured Start-Process args to script scope for assertions
+        # Propagate captured Start-Process / winget args to script scope for assertions
         if ($null -ne $script:__sp_args) {
             $script:LastCapturedSP = $script:__sp_args
             $script:__sp_args      = $null
         }
+        $script:LastWingetArgs = $script:__winget_args
+        $script:__winget_args  = $null
 
         return [PSCustomObject]@{
             Output   = [string[]]$output
@@ -352,23 +332,27 @@ Describe "pwsh.ps1 error cases" {
             ($result.Output -join ' ') | Should -Not -Match 'updated to'
         }
     }
-
-    Context "E2: MSI asset absent from release — warning, no download" {
+    # 7.7.0+ ships no MSI, so an MSI-less release must fall back to winget instead of stopping.
+    Context "E2: MSI asset absent — winget upgrade fallback" {
         BeforeAll {
             $script:e2Release = script:New-FakeRelease -TagName 'v99.9.9' -IncludeX64 $false -IncludeX86 $false
         }
-
-        It "shows 'Could not find MSI asset' warning" {
-            $result = script:Invoke-PwshScript -PwshPresent $true -FakeRelease $script:e2Release
-            ($result.Warnings -join ' ') | Should -Match 'Could not find MSI asset'
+        It "calls winget upgrade for Microsoft.PowerShell and reports the update" {
+            $result = script:Invoke-PwshScript -PwshPresent $true -FakeRelease $script:e2Release -WingetExitCode 0
+            $script:LastWingetArgs | Should -Be 'upgrade --id Microsoft.PowerShell --accept-source-agreements --accept-package-agreements'
+            ($result.Output -join ' ') | Should -Match 'updated via winget'
         }
-
-        It "does NOT show 'Downloading' — Invoke-WebRequest not called" {
-            $result = script:Invoke-PwshScript -PwshPresent $true -FakeRelease $script:e2Release
-            ($result.Output -join ' ') | Should -Not -Match 'Downloading'
+        It "warns and resets LASTEXITCODE on winget exit <Code>" -TestCases @(@{ Code = 1; Pattern = 'winget upgrade failed \(exit code: 1\)' }, @{ Code = -1978335189; Pattern = 'winget has no update for 99\.9\.9 yet' }) {
+            $result = script:Invoke-PwshScript -PwshPresent $true -FakeRelease $script:e2Release -WingetExitCode $Code
+            ($result.Warnings -join ' ') | Should -Match $Pattern
+            $global:LASTEXITCODE | Should -Be 0
+        }
+        It "warns with the manual-update URL when winget is not available" {
+            $result = script:Invoke-PwshScript -PwshPresent $true -FakeRelease $script:e2Release -WingetPresent $false
+            ($result.Warnings -join ' ') | Should -Match 'winget not found.*releases/latest'
+            $script:LastWingetArgs | Should -BeNullOrEmpty
         }
     }
-
     Context "E3: msiexec ExitCode != 0 — failure warning" {
         BeforeAll {
             $script:e3Release = script:New-FakeRelease -TagName 'v99.9.9'
@@ -496,8 +480,7 @@ Describe "pwsh.ps1 regression cases" {
         }
 
         It "ArgumentList uses backtick-double-quote to wrap the MSI path" {
-            # Source line: -ArgumentList "/i `"$msiPath`" /quiet /norestart"
-            # In raw content this appears as the literal characters: /i `"
+            # Source line: -ArgumentList "/i `"$msiPath`" /quiet /norestart" — raw content holds the literal /i `"
             $script:ScriptContent | Should -Match '/i\s+`"'
         }
     }
@@ -561,7 +544,7 @@ Describe "pwsh.ps1 idempotency cases" {
 # ---------------------------------------------------------------------------
 Describe "pwsh.ps1 security cases" {
 
-    Context "S1: MSI asset name with spaces — msiexec path is quoted" {
+    Context "S1: MSI asset name with spaces — msiexec path is quoted (static quoting check is R3)" {
         BeforeAll {
             $script:s1Release = [PSCustomObject]@{
                 tag_name = 'v99.9.9'
@@ -570,11 +553,6 @@ Describe "pwsh.ps1 security cases" {
                     browser_download_url = 'https://fake.example.com/pwsh.msi'
                 })
             }
-        }
-
-        It "script quotes the MSI path in ArgumentList — backtick-double-quote present" {
-            # Source line: -ArgumentList "/i `"$msiPath`" /quiet /norestart"
-            $script:ScriptContent | Should -Match '/i\s+`"'
         }
 
         It "MSI path quoting survives asset name with spaces — no crash" {
