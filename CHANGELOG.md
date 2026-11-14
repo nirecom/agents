@@ -220,3 +220,7 @@ Changes: Codex review loop: the printed verdict now always matches the exit code
 ### FEATURE: PR #3032 (2026-11-14)
 Background: fix(#3015): cache run-tests-baseline timeouts so re-runs converge
 Changes: `run-tests-baseline` no longer loops on exit 8 when a test file times out: timeouts are cached per test file and reused on the next run, and a timeout that cannot be recorded says why on stderr.
+
+### FEATURE: PR #3039 (2026-11-14)
+Background: fix(#3037): cache root-decoy hit at base in the run-tests-baseline ledger
+Changes: Fixed `run-tests-baseline` re-running tests that hit a root decoy at the base on every re-run; the result is now cached and the re-run converges.
