@@ -111,11 +111,17 @@ try {
 # is the verification tier (review_security onward), so a prior session sitting
 # ON that boundary is not inheritable at all and the cleanup assertions below
 # would never be reached. This fixture must stay strictly before the boundary.
+# cwd (v1 field, migrated into session_start_context.cwd) names the checkout the upstream ran in:
+# without it the downstream's repo-identity verdict is UNKNOWN, the inheritance degrades (#2297),
+# and cleanup is not reset.
 prior_state_json() {
-    local sid="$1" cleanup_status="$2"
+    local sid="$1" cleanup_status="$2" up_cwd="$3" cwd_field=""
+    # An empty up_cwd omits the key: a legacy upstream that records no checkout still passes the
+    # context guard on its branch and inherits, and its checkout is then unknown.
+    [ -n "$up_cwd" ] && cwd_field=" \"cwd\": \"$up_cwd\","
     cat <<EOF
 {
-  "version": 1, "session_id": "$sid", "git_branch": "main",
+  "version": 1, "session_id": "$sid", "git_branch": "main",$cwd_field
   "created_at": "$NOW_ISO",
   "steps": {
     "research":          {"status": "complete", "updated_at": "$NOW_ISO"},
@@ -169,7 +175,7 @@ run_session_start_new() {
         CLAUDE_PROJECT_DIR="$repo" \
         WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$(to_node_path "$fake_home/.claude/projects")" \
-        run_with_timeout 30 node "$SESSION_START" >/dev/null 2>&1 || true
+        run_with_timeout 30 node "$SESSION_START" >"$TMPDIR_BASE/ss-last.out" 2>&1 || true
 }
 
 # Set up: prior session with given cleanup status, run new session-start,
@@ -185,7 +191,7 @@ setup_prior_and_new() {
     local cwd_enc
     cwd_enc=$(encode_path "$(to_node_path "$REPO")")
     mkdir -p "$FAKE_HOME/.claude/projects/$cwd_enc"
-    write_state_file "$PRIOR_SID" "$(prior_state_json "$PRIOR_SID" "$prior_cleanup")"
+    write_state_file "$PRIOR_SID" "$(prior_state_json "$PRIOR_SID" "$prior_cleanup" "${PRIOR_UP_CWD-$(to_node_path "$REPO")}")"
     write_transcript_line "$FAKE_HOME/.claude/projects/$cwd_enc/${PRIOR_SID}.jsonl" \
         "$PRIOR_SID" "$(to_node_path "$WORKFLOW_DIR/${PRIOR_SID}.json")"
     # #1305: the new session must be able to prove the prior one is its own
@@ -217,10 +223,11 @@ fi
 setup_prior_and_new "c2" "pending"
 run_session_start_new "$REPO" "$NEW_SID" "$FAKE_HOME"
 CLEANUP_STATUS="$(read_step_field "$NEW_SID" "cleanup" "status")"
-if [ "$CLEANUP_STATUS" = "skipped" ]; then
-    pass "C2: prior cleanup=pending → new cleanup=skipped (NOT pending)"
+SKIP_REASON="$(read_step_field "$NEW_SID" "cleanup" "skip_reason")"
+if [ "$CLEANUP_STATUS" = "skipped" ] && [ "$SKIP_REASON" = "inherited-from-prior-session" ]; then
+    pass "C2: prior cleanup=pending → new cleanup=skipped, skip_reason=inherited-from-prior-session (NOT pending)"
 else
-    fail "C2: expected cleanup=skipped, got status=$CLEANUP_STATUS"
+    fail "C2: expected cleanup=skipped/skip_reason=inherited-from-prior-session, got status=$CLEANUP_STATUS skip_reason=$SKIP_REASON"
 fi
 
 # ============================================================================
@@ -231,10 +238,26 @@ fi
 setup_prior_and_new "c3" "in_progress"
 run_session_start_new "$REPO" "$NEW_SID" "$FAKE_HOME"
 CLEANUP_STATUS="$(read_step_field "$NEW_SID" "cleanup" "status")"
-if [ "$CLEANUP_STATUS" = "skipped" ]; then
-    pass "C3: prior cleanup=in_progress → new cleanup=skipped"
+SKIP_REASON="$(read_step_field "$NEW_SID" "cleanup" "skip_reason")"
+if [ "$CLEANUP_STATUS" = "skipped" ] && [ "$SKIP_REASON" = "inherited-from-prior-session" ]; then
+    pass "C3: prior cleanup=in_progress → new cleanup=skipped, skip_reason=inherited-from-prior-session"
 else
-    fail "C3: expected cleanup=skipped, got status=$CLEANUP_STATUS"
+    fail "C3: expected cleanup=skipped/skip_reason=inherited-from-prior-session, got status=$CLEANUP_STATUS skip_reason=$SKIP_REASON"
+fi
+
+# C8: the other side of the contract — an upstream whose checkout is unknown inherits degraded
+# (#2297), so the downstream still has its own worktree to tear down: cleanup stays pending.
+PRIOR_UP_CWD="" setup_prior_and_new "c8" "pending"
+run_session_start_new "$REPO" "$NEW_SID" "$FAKE_HOME"
+CLEANUP_STATUS="$(read_step_field "$NEW_SID" "cleanup" "status")"
+# A pending cleanup alone is also what a failed inheritance leaves behind, so the row also needs
+# the upstream recorded and the hook's own notice naming the degraded granularity.
+C8_UP="$(node -e "try{console.log(JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).upstream_session_id||'')}catch(e){console.log('')}" "$(to_node_path "$WORKFLOW_DIR/${NEW_SID}.json")")"
+if [ "$CLEANUP_STATUS" = "pending" ] && [ "$C8_UP" = "$PRIOR_SID" ] \
+   && grep -q "at granularity context-independent-only" "$TMPDIR_BASE/ss-last.out"; then
+    pass "C8: degraded inheritance (upstream checkout unknown) → upstream recorded, granularity context-independent-only, cleanup=pending"
+else
+    fail "C8: expected cleanup=pending, upstream_session_id=$PRIOR_SID and a context-independent-only notice, got status=$CLEANUP_STATUS upstream=$C8_UP"
 fi
 
 # C4: Other steps (research/outline/detail) inherited unchanged
