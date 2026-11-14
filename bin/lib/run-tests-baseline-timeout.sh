@@ -25,7 +25,9 @@ RTB_BUDGET_MIN_SLICE=30
 
 declare -ga RTB_TIMEOUT_LEDGER=()
 RTB_TIMEOUT_DERIVED_OUT=""
-RTB_TIMEOUT_SLICE_OUT=""
+RTB_TIMEOUT_REQUESTED_OUT=""
+RTB_TIMEOUT_SRC_OUT=""
+RTB_TIMEOUT_APPLIED_OUT=""
 RTB_TIMEOUT_NUM_OUT=""
 
 # rtb_timeout_num_into <value> <if-invalid> <if-huge> — a decimal of at most 9 digits as is;
@@ -78,10 +80,26 @@ rtb_timeout_derive_into() {
     RTB_TIMEOUT_DERIVED_OUT="$v"
 }
 
-# rtb_timeout_budget_into <wanted> <elapsed> — RTB_TIMEOUT_SLICE_OUT = min(wanted, remaining);
-# 0 when less than RTB_BUDGET_MIN_SLICE remains (budget exhausted). The sole budget clamp.
+# rtb_timeout_requested_into <ledger-secs|""> <explicit|""> — RTB_TIMEOUT_DERIVED_OUT,
+# RTB_TIMEOUT_REQUESTED_OUT (REQUESTED_TEST_TIMEOUT: the explicit value, else the derived one) and
+# RTB_TIMEOUT_SRC_OUT (explicit / default / derived).
+# shellcheck disable=SC2034  # outputs read by the sourcing caller
+rtb_timeout_requested_into() {
+    rtb_timeout_derive_into "${1:-}"
+    if [ -n "${2:-}" ]; then
+        RTB_TIMEOUT_REQUESTED_OUT="$2" RTB_TIMEOUT_SRC_OUT="explicit"
+    elif [ -n "${1:-}" ]; then
+        RTB_TIMEOUT_REQUESTED_OUT="$RTB_TIMEOUT_DERIVED_OUT" RTB_TIMEOUT_SRC_OUT="derived"
+    else
+        RTB_TIMEOUT_REQUESTED_OUT="$RTB_TIMEOUT_DERIVED_OUT" RTB_TIMEOUT_SRC_OUT="default"
+    fi
+}
+
+# rtb_timeout_budget_into <requested> <elapsed> — RTB_TIMEOUT_APPLIED_OUT (APPLIED_TEST_TIMEOUT) =
+# min(requested, remaining); 0 when less than RTB_BUDGET_MIN_SLICE remains (budget exhausted).
+# An empty <requested> yields the remaining time itself. The sole budget clamp.
 rtb_timeout_budget_into() {
-    local total elapsed remaining wanted
+    local total elapsed remaining requested
     rtb_timeout_num_into "$RTB_BUDGET_TOTAL" "$RTB_BUDGET_CEIL" "$RTB_BUDGET_CEIL"
     total="$RTB_TIMEOUT_NUM_OUT"
     [ "$total" -le "$RTB_BUDGET_CEIL" ] || total="$RTB_BUDGET_CEIL"
@@ -89,18 +107,35 @@ rtb_timeout_budget_into() {
     elapsed="$RTB_TIMEOUT_NUM_OUT"
     remaining=$((total - RTB_BUDGET_SAFETY - elapsed - RTB_BUDGET_KILL_GRACE))
     if [ "$remaining" -lt "$RTB_BUDGET_MIN_SLICE" ]; then
-        RTB_TIMEOUT_SLICE_OUT=0
+        RTB_TIMEOUT_APPLIED_OUT=0
         return 0
     fi
     rtb_timeout_num_into "${1:-}" "$remaining" "$remaining"
-    wanted="$RTB_TIMEOUT_NUM_OUT"
-    [ "$wanted" -le "$remaining" ] || wanted="$remaining"
+    requested="$RTB_TIMEOUT_NUM_OUT"
+    [ "$requested" -le "$remaining" ] || requested="$remaining"
     # shellcheck disable=SC2034
-    RTB_TIMEOUT_SLICE_OUT="$wanted"
+    RTB_TIMEOUT_APPLIED_OUT="$requested"
 }
 
-# rtb_timeout_slice_into <secs-or-empty> <elapsed> — derive, then clamp by the budget.
-rtb_timeout_slice_into() {
-    rtb_timeout_derive_into "${1:-}"
-    rtb_timeout_budget_into "$RTB_TIMEOUT_DERIVED_OUT" "${2:-}"
+# rtb_timeout_recordable <applied> <requested> <derived> — 0 when a timeout may be recorded: the
+# budget did not shorten it and the requested value is not below the derived one (#3015).
+rtb_timeout_recordable() {
+    local a r d
+    rtb_timeout_num_into "${1:-}" "" ""; a="$RTB_TIMEOUT_NUM_OUT"
+    rtb_timeout_num_into "${2:-}" "" ""; r="$RTB_TIMEOUT_NUM_OUT"
+    rtb_timeout_num_into "${3:-}" "" ""; d="$RTB_TIMEOUT_NUM_OUT"
+    [ -n "$a" ] && [ -n "$r" ] && [ -n "$d" ] && [ "$r" -gt 0 ] && [ "$a" -ge "$r" ] && [ "$r" -ge "$d" ]
+}
+
+# rtb_timeout_unrecordable_note <t> <requested> <derived> <applied-max|""> — one stderr line when
+# the timeout can never be recorded as asked, naming the way out; silent for a budget cut.
+rtb_timeout_unrecordable_note() {
+    local why=""
+    if [ "${2:-0}" -lt "${3:-0}" ] 2>/dev/null; then
+        why="explicit --per-test-timeout is below the derived ${3}s: drop it or raise it"
+    elif [ -n "${4:-}" ] && [ "${2:-0}" -gt "$4" ] 2>/dev/null; then
+        why="the branch stage applies at most ${4}s: shorten or split the test"
+    fi
+    [ -z "$why" ] || printf 'run-tests-baseline: timeout not recorded: %s requested %ss; %s\n' "$1" "$2" "$why" >&2
+    return 0
 }

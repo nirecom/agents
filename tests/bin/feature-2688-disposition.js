@@ -109,6 +109,19 @@ const ROWS = [
   ["undetermined", "missing-at-base", 1, null],
   ["undetermined", "no-such-cause-2688", 1, null],
   ["undetermined", "state-RUNNING", 1, null],
+  // #3015: the raw ledger value keeps its N; the reader must strip it back to timeout-at-base.
+  ["undetermined", "timeout-at-base-after-300s", 1, null],
+  // #3015 fix round: a rerun detail with a rename suffix (rtb_cls_append_via) still means the
+  // classification did not finish, so the suffix is stripped for the rerun check only. An auto
+  // detail keeps its exact match, so the same suffix leaves it pending (fail-closed). The bare
+  // budget-exhausted / timeout-at-base rows above are the regression controls.
+  ["undetermined", "budget-exhausted-via-rename:tests/bin/old.sh", 8, null],
+  ["undetermined", "worktree-create-failed-via-rename:tests/bin/old.sh", 8, null],
+  ["undetermined", "exec-setup-failed-via-rename:tests/bin/old.sh", 8, null],
+  ["undetermined", "state-foo_bar-at-base-via-rename:tests/bin/old.sh", 8, null],
+  ["undetermined", "timeout-at-base-via-rename:tests/bin/old.sh", 1, null],
+  ["undetermined", "budget-exhausted-via-rename:", 8, null],
+  ["undetermined", "budget-exhaustedX", 1, null],
   // #2956 S8 table 1: a file-level verdict is auto for its two details only (a rename suffix is
   // stripped before matching); a new failure on the branch is never registered, so it is pending.
   ["file-verdict-preexisting", "test-file-changed", 0, AUTO],
@@ -179,6 +192,17 @@ test("aggregate-new-case-failure-beats-file-verdict", () => {
     ["tests/bin/g2.sh", "new-case-failure-on-branch", "case-records-missing-on-branch"]]), 1, null);
   expectOutcome(record("agg6", [["tests/bin/h1.sh", "preexisting", "base-fail"],
     ["tests/bin/h2.sh", "file-verdict-preexisting", "test-file-changed"]]), 0, AUTO);
+});
+caseEnd();
+
+// #3015 fix round: the module-level aggregate counts a renamed rerun row as a rerun request.
+caseBegin("aggregate-rerun-via-rename", "bin/workflow/lib/run-tests-baseline-evidence/disposition.js");
+test("aggregate-rerun-via-rename", () => {
+  const { aggregate } = require(DISPOSITION_JS);
+  const got = aggregate([{ class: "undetermined", detail: "budget-exhausted-via-rename:tests/bin/old.sh" }]);
+  assert.equal(got.verdict, "rerun");
+  assert.equal(got.count, 1);
+  assert.equal(got.basis, null);
 });
 caseEnd();
 

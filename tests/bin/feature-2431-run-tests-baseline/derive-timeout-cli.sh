@@ -144,12 +144,23 @@ run_timeout_cli_cases() {
   dt_seed_dur "$cache" "$repo" tests/bin/test-sleep.sh 400 || fail "D1: could not seed the duration ledger"
   seed_failing "dt-d-$$" tests/bin/test-sleep.sh
   dt_cli_run "$cache" "$repo" "dt-d-$$" -- --per-test-timeout 1
-  # An explicit value below the derived one says nothing about the test (#2688): budget-exhausted, exit 8.
+  # The intent's exception (#3015): an explicit value below the derived one says nothing about the
+  # test (#2688): budget-exhausted, exit 8, a `timeout not recorded:` note, and no branch cache row.
   if printf '%s\n' "$RTB_CLI_OUT" | grep -qE '^BASELINE: undetermined[[:space:]]+tests/bin/test-sleep.sh[[:space:]]+budget-exhausted' \
     && [ "$RTB_CLI_RC" -eq 8 ]; then
     pass "D1: explicit 1s (below the derived 540s) timed the sleeping test out as budget-exhausted, exit 8"
   else
     fail "D1: expected budget-exhausted + exit 8; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
+  fi
+  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE '^run-tests-baseline: timeout not recorded: tests/bin/test-sleep.sh requested 1s; explicit --per-test-timeout is below the derived 540s'; then
+    pass "D1: the note names the explicit value below the derived 540s"
+  else
+    fail "D1: no 'timeout not recorded: ... explicit' note; rc=$RTB_CLI_RC ($(printf '%s\n' "$RTB_CLI_OUT" | grep 'not recorded' | tr '\n' '|'))"
+  fi
+  if grep -qs 'timeout-after-' "$cache"/branch.v2.*.seg; then
+    fail "D1: an unrecordable branch timeout was cached as timeout-after-"
+  else
+    pass "D1: no timeout-after- row in the branch cache"
   fi
   dt_assert_timeout_line "D2" tests/bin/test-sleep.sh "1s (explicit)"
 
@@ -211,14 +222,14 @@ run_timeout_cli_derived_cases() {
   ch_assert_ran_at_base "X1" "$DT_T" "$DT_RAN" "$DT_SID"
 
   # ---- (h'') the value shown is the value handed to rtb_exec_one ----
-  if grep -qE 'rtb_exec_one[^#]*"\$T_USE"' "$BASELINE_CLI"; then
-    pass "H6: rtb_exec_one is called with \"\$T_USE\""
+  if grep -qE 'rtb_exec_one[^#]*"\$APPLIED_TEST_TIMEOUT"' "$BASELINE_CLI"; then
+    pass "H6: rtb_exec_one is called with \"\$APPLIED_TEST_TIMEOUT\""
   else
-    fail "H6: the rtb_exec_one call in bin/run-tests-baseline does not pass \"\$T_USE\""
+    fail "H6: the rtb_exec_one call in bin/run-tests-baseline does not pass \"\$APPLIED_TEST_TIMEOUT\""
   fi
-  if grep -E 'timeout: ' "$BASELINE_CLI" | grep -qF '$T_USE'; then
-    pass "H7: the diagnostic line prints the same T_USE variable"
+  if grep -E 'timeout: ' "$BASELINE_CLI" | grep -qF '$APPLIED_TEST_TIMEOUT'; then
+    pass "H7: the diagnostic line prints the same APPLIED_TEST_TIMEOUT variable"
   else
-    fail "H7: the diagnostic line does not print \$T_USE"
+    fail "H7: the diagnostic line does not print \$APPLIED_TEST_TIMEOUT"
   fi
 }

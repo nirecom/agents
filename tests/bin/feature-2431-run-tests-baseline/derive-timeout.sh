@@ -50,9 +50,16 @@ dt_expect_range() {
 
 dt_expect_derive() { dt_expect "$1" "$2" "rtb_timeout_derive_into '$3'; printf '%s' \"\$RTB_TIMEOUT_DERIVED_OUT\""; }
 
-# dt_expect_slice <label> <want> <wanted-or-secs> <elapsed> <fn> [VAR=val]
-dt_expect_slice() {
-  dt_expect "$1" "$2" "$5 '$3' $4; printf '%s' \"\$RTB_TIMEOUT_SLICE_OUT\"" "${6:-DT_UNUSED=1}"
+# dt_expect_applied <label> <want> <requested> <elapsed> [VAR=val] — rtb_timeout_budget_into's
+# APPLIED_TEST_TIMEOUT for an explicit REQUESTED_TEST_TIMEOUT.
+dt_expect_applied() {
+  dt_expect "$1" "$2" "rtb_timeout_budget_into '$3' $4; printf '%s' \"\$RTB_TIMEOUT_APPLIED_OUT\"" "${5:-DT_UNUSED=1}"
+}
+
+# dt_expect_derived_applied <label> <want> <ledger-secs> <elapsed> — the derived REQUESTED_TEST_TIMEOUT
+# (#3015 rtb_timeout_requested_into, no explicit value) clamped by the budget.
+dt_expect_derived_applied() {
+  dt_expect "$1" "$2" "rtb_timeout_requested_into '$3' ''; rtb_timeout_budget_into \"\$RTB_TIMEOUT_REQUESTED_OUT\" $4; printf '%s' \"\$RTB_TIMEOUT_APPLIED_OUT\""
 }
 
 dt_static_cases() {
@@ -137,35 +144,35 @@ run_timeout_unit_cases() {
     "RUN_ALL_CACHE_DIR=$TMPROOT/cache-dt-never-created"
 
   # (e) the budget clamp, derived path
-  dt_expect_slice "E1: derived 350s at elapsed 0" 540 350 0 rtb_timeout_slice_into
-  dt_expect_slice "E2: derived 350s at elapsed 300 (555-300-2)" 253 350 300 rtb_timeout_slice_into
-  dt_expect_slice "E3: derived 350s at elapsed 540 (13s left < 30)" 0 350 540 rtb_timeout_slice_into
-  dt_expect_slice "E4: derived 350s at elapsed 555" 0 350 555 rtb_timeout_slice_into
-  dt_expect_slice "E5: unmeasured at elapsed 0 keeps 300" 300 "" 0 rtb_timeout_slice_into
+  dt_expect_derived_applied "E1: derived 350s at elapsed 0" 540 350 0
+  dt_expect_derived_applied "E2: derived 350s at elapsed 300 (555-300-2)" 253 350 300
+  dt_expect_derived_applied "E3: derived 350s at elapsed 540 (13s left < 30)" 0 350 540
+  dt_expect_derived_applied "E4: derived 350s at elapsed 555" 0 350 555
+  dt_expect_derived_applied "E5: unmeasured at elapsed 0 keeps 300" 300 "" 0
   # (e) the budget clamp, explicit values (C1 of the plan: the clamp is not waived for them)
-  dt_expect_slice "E6: wanted 590 at elapsed 0 is cut to 553" 553 590 0 rtb_timeout_budget_into
-  dt_expect_slice "E7: wanted 590 at elapsed 300" 253 590 300 rtb_timeout_budget_into
-  dt_expect_slice "E8: wanted 590 at elapsed 540" 0 590 540 rtb_timeout_budget_into
-  dt_expect_slice "E9: wanted 10 at elapsed 300 stays 10" 10 10 300 rtb_timeout_budget_into
-  dt_expect_slice "E10: non-numeric elapsed counts as 0" 553 590 abc rtb_timeout_budget_into
-  dt_eval 'e=0; sum=0; out=""; for n in 1 2 3; do rtb_timeout_budget_into 590 "$e"; s="$RTB_TIMEOUT_SLICE_OUT"; out="$out$s "; sum=$((sum + s)); e=$((e + s)); done; printf "%s%s" "$out" "$sum"'
+  dt_expect_applied "E6: requested 590 at elapsed 0 is cut to 553" 553 590 0
+  dt_expect_applied "E7: requested 590 at elapsed 300" 253 590 300
+  dt_expect_applied "E8: requested 590 at elapsed 540" 0 590 540
+  dt_expect_applied "E9: requested 10 at elapsed 300 stays 10" 10 10 300
+  dt_expect_applied "E10: non-numeric elapsed counts as 0" 553 590 abc
+  dt_eval 'e=0; sum=0; out=""; for n in 1 2 3; do rtb_timeout_budget_into 590 "$e"; s="$RTB_TIMEOUT_APPLIED_OUT"; out="$out$s "; sum=$((sum + s)); e=$((e + s)); done; printf "%s%s" "$out" "$sum"'
   last="${DT_OUT##* }"
   if [ "$DT_RC" -eq 0 ] && [ "$DT_OUT" = "553 0 0 553" ] && [ "$last" -le 555 ] 2>/dev/null; then
-    pass "E11: three wanted-590 tests share one budget (553 0 0, total $last <= 555)"
+    pass "E11: three requested-590 tests share one budget (553 0 0, total $last <= 555)"
   else
     fail "E11: expected '553 0 0 553' within 555 total, got '$DT_OUT' (rc=$DT_RC)"
   fi
-  dt_expect_slice "E16: negative elapsed counts as 0" 553 590 -5 rtb_timeout_budget_into
-  dt_expect_slice "E17: 20-digit elapsed exhausts the budget" 0 590 99999999999999999999 rtb_timeout_budget_into
-  dt_expect_range "E18: 20-digit wanted is cut to the remaining time" 0 553 \
-    "rtb_timeout_budget_into '99999999999999999999' 0; printf '%s' \"\$RTB_TIMEOUT_SLICE_OUT\""
-  dt_expect_slice "E19: TOTAL=-5 falls back to 600" 553 590 0 rtb_timeout_budget_into "RTB_BUDGET_TOTAL=-5"
-  dt_expect_slice "E20: 20-digit TOTAL is cut to 600" 553 590 0 rtb_timeout_budget_into "RTB_BUDGET_TOTAL=99999999999999999999"
+  dt_expect_applied "E16: negative elapsed counts as 0" 553 590 -5
+  dt_expect_applied "E17: 20-digit elapsed exhausts the budget" 0 590 99999999999999999999
+  dt_expect_range "E18: 20-digit requested is cut to the remaining time" 0 553 \
+    "rtb_timeout_budget_into '99999999999999999999' 0; printf '%s' \"\$RTB_TIMEOUT_APPLIED_OUT\""
+  dt_expect_applied "E19: TOTAL=-5 falls back to 600" 553 590 0 "RTB_BUDGET_TOTAL=-5"
+  dt_expect_applied "E20: 20-digit TOTAL is cut to 600" 553 590 0 "RTB_BUDGET_TOTAL=99999999999999999999"
   # (e) the RTB_BUDGET_TOTAL override can only narrow the budget
-  dt_expect_slice "E12: TOTAL=abc falls back to 600" 540 540 0 rtb_timeout_budget_into "RTB_BUDGET_TOTAL=abc"
-  dt_expect_slice "E13: TOTAL=9999 is cut to 600" 553 590 0 rtb_timeout_budget_into "RTB_BUDGET_TOTAL=9999"
-  dt_expect_slice "E14: TOTAL=700 is cut to 600" 553 590 0 rtb_timeout_budget_into "RTB_BUDGET_TOTAL=700"
-  dt_expect_slice "E15: TOTAL=50 leaves 3s < 30: budget exhausted" 0 540 0 rtb_timeout_budget_into "RTB_BUDGET_TOTAL=50"
+  dt_expect_applied "E12: TOTAL=abc falls back to 600" 540 540 0 "RTB_BUDGET_TOTAL=abc"
+  dt_expect_applied "E13: TOTAL=9999 is cut to 600" 553 590 0 "RTB_BUDGET_TOTAL=9999"
+  dt_expect_applied "E14: TOTAL=700 is cut to 600" 553 590 0 "RTB_BUDGET_TOTAL=700"
+  dt_expect_applied "E15: TOTAL=50 leaves 3s < 30: budget exhausted" 0 540 0 "RTB_BUDGET_TOTAL=50"
 
   dt_static_cases
 }

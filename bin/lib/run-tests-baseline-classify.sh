@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Table 1 and the ledger stage of bin/run-tests-baseline (#2956 S6/S8). Source-only, after the
 # ledger, compare, rename and worktree libs. Works on the caller's TESTS, CLS, DET, NEWC, NEWH,
-# BR_RES, BR_END, RERUN, B2, ROOT, LOGDIR and TMP_BASE. The class/detail table is owned by
+# BR_RES, BR_END, BR_NOREC, BR_TIMEOUT, RUN_REL, RUN_OLD, RERUN, B2, ROOT, LOGDIR and TMP_BASE. Also
+# needs the timeout lib. The class/detail table is owned by
 # docs/architecture/claude-code/test-result-contract.md.
 
 # rtb_cls_branch_res <i> — the branch result dir of test <i> (an empty dir when there is none).
@@ -29,8 +30,8 @@ rtb_cls_table1() {
     local -a old_arg=()
     [[ -z "$old" ]] || old_arg=("$old")
     NEWC[i]=0 NEWH[i]="[]"
-    # A branch run that left no records (BR_NOREC) proves nothing either way (fail-closed).
-    if [[ "${BR_NOREC[i]:-}" == 1 ]]; then
+    # A branch run that left no records (BR_NOREC, BR_TIMEOUT) proves nothing either way (fail-closed).
+    if [[ "${BR_NOREC[i]:-}" == 1 || "${BR_TIMEOUT[i]:-}" == 1 ]]; then
         CLS[i]="new-case-failure-on-branch"; DET[i]="case-records-missing-on-branch"; return 0
     fi
     mkdir -p "$LOGDIR" 2>/dev/null
@@ -56,13 +57,38 @@ rtb_cls_table1() {
     return 0
 }
 
-# rtb_cls_from_row <i> <fp> <base-detail> — table 1 against a ledger row file; 1 = no row file.
+# rtb_cls_from_row <i> <fp> <base-detail> [<old>] — table 1 against a ledger row file; 1 = no row file.
 rtb_cls_from_row() {
     local i="$1" dir="$TMP_BASE/row-$$-$1.res"
     rtb_ledger_lines_load "$2" "$dir" "$TMP_BASE" || return 1
-    rtb_cls_table1 "$i" "$ROOT" "$dir" "" "$3"
+    rtb_cls_table1 "$i" "$ROOT" "$dir" "${4:-}" "$3"
     rm -rf "$dir"
     return 0
+}
+
+# rtb_cls_append_via <i> <old> — `-via-rename:<old>` on DET; a branch timeout set against a base
+# timeout keeps the bare timeout-at-base (its disposition matches exactly) and tells the rename on stderr.
+rtb_cls_append_via() {
+    [[ -n "${2:-}" ]] || return 0
+    if [[ "${BR_TIMEOUT[$1]:-}" == 1 && "${DET[$1]:-}" == "timeout-at-base" ]]; then
+        printf 'run-tests-baseline: rename: %s ran at base as %s\n' "${TESTS[$1]}" "$2" >&2
+        return 0
+    fi
+    DET[$1]="${DET[$1]:-}-via-rename:$2"
+}
+
+# rtb_cls_base_timeout <i> <run> <applied> <requested> <derived> — a base timeout: recorded as
+# und:timeout-at-base-after-<requested>s when recordable, else a re-run request.
+# shellcheck disable=SC2034
+rtb_cls_base_timeout() {
+    CLS[$1]="undetermined"
+    if rtb_timeout_recordable "$3" "$4" "$5"; then
+        DET[$1]="timeout-at-base"
+        rtb_ledger_append "$B2" "$2" "und:timeout-at-base-after-${4}s"
+    else
+        DET[$1]="budget-exhausted"
+        rtb_timeout_unrecordable_note "${TESTS[$1]}" "$4" "$5" ""
+    fi
 }
 
 # rtb_cls_base_fail <i> <run> <old-or-empty> — a failure the base run just showed: table 1, then the
@@ -89,7 +115,8 @@ rtb_cls_base_pass() {
 # and the test is unchanged; 1 when no candidate qualifies (the base runs).
 # shellcheck disable=SC2034
 rtb_cls_inherit() {
-    local i="$1" t="${TESTS[$1]}" d b1 fp
+    local i="$1" t="${RUN_REL[$1]:-}" d b1 fp
+    [[ -n "$t" ]] || return 1
     d="$(rtb_test_data_dir "$t")"
     while IFS=$'\t' read -r b1 fp; do
         [[ -n "$b1" && "$b1" != "$B2" ]] || continue
@@ -97,9 +124,10 @@ rtb_cls_inherit() {
         git -C "$ROOT" cat-file -e "$b1^{commit}" 2>/dev/null || continue
         git -C "$ROOT" merge-base --is-ancestor "$b1" "$B2" 2>/dev/null || continue
         git --literal-pathspecs -C "$ROOT" diff --quiet "$b1" "$B2" -- "$t" "$d/" 2>/dev/null || continue
-        rtb_cls_from_row "$i" "$fp" "inherited-from-$b1" || continue
+        rtb_cls_from_row "$i" "$fp" "inherited-from-$b1" "${RUN_OLD[i]:-}" || continue
         if [[ "${CLS[i]}" == "preexisting" ]]; then
             CLS[i]="preexisting-inherited"
+            rtb_cls_append_via "$i" "${RUN_OLD[i]:-}"
             return 0
         fi
         # New lines against the older base: B2 may have fixed them, so B2 itself is run.
@@ -111,24 +139,43 @@ rtb_cls_inherit() {
 }
 
 # rtb_cls_ledger_stage — stage 4: (a) the same base, then (b) inheritance; the rest go to RERUN.
-# A fail hit counts only with a readable, verified row file; otherwise the base re-runs.
+# Rows are keyed on the path the base runs (RUN_REL: the test, else its rename source; RUN_OLD
+# the latter), resolved here once for the base loop too. A fail hit counts only with a readable,
+# verified row file, a timeout row only when its N >= REQUESTED_TEST_TIMEOUT; else the base re-runs.
 # shellcheck disable=SC2034
 rtb_cls_ledger_stage() {
-    local i t same res fp
+    local i run same res fp n explicit=""
+    [[ "${PTT_EXPLICIT:-0}" != 1 ]] || explicit="${PER_TEST_TIMEOUT:-}"
     for i in "${!TESTS[@]}"; do
         [[ -z "${CLS[i]:-}" ]] || continue
-        t="${TESTS[$i]}"
-        same="$(rtb_ledger_lookup_same_base "$B2" "$t")"
+        rtb_rename_base_path_into "$ROOT" "$B2" "${TESTS[$i]}"
+        RUN_REL[i]="$RTB_BASE_REL_OUT" RUN_OLD[i]="$RTB_BASE_OLD_OUT"
+        run="${RUN_REL[i]}"
+        [[ -n "$run" ]] || { RERUN+=("$i"); continue; }
+        same="$(rtb_ledger_lookup_same_base "$B2" "$run")"
         res="${same%%$'\t'*}" fp="-"
         [[ "$same" != *$'\t'* ]] || fp="${same#*$'\t'}"
         case "$res" in
             fail)
                 if [[ "$fp" != "-" ]] && ! rtb_ledger_lines_fresh "$fp" \
-                    && rtb_cls_from_row "$i" "$fp" "ledger-same-base"; then continue; fi
+                    && rtb_cls_from_row "$i" "$fp" "ledger-same-base" "${RUN_OLD[i]}"; then
+                    rtb_cls_append_via "$i" "${RUN_OLD[i]}"; continue
+                fi
                 RERUN+=("$i"); continue ;;
-            pass) rtb_cls_base_pass "$i" "ledger-same-base"; continue ;;
-            und:*) CLS[i]="undetermined"; DET[i]="${res#und:}"; continue ;;
+            pass) rtb_cls_base_pass "$i" "ledger-same-base"; rtb_cls_append_via "$i" "${RUN_OLD[i]}"; continue ;;
+            und:timeout-at-base-after-*)
+                n="${res#und:timeout-at-base-after-}"
+                rtb_timeout_num_into "${n%s}" "" ""
+                n="$RTB_TIMEOUT_NUM_OUT"
+                rtb_timeout_requested_into "${RTB_TIMEOUT_LEDGER[$i]:-}" "$explicit"
+                if [[ -z "$n" || "$n" -lt "$RTB_TIMEOUT_REQUESTED_OUT" ]]; then
+                    RERUN+=("$i"); continue
+                fi
+                CLS[i]="undetermined"; DET[i]="timeout-at-base"; rtb_cls_append_via "$i" "${RUN_OLD[i]}"; continue ;;
+            und:*) CLS[i]="undetermined"; DET[i]="${res#und:}"; rtb_cls_append_via "$i" "${RUN_OLD[i]}"; continue ;;
         esac
-        rtb_cls_inherit "$i" || RERUN+=("$i")
+        # Inheritance yields preexisting only against branch records, which a branch timeout lacks.
+        [[ "${BR_TIMEOUT[i]:-}" == 1 ]] || ! rtb_cls_inherit "$i" || continue
+        RERUN+=("$i")
     done
 }
