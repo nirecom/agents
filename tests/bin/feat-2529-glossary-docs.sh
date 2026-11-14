@@ -157,7 +157,7 @@ USER_TERMS=(AGENTS_MAIN_ROOT "confirm gate" "deliverable type" "delivery path" d
             intent Jev meta outline plan-sync "PM type" "presentation turn" RTK sentinel
             WF-CODE WF-META workflow "workflow step")
 INTERNAL_TERMS=("delivery operation" GATE_ACTION "in-skill step" IR "review round" SCRIPT_CHECKOUT_ROOT
-                "state handoff reader" "step table" TARGET_CHECKOUT_ROOT TARGET_MAIN_ROOT turn)
+                "state handoff reader" "step table" TARGET_CHECKOUT_ROOT TARGET_MAIN_ROOT)
 # kept_terms_missing <user-file> <internal-file> — one line per curated term not present exactly once.
 kept_terms_missing() {
     local t n
@@ -472,7 +472,8 @@ BACKTICK_ITEM="$(grep -E -m1 -- '^- .*\bwithout backticks\b' "$REVIEWER_SECTION"
 if [[ -z "$BACKTICK_ITEM" ]]; then fail "D19/reviewer-backtick-item-not-negated" "no backtick-omission bullet in the reviewer directives"
 elif printf '%s\n' "$BACKTICK_ITEM" | grep -Eqi -- "\b(not|never|no|none|nor)\b|n't\b"; then fail "D19/reviewer-backtick-item-not-negated" "the backtick-omission bullet carries a negation: $BACKTICK_ITEM"
 else pass "D19/reviewer-backtick-item-not-negated"; fi
-has "D19/reviewer-has-multi-word-part-item" "$REVIEWER_SECTION" "^- .*\bgeneric word that is part of a multi-word term\b.*\bis no rewording of that term unless it names the term's concept\b"
+# b5be81f2 (#2763) replaced the "generic word ... unless it names the term's concept" bullet with the bullet on a declared short-form field.
+has "D19/reviewer-has-multi-word-part-item" "$REVIEWER_SECTION" '^- .*\bgeneric use\b.*\bword from a term\b.*\bshort form declared in the entry.s `Short forms` field\b.*\bis no rewording of the term\b'
 has "D19/reviewer-has-japanese-item" "$REVIEWER_SECTION" '^- Never map a Japanese expression to a glossary term\b'
 has "D19/reviewer-has-misspelled-identifier-item" "$REVIEWER_SECTION" '^- .*\bmisspelled identifier\b.*\bglossary-drift concern\b.*\bbackticked or not\b'
 # The legitimate "backticked or not" phrase is cut before the negation scan.

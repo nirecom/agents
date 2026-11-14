@@ -102,7 +102,7 @@ case_end
 # A checkout copy whose is-github-dotcom-remote says non-GitHub (skips Phase 0a label repair).
 # The copy holds tracked files only, so the lib under test is copied in when present.
 CO="$GNP_TMP/co"
-script_checkout_fixture_copy "$CO" bin >/dev/null 2>&1 || fail "fixture" "checkout copy failed"
+script_checkout_fixture_copy "$CO" bin hooks >/dev/null 2>&1 || fail "fixture" "checkout copy failed"
 [ -f "$LIB" ] && cp "$LIB" "$CO/bin/lib/native-path.sh"
 printf '#!/usr/bin/env bash\nexit 1\n' > "$CO/bin/is-github-dotcom-remote"
 chmod +x "$CO/bin/is-github-dotcom-remote"
@@ -135,7 +135,7 @@ recorded_body_file() { awk 'prev == "--body-file" { print; exit } { prev = $0 }'
 # gh_check <label> <rc> <input path> — the recorded --body-file is native (cygpath host) or unchanged.
 gh_check() {
   local label="$1" rc="$2" in="$3" got
-  got="$(recorded_body_file)"
+  if [ "$#" -ge 4 ]; then got="$4"; else got="$(recorded_body_file)"; fi
   if [ "$HAVE_CYGPATH" -eq 1 ]; then
     if [ "$rc" -eq 0 ] && printf '%s' "$got" | grep -qE '^[A-Za-z]:/'; then
       pass "$label: --body-file reaches gh in native form ($got)"
@@ -160,13 +160,30 @@ gh_check "issue-create" "$IC_RC" "$BODY_FILE"
 case_end
 
 case_begin "issue-body-append-body-file" "bin/github-issues/issue-body-append.sh"
-rm -f "$GNP_GH_LOG"
-PATH="$STUB_BIN:$PATH" MSYS_NO_PATHCONV=1 run_with_timeout 60 bash "$CO/bin/github-issues/issue-body-append.sh" \
+# The wrapper's <user>-block guard (#2940) reads the old issue state from a node child that spawns
+# `gh` by name, which the bash stub above cannot answer. This case therefore uses the scripted stub
+# (tests/lib/gh-scripted-stub.js: a bash `gh` plus, on Windows, a gh.exe the preload turns into the
+# stub); the old body has no <user> block, so the write goes ahead and its --body-file is logged.
+SCR_OUT="$(node "$(cygpath -m "$SCRIPT_CHECKOUT_ROOT/tests/lib/gh-scripted-stub.js" 2>/dev/null || echo "$SCRIPT_CHECKOUT_ROOT/tests/lib/gh-scripted-stub.js")" setup "$(cygpath -m "$GNP_TMP/scr" 2>/dev/null || echo "$GNP_TMP/scr")")"
+SCR_BIN="${SCR_OUT%%$'\n'*}"; SCR_PRELOAD="${SCR_OUT#*$'\n'}"
+command -v cygpath >/dev/null 2>&1 && SCR_BIN="$(cygpath -u "$SCR_BIN")"
+printf '{"rules":[{"match":"^auth status","stdout":"scopes: project, repo"},{"match":"^issue view","stdout":"ORIGINAL body"},{"match":"api graphql","stdout":{"data":{"repository":{"issue":{"id":"I_7","title":"ordinary title","body":"ORIGINAL body","comments":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[]}}}}}}],"fallback":{"exit":0}}\n' > "$GNP_TMP/scr-spec.json"
+PATH="$SCR_BIN:$PATH" MSYS_NO_PATHCONV=1 NODE_OPTIONS="--require \"$SCR_PRELOAD\"" \
+  F2940_GH_SPEC="$(cygpath -m "$GNP_TMP/scr-spec.json" 2>/dev/null || echo "$GNP_TMP/scr-spec.json")" F2940_GH_LOG="$(cygpath -m "$GNP_TMP/scr-calls.jsonl" 2>/dev/null || echo "$GNP_TMP/scr-calls.jsonl")" \
+  run_with_timeout 60 bash "$CO/bin/github-issues/issue-body-append.sh" \
   --issue 7 --note "ordinary note" >"$GNP_TMP/iba.out" 2>"$GNP_TMP/iba.err"
 IBA_RC=$?
-IBA_IN="$(recorded_body_file)"
+IBA_IN="$(node -e "const l=require('fs').readFileSync(process.argv[1],'utf8').split('\n').filter(Boolean).map(JSON.parse);let v='';for(const r of l){const i=r.args.indexOf('--body-file');if(i>=0)v=r.args[i+1]}console.log(v)" "$(cygpath -m "$GNP_TMP/scr-calls.jsonl" 2>/dev/null || echo "$GNP_TMP/scr-calls.jsonl")" 2>/dev/null)"
+# The stub reads the --body-file when gh is called (null when the path does not exist for gh), so a
+# wrong path that merely looks native (C:/...) is caught here, not by the path shape alone.
+IBA_BODY="$(node -e "const l=require('fs').readFileSync(process.argv[1],'utf8').split('\n').filter(Boolean).map(JSON.parse);let v=null;for(const r of l){if(r.args.includes('--body-file'))v=r.bodyFile}process.stdout.write(v===null?'<<UNREADABLE>>':v)" "$(cygpath -m "$GNP_TMP/scr-calls.jsonl" 2>/dev/null || echo "$GNP_TMP/scr-calls.jsonl")" 2>/dev/null)"
+if [ "$IBA_RC" -eq 0 ] && printf '%s' "$IBA_BODY" | grep -q 'ORIGINAL body' && printf '%s' "$IBA_BODY" | grep -q 'ordinary note'; then
+  pass "issue-body-append: gh could read the --body-file and it holds the original body plus the note"
+else
+  fail "issue-body-append: --body-file content" "rc=$IBA_RC path='$IBA_IN' body='$(printf '%s' "$IBA_BODY" | head -c 300)' (want ORIGINAL body + ordinary note)"
+fi
 if [ "$HAVE_CYGPATH" -eq 1 ]; then
-  gh_check "issue-body-append" "$IBA_RC" "$IBA_IN"
+  gh_check "issue-body-append" "$IBA_RC" "$IBA_IN" "$IBA_IN"
 elif [ "$IBA_RC" -eq 0 ] && is_abs_path "$IBA_IN"; then
   pass "issue-body-append: without cygpath the absolute mktemp path is passed as-is ($IBA_IN)"
 else
