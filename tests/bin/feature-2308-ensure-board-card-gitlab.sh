@@ -2,6 +2,7 @@
 # tests/bin/feature-2308-ensure-board-card-gitlab.sh
 # Tests: bin/github-issues/ensure-board-card.sh
 # Tags: scope:issue-specific, gitlab, forge, ensure-board-card, board-card, TL2, dup-group-keep:size-hard-limit
+# Serial: H1 — probes and removes the fixed shared path /tmp/EBC_INJECT
 # Issue #2308 — the GitLab skip path of ensure-board-card.sh. GitLab Free has no
 # Projects v2 board (status labels are the board, owned by wip-state.sh), so on a
 # gitlab remote the script skips board-card creation cleanly (exit 0) BEFORE it
