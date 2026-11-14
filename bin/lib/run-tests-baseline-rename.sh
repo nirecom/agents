@@ -33,3 +33,18 @@ rtb_rename_source_into() {
     RTB_RENAME_OUT="$found"
     return 0
 }
+
+# rtb_rename_base_path_into <root> <base-sha> <rel> — RTB_BASE_REL_OUT = the path <rel> has at
+# <base-sha> (itself, else its rename source, else ""); RTB_BASE_OLD_OUT = the rename source or "".
+rtb_rename_base_path_into() {
+    # shellcheck disable=SC2034  # read by the sourcing caller
+    RTB_BASE_REL_OUT="" RTB_BASE_OLD_OUT=""
+    if git -C "$1" cat-file -e "$2:$3" 2>/dev/null; then
+        RTB_BASE_REL_OUT="$3"
+        return 0
+    fi
+    rtb_rename_source_into "$1" "$2" "$3"
+    # shellcheck disable=SC2034
+    RTB_BASE_REL_OUT="$RTB_RENAME_OUT" RTB_BASE_OLD_OUT="$RTB_RENAME_OUT"
+    return 0
+}

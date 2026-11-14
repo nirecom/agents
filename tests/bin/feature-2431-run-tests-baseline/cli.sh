@@ -87,17 +87,25 @@ appendEvents(process.argv[2], [
     && pass "C8: BASELINE: line shows broken" \
     || fail "C8: broken classification missing ($(cli_baseline_lines))"
 
-  # ---- C9: a timeout at base is never preexisting. An explicit timeout below the derived one
-  # (#2688) says nothing about the test, so it is budget-exhausted: a re-run request (exit 8). ----
-  local t_slp="tests/bin/test-sleep.sh"
+  # ---- C9: a timeout at base is never preexisting. The intent's exception (#3015): an explicit
+  # timeout below the derived one (#2688) says nothing about the test, so it is budget-exhausted
+  # (a re-run request, exit 8), with a `timeout not recorded:` note and no branch cache row. ----
+  local t_slp="tests/bin/test-sleep.sh" c9_cache
+  c9_cache="$(cli_case_cache c9)"
   seed_failing "c9-$$" "$t_slp"
-  rtb_cli_run "$(cli_case_cache c9)" "$repo" "c9-$$" --per-test-timeout 1
+  rtb_cli_run "$c9_cache" "$repo" "c9-$$" --per-test-timeout 1
   if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: undetermined[[:space:]]+$t_slp.*budget-exhausted" \
     && [ "$RTB_CLI_RC" -eq 8 ]; then
     pass "C9: timeout under an explicit short limit → undetermined budget-exhausted, exit 8"
   else
     fail "C9: expected undetermined budget-exhausted + exit 8, rc=$RTB_CLI_RC ($(cli_baseline_lines))"
   fi
+  printf '%s\n' "$RTB_CLI_OUT" | grep -qF "run-tests-baseline: timeout not recorded: $t_slp requested 1s;" \
+    && pass "C9: the unrecorded timeout is announced on stderr" \
+    || fail "C9: no 'timeout not recorded:' line ($(printf '%s\n' "$RTB_CLI_OUT" | grep 'timeout' | tr '\n' '|'))"
+  grep -qs 'timeout-after-' "$c9_cache"/branch.v2.*.seg \
+    && fail "C9: the explicit-below-derived timeout was cached as timeout-after-" \
+    || pass "C9: no timeout-after- row in the branch cache"
   cli_assert_not_completed "C9" "c9-$$" "$t_slp"
 
   # ---- C10: FALLBACK merge-base (no main, HEAD~1 only) → exit 4 passed through ----
