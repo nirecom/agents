@@ -1,5 +1,6 @@
 # pwsh.ps1 - Install or update PowerShell Core
-# Install: winget. Update: GitHub Releases API (faster than winget package sync).
+# Install: winget. Update: GitHub Releases API (faster than winget package sync);
+# falls back to winget upgrade when the release has no MSI asset.
 # Usage: Called by install.ps1 (default section)
 
 Set-StrictMode -Version Latest
@@ -51,20 +52,36 @@ if ($latestVersion -le $currentVersion) {
 Write-Host "Updating PowerShell Core: $currentVersion -> $latestVersion ..."
 $arch = if ([Environment]::Is64BitOperatingSystem) { 'win-x64' } else { 'win-x86' }
 $msiAsset = $release.assets | Where-Object { $_.name -match "$arch\.msi$" } | Select-Object -First 1
+# 7.7.0+ ships no MSI (only zip/msixbundle), so fall back to winget.
 if (-not $msiAsset) {
-    Write-Warning "Could not find MSI asset for $latestVersion ($arch)."
-    return
-}
-
-$msiPath = Join-Path ([System.IO.Path]::GetTempPath()) $msiAsset.name
-Write-Host "Downloading $($msiAsset.name)..."
-Invoke-WebRequest -Uri $msiAsset.browser_download_url -OutFile $msiPath
-
-$proc = Start-Process msiexec -ArgumentList "/i `"$msiPath`" /quiet /norestart" -Verb RunAs -Wait -PassThru
-if ($proc.ExitCode -eq 0) {
-    Write-Host "PowerShell Core updated to $latestVersion. Restart your terminal." -ForegroundColor Green
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        Write-Warning "No MSI asset for $latestVersion ($arch) and winget not found. Update PowerShell Core manually: https://github.com/PowerShell/PowerShell/releases/latest"
+    } else {
+        Write-Host "No MSI asset for $latestVersion ($arch); updating via winget..."
+        winget upgrade --id Microsoft.PowerShell --accept-source-agreements --accept-package-agreements
+        if ($LASTEXITCODE -eq 0) {
+            # winget may lag the GitHub release, so do not claim $latestVersion was installed.
+            Write-Host "PowerShell Core updated via winget. Restart your terminal." -ForegroundColor Green
+        } elseif ($LASTEXITCODE -eq -1978335189) {
+            # UPDATE_NOT_APPLICABLE: winget's source has not caught up with the GitHub release yet.
+            Write-Warning "winget has no update for $latestVersion yet. Re-run install.ps1 later."
+        } else {
+            Write-Warning "winget upgrade failed (exit code: $LASTEXITCODE). Re-run install.ps1 to retry."
+        }
+        # Already reported above; keep install.ps1 from treating it as a failure.
+        $global:LASTEXITCODE = 0
+    }
 } else {
-    Write-Warning "MSI install failed (exit code: $($proc.ExitCode))."
+    $msiPath = Join-Path ([System.IO.Path]::GetTempPath()) $msiAsset.name
+    Write-Host "Downloading $($msiAsset.name)..."
+    Invoke-WebRequest -Uri $msiAsset.browser_download_url -OutFile $msiPath
+
+    $proc = Start-Process msiexec -ArgumentList "/i `"$msiPath`" /quiet /norestart" -Verb RunAs -Wait -PassThru
+    if ($proc.ExitCode -eq 0) {
+        Write-Host "PowerShell Core updated to $latestVersion. Restart your terminal." -ForegroundColor Green
+    } else {
+        Write-Warning "MSI install failed (exit code: $($proc.ExitCode))."
+    }
 }
 
 # --- Install Pester 5 if not present ---
