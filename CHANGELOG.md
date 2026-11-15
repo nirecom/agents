@@ -232,3 +232,7 @@ Changes: Workflow sentinel echoes (`echo "<<WORKFLOW_...>>"`) no longer trigger 
 ### FEATURE: PR #3048 (2026-11-15)
 Background: test(#3033): split main-enforce-worktree-guard.sh into five independent entrypoints
 Changes: (none) — test-only restructuring with no user-visible change.
+
+### FEATURE: PR #3050 (2026-11-15)
+Background: fix(#3021): warn with manual migration guidance when winget cannot upgrade an MSI-installed pwsh
+Changes: `install.ps1` on Windows now shows clear manual-migration guidance when PowerShell was installed from an MSI and winget cannot upgrade it, instead of asking you to re-run the installer.
