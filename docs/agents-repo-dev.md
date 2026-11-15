@@ -73,7 +73,7 @@ of truth for the ESLint toolchain; change versions there, never in the wrapper.
 Control files (JSON, counters, markers) go to `<WORKFLOW_STATE_DIR>/<sid>.control/`, prose artifacts to `WORKFLOW_PLANS_DIR`; register every new name in `hooks/lib/plans-artifact-registry.json` with its retention class — the commit gate reads that file from the tree being committed, so the registration and its first use can share one commit. Policy: `docs/architecture/claude-code/state-dirs.md`.
 Tests must never reach the live state root: `bin/check-plans-dir-isolation.sh` gates this at pre-commit and in CI (rules: `rules/test/fixture-isolation.md`).
 
-## Consolidated test suites: one dispatcher, sourced fragments
+## Consolidated test suites: shared harness, sourced fragments
 
 Background: a hook that accumulates cases over many issues ends up with one test
 file per issue, and each file carries its own private copy of the same harness —
@@ -81,9 +81,13 @@ fixture builders, payload assembly, decision helpers. Thirteen files targeted
 `hooks/enforce-worktree.js` that way. The duplication costs tokens on every read
 and makes a harness fix a thirteen-place edit.
 
-The shape that replaces it: a dispatcher `tests/<cat>/<name>.sh` owns the harness and
-sources fragments from `tests/<cat>/<name>/`. `tests/hooks/main-enforce-worktree-guard.sh`
-is the reference implementation.
+The shape that replaces it: a shared harness (`tests/lib/<name>-harness.sh`) plus fragments
+in `tests/<cat>/<name>/`, run through independent entrypoints `tests/<cat>/<name>-<group>.sh`
+that each source the fragments one table assigns to them (`tests/lib/<name>-groups.sh`).
+The `main-enforce-worktree-guard` suite is the reference implementation: five entrypoints
+(`tests/hooks/main-enforce-worktree-guard-<group>.sh`, `tests/lib/mewg-harness.sh`,
+`tests/lib/mewg-groups.sh`), split so each run fits the per-test timeout. Static checks in the
+table module fail when the fragment set, the table and the entrypoints disagree.
 
 **Fragments are deliberately not runnable on their own.** `tests/run-all.sh`
 enumerates the files directly in the six canonical categories (hooks, bin,
@@ -92,7 +96,7 @@ test language registry (`docs/architecture/claude-code/test-language-registry.md
 — a missing launch tool (pwsh, uv) makes that file SKIP (exit 77) rather than
 FAIL — and the match never crosses `/`, so a fragment
 nested under `tests/<cat>/<name>/` is invisible to the runner while the
-dispatcher at `tests/<cat>/<name>.sh` is not. That is the mechanism that keeps
+entrypoints at `tests/<cat>/<name>-<group>.sh` are not. That is the mechanism that keeps
 each case counted exactly once. A fragment has no harness of its own and fails
 immediately if invoked directly.
 
@@ -102,7 +106,8 @@ silently overwrites a sibling's.
 
 **The gate when consolidating is case-identifier preservation.** Capture the
 `PASS: ` / `FAIL: ` / `SKIP: ` lines before and after and compare them as
-multisets; they must match. Normalize embedded temp paths first — an identifier
+multisets; they must match. When a suite is split across entrypoints, compare the union of
+all entrypoints' lines against the pre-split capture. Normalize embedded temp paths first — an identifier
 that interpolates a per-run temp directory never matches verbatim. A case that
 changes wording is a case that silently stopped being the case it was.
 

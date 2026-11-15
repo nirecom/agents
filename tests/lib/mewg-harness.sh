@@ -1,18 +1,16 @@
 #!/bin/bash
-# tests/hooks/main-enforce-worktree-guard.sh
+# tests/lib/mewg-harness.sh
 # Tests: hooks/enforce-worktree.js
-# Tags: TL2, worktree, enforce, hook, bin, git, pre-commit, scope:common, enforce-worktree, workflow, supervisor, orphan-cwd, bash-c, fail-closed, context-populate, block-extras, axis-a, env, shell, windows, tests, merge, cross-repo, issue-525, feature-885
-# Fragments in tests/hooks/main-enforce-worktree-guard/ are sourced into THIS shell,
-# so every fragment-local name needs a short per-fragment prefix.
-# TL3 gap: cases feed hand-built stdin to `node hooks/enforce-worktree.js`, so a
-# dropped settings.json registration or a diverged host payload shape stays
-# green. Covered elsewhere: tests/hooks/fix-1780-round4-write-tool-parity.sh section R
-# (static registration) and bin/check-verification-gate.sh category
-# hook-registration.
+# Tags: TL2, shared-lib, scope:common
+# Harness shared by the tests/hooks/main-enforce-worktree-guard-<group>.sh entrypoints.
+# Source AFTER the entrypoint has defined SCRIPT_CHECKOUT_ROOT and TMPDIR_BASE, pinned
+# WORKFLOW_STATE_DIR / WORKFLOW_PLANS_DIR and set its cleanup trap
+# (rules/test/fixture-isolation.md requires the pin at top level, before the first hook run).
+# Fragments in tests/hooks/main-enforce-worktree-guard/ are sourced into the entrypoint's
+# shell and use these names unchanged.
 
-set -uo pipefail
-
-SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+: "${SCRIPT_CHECKOUT_ROOT:?mewg-harness.sh needs SCRIPT_CHECKOUT_ROOT from the entrypoint}"
+: "${TMPDIR_BASE:?mewg-harness.sh needs TMPDIR_BASE from the entrypoint}"
 
 to_node_path() {
     if command -v cygpath >/dev/null 2>&1; then
@@ -50,23 +48,6 @@ run_with_timeout() {
         "$@"
     fi
 }
-
-TMPDIR_BASE="$(node -e "
-const os=require('os'),path=require('path'),fs=require('fs');
-const d=path.join(os.tmpdir(),'mewg-'+process.pid).replace(/\\\\/g,'/');
-fs.mkdirSync(d,{recursive:true});
-console.log(d);
-" 2>/dev/null)"
-[ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR_BASE"' EXIT
-
-# rules/test/fixture-isolation.md: pin the workflow dir and the plans dir as a
-# PAIR, or supervisor-emit.js resolves the developer's real ~/.workflow-plans/.
-# Unset the inherited session ids for the same reason.
-export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow"
-export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/workflow-plans"
-mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_CODE_SESSION_ID
 
 # ── decision helpers ────────────────────────────────────────────────────────
 # Two-state: anything that is not an explicit block counts as allow. The one
@@ -249,7 +230,6 @@ main_worktree_dir() {
 BASELINE_REPO="$(setup_main_checkout "baseline")"
 export BASELINE_REPO
 
-# ── fragments ───────────────────────────────────────────────────────────────
 FRAGMENT_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/main-enforce-worktree-guard"
 
 # Completion ledger: every fragment's LAST line is `frag_done <its own basename>`.
@@ -259,66 +239,3 @@ FRAGMENT_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/main-enforce-worktree-guard"
 FRAG_DONE=""
 frag_done() { FRAG_DONE="${FRAG_DONE}$1
 "; }
-
-# shellcheck source=tests/hooks/main-enforce-worktree-guard/merge-gate.sh
-. "$FRAGMENT_DIR/merge-gate.sh"
-# shellcheck source=tests/hooks/main-enforce-worktree-guard/hooks-bypass-detection.sh
-. "$FRAGMENT_DIR/hooks-bypass-detection.sh"
-# shellcheck source=tests/hooks/main-enforce-worktree-guard/orphan-cwd-fail-closed.sh
-. "$FRAGMENT_DIR/orphan-cwd-fail-closed.sh"
-# shellcheck source=tests/hooks/main-enforce-worktree-guard/block-reporting.sh
-. "$FRAGMENT_DIR/block-reporting.sh"
-# shellcheck source=tests/hooks/main-enforce-worktree-guard/sanctioned-bypass.sh
-. "$FRAGMENT_DIR/sanctioned-bypass.sh"
-# shellcheck source=tests/hooks/main-enforce-worktree-guard/target-extraction.sh
-. "$FRAGMENT_DIR/target-extraction.sh"
-# shellcheck source=tests/hooks/main-enforce-worktree-guard/interpreter-readonly.sh
-. "$FRAGMENT_DIR/interpreter-readonly.sh"
-# shellcheck source=tests/hooks/main-enforce-worktree-guard/worktree-lifecycle.sh
-. "$FRAGMENT_DIR/worktree-lifecycle.sh"
-# shellcheck source=tests/hooks/main-enforce-worktree-guard/push-range-basic.sh
-. "$FRAGMENT_DIR/push-range-basic.sh"
-# shellcheck source=tests/hooks/main-enforce-worktree-guard/push-range-cross-repo.sh
-. "$FRAGMENT_DIR/push-range-cross-repo.sh"
-# shellcheck source=tests/hooks/main-enforce-worktree-guard/repo-resolution.sh
-. "$FRAGMENT_DIR/repo-resolution.sh"
-# shellcheck source=tests/hooks/main-enforce-worktree-guard/exclude-and-session-scope.sh
-. "$FRAGMENT_DIR/exclude-and-session-scope.sh"
-
-# ── fragment-set integrity ──────────────────────────────────────────────────
-# The `. "$FRAGMENT_DIR/…"` lines above are the only wiring a fragment has, so a
-# dropped line removes a whole behavioural family with the suite still green.
-FRAG_PRESENT="$(ls -1 "$FRAGMENT_DIR" 2>/dev/null | grep '\.sh$' | sort)"
-FRAG_SOURCED="$(sed -n 's|^\. "\$FRAGMENT_DIR/\(.*\.sh\)"$|\1|p' "${BASH_SOURCE[0]}" | sort)"
-
-frag_only_in_first() {
-    comm -23 <(printf '%s\n' "$1" | grep -v '^$') <(printf '%s\n' "$2" | grep -v '^$') \
-        | tr '\n' ' ' | sed 's/ *$//'
-}
-FRAG_UNSOURCED="$(frag_only_in_first "$FRAG_PRESENT" "$FRAG_SOURCED")"
-FRAG_ABSENT="$(frag_only_in_first "$FRAG_SOURCED" "$FRAG_PRESENT")"
-
-if [ -z "$FRAG_UNSOURCED" ] && [ -z "$FRAG_ABSENT" ]; then
-    pass "FRAG1 every fragment file is sourced and every sourced fragment exists"
-else
-    fail "FRAG1 fragment set mismatch — present-but-unsourced: [${FRAG_UNSOURCED:-none}] sourced-but-missing: [${FRAG_ABSENT:-none}]"
-fi
-
-# FRAG1 only proves the two NAME lists agree; it passes while a fragment returns
-# early or fails to source. The ledger is what proves each one reached its end.
-FRAG_DONE_SORTED="$(printf '%s' "$FRAG_DONE" | sort)"
-FRAG_UNFINISHED="$(frag_only_in_first "$FRAG_SOURCED" "$FRAG_DONE_SORTED")"
-FRAG_UNEXPECTED="$(frag_only_in_first "$FRAG_DONE_SORTED" "$FRAG_SOURCED")"
-
-if [ -z "$FRAG_UNFINISHED" ] && [ -z "$FRAG_UNEXPECTED" ]; then
-    pass "FRAG2 every sourced fragment ran through to its completion marker"
-else
-    fail "FRAG2 fragment completion mismatch — sourced-but-unfinished: [${FRAG_UNFINISHED:-none}] marked-but-not-sourced: [${FRAG_UNEXPECTED:-none}]"
-fi
-
-echo ""
-# Deliberately not the `PASS: `/`FAIL: `/`SKIP: ` prefixes — those are reserved
-# for case lines, and run-all's tallies would count this summary as three cases.
-echo "Total: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
-[ "$FAIL" -eq 0 ] || exit 1
-exit 0

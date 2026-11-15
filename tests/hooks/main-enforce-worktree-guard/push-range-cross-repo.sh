@@ -1,6 +1,6 @@
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, worktree, enforce, hook, bin, git, cross-repo, scope:common
-# Sourced by tests/hooks/main-enforce-worktree-guard.sh
+# Sourced by the tests/hooks/main-enforce-worktree-guard-<group>.sh that MEWG_TABLE (tests/lib/mewg-groups.sh) assigns
 # Origin: tests/fix-enforce-worktree-push-fix-range.sh (cross-repo cases, #653).
 # Cases: the `Fix 1 (cross-repo): …` family. Same-repo: push-range-basic.sh.
 # Same function as push-range-basic.sh, different caller shape: CWD is repo A and

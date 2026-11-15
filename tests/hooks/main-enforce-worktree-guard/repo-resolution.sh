@@ -1,10 +1,10 @@
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, worktree, enforce, hook, bin, git, scope:common
-# Sourced by tests/hooks/main-enforce-worktree-guard.sh
+# Sourced by the tests/hooks/main-enforce-worktree-guard-<group>.sh that MEWG_TABLE (tests/lib/mewg-groups.sh) assigns
 # Origin: tests/fix-extra-repos-dir-scan.sh (all cases).
 # Cases: N1-N5, E1-E4, IDEM1, SEC1, INT1, INT2.
 # getSessionRepoRoots(): an ENFORCE_WORKTREE_ADDITIONAL_REPOS entry that is not a
-# git repo root has its depth-1 subdirs scanned, so `C:\git` stands in for every
+# git repo root has its depth-1 subdirs scanned, so one parent dir stands in for every
 # repo under it. `[NEW]`/`[EXISTING]` suffixes are case identifiers — never trim.
 
 # Needs a third state beyond the shared two-state guard_decision: 0=allow, 1=block,
@@ -226,13 +226,16 @@ rr_assert_allow "$rr_out" \
 
 rr_pair="$(setup_linked_worktree "INT2-session")"; rr_wt="${rr_pair#*|}"
 rr_pair2="$(setup_linked_worktree "INT2-target")"; rr_target="${rr_pair2#*|}"
+# Since #321 an absolute `git -C` path is payload-derived scope (getSessionRepoRoots), so the
+# gh write is in scope and the guard ALLOWS it. The labels still say "blocked": they are
+# result-line identifiers and stay verbatim; the verdict inverted.
 rr_out="$(run_bash_guard \
     "git -C \"$(to_node_path "$rr_target")\" rev-parse HEAD && gh pr merge 1" \
     "$rr_wt" ENFORCE_WORKTREE=on)"
 if rr_decision "$rr_out"; then
-    fail "INT2: no EXTRA_REPOS, out-of-scope target should be blocked ($rr_out) [EXISTING]"
-else
     pass "INT2: no EXTRA_REPOS, out-of-scope target via git -C blocked [EXISTING]"
+else
+    fail "INT2: no EXTRA_REPOS, out-of-scope target should be blocked ($rr_out) [EXISTING]"
 fi
 
 # Completion marker (dispatcher FRAG2) — must remain the last line.

@@ -48,7 +48,7 @@ case_begin "git-c-scope-boundaries" "hooks/enforce-worktree.js"
 # against narrowed roots (cwd + ADDITIONAL_REPOS), never against the payload-
 # derived -C path itself. E2 is RED until then: the absolute -C joins
 # getSessionRepoRoots() and is judged as a session main checkout (same failure
-# as main-enforce-worktree-guard.sh "Bug 2: Bash git -C non-session commit").
+# as main-enforce-worktree-guard-exclude-scope.sh "Bug 2: Bash git -C non-session commit").
 ew_expect allow "E2. main CWD: git -C <abs-external> commit -m x → ALLOW (external repo; RED until narrowed roots)" \
     "$(run "git -C \"$EXT_ABS\" commit -m x")"
 ew_expect block "E3. main CWD: git -C \$HOME/.claude/projects commit → BLOCK (env var stays AMBIGUOUS)" \

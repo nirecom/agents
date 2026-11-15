@@ -1,6 +1,6 @@
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, worktree, enforce, hook, bin, shell, scope:common
-# Sourced by tests/hooks/main-enforce-worktree-guard.sh
+# Sourced by the tests/hooks/main-enforce-worktree-guard-<group>.sh that MEWG_TABLE (tests/lib/mewg-groups.sh) assigns
 # Origin: tests/fix-enforce-worktree-push-fix-interp.sh (all cases).
 # Cases: the `Fix 2: …` allow/block family below.
 # isReadOnlyInterpreterC(cmd): `bash -c` / `pwsh -Command` is allowed only when the
@@ -46,10 +46,13 @@ ir_run_case block "interp-rm" "bash -c 'rm -rf /tmp/foo'" \
 ir_run_case block "interp-outer" "bash -c 'echo hi' && rm file" \
     "Fix 2: outer chaining (bash -c ... && rm) blocks" \
     "Fix 2: bash -c '...' && rm should block (outer chaining)"
-ir_run_case block "interp-unquoted" "bash -c ls" \
+# The next two expect allow although their labels still say "blocks": since #1679 S-3 the
+# IR fallback in isReadOnlyInterpreterC resolves argv, so an unquoted read-only body is admitted.
+# Labels are result-line identifiers and stay verbatim.
+ir_run_case allow "interp-unquoted" "bash -c ls" \
     "Fix 2: bash -c ls (unquoted body) blocks (fail-closed)" \
     "Fix 2: bash -c <unquoted body> should fail-closed"
-ir_run_case block "interp-unq-multi" "bash -c echo hello" \
+ir_run_case allow "interp-unq-multi" "bash -c echo hello" \
     "Fix 2: bash -c echo hello blocks (fail-closed)" \
     "Fix 2: bash -c echo hello (unquoted multi-token) should block"
 ir_run_case block "interp-ansic" "bash -c \$'echo hi'" \
