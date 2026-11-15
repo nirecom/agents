@@ -52,9 +52,10 @@ case_end
 
 # #2688 T2: when the standalone re-run itself cannot be judged, S8 table 2 decides: a timeout under an
 # explicit --per-test-timeout below the derived one (the #3015 exception) is undetermined budget-exhausted
-# (exit 8), never cached as timeout-after-<N>s; a decoy HIT or UNRUNNABLE leaves no branch records, so it is
-# new-case-failure-on-branch case-records-missing-on-branch (pending, fail-closed). The seed is exit 124, so
-# misreading it as "standalone pass" would emit a flaky line.
+# (exit 8), never cached as timeout-after-<N>s; a decoy HIT on a changed test or UNRUNNABLE leaves no branch
+# records, so it is new-case-failure-on-branch case-records-missing-on-branch (pending, fail-closed); the decoy
+# HIT on an unchanged test the base also fails: feature-3055-branch-decoy-base-fail.sh. The seed is
+# exit 124, so misreading it as "standalone pass" would emit a flaky line.
 # commit_branch <repo> - commit the changes on feature (keeps the own checkout clean).
 commit_branch() { git -C "$1" add -A; git -C "$1" commit -q -m "branch variant"; }
 # no_branch_verdict <label> - no branch-side pass line appears and no base-only preexisting is emitted.
@@ -85,7 +86,7 @@ ck "inc-to: no timeout-after- row in the branch cache" "" "$(grep -ls 'timeout-a
 no_branch_verdict "inc-to"
 case_end
 
-case_begin "branch-rerun-decoy-hit-is-records-missing" "bin/lib/run-tests-baseline-branch.sh"
+case_begin "branch-rerun-decoy-hit-with-changed-test-is-records-missing" "bin/lib/run-tests-baseline-branch.sh"
 R="$TMPROOT/inc-decoy"; mk_repo "$R" 0; S="br-inc-decoy-$$"; mkdir -p "$R.cache"
 ROOT_VAR="AGENTS_MAIN""_ROOT"
 printf '#!/usr/bin/env bash\ntouch "%s"\nnode "$%s/hooks/lib/load-env.js" >/dev/null 2>&1 || true\nexit 0\n' \

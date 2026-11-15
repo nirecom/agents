@@ -99,6 +99,7 @@ const ROWS = [
   ["undetermined", "base-launcher-predates-result-conversion", 0, AUTO],
   ["undetermined", "timeout-at-base", 0, AUTO],
   ["undetermined", "root-decoy-hit-at-base", 0, AUTO],
+  ["undetermined", "root-decoy-hit-on-branch", 0, AUTO],
   ["undetermined", "home-claude-ref", 0, AUTO],
   ["undetermined", "budget-exhausted", 8, null],
   ["undetermined", "worktree-create-failed", 8, null],
@@ -127,6 +128,10 @@ const ROWS = [
   ["undetermined", "exceeds-budget", 0, AUTO],
   ["undetermined", "exceeds-budget-via-rename:tests/bin/old.sh", 1, null],
   ["undetermined", "exceeds-budgetX", 1, null],
+  // #3055: a branch decoy hit against a base failure of an unchanged test is auto; the rename suffix
+  // and a near-miss spelling stay pending (exact match).
+  ["undetermined", "root-decoy-hit-on-branch-via-rename:tests/bin/old.sh", 1, null],
+  ["undetermined", "root-decoy-hit-on-branchX", 1, null],
   // #2956 S8 table 1: a file-level verdict is auto for its two details only (a rename suffix is
   // stripped before matching); a new failure on the branch is never registered, so it is pending.
   ["file-verdict-preexisting", "test-file-changed", 0, AUTO],
