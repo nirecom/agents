@@ -24,6 +24,55 @@ for t in tests/bin/t.sh tests/bin/new-t.sh tests/bin/added.sh; do
 done'
 }
 
+# #3035: the per-language cap. Each EFF/REC line is printed twice, without RUN_ALL_TIMEOUT_SECONDS
+# and with 60 exported; env= is its value after the call. The lang cap output is RTB_TIMEOUT_LANG_CAP_OUT.
+tr_unit_cap_probe() {
+  tr_drive "$TMPROOT/c-unit-cap" '
+for env in none 60; do
+  if [ "$env" = none ]; then unset RUN_ALL_TIMEOUT_SECONDS; else export RUN_ALL_TIMEOUT_SECONDS=60; fi
+  for a in "300|180" "300|" "100|180"; do
+    RAC_EFFECTIVE_TIMEOUT=unset
+    rtb_timeout_effective_into "${a%%|*}" "${a#*|}"
+    printf "EFF[%s] %s -> %s env=%s\n" "$env" "$a" "$RAC_EFFECTIVE_TIMEOUT" "${RUN_ALL_TIMEOUT_SECONDS:-none}"
+  done
+  for a in "300 300 300 180" "300 20 300 180" "299 300 300 180" "179 300 300 180" "300 300 300"; do
+    rc=0; rtb_timeout_recordable $a || rc=$?; printf "REC[%s] %s -> %s\n" "$env" "$a" "$rc"
+  done
+done
+for t in tests/bin/t.sh tests/bin/j.js tests/bin/none.txt; do
+  RTB_TIMEOUT_LANG_CAP_OUT=unset
+  rtb_timeout_lang_cap_into "$t"
+  printf "CAP %s -> [%s]\n" "$t" "$RTB_TIMEOUT_LANG_CAP_OUT"
+done'
+}
+
+tr_unit_effective() {
+  local env
+  for env in none 60; do
+    tr_ck "[$env] min(300, cap 180) = 180" "EFF[$env] 300|180 -> 180 env=$env" "$(tr_line "EFF[$env] 300|180 ")"
+    tr_ck "[$env] no cap: 300 as is" "EFF[$env] 300| -> 300 env=$env" "$(tr_line "EFF[$env] 300| ")"
+    tr_ck "[$env] below the cap: 100 as is" "EFF[$env] 100|180 -> 100 env=$env" "$(tr_line "EFF[$env] 100|180 ")"
+  done
+}
+
+tr_unit_lang_cap() {
+  tr_ck "bash (timeoutSeconds null): no cap" "CAP tests/bin/t.sh -> []" "$(tr_line 'CAP tests/bin/t.sh ')"
+  tr_ck "js: launch.timeoutSeconds 180" "CAP tests/bin/j.js -> [180]" "$(tr_line 'CAP tests/bin/j.js ')"
+  tr_ck "a path no registry entry matches: no cap" "CAP tests/bin/none.txt -> []" "$(tr_line 'CAP tests/bin/none.txt ')"
+}
+
+tr_unit_recordable_cap() {
+  local env
+  for env in none 60; do
+    tr_ck "[$env] cap 180: applied 300 of requested 300 is recordable" "REC[$env] 300 300 300 180 -> 0" "$(tr_line "REC[$env] 300 300 300 180 ")"
+    tr_ck "[$env] cap 180: explicit 20 below derived 300 is never recordable (raw r >= d)" \
+      "REC[$env] 300 20 300 180 -> 1" "$(tr_line "REC[$env] 300 20 300 180 ")"
+    tr_ck "[$env] cap 180: applied 299 still reaches the effective 180" "REC[$env] 299 300 300 180 -> 0" "$(tr_line "REC[$env] 299 300 300 180 ")"
+    tr_ck "[$env] cap 180: applied 179 is below the effective 180" "REC[$env] 179 300 300 180 -> 1" "$(tr_line "REC[$env] 179 300 300 180 ")"
+    tr_ck "[$env] no cap argument: unchanged" "REC[$env] 300 300 300 -> 0" "$(tr_line "REC[$env] 300 300 300 -> ")"
+  done
+}
+
 tr_unit_requested() {
   tr_ck "unmeasured, no explicit: default 300" "REQ | -> 300 300 default" "$(tr_line 'REQ | ')"
   tr_ck "measured 10: derived floor 300" "REQ 10| -> 300 300 derived" "$(tr_line 'REQ 10| ')"

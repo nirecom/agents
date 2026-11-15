@@ -14,7 +14,7 @@ readonly TMPROOT
 trap 'chmod -R u+rwx "$TMPROOT" >/dev/null 2>&1 || true; rm -rf "$TMPROOT"' EXIT
 harness_isolate "$TMPROOT/iso"
 export WORKFLOW_STATE_DIR="$(np "$TMPROOT/iso/workflow-state")" WORKFLOW_PLANS_DIR="$(np "$TMPROOT/iso/plans")"
-unset CLAUDE_CODE_SESSION_ID RTB_BUDGET_TOTAL
+unset CLAUDE_CODE_SESSION_ID RTB_BUDGET_TOTAL RUN_ALL_TIMEOUT_SECONDS
 mkdir -p "$TMPROOT/home" "$TMPROOT/transcripts"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPROOT/transcripts"
 HOME="$(np "$TMPROOT/home")"
@@ -29,7 +29,7 @@ tr_body() {
   printf '#!/usr/bin/env bash\n# fixture test for #3015\n# line a\n# line b\n# line c\n# line d\n# %s\nexit 1\n' "$1"
 }
 
-# tr_repo <dir> — main: t.sh, u.sh, old-t.sh; feature: old-t.sh renamed to new-t.sh, added.sh new.
+# tr_repo <dir> — main: t.sh, u.sh, old-t.sh, j.js; feature: old-t.sh renamed to new-t.sh, added.sh new.
 # Sets TR_B2 to main's commit and TR_ANC to its parent (a real ancestor base). Checked out on feature.
 tr_repo() {
   local r="$1"
@@ -46,6 +46,8 @@ tr_repo() {
   # shellcheck disable=SC2034 # read by base.sh
   TR_ANC="$(git -C "$r" rev-parse HEAD)"
   tr_body t >"$r/tests/bin/t.sh"; tr_body u >"$r/tests/bin/u.sh"; tr_body old >"$r/tests/bin/old-t.sh"
+  # j.js: the registry's js entry caps a run at launch.timeoutSeconds 180 (#3035).
+  printf '// fixture js test for #3035\nprocess.exit(1);\n' >"$r/tests/bin/j.js"
   git -C "$r" add -A; git -C "$r" commit -q -m base
   TR_B2="$(git -C "$r" rev-parse HEAD)"
   git -C "$r" checkout -q -b feature

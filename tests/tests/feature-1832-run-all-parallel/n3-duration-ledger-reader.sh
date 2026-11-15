@@ -272,4 +272,78 @@ else
     fx_ledger_clear
 fi
 
+# ===========================================================================
+# N22 — the optional 4th argument returns the termination of the line the seconds came from (#3047)
+# ===========================================================================
+# term_for <id> — the termination the reader wrote for that id, "(empty)" / "(absent)" as secs_for.
+term_for() {
+    awk -F'\t' -v want="$1" '$1 == want { print ($2 == "" ? "(empty)" : $2); found = 1; exit }
+                             END { if (!found) print "(absent)" }' "$TERM_OUT"
+}
+TERM_OUT="$FX_TMP_ROOT/lookup.term"
+
+if lib_missing "N22a. three arguments: the out file is byte-identical with and without a term file"; then
+    fx_fail "N22b. the term file names each key's newest termination (implementation missing or unloadable: $DUR_LIB_REL)"
+else
+    fresh_ledger
+    {
+        printf '%s|748|FAIL|completed|done/c.sh\n' "$RID"
+        printf '%s|400|-|timeout|done/c.sh\n' "$RID"
+        printf '%s|400|-|timeout|late/c.sh\n' "$RID"
+        printf '%s|927|FAIL|completed|late/c.sh\n' "$RID"
+        printf '%s|5|?|?|legacy/q.sh\n' "$RID"
+    } > "$(seg_path 20200101T000001 1)"
+    printf '%s|9|PASS|completed|cross/s.sh\n' "$RID" >> "$(seg_path 20200101T000001 1)"
+    printf '%s|30|-|timeout|cross/s.sh\n' "$RID" > "$(seg_path 20200101T000002 1)"
+    {
+        printf 'k1\tdone/c.sh\n'
+        printf 'k2\tlate/c.sh\n'
+        printf 'k3\tlegacy/q.sh\n'
+        printf 'k4\tcross/s.sh\n'
+        printf 'k5\tnever/recorded.sh\n'
+    } > "$KEYS"
+    run_all_dur_lookup "$AG" "$KEYS" "$OUT"
+    RC3=$?
+    cp "$OUT" "$FX_TMP_ROOT/lookup3.out"
+    WANT3="$(printf 'k1\t400\nk2\t927\nk3\t5\nk4\t30\nk5\t')"
+    GOT3="$(cat "$OUT")"
+    rm -f "$TERM_OUT"
+    run_all_dur_lookup "$AG" "$KEYS" "$OUT" "$TERM_OUT"
+    RC4=$?
+    if [ "$RC3" -eq 0 ] && [ "$GOT3" = "$WANT3" ] && [ "$RC4" -eq 0 ] && cmp -s "$OUT" "$FX_TMP_ROOT/lookup3.out"; then
+        fx_pass "N22a. the 3-argument out file is unchanged (pinned) and identical when a term file is also asked for"
+    else
+        fx_fail "N22a. want exit 0 twice and the pinned out [$WANT3] both times, got exit $RC3/$RC4 out3=[$GOT3] out4=[$(cat "$OUT" 2>/dev/null)]"
+    fi
+    if [ -f "$TERM_OUT" ]; then
+        T1="$(term_for k1)"; T2="$(term_for k2)"; T3="$(term_for k3)"; T4="$(term_for k4)"; T5="$(term_for k5)"
+        ROWS="$(grep -c '' "$TERM_OUT" 2>/dev/null || true)"
+        ORDER="$(cut -f1 "$TERM_OUT" | tr '\n' ' ')"
+    else
+        T1="(no file)" T2="" T3="" T4="" T5="" ROWS=0 ORDER=""
+    fi
+    if [ "$T1" = "timeout" ] && [ "$T2" = "completed" ] && [ "$T3" = "?" ] && [ "$T4" = "timeout" ] \
+        && [ "$T5" = "(empty)" ] && [ "$ROWS" = "5" ] && [ "$ORDER" = "k1 k2 k3 k4 k5 " ]; then
+        fx_pass "N22b. the term file names the newest line's termination per key, in keys order (later line, newer segment)"
+    else
+        fx_fail "N22b. want timeout/completed/?/timeout/(empty) in order k1..k5, got $T1/$T2/$T3/$T4/$T5 rows=$ROWS order=[$ORDER]"
+    fi
+fi
+
+if lib_missing "N22c. no ledger at all: the term file still has one blank row per key"; then :
+else
+    fresh_ledger
+    printf 'k1\tdone/c.sh\nk2\tlate/c.sh\n' > "$KEYS"
+    rm -f "$TERM_OUT"
+    run_all_dur_lookup "$AG" "$KEYS" "$OUT" "$TERM_OUT"
+    RC=$?
+    GOT="$(cat "$TERM_OUT" 2>/dev/null || printf '(no file)')"
+    if [ "$RC" -eq 0 ] && [ "$GOT" = "$(printf 'k1\t\nk2\t')" ]; then
+        fx_pass "N22c. with no segment the term file holds k1 and k2 with empty terminations"
+    else
+        fx_fail "N22c. want exit 0 and two blank rows, got exit $RC term=[$GOT]"
+    fi
+    fx_ledger_clear
+fi
+
 fx_finish

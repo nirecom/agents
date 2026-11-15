@@ -122,6 +122,11 @@ const ROWS = [
   ["undetermined", "timeout-at-base-via-rename:tests/bin/old.sh", 1, null],
   ["undetermined", "budget-exhausted-via-rename:", 8, null],
   ["undetermined", "budget-exhaustedX", 1, null],
+  // #3047: a completed measurement above the stage maximum settles as auto; the rename suffix keeps
+  // an auto detail pending (exact match), and a near-miss spelling stays pending.
+  ["undetermined", "exceeds-budget", 0, AUTO],
+  ["undetermined", "exceeds-budget-via-rename:tests/bin/old.sh", 1, null],
+  ["undetermined", "exceeds-budgetX", 1, null],
   // #2956 S8 table 1: a file-level verdict is auto for its two details only (a rename suffix is
   // stripped before matching); a new failure on the branch is never registered, so it is pending.
   ["file-verdict-preexisting", "test-file-changed", 0, AUTO],
