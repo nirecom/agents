@@ -65,6 +65,9 @@ if (-not $msiAsset) {
         } elseif ($LASTEXITCODE -eq -1978335189) {
             # UPDATE_NOT_APPLICABLE: winget's source has not caught up with the GitHub release yet.
             Write-Warning "winget has no update for $latestVersion yet. Re-run install.ps1 later."
+        } elseif ($LASTEXITCODE -eq -1978335212) {
+            # NO_APPLICATIONS_FOUND: an MSI install cannot be upgraded via msix, so this fails permanently.
+            Write-Warning "winget could not find an installed package to upgrade (exit code: -1978335212). If PowerShell was installed from an MSI, winget cannot upgrade it automatically. Uninstall the MSI version, then run: winget install --id Microsoft.PowerShell. Or download from https://github.com/PowerShell/PowerShell/releases/latest"
         } else {
             Write-Warning "winget upgrade failed (exit code: $LASTEXITCODE). Re-run install.ps1 to retry."
         }

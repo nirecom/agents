@@ -76,9 +76,8 @@ if (`$Name -eq 'pwsh')   { return $pwshResult }
 if (`$Name -eq 'winget') { return $wingetResult }
 return `$null
 "@
-
-        # --- Build winget stub (records its args) ---
-        $wingetBody = "`$script:__winget_args = `$args -join ' '; `$global:LASTEXITCODE = $WingetExitCode"
+        # --- Build winget stub (records its args; non-ASCII text built from code points for CODE_LANG) ---
+        $wingetBody = "`$script:__winget_args = `$args -join ' '; `$global:LASTEXITCODE = $WingetExitCode; if ($WingetExitCode -eq -1978335212) { Write-Host ([string]::new([char[]](0x5165,0x529B,0x6761,0x4EF6))) }"
 
         # --- Build Invoke-WebRequest stub (no-op: prevents real HTTP calls in tests) ---
         $iwrBody = 'param([string]$Uri, [string]$OutFile)'
@@ -94,14 +93,10 @@ param([string]`$FilePath, [string]`$ArgumentList, [string]`$Verb, [switch]`$Wait
 return [PSCustomObject]@{ ExitCode = $MsiExitCode }
 "@
 
-        # --- Arch value for [Environment]::Is64BitOperatingSystem ---
-        # We cannot mock a static .NET property, so we replicate the arch logic
-        # directly in the patched script using the $Is64Bit parameter value.
+        # --- Arch value: [Environment]::Is64BitOperatingSystem is static and cannot be mocked, so place a literal derived from $Is64Bit ---
         $archValue = if ($Is64Bit) { "'win-x64'" } else { "'win-x86'" }
 
         # --- Build patched script ---
-        # The patched script mirrors the original logic exactly, with stubs injected.
-        # We replace the [Environment]::Is64BitOperatingSystem call with the literal value.
         $patchedScript = @"
 Set-StrictMode -Version Latest
 `$ErrorActionPreference = 'Stop'
@@ -170,6 +165,8 @@ if (-not `$msiAsset) {
             Write-Host "PowerShell Core updated via winget. Restart your terminal." -ForegroundColor Green
         } elseif (`$LASTEXITCODE -eq -1978335189) {
             Write-Warning "winget has no update for `$latestVersion yet. Re-run install.ps1 later."
+        } elseif (`$LASTEXITCODE -eq -1978335212) {
+            Write-Warning "winget could not find an installed package to upgrade (exit code: -1978335212). If PowerShell was installed from an MSI, winget cannot upgrade it automatically. Uninstall the MSI version, then run: winget install --id Microsoft.PowerShell. Or download from https://github.com/PowerShell/PowerShell/releases/latest"
         } else {
             Write-Warning "winget upgrade failed (exit code: `$LASTEXITCODE). Re-run install.ps1 to retry."
         }
@@ -202,14 +199,9 @@ if (-not `$msiAsset) {
                 $output.Add($item.ToString())
             }
         }
-
         # Propagate captured Start-Process / winget args to script scope for assertions
-        if ($null -ne $script:__sp_args) {
-            $script:LastCapturedSP = $script:__sp_args
-            $script:__sp_args      = $null
-        }
-        $script:LastWingetArgs = $script:__winget_args
-        $script:__winget_args  = $null
+        if ($null -ne $script:__sp_args) { $script:LastCapturedSP = $script:__sp_args; $script:__sp_args = $null }
+        $script:LastWingetArgs = $script:__winget_args; $script:__winget_args = $null
 
         return [PSCustomObject]@{
             Output   = [string[]]$output
@@ -332,8 +324,7 @@ Describe "pwsh.ps1 error cases" {
             ($result.Output -join ' ') | Should -Not -Match 'updated to'
         }
     }
-    # 7.7.0+ ships no MSI, so an MSI-less release must fall back to winget instead of stopping.
-    Context "E2: MSI asset absent — winget upgrade fallback" {
+    Context "E2: MSI asset absent — winget upgrade fallback" { # 7.7.0+ ships no MSI: fall back to winget instead of stopping
         BeforeAll {
             $script:e2Release = script:New-FakeRelease -TagName 'v99.9.9' -IncludeX64 $false -IncludeX86 $false
         }
@@ -342,15 +333,14 @@ Describe "pwsh.ps1 error cases" {
             $script:LastWingetArgs | Should -Be 'upgrade --id Microsoft.PowerShell --accept-source-agreements --accept-package-agreements'
             ($result.Output -join ' ') | Should -Match 'updated via winget'
         }
-        It "warns and resets LASTEXITCODE on winget exit <Code>" -TestCases @(@{ Code = 1; Pattern = 'winget upgrade failed \(exit code: 1\)' }, @{ Code = -1978335189; Pattern = 'winget has no update for 99\.9\.9 yet' }) {
+        It "warns and resets LASTEXITCODE on winget exit <Code>" -TestCases @(@{ Code = 1; Pattern = 'winget upgrade failed \(exit code: 1\)'; Not = 'MSI' }, @{ Code = -1978335189; Pattern = 'winget has no update for 99\.9\.9 yet'; Not = 'failed' }, @{ Code = -1978335212; Pattern = 'uninstall.*winget install --id Microsoft\.PowerShell'; Not = 'Re-run|retry' }) {
             $result = script:Invoke-PwshScript -PwshPresent $true -FakeRelease $script:e2Release -WingetExitCode $Code
-            ($result.Warnings -join ' ') | Should -Match $Pattern
+            ($result.Warnings -join ' ') | Should -Match $Pattern; ($result.Warnings -join ' ') | Should -Not -Match $Not
             $global:LASTEXITCODE | Should -Be 0
         }
         It "warns with the manual-update URL when winget is not available" {
             $result = script:Invoke-PwshScript -PwshPresent $true -FakeRelease $script:e2Release -WingetPresent $false
-            ($result.Warnings -join ' ') | Should -Match 'winget not found.*releases/latest'
-            $script:LastWingetArgs | Should -BeNullOrEmpty
+            ($result.Warnings -join ' ') | Should -Match 'winget not found.*releases/latest'; $script:LastWingetArgs | Should -BeNullOrEmpty
         }
     }
     Context "E3: msiexec ExitCode != 0 — failure warning" {
@@ -451,67 +441,41 @@ Describe "pwsh.ps1 edge cases" {
 Describe "pwsh.ps1 regression cases" {
 
     Context "R1: Start-Process -PassThru used — ExitCode from proc, not LASTEXITCODE" {
-        It "script uses -PassThru with Start-Process" {
-            $script:ScriptContent | Should -Match '(?i)-PassThru'
-        }
-
-        It "script assigns Start-Process result to variable proc" {
-            $script:ScriptContent | Should -Match '\$proc\s*=\s*Start-Process'
-        }
-
-        It "script checks proc.ExitCode, not raw LASTEXITCODE, after msiexec" {
-            $script:ScriptContent | Should -Match '\$proc\.ExitCode'
-        }
+        It "script uses -PassThru with Start-Process" { $script:ScriptContent | Should -Match '(?i)-PassThru' }
+        It "script assigns Start-Process result to variable proc" { $script:ScriptContent | Should -Match '\$proc\s*=\s*Start-Process' }
+        It "script checks proc.ExitCode, not raw LASTEXITCODE, after msiexec" { $script:ScriptContent | Should -Match '\$proc\.ExitCode' }
     }
 
     Context "R2: Start-Process called with -Verb RunAs" {
-        It "script uses -Verb RunAs in Start-Process call" {
-            $script:ScriptContent | Should -Match '(?i)-Verb\s+RunAs'
-        }
+        It "script uses -Verb RunAs in Start-Process call" { $script:ScriptContent | Should -Match '(?i)-Verb\s+RunAs' }
     }
 
     Context "R3: msiexec ArgumentList includes /quiet, /norestart, and /i with quoted path" {
-        It "ArgumentList contains /quiet" {
-            $script:ScriptContent | Should -Match '/quiet'
-        }
-
-        It "ArgumentList contains /norestart" {
-            $script:ScriptContent | Should -Match '/norestart'
-        }
-
-        It "ArgumentList uses backtick-double-quote to wrap the MSI path" {
-            # Source line: -ArgumentList "/i `"$msiPath`" /quiet /norestart" — raw content holds the literal /i `"
-            $script:ScriptContent | Should -Match '/i\s+`"'
-        }
+        It "ArgumentList contains /quiet" { $script:ScriptContent | Should -Match '/quiet' }
+        It "ArgumentList contains /norestart" { $script:ScriptContent | Should -Match '/norestart' }
+        # Source line: -ArgumentList "/i `"$msiPath`" /quiet /norestart" — raw content holds the literal /i `"
+        It "ArgumentList uses backtick-double-quote to wrap the MSI path" { $script:ScriptContent | Should -Match '/i\s+`"' }
     }
 
     Context "R4: version detection uses installed binary path, not PSVersionTable directly" {
-        It "source references installed pwsh.exe path via ProgramFiles env var" {
-            $script:ScriptContent | Should -Match 'ProgramFiles.*PowerShell.*pwsh\.exe'
-        }
-
-        It "source uses Test-Path to check the installed binary before reading its version" {
-            $script:ScriptContent | Should -Match 'Test-Path.*installedPwsh'
-        }
-
-        It "source calls the installed binary with --version to read its version" {
-            $script:ScriptContent | Should -Match '&.*installedPwsh.*--version'
-        }
+        It "source references installed pwsh.exe path via ProgramFiles env var" { $script:ScriptContent | Should -Match 'ProgramFiles.*PowerShell.*pwsh\.exe' }
+        It "source uses Test-Path to check the installed binary before reading its version" { $script:ScriptContent | Should -Match 'Test-Path.*installedPwsh' }
+        It "source calls the installed binary with --version to read its version" { $script:ScriptContent | Should -Match '&.*installedPwsh.*--version' }
     }
 
     Context "R5: catch block uses Exception.Message, not bare `$_" {
-        It "catch block uses `$(`$_.Exception.Message) for the warning" {
-            $script:ScriptContent | Should -Match '\$\(.*\.Exception\.Message\)'
-        }
+        It "catch block uses `$(`$_.Exception.Message) for the warning" { $script:ScriptContent | Should -Match '\$\(.*\.Exception\.Message\)' }
+        # Warning must use $($_.Exception.Message): reject Write-Warning lines where $_ is not followed by .Exception
+        It "catch block does NOT use bare `$_ (without .Exception) in the warning string" { $script:ScriptContent | Should -Not -Match 'Write-Warning[^`n]*\$_[^.`n]' }
+    }
 
-        It "catch block does NOT use bare `$_ (without .Exception) in the warning string" {
-            # The warning must use $($_.Exception.Message), not bare $_ or $($_ )
-            # Match Write-Warning lines where $_ appears but is NOT followed by .Exception
-            $script:ScriptContent | Should -Not -Match 'Write-Warning[^`n]*\$_[^.`n]'
-        }
+    Context "R6: winget no-installed-package branches exist in the real script (#3021)" {
+        BeforeAll { $m = [regex]::Match($script:ScriptContent, '(?i)-1978335212\)\s*\{(?:\s*#[^\r\n]*)*\s*Write-Warning\s+(["''])([^\r\n]*)\1'); $script:W212 = $m.Groups[2].Value; $script:W212Ok = $m.Success }
+        It "script has the -1978335189 branch and a one-line -1978335212 Write-Warning that guides uninstall then winget install, offers releases/latest, has no Re-run or retry advice" { $script:ScriptContent | Should -Match '-1978335189'; $script:W212Ok | Should -BeTrue; $script:W212 | Should -Match '(?i)uninstall.*winget install --id Microsoft\.PowerShell'; $script:W212 | Should -Match 'releases/latest'; $script:W212 | Should -Not -Match 'Re-run|retry' }
+        It "-1978335189 warning says winget has no update and advises Re-run" { $m = [regex]::Match($script:ScriptContent, '(?i)-1978335189\)\s*\{(?:\s*#[^\r\n]*)*\s*Write-Warning\s+(["''])([^\r\n]*)\1'); $m.Success | Should -BeTrue; $m.Groups[2].Value | Should -Match 'winget has no update'; $m.Groups[2].Value | Should -Match 'Re-run' }
+        It "script resets LASTEXITCODE to 0 after the winget if/elseif/else chain" { $script:ScriptContent | Should -Match '(?s)winget upgrade failed[^\r\n]*\r?\n\s*\}\s*(?:#[^\r\n]*\s*)*\$global:LASTEXITCODE\s*=\s*0' }
     }
 }
-
 # ---------------------------------------------------------------------------
 # Idempotency cases
 # ---------------------------------------------------------------------------
