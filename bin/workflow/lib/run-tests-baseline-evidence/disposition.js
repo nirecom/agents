@@ -14,6 +14,7 @@ const AUTO_UNDETERMINED = new Set([
   "base-launcher-predates-result-conversion",
   "timeout-at-base",
   "root-decoy-hit-at-base",
+  "root-decoy-hit-on-branch",
   "home-claude-ref",
   "exceeds-budget",
 ]);

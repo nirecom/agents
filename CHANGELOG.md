@@ -240,3 +240,7 @@ Changes: `install.ps1` on Windows now shows clear manual-migration guidance when
 ### FEATURE: PR #3053 (2026-11-15)
 Background: fix(#3047): classify a budget-exceeding baseline test as exceeds-budget only on a completed ledger measurement
 Changes: run-tests-baseline no longer reports `budget-exhausted` forever for a test that is measurably longer than its time budget: such a test is now auto-accepted as `exceeds-budget` and listed on the `Unverified tests:` line.;run-tests-baseline exit 5 now prints the steps to recover when a branch has no commits of its own.
+
+### FEATURE: PR #3061 (2026-11-16)
+Background: fix(#3055): classify a branch-side root decoy hit as undetermined whe...
+Changes: run-tests-baseline: a test you did not change that hits a root decoy on the branch while failing the same way at the base is now auto-accepted as `root-decoy-hit-on-branch` and listed on the `Unverified tests:` line, instead of being reported as `new-case-failure-on-branch`. A passing base, or a test whose change status cannot be determined, still keeps run_tests pending.
