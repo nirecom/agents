@@ -134,7 +134,7 @@ rtb_branch_run_one() {
 
 # rtb_branch_classify <i> <result> <code> — table 2: CLS/DET for a result settled on the branch,
 # else BR_END[i] for the base comparison (BR_RES[i] already set).
-# shellcheck disable=SC2034  # CLS/DET/BR_END/BR_NOREC are the caller's arrays
+# shellcheck disable=SC2034  # CLS/DET/BR_END/BR_NOREC/BR_DECOY are the caller's arrays
 rtb_branch_classify() {
     local i="$1" res="$2" code="$3"
     case "$res" in
@@ -145,9 +145,10 @@ rtb_branch_classify() {
                 CLS[i]="passes-alone-on-branch"; DET[i]="exit-${code:-unknown}-then-pass"
             fi ;;
         inconclusive:kill-*) CLS[i]="undetermined"; DET[i]="ambiguous-exit-${res#inconclusive:kill-}" ;;
-        # No branch records: the base still runs, so its own decoy / unrunnable row can name the
-        # cause; any base verdict besides is records missing on the branch (rtb_cls_table1 / _base_pass).
-        inconclusive:decoy|inconclusive:unrunnable) BR_END[i]="normal"; BR_NOREC[i]=1 ;;
+        # No branch records: a decoy hit against a base fail of an unchanged test is root-decoy-hit-on-branch,
+        # anything else is records missing on the branch (rtb_cls_table1 / _base_pass).
+        inconclusive:decoy) BR_END[i]="normal"; BR_DECOY[i]=1 ;;
+        inconclusive:unrunnable) BR_END[i]="normal"; BR_NOREC[i]=1 ;;
         inconclusive:rc-124|inconclusive:rc-142) BR_END[i]="interrupted" ;;
         # A recorded timeout leaves no branch records either; the base decides (rtb_cls_base_timeout).
         timeout-after-*) BR_END[i]="normal"; BR_TIMEOUT[i]=1 ;;
