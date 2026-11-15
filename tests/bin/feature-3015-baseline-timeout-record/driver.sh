@@ -28,7 +28,7 @@ LOGDIR="$TMP_BASE/logs-$$"
 TESTS=()
 declare -A BR_EXIT=()
 # shellcheck disable=SC2034
-declare -a CLS=() DET=() RERUN=() NEWC=() NEWH=() BR_RES=() BR_END=() BR_NOREC=() BR_TIMEOUT=() RUN_REL=() RUN_OLD=()
+declare -a CLS=() DET=() RERUN=() NEWC=() NEWH=() BR_RES=() BR_END=() BR_NOREC=() BR_DECOY=() BR_TIMEOUT=() RUN_REL=() RUN_OLD=()
 TR_CALLS="$TMP_BASE/calls-$$"
 : >"$TR_CALLS"
 
