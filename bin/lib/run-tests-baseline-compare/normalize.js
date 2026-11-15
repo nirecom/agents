@@ -1,7 +1,7 @@
 // bin/lib/run-tests-baseline-compare/normalize.js — the #2956 S4 normalization: one function both
 // sides of a comparison go through, so a value that changes per run (time, duration, temp path,
 // checkout root, line number, pid, uuid, hash, host, user, home) never reads as a new failure line.
-// Also the fold of a fail-details.tsv record (the rule itself: test-result-contract.md).
+// Also the fold of a fail-details.tsv record (the rules, incl. path normalization: test-result-contract.md).
 "use strict";
 
 const os = require("node:os");
@@ -33,11 +33,13 @@ function pathForms(p) {
   return forms.filter((f) => f.length > 1);
 }
 
-function alternation(values) {
-  const uniq = [...new Set(values.filter(Boolean))].sort((a, b) => b.length - a.length);
-  return uniq.length ? uniq.map(esc).join("|") : null;
+function alternationSrc(sources) {
+  const uniq = [...new Set(sources.filter(Boolean))].sort((a, b) => b.length - a.length);
+  return uniq.length ? uniq.join("|") : null;
 }
+const alternation = (values) => alternationSrc([...new Set(values.filter(Boolean))].map(esc));
 
+// nameRule stays depth-agnostic: once the path rules match at any escape depth, only user names outside paths reach it.
 function nameRule(names, token) {
   const alt = alternation(names.filter((n) => n && n.length >= 2));
   return alt ? [new RegExp(`(?<![A-Za-z0-9_])(?:${alt})(?![A-Za-z0-9_])`, "gi"), token] : null;
@@ -47,8 +49,17 @@ function safe(fn) {
   try { return fn(); } catch { return ""; }
 }
 
-// foldedForms(p) — pathForms plus the fold's doubled-backslash spelling of each.
-const foldedForms = (p) => pathForms(p).flatMap((f) => [f, f.replace(/\\/g, "\\\\")]);
+// A separator at any escape depth: one or more backslashes (native, folded, folded again...) or "/".
+const SEP = "(?:\\\\+|/)";
+
+// anyDepthPatterns(p) — regex sources of each pathForms spelling, separators matching at any depth.
+function anyDepthPatterns(p) {
+  const srcs = pathForms(p).map((f) => {
+    const lead = /^[\\/]/.test(f) ? SEP : "";
+    return lead + f.split(/[\\/]+/).filter(Boolean).map(esc).join(SEP);
+  });
+  return [...new Set(srcs)];
+}
 
 const apply = (rules, text) => rules.reduce((acc, [re, to]) => acc.replace(re, to), text);
 
@@ -56,16 +67,17 @@ const apply = (rules, text) => rules.reduce((acc, [re, to]) => acc.replace(re, t
 // replaced on the folded text first: a native `C:\x\nire` path must not unfold into a newline.
 function makeNormalizer({ root, baseWt }) {
   const pf = FOLD_PATH_CASE ? "gi" : "g";
-  const roots = alternation([...foldedForms(root), ...foldedForms(baseWt)]);
-  const tmps = alternation(foldedForms(os.tmpdir()));
-  const homes = alternation([os.homedir(), process.env.HOME, process.env.USERPROFILE].flatMap(foldedForms));
+  const roots = alternationSrc([...anyDepthPatterns(root), ...anyDepthPatterns(baseWt)]);
+  const tmps = alternationSrc(anyDepthPatterns(os.tmpdir()));
+  const homes = alternationSrc([os.homedir(), process.env.HOME, process.env.USERPROFILE].flatMap(anyDepthPatterns));
   const exts = LINE_NO_EXTS.join("|");
   // Order matters: the root may sit in the temp area, and on Windows the temp area sits in home.
   const pathRules = [
     roots && [new RegExp(roots, pf), "<root>"],
     tmps && [new RegExp(`(?:${tmps})${PATH_TAIL}`, pf), "<tmp>"],
-    [new RegExp(`(?<![A-Za-z0-9_.\\/-])\\/tmp(?=[\\\\/])${PATH_TAIL}`, "g"), "<tmp>"],
+    [new RegExp(`(?:(?<![A-Za-z0-9_.\\/-])|(?<=\\\\+[nt]))\\/tmp(?=[\\\\/])${PATH_TAIL}`, "g"), "<tmp>"],
     homes && [new RegExp(homes, pf), "<home>"],
+    [new RegExp("(?:(?<![A-Za-z0-9_.])|(?<=\\\\+[nt]))tmp\\.(?=[A-Za-z0-9]*[A-Z0-9])[A-Za-z0-9]{4,}(?![A-Za-z0-9_])", "g"), "<tmp>"],
   ].filter(Boolean);
   const textRules = [
     nameRule([os.hostname(), process.env.HOSTNAME, process.env.COMPUTERNAME], "<host>"),
