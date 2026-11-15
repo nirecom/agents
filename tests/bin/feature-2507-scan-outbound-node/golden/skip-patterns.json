@@ -12,12 +12,12 @@
     "file": "file-5.46",
     "platform": "win32"
   },
-  "skipPatterns": "bin/scan-outbound.sh|\\.private-info-allowlist|\\.offensive-content-blocklist\\.example",
+  "skipPatterns": "\\.private-info-allowlist|\\.offensive-content-blocklist\\.example",
   "cases": {
-    "bin/scan-outbound.sh": true,
-    "x/bin/scan-outbound.sh": true,
-    "bin/scan-outbound-sh": true,
-    "bin/scan-outbound.shx": true,
+    "bin/scan-outbound.sh": false,
+    "x/bin/scan-outbound.sh": false,
+    "bin/scan-outbound-sh": false,
+    "bin/scan-outbound.shx": false,
     "bin/scan-outbound.d/cli.js": false,
     ".private-info-allowlist": true,
     "sub/.private-info-allowlist.bak": true,

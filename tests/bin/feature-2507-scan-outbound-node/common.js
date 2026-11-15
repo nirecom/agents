@@ -28,7 +28,8 @@ const MOD = {
   secretShape: "hooks/workflow-state/complexity-routing/secret-shape.js",
 };
 
-// The new modules the self-scan (case 5) walks: every source file the port adds.
+// The files the self-scan (case 5) walks: every source file the port adds, plus the scanner's own
+// entry points (#2046: kept off SKIP_PATTERNS, so a literal drive path in them is caught here).
 const NEW_MODULE_FILES = [
   MOD.translate,
   MOD.longest,
@@ -41,6 +42,8 @@ const NEW_MODULE_FILES = [
   MOD.cli,
   MOD.precommitCheck,
   MOD.binary,
+  "hooks/scan-outbound.js",
+  "bin/scan-outbound.sh",
 ];
 
 const abs = (rel) => path.join(REPO, rel);

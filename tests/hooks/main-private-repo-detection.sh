@@ -40,7 +40,7 @@ export AGENTS_MAIN_ROOT="$TMPDIR_BASE/agents-main"
 # descriptor spawns gh without a shell); setup_mock_gh_missing removes it too.
 MOCK_BIN="$TMPDIR_BASE/mock-bin"
 mkdir -p "$MOCK_BIN"
-. "$SCRIPT_CHECKOUT_ROOT/tests/lib/cli-stub.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/cli-stub.sh"; printf '@echo off\r\nexit /b 1\r\n' > "$MOCK_BIN/glab.cmd"; printf '#!/bin/bash\nexit 1\n' > "$MOCK_BIN/glab"; chmod +x "$MOCK_BIN/glab"; cli_stub_bridge_cmd "$MOCK_BIN" glab # glab always fails: keeps the run-all command guard's glab out of the GitLab cases (#2992)
 
 GH_CALL_LOG="$MOCK_BIN/gh-calls.log"
 if command -v cygpath >/dev/null 2>&1; then
@@ -78,7 +78,7 @@ setup_mock_gh_error() {
 
 # Mock: gh not found (remove from PATH)
 setup_mock_gh_missing() {
-    rm -f "$GH_CALL_LOG" "$MOCK_BIN/gh" "$MOCK_BIN/gh.cmd" "$MOCK_BIN/gh.exe"
+    rm -f "$GH_CALL_LOG" "$MOCK_BIN/gh.cmd"; printf '#!/bin/bash\nexit 127\n' > "$MOCK_BIN/gh"; chmod +x "$MOCK_BIN/gh"; cli_stub_bridge_cmd "$MOCK_BIN" gh # exit 127 = gh cannot run; removing the mock would reach the guard's gh (#2992)
 }
 
 # Mock: records one line per invocation, then answers "true" (private).
@@ -149,9 +149,11 @@ setup_repo_with_origin() {
     fi
 }
 
+# The hook runs from the fixture repo, as Claude Code launches it from the project dir:
+# the git commit branch resolves its repo from the process cwd, not CLAUDE_PROJECT_DIR (#2992).
 run_hook() {
     local hook="$1" json="$2" repo="$3"
-    echo "$json" | PATH="$MOCK_BIN:$PATH" CLAUDE_PROJECT_DIR="$repo" HOOK_CWD="$repo" node "$hook" 2>/dev/null || true
+    (cd "$repo" && echo "$json" | PATH="$MOCK_BIN:$PATH" CLAUDE_PROJECT_DIR="$repo" HOOK_CWD="$repo" node "$hook" 2>/dev/null) || true
 }
 
 expect_approve() {

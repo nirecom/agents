@@ -7,6 +7,7 @@
 const R = require("../registry");
 const P = require("../parts");
 const S = require("../source");
+const { addedOnlyData } = require("./case-notation");
 
 const WHY = { 0: "no count in the answer", 1: "no case unit", 3: "no caseEmbedRules", 69: "runtime not installed", 70: "part unreachable" };
 
@@ -63,6 +64,7 @@ function caseAddition(head, file, match) {
     const hLines = head ? codeLines(head, match) : 0;
     const wLines = codeLines(file, match);
     if (!(wLines > hLines)) return null;
+    if (addedOnlyData(m.entry, file, head ? [head] : []) === true) return null;
     basis = `case count unavailable: ${why}; code lines ${hLines} -> ${wLines}`;
   }
   return addedLine(m.entry, match, basis);
@@ -93,6 +95,7 @@ function caseAddition3way(file, match, h1, h2, base) {
   }
   const existing = Math.max(0, n[1] + n[2] - (base ? n[3] : 0));
   if (!(n[0] > existing)) return null;
+  if (label !== "case units" && addedOnlyData(m.entry, file, versions.slice(1)) === true) return null;
   return addedLine(m.entry, match, `${label} H+M−B = ${existing} -> ${n[0]}`);
 }
 

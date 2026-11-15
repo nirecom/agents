@@ -5,7 +5,7 @@
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-HOOK="$DOTFILES_DIR/claude-global/hooks/pre-commit"
+HOOK="$DOTFILES_DIR/hooks/pre-commit"
 PASS=0
 FAIL=0
 

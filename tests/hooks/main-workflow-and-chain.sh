@@ -10,8 +10,7 @@
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-GATE_HOOK="$DOTFILES_DIR/claude-global/hooks/workflow-gate.js"
-MARK_HOOK="$DOTFILES_DIR/claude-global/hooks/workflow-mark.js"
+GATE_HOOK="$DOTFILES_DIR/hooks/workflow-gate.js" MARK_HOOK="$DOTFILES_DIR/hooks/workflow-mark.js"
 ERRORS=0
 FAILED_IDS=()
 PASSED_IDS=()
