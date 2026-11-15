@@ -39,6 +39,10 @@ case_begin "baseline-ledger-segment-cap" "bin/lib/run-tests-baseline-ledger.sh"
 run_ledger_segment_cap_cases
 case_end
 
+case_begin "baseline-ledger-inherit-newest-row" "bin/lib/run-tests-baseline-ledger.sh"
+run_ledger_newest_row_cases
+case_end
+
 case_begin "baseline-worktree" "bin/lib/run-tests-baseline-worktree.sh"
 run_worktree_cases
 case_end

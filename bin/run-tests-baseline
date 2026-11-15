@@ -11,7 +11,8 @@
 #   preexisting=N inherited=N broken=N undetermined=N file_verdict=N new_on_branch=N`.
 # Exit:   0 run_tests completed (`RECORDED completion_basis=<basis>` on stderr), 1 otherwise,
 #   2 usage, 3 no hook-recorded failing list (or state moved), 4 merge base not trustworthy,
-#   5 no baseline (base predates the root names or the case details: merge main and re-run),
+#   5 no baseline (base predates the root names or the case details: merge main and re-run;
+#     stderr gives the steps for a branch with no own commits),
 #   6 unattributed hits: `BASELINE_HITS: count=N` then `HIT: <line>` lines, 8 re-run requested.
 # Child test output goes to log files only, never to stdout.
 
@@ -28,6 +29,17 @@ RTB_RESOLVE="$SCRIPT_CHECKOUT_ROOT/bin/resolve-merge-base.sh"
 
 die() { printf 'run-tests-baseline: %s\n' "$2" >&2; exit "$1"; }
 
+# rtb_exit5_no_commit_steps — the way out of exit 5 when the branch cannot merge main (#3025).
+rtb_exit5_no_commit_steps() {
+  printf '%s\n' \
+    'run-tests-baseline: if the branch has no own commits and its work is staged (a WIP commit and git merge are refused):' \
+    '  1. git stash push -u -m <unique-tag>, and note the entry SHA (git stash list --format="%H %gs")' \
+    '  2. fast-forward only to origin/main (git merge --ff-only origin/main)' \
+    '  3. git stash apply <sha>, resolving conflicts only; then drop that entry' \
+    '  4. re-record the merge base: bin/workflow/record-merge-base-baseline --session <sid> --base <sha> --reason "<text>"' \
+    '  5. re-run bin/run-tests-baseline' >&2
+}
+
 SID="" WT_ARG="$PWD" PER_TEST_TIMEOUT="" PTT_EXPLICIT=0 NOTE="" HAS_NOTE=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -35,7 +47,7 @@ while [ "$#" -gt 0 ]; do
     --worktree) [ "$#" -ge 2 ] || die 2 "--worktree needs a value"; WT_ARG="$2"; shift 2 ;;
     --per-test-timeout) [ "$#" -ge 2 ] || die 2 "--per-test-timeout needs a value"; PER_TEST_TIMEOUT="$2"; PTT_EXPLICIT=1; shift 2 ;;
     --note) [ "$#" -ge 2 ] || die 2 "--note needs a value"; NOTE="$2"; HAS_NOTE=1; shift 2 ;;
-    -h|--help) sed -n '2,15p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,16p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) die 2 "unknown argument: $1" ;;
   esac
 done
@@ -94,6 +106,10 @@ rtb_timeout_load_ledger "$ROOT" "$TMP_BASE" "${ledger_args[@]}"
 
 # shellcheck disable=SC2034  # BR_* are filled by the branch stage, RUN_REL/RUN_OLD by the ledger stage
 declare -a CLS=() DET=() RERUN=() NEWC=() NEWH=() BR_RES=() BR_END=() BR_NOREC=() BR_TIMEOUT=() RUN_REL=() RUN_OLD=()
+# This checkout's registry: it normalizes names and gives each language's timeout cap (#3035)
+# before the branch stage records a timeout (the base launches its own tests).
+# shellcheck source=bin/lib/test-language-registry.sh
+{ . "$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh" && tlr_load; } || die 2 "test language registry not readable"
 
 # 2. Each failing test alone on the branch: one that passes there is no base question.
 rtb_branch_stage
@@ -120,12 +136,10 @@ if [ "$REST" -gt 0 ]; then
   B2="$(git -C "$ROOT" rev-parse --verify --quiet "$MB_BASE^{commit}")" || die 4 "merge base $MB_BASE is not a local commit"
   # Decided before the ledger: a cached verdict for such a base would be just as unusable.
   if rtb_base_predates_root_names "$ROOT" "$B2"; then
+    rtb_exit5_no_commit_steps
     die 5 "no baseline, rebase needed: merge base $B2 predates the root names this checkout's tests run under"
   fi
   rtb_wt_sweep_stale "$ROOT"
-  # This checkout's registry; used only to normalize names (the base launches its own tests).
-  # shellcheck source=bin/lib/test-language-registry.sh
-  { . "$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh" && tlr_load; } || die 2 "test language registry not readable"
 fi
 
 # 4. Ledger: (a) same base, then (b) inheritance from an ancestor base (run-tests-baseline-classify.sh).
@@ -138,6 +152,7 @@ if [ "${#RERUN[@]}" -gt 0 ]; then
   # A base harness that writes no fail-details.tsv leaves nothing to compare (#2956 S3).
   if [ -n "$WT" ] && rtb_base_predates_case_detail "$WT"; then
     rtb_wt_remove "$ROOT" "$WT" || true
+    rtb_exit5_no_commit_steps
     die 5 "no baseline, merge main and re-run: merge base $B2 predates the case details (its tests/lib/harness.sh writes no fail-details.tsv)"
   fi
   EXPLICIT=""
@@ -160,7 +175,8 @@ if [ "${#RERUN[@]}" -gt 0 ]; then
     REQUESTED_TEST_TIMEOUT="$RTB_TIMEOUT_REQUESTED_OUT" DERIVED="$RTB_TIMEOUT_DERIVED_OUT" SRC="$RTB_TIMEOUT_SRC_OUT"
     rtb_timeout_budget_into "$REQUESTED_TEST_TIMEOUT" "$SECONDS"
     if [ "$RTB_TIMEOUT_APPLIED_OUT" -eq 0 ]; then
-      CLS[i]="undetermined"; DET[i]="budget-exhausted"; continue
+      rtb_timeout_settle_into "$i" 0; rtb_timeout_settle_note "$t"
+      CLS[i]="undetermined"; DET[i]="$RTB_TIMEOUT_SETTLE_OUT"; continue
     fi
     APPLIED_TEST_TIMEOUT="$RTB_TIMEOUT_APPLIED_OUT"
     [ "$APPLIED_TEST_TIMEOUT" -ge "$REQUESTED_TEST_TIMEOUT" ] || SRC="$SRC, limited from ${REQUESTED_TEST_TIMEOUT}s by budget"

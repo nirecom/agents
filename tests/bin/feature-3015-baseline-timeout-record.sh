@@ -42,6 +42,19 @@ case_begin "rename-base-path-of-a-test" "bin/lib/run-tests-baseline-rename.sh"
 tr_unit_base_path
 case_end
 
+tr_unit_cap_probe
+case_begin "timeout-effective-is-min-of-secs-and-lang-cap" "bin/lib/run-tests-baseline-timeout.sh"
+tr_unit_effective
+case_end
+
+case_begin "timeout-lang-cap-from-the-registry" "bin/lib/run-tests-baseline-timeout.sh"
+tr_unit_lang_cap
+case_end
+
+case_begin "timeout-recordable-with-lang-cap" "bin/lib/run-tests-baseline-timeout.sh"
+tr_unit_recordable_cap
+case_end
+
 case_begin "branch-timeout-at-requested-is-recorded" "bin/lib/run-tests-baseline-branch.sh"
 tr_branch_recorded
 case_end
@@ -66,6 +79,18 @@ case_begin "branch-timeout-above-the-stage-cap-is-noted" "bin/lib/run-tests-base
 tr_branch_cap
 case_end
 
+case_begin "branch-timeout-cut-without-completed-row-says-so" "bin/lib/run-tests-baseline-branch.sh"
+tr_branch_cap_not_completed
+case_end
+
+case_begin "branch-timeout-recorded-at-lang-cap" "bin/lib/run-tests-baseline-branch.sh"
+tr_branch_lang_cap
+case_end
+
+case_begin "branch-timeout-ignores-ambient-run-all-timeout" "bin/lib/run-tests-baseline-branch.sh"
+tr_branch_lang_cap_env
+case_end
+
 case_begin "branch-explicit-below-derived-is-noted" "bin/lib/run-tests-baseline-branch.sh"
 tr_branch_explicit_low
 case_end
@@ -76,6 +101,10 @@ case_end
 
 case_begin "base-timeout-recorded-only-when-full-length" "bin/lib/run-tests-baseline-classify.sh"
 tr_base_timeout
+case_end
+
+case_begin "base-timeout-recorded-at-lang-cap" "bin/lib/run-tests-baseline-classify.sh"
+tr_base_lang_cap
 case_end
 
 case_begin "base-timeout-round-trip-hits-same-base-misses-other" "bin/lib/run-tests-baseline-classify.sh"

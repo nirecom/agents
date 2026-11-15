@@ -44,6 +44,10 @@ case_begin "compare-cli-cached-branch-timeout-is-a-hit" "bin/run-tests-baseline"
 run_compare_cli_timeout_cache_cases
 case_end
 
+case_begin "compare-cli-cached-branch-timeout-with-passing-base-is-broken" "bin/run-tests-baseline"
+run_compare_cli_timeout_base_pass_cases
+case_end
+
 echo ""
 echo "Total: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

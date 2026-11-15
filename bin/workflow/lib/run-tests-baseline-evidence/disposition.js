@@ -15,6 +15,7 @@ const AUTO_UNDETERMINED = new Set([
   "timeout-at-base",
   "root-decoy-hit-at-base",
   "home-claude-ref",
+  "exceeds-budget",
 ]);
 const RERUN_UNDETERMINED = new Set(["budget-exhausted", "worktree-create-failed", "exec-setup-failed"]);
 const RERUN_STATE_RE = /^state-[A-Za-z0-9_]+-at-base$/;

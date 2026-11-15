@@ -67,12 +67,48 @@ tr_branch_budget_cut() {
 }
 
 # Measured 250s -> requested 500s; the branch stage can apply at most ~403s (600-45-150-2).
+# A completed 250 s row is within the 403 s limit (#3047 within-limit): the note keeps its wording.
 tr_branch_cap() {
-  tr_drive "$TMPROOT/c-br-cap" "RTB_TIMEOUT_LEDGER=([0]=250); $TR_BRANCH_RUN"
+  tr_drive "$TMPROOT/c-br-cap" "RTB_TIMEOUT_LEDGER=([0]=250); RTB_TIMEOUT_LEDGER_TERM=([0]=completed); $TR_BRANCH_RUN"
   tr_ck "cap: budget-exhausted" "R0 cls=undetermined det=budget-exhausted brt= end=" "$(tr_line R0)"
   tr_lacks "cap: no cache row" "CACHE tests/bin/t.sh"
   tr_match "cap: the note names the stage maximum and the fix" \
     '^run-tests-baseline: timeout not recorded: tests/bin/t\.sh requested 500s; the branch stage applies at most [0-9]+s: shorten or split the test$'
+  tr_lacks "cap, within the limit: no exceeds-budget line" "exceeds budget:"
+}
+
+# The same cut with a timeout row (#3047 not-completed): the S4-5 line replaces the shorten-or-split note.
+tr_branch_cap_not_completed() {
+  tr_drive "$TMPROOT/c-br-cap-tmo" "RTB_TIMEOUT_LEDGER=([0]=250); RTB_TIMEOUT_LEDGER_TERM=([0]=timeout); $TR_BRANCH_RUN"
+  tr_ck "cap, timeout row: budget-exhausted" "R0 cls=undetermined det=budget-exhausted brt= end=" "$(tr_line R0)"
+  tr_lacks "cap, timeout row: no cache row" "CACHE tests/bin/t.sh"
+  tr_lacks "cap, timeout row: no exceeds-budget line" "exceeds budget:"
+  tr_match "cap, timeout row: the no-completed-measurement line" \
+    '^run-tests-baseline: budget-exhausted: tests/bin/t\.sh has no completed measurement \(not-completed:timeout\); let /run-tests run it to completion, or fix it if it hangs$'
+}
+
+# #3035: j.js (registry cap 180) times out at requested 300, applied 300: recorded as 180, then a hit.
+tr_branch_lang_cap() {
+  tr_drive "$TMPROOT/c-br-js" 'TESTS=("tests/bin/j.js"); rtb_branch_stage; tr_report'
+  tr_ck "js: the stage ran the test once" "CALLS=1" "$(tr_line CALLS=)"
+  tr_ck "js: recorded at the effective 180s, not the requested 300s" "CACHE tests/bin/j.js timeout-after-180s -" "$(tr_line 'CACHE tests/bin/j.js')"
+  tr_ck "js: left for the base, BR_TIMEOUT" "R0 cls= det= brt=1 end=normal" "$(tr_line R0)"
+  tr_drive "$TMPROOT/c-br-js" 'TESTS=("tests/bin/j.js"); rtb_branch_stage; tr_report'
+  tr_ck "js: N 180 >= effective requested 180 is a hit (converges)" "CALLS=0" "$(tr_line CALLS=)"
+  tr_ck "js: the hit sets BR_TIMEOUT" "R0 cls= det= brt=1 end=normal" "$(tr_line R0)"
+  tr_drive "$TMPROOT/c-br-js-seed" 'tr_seed_branch tests/bin/j.js timeout-after-180s; TESTS=("tests/bin/j.js"); rtb_branch_stage; tr_report'
+  tr_ck "js: a seeded timeout-after-180s row alone is a hit (N >= effective, not raw, requested)" "CALLS=0" "$(tr_line CALLS=)"
+  tr_drive "$TMPROOT/c-br-sh-180" 'tr_seed_branch tests/bin/t.sh timeout-after-180s; TESTS=("tests/bin/t.sh"); rtb_branch_stage; tr_report'
+  tr_ck "bash: the same 180s row is a miss (no cap, requested 300)" "CALLS=1" "$(tr_line CALLS=)"
+}
+
+# #3035: RUN_ALL_TIMEOUT_SECONDS=60 in the environment neither caps bash nor double-caps js, and survives.
+tr_branch_lang_cap_env() {
+  tr_drive "$TMPROOT/c-br-env" 'TESTS=("tests/bin/t.sh" "tests/bin/j.js"); rtb_branch_stage; tr_report; echo "ENV=$RUN_ALL_TIMEOUT_SECONDS"' \
+    RUN_ALL_TIMEOUT_SECONDS=60
+  tr_ck "env 60: bash is still recorded at the requested 300s" "CACHE tests/bin/t.sh timeout-after-300s -" "$(tr_line 'CACHE tests/bin/t.sh')"
+  tr_ck "env 60: js is still recorded at 180s" "CACHE tests/bin/j.js timeout-after-180s -" "$(tr_line 'CACHE tests/bin/j.js')"
+  tr_ck "env 60: RUN_ALL_TIMEOUT_SECONDS is unchanged after the stage" "ENV=60" "$(tr_line ENV=)"
 }
 
 tr_branch_explicit_low() {

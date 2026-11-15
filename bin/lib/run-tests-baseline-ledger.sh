@@ -190,23 +190,27 @@ rtb_ledger_lookup_same_base() {
 }
 
 # rtb_ledger_lookup_inheritable_fp <rel-path> — `<sha>\t<fp>` for each base SHA whose newest
-# `fail` record in the retention window carries a row file fp, newest first.
+# reusable record (fail / pass / cacheable und, as rtb_ledger_lookup_same_base reads) in the
+# retention window is a `fail` carrying a row file fp, newest first (#3016).
 rtb_ledger_lookup_inheritable_fp() {
     local now min
     rtb_ledger_valid_path "${1:-}" || return 0
     now="$(date +%s)"
     min=$((now - RTB_LEDGER_RETENTION_DAYS * 86400))
-    rtb_ledger_scan "" "$1" "$min" | awk -F '\t' '$3 == "fail" && $4 != "-"' \
-        | sort -t "$(printf '\t')" -k1,1nr | awk -F '\t' '!seen[$2]++ { print $2 "\t" $4 }'
+    rtb_ledger_scan "" "$1" "$min" | awk -F '\t' -v UND="$RTB_LEDGER_UND_CACHEABLE_RE" \
+        '$3 == "fail" || $3 == "pass" || $3 ~ UND' \
+        | sort -t "$(printf '\t')" -k1,1nr \
+        | awk -F '\t' '!seen[$2]++ && $3 == "fail" && $4 != "-" { print $2 "\t" $4 }'
 }
 
-# rtb_ledger_lookup_inheritable <rel-path> — base SHAs with a `fail` record for this host
-# inside the retention window, newest first, one per line.
+# rtb_ledger_lookup_inheritable <rel-path> — base SHAs whose newest reusable record for this host
+# inside the retention window is a `fail`, newest first, one per line (#3016).
 rtb_ledger_lookup_inheritable() {
     local now min
     rtb_ledger_valid_path "${1:-}" || return 0
     now="$(date +%s)"
     min=$((now - RTB_LEDGER_RETENTION_DAYS * 86400))
-    rtb_ledger_scan "" "$1" "$min" | awk -F '\t' '$3 == "fail"' \
-        | sort -t "$(printf '\t')" -k1,1nr | awk -F '\t' '!seen[$2]++ { print $2 }'
+    rtb_ledger_scan "" "$1" "$min" | awk -F '\t' -v UND="$RTB_LEDGER_UND_CACHEABLE_RE" \
+        '$3 == "fail" || $3 == "pass" || $3 ~ UND' \
+        | sort -t "$(printf '\t')" -k1,1nr | awk -F '\t' '!seen[$2]++ && $3 == "fail" { print $2 }'
 }

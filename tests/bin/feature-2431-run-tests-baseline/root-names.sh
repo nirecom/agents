@@ -89,6 +89,12 @@ run_root_names_cli_cases() {
   else
     fail "RN-cli-old: no 'run-tests-baseline: ... baseline ... rebase' line on stderr ($(tr '\n' '|' < "$TMPROOT/rn-err.txt"))"
   fi
+  # #3025: the exit 5 also gives the escape steps for a branch with no own commits and staged work.
+  if grep -qF 'git stash push -u' "$TMPROOT/rn-err.txt" && grep -qF 'record-merge-base-baseline' "$TMPROOT/rn-err.txt"; then
+    pass "RN-cli-old: stderr gives the no-own-commit escape steps (stash, record-merge-base-baseline)"
+  else
+    fail "RN-cli-old: no escape steps ('git stash push -u', 'record-merge-base-baseline') on stderr ($(tr '\n' '|' < "$TMPROOT/rn-err.txt"))"
+  fi
   if [ "$_RN_RC" -eq 5 ] && ! grep -q '^BASELINE' "$TMPROOT/rn-out.txt" \
     && ! grep -q 'base-run logs:' "$TMPROOT/rn-out.txt" "$TMPROOT/rn-err.txt"; then
     pass "RN-cli-old: no classification line and no base-run log directory"

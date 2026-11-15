@@ -18,6 +18,8 @@ SUBDIR="$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2431-run-tests-baseline"
 . "$SUBDIR/helpers.sh"
 # shellcheck source=./ledger.sh
 . "$SUBDIR/ledger.sh"
+# shellcheck source=./ledger-newest.sh
+. "$SUBDIR/ledger-newest.sh"
 # shellcheck source=./inherit-reject.sh
 . "$SUBDIR/inherit-reject.sh"
 # shellcheck source=./worktree.sh

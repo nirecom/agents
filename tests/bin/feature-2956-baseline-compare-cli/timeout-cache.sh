@@ -9,12 +9,13 @@
 # tc_body <side> — exits 1 with no case records and leaves a <side> marker, so a run is observable.
 tc_body() { printf '#!/usr/bin/env bash\ntouch "%s/%s"\nexit 1\n' "$TC_MARKS" "$1"; }
 
-# tc_build <repo> — main and feature each carry tests/bin/t-tmo.sh, each touching its own marker.
+# tc_build <repo> [base-rc] — main and feature each carry tests/bin/t-tmo.sh, each touching its own
+# marker; the base copy exits <base-rc> (default 1).
 tc_build() {
   local repo="$1"
   mk_fixture_repo "$repo" >/dev/null || return 1
   git -C "$repo" checkout -q main
-  tc_body base >"$repo/tests/bin/t-tmo.sh"; chmod +x "$repo/tests/bin/t-tmo.sh"
+  tc_body base | sed "s/^exit 1\$/exit ${2:-1}/" >"$repo/tests/bin/t-tmo.sh"; chmod +x "$repo/tests/bin/t-tmo.sh"
   git -C "$repo" add -A; git -C "$repo" commit -q -m "timeout base"
   git -C "$repo" checkout -q feature
   git -C "$repo" merge -q --no-edit main
@@ -59,4 +60,33 @@ run_compare_cli_timeout_cache_cases() {
   else fail "the base copy did not run after the ledger was cleared; rc=$RTB_CLI_RC"; fi
   cmp_expect "a cached branch timeout reads as no case records on the branch" \
     "new-case-failure-on-branch tests/bin/t-tmo\.sh case-records-missing-on-branch([[:space:]]|\$)"
+}
+
+# #3036: the same cached branch timeout against a base that passes. The fixture seeds no duration
+# rows, so no completed over-budget measurement is involved: the outcome is plain `broken`.
+run_compare_cli_timeout_base_pass_cases() {
+  local repo="$TMPROOT/repo-tmo-bp" cache t="tests/bin/t-tmo.sh" sid="tmobp2-$$"
+  TC_MARKS="$TMPROOT/marks-tmo-bp"; mkdir -p "$TC_MARKS"
+  cache="$(cli_case_cache tmo-bp)"
+  tc_build "$repo" 0 || fail "fixture: timeout/base-pass repo not built"
+  seed_failing "tmobp1-$$" "$t"
+  rtb_cli_run "$cache" "$repo" "tmobp1-$$" --per-test-timeout 20
+  if [ -f "$TC_MARKS/branch" ] && tc_rewrite_row "$cache" "$t" "timeout-after-300s"; then
+    pass "base-pass setup: the branch cache row now reads timeout-after-300s"
+  else
+    fail "base-pass setup: no branch cache row to rewrite for $t; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
+  fi
+  rm -f "$TC_MARKS/base" "$TC_MARKS/branch"
+  rm -rf "$cache/baseline"
+  seed_failing "$sid" "$t"
+  rtb_cli_run "$cache" "$repo" "$sid" --per-test-timeout 20
+  if [ ! -f "$TC_MARKS/branch" ]; then pass "base-pass: the cached timeout is a hit (the branch copy did not run)"
+  else fail "base-pass: the branch copy ran again despite the cached timeout row"; fi
+  if [ -f "$TC_MARKS/base" ]; then pass "base-pass: the base copy ran"
+  else fail "base-pass: the base copy did not run; rc=$RTB_CLI_RC"; fi
+  cmp_expect "base-pass: the test is broken" "broken[[:space:]]+tests/bin/t-tmo\.sh([[:space:]]|\$)"
+  if [ "$RTB_CLI_RC" -eq 1 ]; then pass "base-pass: exit 1"
+  else fail "base-pass: expected exit 1, got $RTB_CLI_RC ($(cli_baseline_lines))"; fi
+  if [ "$(read_step_field "$sid" run_tests status)" = '"pending"' ]; then pass "base-pass: run_tests stays pending"
+  else fail "base-pass: run_tests status is $(read_step_field "$sid" run_tests status)"; fi
 }
