@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Table 1 and the ledger stage of bin/run-tests-baseline (#2956 S6/S8). Source-only, after the
 # ledger, compare, rename and worktree libs. Works on the caller's TESTS, CLS, DET, NEWC, NEWH,
-# BR_RES, BR_END, BR_NOREC, BR_TIMEOUT, RUN_REL, RUN_OLD, RERUN, B2, ROOT, LOGDIR and TMP_BASE. Also
+# BR_RES, BR_END, BR_NOREC, BR_DECOY, BR_TIMEOUT, RUN_REL, RUN_OLD, RERUN, B2, ROOT, LOGDIR and TMP_BASE. Also
 # needs the timeout lib. The class/detail table is owned by
 # docs/architecture/claude-code/test-result-contract.md.
 
@@ -33,6 +33,17 @@ rtb_cls_table1() {
     # A branch run that left no records (BR_NOREC, BR_TIMEOUT) proves nothing either way (fail-closed).
     if [[ "${BR_NOREC[i]:-}" == 1 || "${BR_TIMEOUT[i]:-}" == 1 ]]; then
         CLS[i]="new-case-failure-on-branch"; DET[i]="case-records-missing-on-branch"; return 0
+    fi
+    # The base failed too: a branch run cut short by a decoy hit mirrors root-decoy-hit-at-base,
+    # but only for a test proven unchanged (fail-closed).
+    if [[ "${BR_DECOY[i]:-}" == 1 ]]; then
+        rtb_test_changed "$B2" "$rel" "${old_arg[@]}" || rc=$?
+        if [[ "$rc" -eq 1 ]]; then
+            CLS[i]="undetermined"; DET[i]="root-decoy-hit-on-branch"
+        else
+            CLS[i]="new-case-failure-on-branch"; DET[i]="case-records-missing-on-branch"
+        fi
+        return 0
     fi
     mkdir -p "$LOGDIR" 2>/dev/null
     rm -f "$LOGDIR/$i.new-lines.tsv"
@@ -105,11 +116,12 @@ rtb_cls_base_fail() {
     rtb_ledger_append "$B2" "$run" fail "$fp"
 }
 
-# rtb_cls_base_pass <i> <detail> — the base passes. A branch run that left no records (root decoy
-# hit, unrunnable: BR_NOREC) has nothing to set the base against: records missing on the branch.
+# rtb_cls_base_pass <i> <detail> — the base passes. A branch run that left no records (unrunnable:
+# BR_NOREC, decoy hit: BR_DECOY) has nothing to set the base against: records missing on the branch,
+# pending even for a decoy hit (it is auto only against a base fail).
 # shellcheck disable=SC2034
 rtb_cls_base_pass() {
-    if [[ "${BR_NOREC[$1]:-}" == 1 ]]; then
+    if [[ "${BR_NOREC[$1]:-}" == 1 || "${BR_DECOY[$1]:-}" == 1 ]]; then
         CLS[$1]="new-case-failure-on-branch"; DET[$1]="case-records-missing-on-branch"
     else
         CLS[$1]="broken"; DET[$1]="$2"
