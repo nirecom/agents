@@ -236,3 +236,7 @@ Changes: (none) — test-only restructuring with no user-visible change.
 ### FEATURE: PR #3050 (2026-11-15)
 Background: fix(#3021): warn with manual migration guidance when winget cannot upgrade an MSI-installed pwsh
 Changes: `install.ps1` on Windows now shows clear manual-migration guidance when PowerShell was installed from an MSI and winget cannot upgrade it, instead of asking you to re-run the installer.
+
+### FEATURE: PR #3053 (2026-11-15)
+Background: fix(#3047): classify a budget-exceeding baseline test as exceeds-budget only on a completed ledger measurement
+Changes: run-tests-baseline no longer reports `budget-exhausted` forever for a test that is measurably longer than its time budget: such a test is now auto-accepted as `exceeds-budget` and listed on the `Unverified tests:` line.;run-tests-baseline exit 5 now prints the steps to recover when a branch has no commits of its own.
