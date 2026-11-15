@@ -7,7 +7,7 @@
 echo ""
 echo "=== D. parseGitCArg unit tests (requires git-command.js) ==="
 
-GIT_COMMAND_JS="$REPO_ROOT/claude-global/hooks/lib/parse-git-args.js"
+GIT_COMMAND_JS="$REPO_ROOT/hooks/lib/parse-git-args.js"
 GIT_COMMAND_JS_WIN="$(to_win_path "$GIT_COMMAND_JS")"
 
 if ! PARSE_GIT_ARGS_PATH="$GIT_COMMAND_JS_WIN" node --input-type=module 2>/dev/null <<'NODEEOF'
@@ -16,7 +16,7 @@ const require = createRequire(import.meta.url);
 require(process.env.PARSE_GIT_ARGS_PATH);
 NODEEOF
 then
-  echo "  SKIP: parse-git-args.js not yet implemented — skipping D/E-Q/G sections"
+  echo "  FAIL: parse-git-args.js failed to load — D/E-Q/G sections cannot run"; FAIL=$((FAIL+1))
   SKIP_DEG=1
 else
   SKIP_DEG=0
@@ -137,8 +137,8 @@ const { resolveRepoDir } = require(process.env.HOOK_PATH);
 process.stdout.write(resolveRepoDir('git -C "c:/LLM/my-specs-repo" commit'));
 EOF
   )
-  if [ "$(uname -s | tr '[:upper:]' '[:lower:]')" = "windows_nt" ] || echo "$OS" | grep -qi windows 2>/dev/null; then
-    expected_eq='c:\LLM\my-specs-repo'
+  if uname -s | grep -qiE 'windows|mingw|msys|cygwin' || echo "${OS:-}" | grep -qi windows 2>/dev/null; then
+    expected_eq='c:\'"LLM"'\my-specs-repo'
   else
     # On non-Windows, toNativePath is a no-op so forward slashes remain
     expected_eq='c:/LLM/my-specs-repo'
@@ -163,7 +163,7 @@ const { resolveRepoDir } = require(process.env.HOOK_PATH);
 process.stdout.write(resolveRepoDir('git -C "c:/path with spaces/repo" commit'));
 EOF
   )
-  if [ "$(uname -s | tr '[:upper:]' '[:lower:]')" = "windows_nt" ] || echo "$OS" | grep -qi windows 2>/dev/null; then
+  if uname -s | grep -qiE 'windows|mingw|msys|cygwin' || echo "${OS:-}" | grep -qi windows 2>/dev/null; then
     expected_spaces='c:\path with spaces\repo'
   else
     expected_spaces='c:/path with spaces/repo'
@@ -256,7 +256,7 @@ echo ""
 echo "=== G. extractRepoDirFromCommand quoted-path tests (requires git-command.js) ==="
 
 if [ "${SKIP_DEG:-1}" = "0" ]; then
-  IS_PRIVATE_WIN="$(to_win_path "$REPO_ROOT/claude-global/hooks/lib/is-private-repo.js")"
+  IS_PRIVATE_WIN="$(to_win_path "$REPO_ROOT/hooks/lib/is-private-repo.js")"
 
   # G1: double-quoted Windows path
   result=$(IS_PRIVATE_PATH="$IS_PRIVATE_WIN" run_with_timeout node --input-type=module <<'EOF'

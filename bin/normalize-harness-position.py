@@ -11,10 +11,10 @@ Transformations applied to each file:
   4. Collapse consecutive blank lines down to one
 
 Usage:
-  python3 bin/normalize-harness-position.py [--dry-run] <file> [...]
-  python3 bin/normalize-harness-position.py [--dry-run] --all-multi-path
-  python3 bin/normalize-harness-position.py [--dry-run] --add-harness <file> [...]
-  python3 bin/normalize-harness-position.py [--dry-run] --all-multi-path --add-harness
+  uv run python bin/normalize-harness-position.py [--dry-run] <file> [...]
+  uv run python bin/normalize-harness-position.py [--dry-run] --all-multi-path
+  uv run python bin/normalize-harness-position.py [--dry-run] --add-harness <file> [...]
+  uv run python bin/normalize-harness-position.py [--dry-run] --all-multi-path --add-harness
 
 Flags:
   --dry-run       Show what would change without writing files

@@ -5,9 +5,9 @@
 # Features NOT YET IMPLEMENTED — some tests are expected to FAIL (labeled "Expected FAIL").
 set -euo pipefail
 
-DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SESSION_START="$DOTFILES_DIR/claude-global/hooks/session-start.js"
-WORKFLOW_STATE_LIB="$DOTFILES_DIR/claude-global/hooks/workflow-state.js"
+DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SESSION_START="$DOTFILES_DIR/hooks/session-start.js"
+WORKFLOW_STATE_LIB="$DOTFILES_DIR/hooks/workflow-state.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }

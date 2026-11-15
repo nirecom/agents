@@ -9,8 +9,9 @@ const F = require("../../../lib/outbound-scan/format");
 const { out, err } = require("../../output");
 const { isBinary } = require("./binary");
 
-// Unchanged from the bash hook: a substring ERE over the staged path (its first `.` is any char).
-const SKIP_PATTERNS = /bin\/scan-outbound.sh|\.private-info-allowlist|\.offensive-content-blocklist\.example/;
+// A substring ERE over the staged path: only the exception-definition files. The scanner's own
+// files are scanned like any other (#2046), so a real leak in them still blocks.
+const SKIP_PATTERNS = /\.private-info-allowlist|\.offensive-content-blocklist\.example/;
 const SCANNED_STATUS = new Set(["A", "C", "M"]);
 const RC4_TEXT = "pre-commit: private-info blocklist unresolved (rc=4) — cannot scan, commit blocked";
 

@@ -34,6 +34,11 @@ const PATHS = [
 const LINUXBREW = builtin(["", "home", "linuxbrew"].join(SL));
 const MSYS = builtin(`(^|[^[:alnum:]_${SL}])${SL}[a-z]${SL}[[:alnum:]_.-]`);
 const WSL = builtin(`(^|[^[:alnum:]_${SL}])${SL}mnt${SL}[a-z]${SL}[[:alnum:]_.-]`);
+// A doc placeholder (`<name>`, no blanks) becomes one alnum char before the msys / wsl match only,
+// so a drive path right after it is not reported, while one after a redirect `>` or a blank still is.
+// Real HTML tag names are not placeholders: the path after `<div>` is still reported.
+const PLACEHOLDER = /<(?!(?:div|br|code|span|p|a|b|i|em|pre|li|ul|ol|td|tr|th|table|h[1-6]|img|hr)>)[A-Za-z_][A-Za-z0-9_.-]*>/gi;
+const stripPlaceholders = (s) => s.replace(PLACEHOLDER, "P");
 const ZERO_WIDTH = new RegExp("[\\u200b-\\u200d\\ufeff]", "u");
 const BIDI = new RegExp("[\\u202d\\u202e\\u2066-\\u2069]", "u");
 const HIDDEN_TEXT = "<hidden char>";
@@ -102,9 +107,10 @@ function compileScanner(lists, hardSecrets) {
       const p = longest(pathRe, line);
       report("path", "builtin", p, p);
     }
-    const msys = longest(MSYS, line);
+    const drive = stripPlaceholders(line);
+    const msys = longest(MSYS, drive);
     if (msys !== null) report("msys-path", "builtin", msys, line);
-    const wsl = longest(WSL, line);
+    const wsl = longest(WSL, drive);
     if (wsl !== null) report("wsl-path", "builtin", wsl, line);
     let workGroup = "";
     let workLine = "";

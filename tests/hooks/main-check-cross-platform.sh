@@ -10,7 +10,7 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-HOOK="$DOTFILES_DIR/claude-global/hooks/check-cross-platform.js"
+HOOK="$DOTFILES_DIR/hooks/check-cross-platform.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }

@@ -92,6 +92,8 @@ FX_PFX="$TMPBASE/co-python-prefix"
 fx_checkout "$FX_PFX"
 fx_table_edit "$FIXTURES/slash-header.json" "$FX_PFX/hooks/lib/test-language-registry.json" \
   't.entries[1].helperLibrary = t.entries[0].helperLibrary;'
+# The root decoy copies a real multi-path test into tests/bin; this case counts every candidate.
+rm -rf "$FX_PFX/tests/bin"
 mkdir -p "$FX_PFX/tests/hooks"
 printf '%s\n' '// Tests: hooks/lib/x.js, bin/y.sh' >"$FX_PFX/tests/hooks/m1.slt"
 printf '%s\n' '# Tests: hooks/lib/x.js, bin/y.sh' '// Tests: hooks/lib/x.js' >"$FX_PFX/tests/hooks/m2.slt"
