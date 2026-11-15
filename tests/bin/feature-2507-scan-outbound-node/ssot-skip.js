@@ -1,5 +1,5 @@
 "use strict";
-// Cases 5-6 (TL1): SKIP_PATTERNS keeps today's list and the new modules scan clean under it;
+// Cases 5-6 (TL1): SKIP_PATTERNS no longer skips bin/scan-outbound.sh (#2992) and the new modules scan clean under it;
 // hard-secret-patterns.js is the one pattern source both the scanner and secret-shape.js read;
 // 6c/6d pin each of the 11 patterns with a detected value and a near miss.
 
@@ -22,6 +22,10 @@ function runSkipAndSelfScan(root) {
   SB.setLists(root, C.LISTS.empty);
   const r = SB.runCli(root, { argv: NEW_MODULE_FILES.map(abs), stdin: null });
   assert.strictEqual(r.rc, 0, `self-scan of the new modules is clean; stdout=${r.stdout} stderr=${r.stderr}`);
+  // #2046 guard: under the same empty lists a literal drive path in a doc comment is still found.
+  const lit = SB.runCli(root, { argv: ["self-scan-literal.js"], stdin: null, files: { "self-scan-literal.js": Buffer.from("// /c/path or /C/path -> C:/path\n") } });
+  assert.strictEqual(lit.rc, 1, `a literal /c/path is a hard finding; stdout=${lit.stdout} stderr=${lit.stderr}`);
+  assert.ok(lit.stdout.includes("[msys-path]"), `the finding is msys-path; stdout=${lit.stdout}`);
 }
 
 const STUB_LABEL = "fixture-secret";

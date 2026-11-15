@@ -122,4 +122,4 @@ function run(op, file, helper, opts = {}) {
   }
 }
 
-module.exports = { run };
+module.exports = { run, scan };

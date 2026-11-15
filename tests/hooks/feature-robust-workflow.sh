@@ -2,8 +2,8 @@
 # Tests: hooks/lib/is-private-repo.js, hooks/workflow-state.js, hooks/session-start.js, hooks/workflow-gate.js, hooks/workflow-mark.js
 # Tags: workflow, gate, hook, bin, git, scope:issue-specific
 # Test suite for workflow state machine:
-#   claude-global/hooks/workflow-gate.js   (PreToolUse commit gate)
-#   claude-global/hooks/session-start.js   (SessionStart hook)
+#   hooks/workflow-gate.js   (PreToolUse commit gate)
+#   hooks/session-start.js   (SessionStart hook)
 set -euo pipefail
 
 # isolation (#2512): pin state and plans dirs once for this file
@@ -13,11 +13,11 @@ export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_D
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-GATE_HOOK="$DOTFILES_DIR/claude-global/hooks/workflow-gate.js"
-MARK_HOOK="$DOTFILES_DIR/claude-global/hooks/workflow-mark.js"
-SESSION_START="$DOTFILES_DIR/claude-global/hooks/session-start.js"
+GATE_HOOK="$DOTFILES_DIR/hooks/workflow-gate.js"
+MARK_HOOK="$DOTFILES_DIR/hooks/workflow-mark.js"
+SESSION_START="$DOTFILES_DIR/hooks/session-start.js"
 SETTINGS="$DOTFILES_DIR/claude-global/settings.json"
-WS_REL="./claude-global/hooks/workflow-state.js"
+WS_REL="./hooks/workflow-state.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }

@@ -51,7 +51,7 @@ test("4 isBinary equals git show | file --mime - | grep binary (empty, gitlink, 
 caseEnd();
 
 caseBegin("skip-patterns-and-self-scan", "hooks/pre-commit.d/checks/outbound-scan.js");
-test("5 SKIP_PATTERNS unchanged and the new modules scan clean", () => ssot.runSkipAndSelfScan(root));
+test("5 SKIP_PATTERNS no longer skips bin/scan-outbound.sh and the new modules scan clean", () => ssot.runSkipAndSelfScan(root));
 caseEnd();
 
 caseBegin("hard-secret-patterns-ssot", "hooks/lib/outbound-scan/hard-secret-patterns.js");
