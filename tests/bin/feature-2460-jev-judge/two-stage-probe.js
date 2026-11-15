@@ -157,9 +157,29 @@ const CMDS = {
     const io = load(STATE_IO);
     const approval = load(APPROVAL);
     io.writeState(args[0], io.createInitialState(args[0]));
+    const rec = require(path.join(root, "tests/lib/glossary-check-record.js"));
     for (const [k, st] of Object.entries(JSON.parse(args[1]))) {
       if (st === "complete" && approval.isApprovalGatedStep && approval.isApprovalGatedStep(k)) {
         approval.recordPlanApproval(args[0], k, { source: "confirm-flag-off", reason: "test fixture" });
+      }
+      // #2529: a glossary step completes only with a current glossary_check record.
+      if (st === "complete" && rec.GLOSSARY_STEPS.includes(k)) {
+        const repo = path.join(path.dirname(process.env.WORKFLOW_STATE_DIR), "glossary-repo");
+        if (!fs.existsSync(repo)) {
+          fs.mkdirSync(repo, { recursive: true });
+          require(path.join(root, "tests/lib/harness")).gitInit(repo);
+        }
+        // The record reads the step's plan artifact; the case may need it absent, so a missing
+        // one exists only for the completion and is removed after.
+        const art = path.join(process.env.WORKFLOW_PLANS_DIR, `${args[0]}-${k === "clarify_intent" ? "intent" : k}.md`);
+        const made = ["outline", "detail"].includes(k) && !fs.existsSync(art);
+        if (made) fs.writeFileSync(art, `# ${k}\n\n## Approach\n\ntest fixture\n`);
+        try {
+          rec.completeWithRecord(args[0], k, repo, io.markStep);
+        } finally {
+          if (made) fs.rmSync(art, { force: true });
+        }
+        continue;
       }
       io.markStep(args[0], k, st, st === "skipped" ? { skip_reason: "test fixture" } : undefined);
     }

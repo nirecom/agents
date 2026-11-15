@@ -85,6 +85,12 @@ if [ "$RTB_CLI_RC" -eq 5 ] && ! printf '%s\n' "$RTB_CLI_OUT" | grep -qE '^BASELI
 else
   fail "bootstrap: expected exit 5 and no preexisting line; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
 fi
+# #3025: the exit 5 also gives the escape steps for a branch with no own commits and staged work.
+if printf '%s\n' "$RTB_CLI_OUT" | grep -qF 'git stash push -u' && printf '%s\n' "$RTB_CLI_OUT" | grep -qF 'record-merge-base-baseline'; then
+  pass "bootstrap: the exit 5 output gives the no-own-commit escape steps (stash, record-merge-base-baseline)"
+else
+  fail "bootstrap: no escape steps ('git stash push -u', 'record-merge-base-baseline'); out=$(printf '%s' "$RTB_CLI_OUT" | tail -n 5 | tr '\n' '|')"
+fi
 case_end
 
 case_begin "compare-bootstrap-control" "bin/lib/run-tests-baseline-exec.sh"

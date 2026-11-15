@@ -78,16 +78,21 @@ rtb_cls_append_via() {
 }
 
 # rtb_cls_base_timeout <i> <run> <applied> <requested> <derived> — a base timeout: recorded as
-# und:timeout-at-base-after-<requested>s when recordable, else a re-run request.
+# und:timeout-at-base-after-<effective requested>s when recordable, else settled by
+# rtb_timeout_settle_into (exceeds-budget or budget-exhausted, the latter a re-run request).
 # shellcheck disable=SC2034
 rtb_cls_base_timeout() {
+    local cap
     CLS[$1]="undetermined"
-    if rtb_timeout_recordable "$3" "$4" "$5"; then
+    rtb_timeout_lang_cap_into "$2"; cap="$RTB_TIMEOUT_LANG_CAP_OUT"
+    if rtb_timeout_recordable "$3" "$4" "$5" "$cap"; then
+        rtb_timeout_effective_into "$4" "$cap"
         DET[$1]="timeout-at-base"
-        rtb_ledger_append "$B2" "$2" "und:timeout-at-base-after-${4}s"
+        rtb_ledger_append "$B2" "$2" "und:timeout-at-base-after-${RAC_EFFECTIVE_TIMEOUT:-$4}s"
     else
-        DET[$1]="budget-exhausted"
-        rtb_timeout_unrecordable_note "${TESTS[$1]}" "$4" "$5" ""
+        rtb_timeout_settle_into "$1" 0
+        DET[$1]="$RTB_TIMEOUT_SETTLE_OUT"
+        rtb_timeout_settle_note "${TESTS[$1]}" "$4" "$5" ""
     fi
 }
 
@@ -168,7 +173,9 @@ rtb_cls_ledger_stage() {
                 rtb_timeout_num_into "${n%s}" "" ""
                 n="$RTB_TIMEOUT_NUM_OUT"
                 rtb_timeout_requested_into "${RTB_TIMEOUT_LEDGER[$i]:-}" "$explicit"
-                if [[ -z "$n" || "$n" -lt "$RTB_TIMEOUT_REQUESTED_OUT" ]]; then
+                rtb_timeout_lang_cap_into "$run"
+                rtb_timeout_effective_into "$RTB_TIMEOUT_REQUESTED_OUT" "$RTB_TIMEOUT_LANG_CAP_OUT"
+                if [[ -z "$n" || "$n" -lt "${RAC_EFFECTIVE_TIMEOUT:-$RTB_TIMEOUT_REQUESTED_OUT}" ]]; then
                     RERUN+=("$i"); continue
                 fi
                 CLS[i]="undetermined"; DET[i]="timeout-at-base"; rtb_cls_append_via "$i" "${RUN_OLD[i]}"; continue ;;
