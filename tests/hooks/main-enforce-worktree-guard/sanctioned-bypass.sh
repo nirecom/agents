@@ -1,6 +1,6 @@
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, worktree, enforce, hook, workflow, scope:common
-# Sourced by tests/hooks/main-enforce-worktree-guard.sh
+# Sourced by the tests/hooks/main-enforce-worktree-guard-<group>.sh that MEWG_TABLE (tests/lib/mewg-groups.sh) assigns
 # Origin: tests/feature-workflow-off-bypass-enforce-worktree.sh (all cases).
 # Cases: A, B, C.
 # The SANCTIONED bypass route: a `<workflowDir>/<sid>.workflow-off` marker makes
