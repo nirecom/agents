@@ -187,11 +187,12 @@ run_all_dur_segments_into() {
     return 0
 }
 
-# run_all_dur_lookup <agents-dir> <keys-file> <out-file> — `<id>\t<key>` lines in, `<id>\t<secs-
-# or-empty>` out in the SAME order. ALWAYS returns 0 (a missing or corrupt ledger is normal);
+# run_all_dur_lookup <agents-dir> <keys-file> <out-file> [<term-out-file>] — `<id>\t<key>` lines in,
+# `<id>\t<secs-or-empty>` out in the SAME order; <term-out-file> gets `<id>\t<term-or-empty>` of the
+# same line the seconds came from. ALWAYS returns 0 (a missing or corrupt ledger is normal);
 # RUN_ALL_DUR_REASON carries the why.
 run_all_dur_lookup() {
-    local agents_dir="${1:-}" keys="${2:-}" out="${3:-}"
+    local agents_dir="${1:-}" keys="${2:-}" out="${3:-}" term="${4:-}"
     local LC_ALL=C LC_CTYPE=C
     local dir tok c
 
@@ -199,11 +200,13 @@ run_all_dur_lookup() {
     RUN_ALL_DUR_SEGMENTS_READ=0
     [ -n "$out" ] || { RUN_ALL_DUR_REASON="missing"; return 0; }
     : >"$out" 2>/dev/null || { RUN_ALL_DUR_REASON="unreadable"; return 0; }
+    if [ -n "$term" ]; then : >"$term" 2>/dev/null || term=""; fi
     if [ -z "$keys" ] || [ ! -f "$keys" ]; then RUN_ALL_DUR_REASON="missing"; return 0; fi
     if [ ! -s "$keys" ]; then RUN_ALL_DUR_REASON="empty"; return 0; fi
     if ! command -v awk >/dev/null 2>&1; then
         RUN_ALL_DUR_REASON="no-awk"
         run_all_dur_blank "$keys" "$out"
+        [ -z "$term" ] || run_all_dur_blank "$keys" "$term"
         return 0
     fi
 
@@ -218,14 +221,16 @@ run_all_dur_lookup() {
     if [ "$c" -eq 0 ]; then
         RUN_ALL_DUR_REASON="missing"
         run_all_dur_blank "$keys" "$out"
+        [ -z "$term" ] || run_all_dur_blank "$keys" "$term"
         return 0
     fi
 
-    # Only the 16-alnum repo id and a numeric cap cross into awk; segment text never does.
-    if LC_ALL=C awk -v RID="$RUN_ALL_DUR_REPO_ID" -v MAXREC="$RUN_ALL_DUR_MAX_RECORDS" "$RUN_ALL_DUR_AWK_PARSE"'
+    # Only the 16-alnum repo id and a numeric cap cross into awk; segment text never does. The term
+    # path travels through the environment: awk -v would interpret backslash escapes in it.
+    if RUN_ALL_DUR_AWK_TOUT="$term" LC_ALL=C awk -v RID="$RUN_ALL_DUR_REPO_ID" -v MAXREC="$RUN_ALL_DUR_MAX_RECORDS" "$RUN_ALL_DUR_AWK_PARSE"'
 function merge(   z) {
-    for (z in cur) if (!(z in secs)) secs[z] = cur[z]
-    split("", cur)
+    for (z in cur) if (!(z in secs)) { secs[z] = cur[z]; terms[z] = curt[z] }
+    split("", cur); split("", curt)
 }
 NR == FNR {
     n++
@@ -242,10 +247,15 @@ NR == FNR {
     if (substr($0, 1, 1) == "#") next
     if (!dur_parse($0) || P_RID != RID || !(P_KEY in want)) next
     cur[P_KEY] = P_SECS
+    curt[P_KEY] = P_TERM
 }
 END {
     merge()
-    for (j = 1; j <= n; j++) print id[j] "\t" ((key[j] in secs) ? secs[key[j]] : "")
+    tout = ENVIRON["RUN_ALL_DUR_AWK_TOUT"]
+    for (j = 1; j <= n; j++) {
+        print id[j] "\t" ((key[j] in secs) ? secs[key[j]] : "")
+        if (tout != "") print id[j] "\t" ((key[j] in terms) ? terms[key[j]] : "") > tout
+    }
 }
 ' "$keys" "${RUN_ALL_DUR_SEGMENTS_OUT[@]}" >"$out" 2>/dev/null; then
         RUN_ALL_DUR_REASON="ok"
@@ -253,6 +263,7 @@ END {
         RUN_ALL_DUR_REASON="unreadable"
         : >"$out" 2>/dev/null
         run_all_dur_blank "$keys" "$out"
+        if [ -n "$term" ]; then : >"$term" 2>/dev/null; run_all_dur_blank "$keys" "$term"; fi
     fi
     return 0
 }

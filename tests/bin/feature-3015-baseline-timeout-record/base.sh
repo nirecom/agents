@@ -27,6 +27,26 @@ tr_report'
     "timeout not recorded: tests/bin/added.sh requested 10s; explicit --per-test-timeout is below the derived 300s"
 }
 
+# #3035: j.js (cap 180) and t.sh (no cap) at requested 300, applied 300, with RUN_ALL_TIMEOUT_SECONDS=60
+# in the environment: js records 180 and bash 300, and the ledger stage then hits on both.
+tr_base_lang_cap() {
+  tr_drive "$TMPROOT/c-base-js" 'TESTS=("tests/bin/j.js" "tests/bin/t.sh")
+rtb_cls_base_timeout 0 tests/bin/j.js 300 300 300; rtb_cls_base_timeout 1 tests/bin/t.sh 300 300 300
+CLS=(); DET=(); RERUN=(); rtb_cls_ledger_stage; tr_report; echo "ENV=$RUN_ALL_TIMEOUT_SECONDS"' RUN_ALL_TIMEOUT_SECONDS=60
+  tr_has "js: ledger row at the effective 180s" "LEDGER tests/bin/j.js und:timeout-at-base-after-180s"
+  tr_lacks "js: no row at the requested 300s" "LEDGER tests/bin/j.js und:timeout-at-base-after-300s"
+  tr_has "bash: ledger row at the requested 300s" "LEDGER tests/bin/t.sh und:timeout-at-base-after-300s"
+  tr_ck "js: N 180 >= effective requested 180 is a hit" "R0 cls=undetermined det=timeout-at-base brt= end=" "$(tr_line R0)"
+  tr_ck "bash: N 300 is a hit" "R1 cls=undetermined det=timeout-at-base brt= end=" "$(tr_line R1)"
+  tr_ck "both hit: nothing re-runs at base" "RERUN=" "$(tr_line RERUN=)"
+  tr_ck "RUN_ALL_TIMEOUT_SECONDS is unchanged" "ENV=60" "$(tr_line ENV=)"
+  tr_drive "$TMPROOT/c-led-js180" "tr_seed_ledger $TR_B2 tests/bin/j.js und:timeout-at-base-after-180s $TR_NOW
+tr_seed_ledger $TR_B2 tests/bin/t.sh und:timeout-at-base-after-180s $TR_NOW
+TESTS=(tests/bin/j.js tests/bin/t.sh); rtb_cls_ledger_stage; tr_report"
+  tr_ck "js: a seeded 180s row alone is a hit (N >= effective requested)" "R0 cls=undetermined det=timeout-at-base brt= end=" "$(tr_line R0)"
+  tr_ck "bash: the same 180s row is a miss: only t.sh re-runs at base" "RERUN=1" "$(tr_line RERUN=)"
+}
+
 # One round-trip on one cache: the row the base writes is found again on the same base SHA and
 # not on another one (TR_ANC, an ancestor, which can never inherit from its descendant).
 tr_base_timeout_round_trip() {

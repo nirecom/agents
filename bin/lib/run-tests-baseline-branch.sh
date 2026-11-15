@@ -110,6 +110,7 @@ rtb_branch_run_one() {
     if [[ -n "$RTB_EXEC_STATE" ]]; then
         case "$RTB_EXEC_STATE:$RTB_EXEC_RC" in
             PASS:*) verdict=pass ;;
+            # A FAIL cut at 124/142 may never have reached the base's failing case: interrupted, never "fixed".
             FAIL:137|FAIL:143|FAIL:124|FAIL:142) verdict="rc-$RTB_EXEC_RC" ;;
             FAIL:*) verdict=fail ;;
             *) verdict=skip ;;
@@ -160,7 +161,7 @@ rtb_branch_classify() {
 # by an unrecordable timeout, or not set up is undetermined: its re-run is requested (exit 8).
 # shellcheck disable=SC2034  # CLS/DET/BR_RES are the caller's arrays
 rtb_branch_stage() {
-    local i t iv code res fp order rc n requested applied derived applied_max explicit="" bl="$LOGDIR-branch"
+    local i t iv code res fp order rc n requested applied derived applied_max cap eff explicit="" bl="$LOGDIR-branch"
     [[ "$PTT_EXPLICIT" != 1 ]] || explicit="$PER_TEST_TIMEOUT"
     rtb_timeout_budget_into "" "$((SECONDS + RTB_BRANCH_BASE_RESERVE))"
     applied_max="$RTB_TIMEOUT_APPLIED_OUT"
@@ -173,14 +174,16 @@ rtb_branch_stage() {
         code="${BR_EXIT[$t]:-}"
         rtb_timeout_requested_into "${RTB_TIMEOUT_LEDGER[$i]:-}" "$explicit"
         requested="$RTB_TIMEOUT_REQUESTED_OUT" derived="$RTB_TIMEOUT_DERIVED_OUT"
+        rtb_timeout_lang_cap_into "$t"; cap="$RTB_TIMEOUT_LANG_CAP_OUT"
+        rtb_timeout_effective_into "$requested" "$cap"; eff="${RAC_EFFECTIVE_TIMEOUT:-$requested}"
         rtb_branch_cache_get "$iv" "$t"
         res="$RTB_BRANCH_RESULT"
         BR_RES[i]="$bl/cache-$i.res"
         if [[ "$res" == timeout-after-* ]]; then
-            # A timeout recorded under a shorter REQUESTED_TEST_TIMEOUT is a miss.
+            # A timeout recorded under a shorter effective REQUESTED_TEST_TIMEOUT is a miss.
             n="${res#timeout-after-}"
             rtb_timeout_num_into "${n%s}" "" ""
-            [[ -n "$RTB_TIMEOUT_NUM_OUT" && "$RTB_TIMEOUT_NUM_OUT" -ge "$requested" ]] || res=""
+            [[ -n "$RTB_TIMEOUT_NUM_OUT" && "$RTB_TIMEOUT_NUM_OUT" -ge "$eff" ]] || res=""
         fi
         if [[ "$res" =~ $RTB_BRANCH_LINES_RE ]]; then
             # A hit whose lines cannot be read back is a miss: the branch re-runs.
@@ -193,18 +196,20 @@ rtb_branch_stage() {
             rtb_timeout_budget_into "$requested" "$((SECONDS + RTB_BRANCH_BASE_RESERVE))"
             applied="$RTB_TIMEOUT_APPLIED_OUT"
             if [[ "$applied" -le 0 ]]; then
-                CLS[i]="undetermined"; DET[i]="budget-exhausted"; continue
+                rtb_timeout_settle_into "$i" "$RTB_BRANCH_BASE_RESERVE"; rtb_timeout_settle_note "$t"
+                CLS[i]="undetermined"; DET[i]="$RTB_TIMEOUT_SETTLE_OUT"; continue
             fi
             printf 'run-tests-baseline: branch re-run: %s %ss\n' "$t" "$applied" >&2
             rc=0
             rtb_branch_run_one "$ROOT" "$t" "$applied" "$bl" "$code" || rc=$?
             case "$rc" in
                 1)
-                    if rtb_timeout_recordable "$applied" "$requested" "$derived"; then
-                        RTB_BRANCH_RESULT="timeout-after-${requested}s"
+                    if rtb_timeout_recordable "$applied" "$requested" "$derived" "$cap"; then
+                        RTB_BRANCH_RESULT="timeout-after-${eff}s"
                     else
-                        rtb_timeout_unrecordable_note "$t" "$requested" "$derived" "$applied_max"
-                        CLS[i]="undetermined"; DET[i]="budget-exhausted"; continue
+                        rtb_timeout_settle_into "$i" "$RTB_BRANCH_BASE_RESERVE"
+                        rtb_timeout_settle_note "$t" "$requested" "$derived" "$applied_max"
+                        CLS[i]="undetermined"; DET[i]="$RTB_TIMEOUT_SETTLE_OUT"; continue
                     fi ;;
                 2) CLS[i]="undetermined"; DET[i]="exec-setup-failed"; continue ;;
             esac
