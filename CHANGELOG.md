@@ -228,3 +228,7 @@ Changes: Fixed `run-tests-baseline` re-running tests that hit a root decoy at th
 ### FEATURE: PR #3046 (2026-11-15)
 Background: fix(#3027): approve standalone sentinel echoes in scan-outbound before the gh check
 Changes: Workflow sentinel echoes (`echo "<<WORKFLOW_...>>"`) no longer trigger a slow outbound check that ends in a permission prompt.
+
+### FEATURE: PR #3048 (2026-11-15)
+Background: test(#3033): split main-enforce-worktree-guard.sh into five independent entrypoints
+Changes: (none) — test-only restructuring with no user-visible change.
