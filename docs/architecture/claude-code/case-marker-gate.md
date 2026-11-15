@@ -105,7 +105,10 @@ names the code language's new-file name shape.
   `CASE_ADDED_WITHOUT_MARKERS`: by the `case-count` op when both versions can be counted (pytest,
   pester), else by non-blank, non-comment lines (always for bash and js). Whatever language the added case tests, it blocks; the
   line carries no line number and says to add the entry's marker to every case first, after which
-  each case's target is judged. Fixes that do not grow the count (edits, deletions, renames,
+  each case's target is judged. For bash, a code-line growth whose added lines are all data lines
+  (a quoted literal, an array opening or element, a lone `)`) does not block, so a split-suite
+  dispatcher may gain a group (`addedOnlyData` in `hooks/lib/test-gates/language-match/case-notation.js`;
+  single and 3-way alike, and an empty or undecidable added set still blocks). Fixes that do not grow the count (edits, deletions, renames,
   reordering) pass; one case removed and one added passes; an added line in a version that cannot
   be counted blocks. A new non-conforming file counts from 0.
 - Markers are required only where the working `Tests:` header does not list exactly one path, so

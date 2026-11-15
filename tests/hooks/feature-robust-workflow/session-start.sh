@@ -113,7 +113,7 @@ echo "=== is-private-repo: toNativePath / resolveRepoDir ==="
 # Test 42: toNativePath converts /c/... to C:/... on win32
 RESULT=$(cd "$DOTFILES_DIR" && node -e "
   Object.defineProperty(process,'platform',{value:'win32',configurable:true});
-  const {toNativePath}=require('./claude-global/hooks/lib/is-private-repo.js');
+  const {toNativePath}=require('./hooks/lib/is-private-repo.js');
   console.log(toNativePath('/c/git/dotfiles'));
 " 2>/dev/null)
 [ "$RESULT" = "C:/git/dotfiles" ] && pass "42. toNativePath /c/git/dotfiles → C:/git/dotfiles" || fail "42. toNativePath: expected C:/git/dotfiles, got '$RESULT'"
@@ -121,7 +121,7 @@ RESULT=$(cd "$DOTFILES_DIR" && node -e "
 # Test 43: toNativePath handles different drive letters
 RESULT=$(cd "$DOTFILES_DIR" && node -e "
   Object.defineProperty(process,'platform',{value:'win32',configurable:true});
-  const {toNativePath}=require('./claude-global/hooks/lib/is-private-repo.js');
+  const {toNativePath}=require('./hooks/lib/is-private-repo.js');
   console.log(toNativePath('/d/foo/bar'));
 " 2>/dev/null)
 [ "$RESULT" = "D:/foo/bar" ] && pass "43. toNativePath /d/foo/bar → D:/foo/bar" || fail "43. toNativePath: expected D:/foo/bar, got '$RESULT'"
@@ -129,7 +129,7 @@ RESULT=$(cd "$DOTFILES_DIR" && node -e "
 # Test 44: toNativePath leaves already-Windows paths unchanged
 RESULT=$(cd "$DOTFILES_DIR" && node -e "
   Object.defineProperty(process,'platform',{value:'win32',configurable:true});
-  const {toNativePath}=require('./claude-global/hooks/lib/is-private-repo.js');
+  const {toNativePath}=require('./hooks/lib/is-private-repo.js');
   console.log(toNativePath('C:/git/dotfiles'));
 " 2>/dev/null)
 [ "$RESULT" = "C:/git/dotfiles" ] && pass "44. toNativePath C:/git/dotfiles → C:/git/dotfiles (no change)" || fail "44. toNativePath: expected C:/git/dotfiles, got '$RESULT'"
@@ -137,7 +137,7 @@ RESULT=$(cd "$DOTFILES_DIR" && node -e "
 # Test 45: toNativePath leaves relative paths unchanged
 RESULT=$(cd "$DOTFILES_DIR" && node -e "
   Object.defineProperty(process,'platform',{value:'win32',configurable:true});
-  const {toNativePath}=require('./claude-global/hooks/lib/is-private-repo.js');
+  const {toNativePath}=require('./hooks/lib/is-private-repo.js');
   console.log(toNativePath('.'));
 " 2>/dev/null)
 [ "$RESULT" = "." ] && pass "45. toNativePath '.' → '.' (no change)" || fail "45. toNativePath: expected '.', got '$RESULT'"
@@ -145,7 +145,7 @@ RESULT=$(cd "$DOTFILES_DIR" && node -e "
 # Test 46: toNativePath leaves Linux-style non-drive paths unchanged on win32
 RESULT=$(cd "$DOTFILES_DIR" && node -e "
   Object.defineProperty(process,'platform',{value:'win32',configurable:true});
-  const {toNativePath}=require('./claude-global/hooks/lib/is-private-repo.js');
+  const {toNativePath}=require('./hooks/lib/is-private-repo.js');
   console.log(toNativePath('/usr/local/bin'));
 " 2>/dev/null)
 [ "$RESULT" = "/usr/local/bin" ] && pass "46. toNativePath /usr/local/bin → /usr/local/bin (no change)" || fail "46. toNativePath: expected /usr/local/bin, got '$RESULT'"
@@ -153,7 +153,7 @@ RESULT=$(cd "$DOTFILES_DIR" && node -e "
 # Test 47: toNativePath handles single-char drive with trailing slash
 RESULT=$(cd "$DOTFILES_DIR" && node -e "
   Object.defineProperty(process,'platform',{value:'win32',configurable:true});
-  const {toNativePath}=require('./claude-global/hooks/lib/is-private-repo.js');
+  const {toNativePath}=require('./hooks/lib/is-private-repo.js');
   console.log(toNativePath('/z/'));
 " 2>/dev/null)
 [ "$RESULT" = "Z:/" ] && pass "47. toNativePath /z/ → Z:/" || fail "47. toNativePath: expected Z:/, got '$RESULT'"
@@ -162,7 +162,7 @@ RESULT=$(cd "$DOTFILES_DIR" && node -e "
 RESULT=$(cd "$DOTFILES_DIR" && node -e "
   delete process.env.HOOK_CWD; delete process.env.CLAUDE_PROJECT_DIR;
   Object.defineProperty(process,'platform',{value:'win32',configurable:true});
-  const {resolveRepoDir}=require('./claude-global/hooks/lib/is-private-repo.js');
+  const {resolveRepoDir}=require('./hooks/lib/is-private-repo.js');
   console.log(resolveRepoDir('git -C /c/git/dotfiles commit'));
 " 2>/dev/null)
 [ "$RESULT" = "C:/git/dotfiles" ] && pass "48. resolveRepoDir: WSL path /c/git/dotfiles → C:/git/dotfiles on win32" || fail "48. resolveRepoDir: expected C:/git/dotfiles, got '$RESULT'"
@@ -171,7 +171,7 @@ RESULT=$(cd "$DOTFILES_DIR" && node -e "
 RESULT=$(cd "$DOTFILES_DIR" && node -e "
   delete process.env.HOOK_CWD; delete process.env.CLAUDE_PROJECT_DIR;
   Object.defineProperty(process,'platform',{value:'win32',configurable:true});
-  const {resolveRepoDir}=require('./claude-global/hooks/lib/is-private-repo.js');
+  const {resolveRepoDir}=require('./hooks/lib/is-private-repo.js');
   console.log(resolveRepoDir('git commit'));
 " 2>/dev/null)
 [ "$RESULT" = "." ] && pass "49. resolveRepoDir: no -C flag → '.'" || fail "49. resolveRepoDir: expected '.', got '$RESULT'"

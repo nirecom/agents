@@ -6,7 +6,8 @@
 # or the working version of a test is not conforming, a case added (more case units, or more
 # code lines when the units cannot be counted) is one HIGH CASE_ADDED_WITHOUT_MARKERS line,
 # whatever language the added case tests; edits that add no case pass. Cases live in the sibling
-# directory: existing-bash.sh (new files and bash) and languages.sh (pester, pytest, js).
+# directory: existing-bash.sh (new files and bash), dispatcher.sh (split-suite dispatchers, #2992)
+# and languages.sh (pester, pytest, js).
 # shellcheck disable=SC2016 # fixture lines hold literal $REPO and $(...) text on purpose
 set -u
 
@@ -67,6 +68,8 @@ case_end
 
 # shellcheck source=feature-2502-case-addition/existing-bash.sh
 . "$CASE_DIR/existing-bash.sh"
+# shellcheck source=feature-2502-case-addition/dispatcher.sh
+. "$CASE_DIR/dispatcher.sh"
 # shellcheck source=feature-2502-case-addition/languages.sh
 . "$CASE_DIR/languages.sh"
 

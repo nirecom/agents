@@ -88,3 +88,57 @@ test("codeLines counts lines that are neither blank nor comments in the match-pa
   for (const [f, match, lines, want] of rows) assert.strictEqual(LM.codeLines(mem(f, lines), match), want, `${f} as ${match}`);
 });
 caseEnd();
+
+// #2992 item 1, merge form: a split-suite dispatcher whose base holds two groups (9 code lines).
+const D_PRE = [...H_A, 'SPLIT_DIR="$(dirname "$0")/d"', "SPLIT_GROUPS=(", '  "g-one.sh"', '  "g-two.sh"'];
+const D_POST = [")", 'for group in "${SPLIT_GROUPS[@]}"; do', '  bash "$SPLIT_DIR/$group"', "done"];
+const disp = (...mid) => mem("dp.sh", [...D_PRE, ...mid, ...D_POST]);
+const merged = (file, name, h1, h2, base) => LM.check(file, name, [h1, h2], { root: REPO, base });
+const base3 = (basis) => `case count unavailable: no case unit; code lines H+M−B = ${basis}`;
+
+caseBegin("merge-group-lines-from-both-parents-pass", "hooks/lib/test-gates/language-match/case-addition.js");
+test("3way: h1 and h2 each add a group line and staged keeps both", () => {
+  const base = disp();
+  const h1 = disp('  "g-three.sh"');
+  const h2 = disp('  "g-four.sh"');
+  const staged = disp('  "g-three.sh"', '  "g-four.sh"');
+  assert.deepStrictEqual(LM.judgeMulti(staged, "tests/bin/dm1.sh", base, h1, h2, { root: REPO }), { rc: 0, lines: [] });
+  assert.deepStrictEqual(merged(staged, "tests/bin/dm1.sh", h1, h2, base), { lines: [], violation: false, infra: false });
+});
+caseEnd();
+
+caseBegin("merge-adds-its-own-group-line-passes", "hooks/lib/test-gates/language-match/case-addition.js");
+test("3way: the merge resolution adds one more group line (only data lines are new)", () => {
+  const base = disp();
+  const h1 = disp('  "g-three.sh"');
+  const h2 = disp('  "g-four.sh"');
+  const staged = disp('  "g-three.sh"', '  "g-four.sh"', '  "fail-open.sh"');
+  assert.deepStrictEqual(LM.judgeMulti(staged, "tests/bin/dm2.sh", base, h1, h2, { root: REPO }), { rc: 0, lines: [] });
+  assert.strictEqual(LM.caseAddition3way(staged, "tests/bin/dm2.sh", h1, h2, base), null);
+});
+caseEnd();
+
+caseBegin("merge-adds-a-real-case-blocks", "hooks/lib/test-gates/language-match/case-addition.js");
+test("3way: a parent adds a group line and the merge adds a pass call", () => {
+  const base = disp();
+  const h1 = disp('  "g-three.sh"');
+  const h2 = disp('  "g-four.sh"');
+  const staged = mem("dp.sh", [...D_PRE, '  "g-three.sh"', '  "g-four.sh"', ...D_POST, 'pass "merged"']);
+  const want = [addedLine("tests/bin/dm3.sh", base3("11 -> 12"), "case_begin/case_end")];
+  assert.deepStrictEqual(LM.judgeMulti(staged, "tests/bin/dm3.sh", base, h1, h2, { root: REPO }), { rc: 1, lines: want });
+  assert.deepStrictEqual(added(merged(staged, "tests/bin/dm3.sh", h1, h2, base)), want);
+});
+caseEnd();
+
+caseBegin("merge-with-no-added-line-blocks", "hooks/lib/test-gates/language-match/case-addition.js");
+test("3way: base {X, Y}, both parents drop Y, staged {X}: more lines than H+M-B but no added line", () => {
+  const X = 'bash "$REPO/bin/a.sh"';
+  const base = mem("dp.sh", [...H_A, X, "echo y"]);
+  const h1 = mem("dp.sh", [...H_A, X]);
+  const h2 = mem("dp.sh", [...H_A, X]);
+  const staged = mem("dp.sh", [...H_A, X]);
+  const want = [addedLine("tests/bin/dm4.sh", base3("1 -> 2"), "case_begin/case_end")];
+  assert.deepStrictEqual(LM.judgeMulti(staged, "tests/bin/dm4.sh", base, h1, h2, { root: REPO }), { rc: 1, lines: want });
+  assert.deepStrictEqual(added(merged(staged, "tests/bin/dm4.sh", h1, h2, base)), want);
+});
+caseEnd();
