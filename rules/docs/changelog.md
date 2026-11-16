@@ -13,5 +13,6 @@ User-facing release log. Write only changes the user feels:
 
 Do NOT include internal function / module / hook names — those belong in `history.md`.
 Written by `/update-docs` via `doc-append CHANGELOG.md` (no `--commits`).
+Rotation archives old entries to `docs/changelog/<year>.md`; a retired `changelog/` dir beside a root `CHANGELOG.md` is moved there by the next local `doc-rotate.py` run.
 
 Under `ENFORCE_WORKTREE=on`, `/update-docs` stages user-facing bullets (public repos only) into `WORKTREE_NOTES.md` `## Changelog Notes`. `bin/compose-doc-append-entry` appends them to `CHANGELOG.md` during `/worktree-end` Step WE-17.

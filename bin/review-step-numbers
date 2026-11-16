@@ -43,6 +43,7 @@ EXCLUDES=(
   --glob '!docs/history.md'
   --glob '!docs/history/**'
   --glob '!CHANGELOG.md'
+  --glob '!docs/changelog/**'
   --glob '!rules/docs/history.md'
   # Tier 2 — test fixtures + rule self-exclusion
   --glob '!tests/**'
@@ -151,7 +152,7 @@ CHANGED=$(printf '%s\n' "$CHANGED_COMMITTED" "$CHANGED_STAGED" "$CHANGED_UNSTAGE
 
 # Apply tier exclusions to the diff file list
 TARGETS=$(printf '%s\n' "$CHANGED" | grep -v \
-    -e '^docs/history\.md$' -e '^docs/history/' -e '^CHANGELOG\.md$' -e '^rules/docs/history\.md$' \
+    -e '^docs/history\.md$' -e '^docs/history/' -e '^CHANGELOG\.md$' -e '^docs/changelog/' -e '^rules/docs/history\.md$' \
     -e '^tests/' -e '^rules/prompt\.md$' \
     -e '^bin/review-step-numbers$' \
     2>/dev/null || true)

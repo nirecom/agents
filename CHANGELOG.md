@@ -1,5 +1,5 @@
 ## Archived
-- [2026](changelog/2026.md) — 223 entries
+- [2026](docs/changelog/2026.md) — 223 entries
 
 ### FEATURE: PR #2815 (2026-10-27)
 Background: fix(#2808): update codex through npm directly after claude and codex exit

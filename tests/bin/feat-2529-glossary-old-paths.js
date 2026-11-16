@@ -43,9 +43,11 @@ const PENDING_DOC_LINES = new Map([
   ])],
 ]);
 const pendingDocLine = (p, line) => !!(PENDING_DOC_LINES.get(p) && PENDING_DOC_LINES.get(p).has(line));
+// The four append-only records come from the shared predicate (#2890); _archive stays local.
+// Loaded on first use, so only T1-1 fails while the module is missing.
+const isRecord = (p) => require(path.join(ROOT, "hooks/lib/append-only-record-path.js")).isAppendOnlyRecordPath(p);
 function excludedPath(p) {
-  return EXCLUDED_FILES.has(p) || p === "docs/history.md" || p.startsWith("docs/history/") ||
-    p === "CHANGELOG.md" || p.startsWith("changelog/") || /(^|\/)_archived?(\/|$)/.test(p);
+  return EXCLUDED_FILES.has(p) || isRecord(p) || /(^|\/)_archived?(\/|$)/.test(p);
 }
 const BEGIN_RE = /--- BEGIN temporary: docs\/glossary-<category>\.md -> docs\/glossary\/<category>\.md migration/;
 const END_RE = /--- END temporary: docs\/glossary-<category>\.md -> docs\/glossary\/<category>\.md migration/;

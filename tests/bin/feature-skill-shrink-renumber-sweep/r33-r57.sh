@@ -125,3 +125,64 @@ check_absent "R-CP-extra-c" "CP-2-6" "skills/commit-push/SKILL.md"
 # pre-flight label likewise belongs to the caller's CP-2 block.
 check_literal "R-CPW-ref-a" "CP-2" "skills/commit-push/SKILL.md"
 check_absent "R-CPW-ref-b" "commit-push-worker" "skills/commit-push/SKILL.md"
+
+# R32b: docs/changelog/** is excluded (--all and diff mode); the old changelog/ path is not.
+# Lives here because the entrypoint carries no case markers (R32 sibling).
+if command -v rg >/dev/null 2>&1; then
+    _TMPCL=$(mktemp -d)
+    mkdir -p "$_TMPCL/docs/changelog" "$_TMPCL/changelog"
+    printf '### WE-4.5: changelog entry (excluded)\n' > "$_TMPCL/docs/changelog/2026.md"
+    _R32B_NEW=$(cd "$_TMPCL" && bash "$SCRIPT_CHECKOUT_ROOT/bin/review-step-numbers" --all 2>&1)
+    printf '### WE-4.5: changelog entry (old path)\n' > "$_TMPCL/changelog/2026.md"
+    _R32B_OLD=$(cd "$_TMPCL" && bash "$SCRIPT_CHECKOUT_ROOT/bin/review-step-numbers" --all 2>&1)
+    rm -rf "$_TMPCL/changelog"
+    git -C "$_TMPCL" init --quiet
+    git -C "$_TMPCL" config user.email "test@example.com"
+    git -C "$_TMPCL" config user.name "Test"
+    git -C "$_TMPCL" config core.hooksPath /dev/null
+    printf '## clean\n' > "$_TMPCL/clean.md"
+    git -C "$_TMPCL" add clean.md && git -C "$_TMPCL" commit --quiet -m "baseline"
+    _CL_BASE=$(git -C "$_TMPCL" rev-parse HEAD)
+    git -C "$_TMPCL" add docs/changelog/2026.md
+    _R32B_DIFF=$(cd "$_TMPCL" && bash "$SCRIPT_CHECKOUT_ROOT/bin/review-step-numbers" --base "$_CL_BASE" 2>&1)
+    _R32B_RC=$?
+    rm -rf "$_TMPCL"
+    if echo "$_R32B_NEW" | grep -q "No decimal step-label violations found" \
+        && ! echo "$_R32B_NEW" | grep -qE 'docs[/\\]changelog[/\\]2026\.md'; then
+        pass "R32b: --all mode excludes docs/changelog/2026.md (Tier 1 exclusion)"
+    else
+        fail "R32b: --all should skip docs/changelog/2026.md, got: $_R32B_NEW"
+    fi
+    if echo "$_R32B_OLD" | grep -qE '^HARD: (\.[/\\])?changelog[/\\]2026\.md:'; then
+        pass "R32b: --all mode still reports the old changelog/2026.md path"
+    else
+        fail "R32b: --all should report old changelog/2026.md, got: $_R32B_OLD"
+    fi
+    if [ "$_R32B_RC" -eq 0 ] && echo "$_R32B_DIFF" | grep -q "No diff-mode files to scan"; then
+        pass "R32b: diff mode drops staged docs/changelog/2026.md from TARGETS"
+    else
+        fail "R32b: diff mode should exclude docs/changelog/2026.md, got rc=$_R32B_RC out=$_R32B_DIFF"
+    fi
+    # R32c: diff mode still reports a staged violation under the old changelog/ path.
+    _TMPOLD=$(mktemp -d)
+    git -C "$_TMPOLD" init --quiet
+    git -C "$_TMPOLD" config user.email "test@example.com"
+    git -C "$_TMPOLD" config user.name "Test"
+    git -C "$_TMPOLD" config core.hooksPath /dev/null
+    printf '## clean\n' > "$_TMPOLD/clean.md"
+    git -C "$_TMPOLD" add clean.md && git -C "$_TMPOLD" commit --quiet -m "baseline"
+    _OLD_BASE=$(git -C "$_TMPOLD" rev-parse HEAD)
+    mkdir -p "$_TMPOLD/changelog"
+    printf '### WE-4.5: changelog entry (old path)\n' > "$_TMPOLD/changelog/2026.md"
+    git -C "$_TMPOLD" add changelog/2026.md
+    _R32C_DIFF=$(cd "$_TMPOLD" && bash "$SCRIPT_CHECKOUT_ROOT/bin/review-step-numbers" --base "$_OLD_BASE" 2>&1)
+    rm -rf "$_TMPOLD"
+    if echo "$_R32C_DIFF" | grep -qE '^HARD: (\.[/\\])?changelog[/\\]2026\.md:'; then
+        pass "R32c: diff mode still reports the staged old changelog/2026.md path"
+    else
+        fail "R32c: diff mode should report old changelog/2026.md, got: $_R32C_DIFF"
+    fi
+else
+    echo "SKIP: R32b: rg not in PATH — docs/changelog exclusion test not run"
+    echo "SKIP: R32c: rg not in PATH — old changelog/ diff-mode test not run"
+fi
