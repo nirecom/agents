@@ -14,6 +14,7 @@ const { rowFor } = require("../../plan-step-table");
 const { stagedOids } = require("../../../workflow-gate/staged-evidence");
 const { detectMergeIncoming, MERGE_INCOMING_STATE } = require("../../../lib/merge-incoming");
 const { changedLinesOf } = require("./changed-lines");
+const { isAppendOnlyRecordPath } = require("../../../lib/append-only-record-path");
 
 const sha256 = (data) => crypto.createHash("sha256").update(data).digest("hex");
 const kindOf = (p) => (/\.md$/i.test(p) ? "markdown" : "code");
@@ -99,7 +100,8 @@ function readBlobs(repoDir, oids) {
 function artifactRS(repoDir, step, classify) {
   try {
     const names = git(repoDir, ["diff", "--cached", "--name-only", "-z", "--no-renames"]).toString("utf8");
-    const listed = names.split("\0").filter(Boolean).filter((p) => classify(p) === step).sort();
+    // Append-only records keep their past wording (#2890): their staged lines are never drift.
+    const listed = names.split("\0").filter(Boolean).filter((p) => classify(p) === step && !isAppendOnlyRecordPath(p)).sort();
     let paths = listed;
     let mergeIncoming = { state: "skipped", excluded: 0 };
     if (listed.length > 0) {

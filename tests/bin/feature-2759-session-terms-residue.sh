@@ -134,7 +134,7 @@ c_keep_pairs_with_the_migration_axis() {
 c_exempt_files() {
   read_kit
   new_repo exempt
-  local rel exempt=(docs/history.md docs/history/old.md CHANGELOG.md changelog/old.md "$TERM_REL")
+  local rel exempt=(docs/history.md docs/history/old.md CHANGELOG.md docs/changelog/old.md "$TERM_REL")
   for rel in "${exempt[@]}"; do fx "$REPO/$rel" 'the heir of a donor'; done
   fx "$REPO/docs/history-notes.md" 'the heir of a donor'
   tracked

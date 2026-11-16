@@ -227,14 +227,22 @@ function detectWith(name, edit, root) {
 const bashEntry = (t) => t.entries.find((e) => e.id === "bash");
 
 caseBegin("MTD-loose-source-regex-excluded", "skills/migrate-tests/scripts/detect.js");
-test("MTD-loose-source-regex-excluded: an entry flagged helperLibrary.looseSourceRegex does not detect a harness load; unflagged (false / omitted) entries do", () => {
+test("MTD-loose-source-regex-excluded: looseSourceRegex excludes only sourceRegex (relative form); sharedSourceRegex still counts; unflagged entries count both", () => {
+  const REL_HARNESS = tree("rel-harness", {
+    "tests/a.sh": "#!/usr/bin/env bash\n. tests/lib/harness.sh\npass ok\n",
+    "tests/b.sh": "#!/usr/bin/env bash\n. tests/lib/harness.sh\npass ok\n",
+  });
+  const loose = (t) => { bashEntry(t).helperLibrary.looseSourceRegex = true; };
   const cases = [
-    { name: "cfg-loose-true", edit: (t) => { bashEntry(t).helperLibrary.looseSourceRegex = true; }, want: "off" },
-    { name: "cfg-loose-false", edit: (t) => { bashEntry(t).helperLibrary.looseSourceRegex = false; }, want: "on" },
-    { name: "cfg-loose-omitted", edit: () => {}, want: "on" },
+    { name: "cfg-loose-true-relative", edit: loose, root: REL_HARNESS, want: "off" },
+    { name: "cfg-loose-true-shared", edit: loose, root: ALL_HARNESS, want: "on" },
+    { name: "cfg-loose-false-shared", edit: (t) => { bashEntry(t).helperLibrary.looseSourceRegex = false; }, root: ALL_HARNESS, want: "on" },
+    { name: "cfg-loose-false-relative", edit: (t) => { bashEntry(t).helperLibrary.looseSourceRegex = false; }, root: REL_HARNESS, want: "on" },
+    { name: "cfg-loose-omitted-shared", edit: () => {}, root: ALL_HARNESS, want: "on" },
+    { name: "cfg-loose-omitted-relative", edit: () => {}, root: REL_HARNESS, want: "on" },
   ];
-  for (const { name, edit, want } of cases) {
-    assert.equal(detectWith(name, edit, ALL_HARNESS), want, `${name}: testHarness`);
+  for (const { name, edit, root, want } of cases) {
+    assert.equal(detectWith(name, edit, root), want, `${name}: testHarness`);
   }
 });
 caseEnd();
