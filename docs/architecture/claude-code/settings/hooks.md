@@ -224,10 +224,12 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
   exactly one well-formed `RUN_CONTRACT` line, `executed>0` and `fail==0` (and `write_tests` already
   satisfied). exit ≠ 0, any test command lacking a valid contract (ad-hoc runner, piped/compound run-all.sh,
   no-match), ambiguous emitter attribution, or an unattributed stdout region, demotes `run_tests` to
-  `pending`. Sentinel echoes, read-only commands, and git non-exec subcommands (resolved past leading global
-  options) excluded. Any unrelated Bash call observed between an explicit completion sentinel and the next
-  workflow-state read can retrigger this demotion (continuous re-verification, not a bug) — re-emit the
-  completion sentinel immediately before checking workflow state if this happens.
+  `pending`. A run without provenance (no verified emitter) leaves a recorded `complete` `run_tests` unchanged;
+  on failure it still stamps the test-failure risk and names the exits (`/run-tests` rerun, `<<WORKFLOW_MARK_STEP_run_tests_pending>>`);
+  dispatch-unsettled routes are out of scope (#2011, `hooks/workflow-run-tests/provenance-gate.js`). Sentinel echoes, read-only
+  commands, and git non-exec subcommands (resolved past leading global options) excluded. Any unrelated Bash call observed
+  between an explicit completion sentinel and the next workflow-state read can retrigger this demotion (continuous
+  re-verification, not a bug) — re-emit the completion sentinel immediately before checking workflow state if this happens.
   **Two recording routes (#2544).** Besides the stdout route above, a test-runner dispatch leaves
   `<stem>.outcome.json` in the session control dir (written only by the dispatcher, exclusive create).
   Every Bash call, whatever its command, first settles the latest test-runner dispatch
