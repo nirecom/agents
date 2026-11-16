@@ -5,6 +5,7 @@
 // residue test — and are read from there, so this module carries none of them.
 
 const { escapeRe } = require("./line-scan");
+const { isAppendOnlyRecordPath } = require("../../hooks/lib/append-only-record-path");
 
 const BEGIN = "# retired-names:begin";
 const END = "# retired-names:end";
@@ -76,9 +77,9 @@ function hitIn(text, list, useKeep = true) {
   return null;
 }
 
-// History documents and the list's own file are the only places an old name may stay.
+// The append-only records and the list's own file are the only places an old name may stay.
 function isExempt(rel, list) {
-  return rel === "docs/history.md" || rel.startsWith("docs/history/") || rel === "CHANGELOG.md" || rel.startsWith("changelog/") || rel === list.listRel;
+  return isAppendOnlyRecordPath(rel) || rel === list.listRel;
 }
 
 // scanFiles(files, list, checkName, lineFilter) → violation lines of one retired list.

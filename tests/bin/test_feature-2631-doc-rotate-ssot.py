@@ -95,8 +95,14 @@ def test_ssot_threshold_leaves_499_untouched(tmp_path):
 
 
 MUTATE_LIMITS = REPO_ROOT / "tests" / "hooks" / "feature-2631-size-limits" / "mutate-limits.js"
-# doc-rotate.py reaches the SSOT through ../bin/print-size-limits -> ../hooks/lib/size-limits.js.
-TREE_FILES = ("bin/doc-rotate.py", "bin/print-size-limits", "hooks/lib/size-limits.js")
+# doc-rotate.py reaches the SSOT through ../bin/print-size-limits -> ../hooks/lib/size-limits.js,
+# and imports its sibling module bin/doc-rotate/changelog_archive.py at load time.
+TREE_FILES = (
+    "bin/doc-rotate.py",
+    "bin/doc-rotate/changelog_archive.py",
+    "bin/print-size-limits",
+    "hooks/lib/size-limits.js",
+)
 
 
 def _limits_tree(tmp_path: Path, warn: int, hard: int) -> Path:

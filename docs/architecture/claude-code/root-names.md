@@ -131,7 +131,7 @@ In the agents repository the pre-commit hook runs six checkers, this gate among 
 Exit 1 or 2 is a violation. A missing checker module, a throw, or any other exit is an outage the gate cannot vouch for, so it blocks as well and says which checker failed.
 The emergency bypass is `git commit --no-verify`.
 
-The retired names are listed between the `retired-names:begin` and `retired-names:end` markers of `tests/bin/feature-2561-root-names-residue.sh`. `docs/history*`, `CHANGELOG.md`, `changelog/` and the list file itself are exempt from `residue`.
+The retired names are listed between the `retired-names:begin` and `retired-names:end` markers of `tests/bin/feature-2561-root-names-residue.sh`. `docs/history*`, `CHANGELOG.md`, `docs/changelog/` and the list file itself are exempt from `residue`.
 
 `session-terms` (#2759) reads its own list from the same markers in `tests/bin/feature-2759-session-terms-residue.sh`, matches it with the `residue` matcher, and exempts the same history files and that list file.
 The one other exception is in `docs/glossary/internal.md`: on the `Definition` line of the `session-upstream` and `session-downstream` entries, the phrase naming that entry's rejected synonym is allowed; anywhere else the word is a violation.

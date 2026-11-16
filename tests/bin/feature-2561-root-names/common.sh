@@ -44,6 +44,8 @@ make_kit() {
   mkdir -p "$KIT/bin" "$KIT/tests/bin"
   if [[ -f "$REAL_GATE" ]]; then cp "$REAL_GATE" "$KIT/bin/"; fi
   if [[ -d "${REAL_GATE%.sh}" ]]; then cp -r "${REAL_GATE%.sh}" "$KIT/bin/"; fi
+  mkdir -p "$KIT/hooks/lib"
+  cp "${REAL_GATE%/bin/check-root-names.sh}/hooks/lib/append-only-record-path.js" "$KIT/hooks/lib/"
   cp "$RETIRED_LIST" "$KIT/tests/bin/"
   cp "${REAL_GATE%/bin/check-root-names.sh}/tests/bin/feature-2759-session-terms-residue.sh" "$KIT/tests/bin/"
 }

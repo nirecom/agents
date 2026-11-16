@@ -64,6 +64,6 @@ A token is an error outside its migration's temporary block; a registered block 
 # except retired-downstream-field docs/history.md append-only record
 # except retired-downstream-field docs/history/** append-only record
 # except retired-downstream-field CHANGELOG.md append-only record
-# except retired-downstream-field changelog/** append-only record
+# except retired-downstream-field docs/changelog/** append-only record
 # except retired-downstream-field tests/bin/feature-2759-session-terms-residue.sh the session-term list holds the keep entry
 # retired-tokens:end
