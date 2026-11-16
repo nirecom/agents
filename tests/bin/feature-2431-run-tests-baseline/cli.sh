@@ -369,3 +369,48 @@ run_cli_same_base_pass_cases() {
     fail "C3-same-base-pass: run_tests must stay pending; status=$st basis=$basis bc=$bc"
   fi
 }
+
+# #3067: the CLI hands `git rev-parse --verify HEAD` to record as --head, so the classification is
+# bound to the commit it was made on; an approvable row (here budget-exhausted, a re-run request)
+# gets the approval sentinel on stderr. A checkout whose HEAD cannot be read is a usage error (exit 2).
+run_cli_head_cases() {
+  if [ ! -f "$BASELINE_CLI" ]; then
+    fail "C-head: bin/run-tests-baseline not found (impl pending)"
+    return
+  fi
+  local repo="$TMPROOT/repo-head" t_slp="tests/bin/test-sleep.sh" head bc
+  local sentinel="WORKFLOW_RUN_TESTS_BASELINE_UNOBSERVED_ACCEPTED"
+  mk_fixture_repo "$repo" >/dev/null
+  head="$(git -C "$repo" rev-parse --verify HEAD)"
+  seed_failing "hd-$$" "$t_slp"
+  rtb_cli_run "$(cli_case_cache hd)" "$repo" "hd-$$" --per-test-timeout 1
+  bc="$(read_step_field "hd-$$" run_tests baseline_classification)"
+  if [ "$RTB_CLI_RC" -eq 8 ] && printf '%s' "$bc" | grep -qF "\"head\":\"$head\""; then
+    pass "C-head: baseline_classification.head is the fixture HEAD (exit 8)"
+  else
+    fail "C-head: expected exit 8 and head=$head in baseline_classification; rc=$RTB_CLI_RC bc=$bc"
+  fi
+  printf '%s\n' "$RTB_CLI_OUT" | grep -qF "$sentinel" \
+    && pass "C-head: stderr names $sentinel for the approvable budget-exhausted row" \
+    || fail "C-head: no $sentinel hint on stderr ($(cli_baseline_lines))"
+  cli_assert_not_completed "C-head" "hd-$$" "$t_slp"
+
+  # Unborn HEAD in a checkout that still has a work tree: test-broken.sh passes alone on the
+  # branch, so no merge base is needed and the run reaches the record hand-off.
+  local repo_nh="$TMPROOT/repo-nohead" st
+  mk_fixture_repo "$repo_nh" >/dev/null
+  git -C "$repo_nh" symbolic-ref HEAD refs/heads/unborn-3067
+  if git -C "$repo_nh" rev-parse --verify --quiet HEAD >/dev/null 2>&1; then
+    fail "C-head-unreadable: fixture error — HEAD still resolves"
+    return
+  fi
+  seed_failing "nh-$$" "tests/bin/test-broken.sh"
+  rtb_cli_run "$(cli_case_cache nh)" "$repo_nh" "nh-$$"
+  st="$(read_step_field "nh-$$" run_tests status)"
+  bc="$(read_step_field "nh-$$" run_tests baseline_classification)"
+  if [ "$RTB_CLI_RC" -eq 2 ] && [ "$st" = '"pending"' ] && [ "$bc" = "(absent)" ]; then
+    pass "C-head-unreadable: unreadable HEAD → exit 2, nothing recorded"
+  else
+    fail "C-head-unreadable: expected exit 2 with no classification; rc=$RTB_CLI_RC status=$st bc=$bc ($(cli_baseline_lines))"
+  fi
+}
