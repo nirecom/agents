@@ -274,6 +274,7 @@ try {
     unrunnableRuntimes: reason === "contract-unrunnable" ? missingRuntimes(toolResponse, t.emitter) : null,
     unrunnableMissingFiles: reason === "contract-unrunnable" ? missingFileCount(toolResponse, t.emitter) : null,
     contractAbsent: !t.hasProvenance || t.contract === null,
+    hasProvenance: t.hasProvenance,
     reason,
     unsettledStem: dispatch.unsettledStem,
     stampRisk: true,

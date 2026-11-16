@@ -40,7 +40,7 @@ WT-6. **Determine the subagent's model**:
 
 WT-7. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model alias from WT-6>`) to autonomously:
    WT-7a. Write the test file(s).
-   WT-7b. Run tests with timeout.
+   WT-7b. Run tests with timeout (red/green check only; /run-tests owns run_tests evidence).
    WT-7c. Fix failures and re-run until green.
    WT-7d. Review test coverage against `skills/_shared/test-design.md` categories — fix gaps.
    WT-7e. Re-run tests until green.
@@ -84,11 +84,11 @@ The order below is load-bearing — do not reorder.
 3. Do NOT prefix that `next-step --advance` call with `cd "$AGENTS_MAIN_ROOT" &&` — the CLI resolves the evidence repo from the Bash process's own CWD via `git rev-parse --show-toplevel` (`resolveTrustedRepoDir()` in `hooks/workflow-state/record-step-verdict.js`), so a `cd` points it at the main agents worktree and the completion is rejected fail-closed.
 4. Follow the returned `ACTION` / `NEXT_SKILL` / `NEXT_HINT` per CLAUDE.md.
 5. `/review-tests` auto-backfills write_tests when evidence exists; the `next-step --advance` call is the primary door.
-6. Run tests (validation only — this does not satisfy the run_tests workflow step).
+6. Run tests (validation only — only tests/run-all.sh or the test-runner worker is run_tests evidence; any other run leaves a complete run_tests unchanged).
 
 If tests are genuinely not needed for this change:
 1. Run: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"`, then record it as `--class E --step write_tests --key write-tests:not-needed`, per `skills/_shared/handoff-record.md`.
-2. Run tests (validation only — this does not satisfy the run_tests workflow step).
+2. Run tests (validation only — only tests/run-all.sh or the test-runner worker is run_tests evidence; any other run leaves a complete run_tests unchanged).
 
 When WT-6 took the `NONE` fallback, record it as `--class D --step write_tests --key write-tests:model-fallback`, per `skills/_shared/handoff-record.md`.
 

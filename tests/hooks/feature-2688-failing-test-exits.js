@@ -181,6 +181,8 @@ test("test-runner-worker-returns-failing-exits", () => noNewFailures(fails, () =
   const spawnPath = require.resolve(path.join(F.ROOT, "bin/worker-dispatch/spawn.js"));
   const runnerPath = require.resolve(path.join(F.ROOT, "bin/worker-dispatch/workers/test-runner.js"));
   const saved = require.cache[spawnPath];
+  const settings = JSON.stringify({ tests: { dir: "tests", categorization: "flat", testHarness: "off", caseMarker: "off" } });
+  const cwd = F.makeRepo(`fx-${++n}`, { ".agents.json": settings }, {});
   const stdout = [`FAIL: ${B} (exit 124)`, `FAIL: ${C} (exit 1)`,
     "RUN_CONTRACT: PASS=0 FAIL=2 SKIP=0 EXECUTED=2 UNRUNNABLE=0 TIMEOUT=1", ""].join("\n");
   require.cache[spawnPath] = {
@@ -193,7 +195,7 @@ test("test-runner-worker-returns-failing-exits", () => noNewFailures(fails, () =
   delete require.cache[runnerPath];
   let res = null;
   try {
-    res = require(runnerPath).run({ cwd: "/stub", timeout_seconds: 120, test_args: [] }, { anchors: {}, entry: {} });
+    res = require(runnerPath).run({ cwd, timeout_seconds: 120, test_args: [] }, { anchors: {}, entry: {} });
   } finally {
     delete require.cache[runnerPath];
     if (saved) require.cache[spawnPath] = saved; else delete require.cache[spawnPath];

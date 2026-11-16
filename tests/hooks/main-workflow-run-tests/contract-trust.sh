@@ -10,18 +10,19 @@ run_contract_trust_tests() {
     echo ""
     echo "=== workflow-run-tests: C' contract-trust cases (#1242) ==="
 
-    # C-DEMOTE: seed run_tests=complete (stale), then run a non-run-all.sh command
-    # with no contract → active demotion back to pending.
-    # Verifies C1 fix: stale complete + no-contract test command → active demotion.
+    # C-KEEP-NOPROV (#2011, was C-DEMOTE): seed run_tests=complete, then run a
+    # non-run-all.sh command with no contract. A run without provenance is no
+    # run_tests evidence, so it leaves a recorded complete unchanged
+    # (hooks/workflow-run-tests/provenance-gate.js). A run WITH provenance still demotes.
     SID="cdemote-$$-$RANDOM"
     seed_write_tests "$SID" "complete"
     seed_run_tests "$SID" "complete"
     run_run_tests_hook "bash tests/foo.sh" 0 "$SID"
     STATUS=$(get_run_tests_status "$SID")
-    if [ "$STATUS" = "pending" ]; then
-        pass "C-DEMOTE. stale run_tests=complete + no-provenance + no-contract → active demotion to pending"
+    if [ "$STATUS" = "complete" ]; then
+        pass "C-KEEP-NOPROV. run_tests=complete + no-provenance + no-contract → complete kept (#2011)"
     else
-        fail "C-DEMOTE. stale run_tests=complete + no-provenance + no-contract → expected pending (C1 demotion), got: $STATUS"
+        fail "C-KEEP-NOPROV. run_tests=complete + no-provenance + no-contract → expected complete kept (#2011), got: $STATUS"
     fi
 
     # C-VALID: bash tests/run-all.sh tests/foo.sh, exit=0, valid contract (PASS=2 FAIL=0 SKIP=1 EXECUTED=3),

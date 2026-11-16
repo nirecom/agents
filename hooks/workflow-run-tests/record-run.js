@@ -8,6 +8,7 @@ const { markStep, readState } = require("../workflow-state");
 const { isContractTrusted, resolveRunOutcome } = require("./outcome");
 const { demotionReason, demotionMessage } = require("./demotion");
 const { stampTestFailureRisk } = require("./test-failure-risk");
+const { holdsCompleteRunTests, heldMessage } = require("./provenance-gate");
 const { boundHits } = require("./hit-summary");
 const { recordParts } = require("./run-parts");
 
@@ -57,8 +58,6 @@ function recordFailedExit(r) {
     ...partsField(r),
     ...sourceFields(r.source, r.unsettledStem),
   });
-  // #2430: a red suite outside the red-expected steps is a handoff risk. Never throws.
-  if (r.stampRisk) stampTestFailureRisk(r.sessionId);
   return null;
 }
 
@@ -180,10 +179,9 @@ function applyRunParts(base, part, input) {
   }
 }
 
-// -> the { head, detail } diagnostic to surface, or null. `unsettledStem` blocks completion:
-// while a dispatch is unsettled a run may take run_tests away, never grant it,
-// and records no observation that could stand for that dispatch.
-function recordRun(r) {
+// `unsettledStem` blocks completion: while a dispatch is unsettled a run may take run_tests
+// away, never grant it, and records no observation that could stand for that dispatch.
+function recordObservation(r) {
   const input = r.outcomeInput || {};
   const contract = input.contract === undefined ? null : input.contract;
   const unsettledStem = r.unsettledStem || null;
@@ -202,7 +200,6 @@ function recordRun(r) {
     hitSummary: boundHits(r.hitSummary),
     source: r.source || null,
     unsettledStem,
-    stampRisk: r.stampRisk === true,
     contractAbsent: r.contractAbsent === undefined ? contract === null : r.contractAbsent,
   };
   base.failingExits = base.failingTests !== null && r.failingExits ? r.failingExits : null;
@@ -225,6 +222,16 @@ function recordRun(r) {
     return recordDemotion(Object.assign(base, { reason }));
   }
   return recordPass(base);
+}
+
+// -> the { head, detail } diagnostic to surface, or null. The gate holds only the state write;
+// the risk stamp still follows a failed exit (#2430: a red suite outside the red-expected
+// steps is a handoff risk; never throws).
+function recordRun(r) {
+  const failedExit = r.exitCode !== 0 && r.exitCode !== 77;
+  const message = holdsCompleteRunTests(r) ? heldMessage(failedExit) : recordObservation(r);
+  if (failedExit && r.stampRisk === true) stampTestFailureRisk(r.sessionId);
+  return message;
 }
 
 module.exports = { RUN_TOMBSTONES, recordRun, recordUnsettled };
