@@ -71,9 +71,9 @@ the following — unit tests are structurally blind to these failure modes:
 1. **Configuration files** (`settings.json`, YAML, TOML, etc.) — load the real
    file and assert the feature activates. Consider schema validation as a static
    test.
-2. **Hook / plugin / event-handler registration** — the test must verify the
-   hook actually fires in the real host process, not just that the handler
-   function works when called directly.
+2. **Hook / plugin / event-handler registration** — verify the hook fires in
+   the real host: a TL3 test that runs the real `claude -p` and exits 77 (skip)
+   when `RUN_TL3=off` ([rules/test/claude-e2e.md](../../rules/test/claude-e2e.md)).
 3. **Subprocess boundaries** — spawn the real CLI and assert on
    stdout/stderr/exit code/side-effect files.
 4. **Cross-module wiring** added or modified (DI, routing, event bus).

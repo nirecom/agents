@@ -15,7 +15,7 @@ const { resolveGitArgvForSegment } = require("./lib/bash-write-patterns/git-writ
 const { resolveCommitRepoDir, extractInlineBashWriteContent } = require("./lib/commit-target");
 const { extractStagedFilesRelative } = require("./lib/bash-write-targets/staged");
 const { readHookInput, readFailureReason, readFailOpenDiagnostic } = require("./lib/read-stdin");
-const { isStrictSentinel } = require("./lib/sentinel-patterns");
+const { isStrictSentinel, hasUnsafeSentinelBody } = require("./lib/sentinel-patterns");
 
 const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..");
 
@@ -37,7 +37,7 @@ function isStandaloneSentinelEcho(cmd) {
   if (!isStrictSentinel(cmd)) return false;
   if (/^echo\s+'[^']*'$/.test(cmd)) return true;
   const m = cmd.match(/^echo\s+"([\s\S]*)"$/);
-  return !!m && !/["`$\\\r\n]/.test(m[1]);
+  return !!m && !hasUnsafeSentinelBody(m[1]);
 }
 
 // Normalize path for shell commands (Windows backslashes → forward slashes)

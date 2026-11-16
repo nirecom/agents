@@ -26,6 +26,7 @@ const {
   reconcileEffectiveState,
 } = require("../../../../hooks/workflow-state/effective-state");
 const { resolveSessionProfile } = require("../../../../hooks/workflow-state/session-profile");
+const { firstUnsettledStep } = require("../../../../hooks/workflow-state/reconciled-current-step");
 const {
   APPROVAL_GATED_STEPS,
   isApprovalGatedStep,
@@ -112,13 +113,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
   // non-empty intent.md `## Issues`. Resolved against the RAW walk so evidence-based
   // resolution of clarify_intent cannot skip past the check (pre-#1148 precedence).
   {
-    let rawCurrent = null;
-    for (const step of VALID_STEPS) {
-      if (isTerminalStep(step)) continue;
-      const raw = (state.steps[step] || {}).status || "pending";
-      const status = effectiveStatus(step, raw, profile);
-      if (!isSettledStatus(status)) { rawCurrent = step; break; }
-    }
+    const rawCurrent = firstUnsettledStep((step) => effectiveStatus(step, (state.steps[step] || {}).status || "pending", profile));
     if (rawCurrent === "clarify_intent") {
       const { getClosesIssues } = require("../../../../hooks/workflow-state/session-facts");
       const { getWorkflowPlansDir } = require("../../../../hooks/lib/workflow-plans-dir");
@@ -201,18 +196,8 @@ function computeVerdict(rawSid, _didAutoRepair) {
 
   // Walk the snapshot to find currentStep (its statuses are already effective —
   // do NOT re-apply effectiveStatus here).
-  let currentIdx = -1;
-  let currentStep = null;
-  for (let i = 0; i < VALID_STEPS.length; i++) {
-    const step = VALID_STEPS[i];
-    if (isTerminalStep(step)) continue;
-    const status = snapStatus(step);
-    if (!isSettledStatus(status)) {
-      currentIdx = i;
-      currentStep = step;
-      break;
-    }
-  }
+  const currentStep = firstUnsettledStep(snapStatus);
+  const currentIdx = currentStep === null ? -1 : VALID_STEPS.indexOf(currentStep);
 
   if (currentStep === null) {
     persistResolutions();

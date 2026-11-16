@@ -32,6 +32,10 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Definition**: The workflow step that turns the approved approach into a file-level implementation plan; produced by `/make-detail-plan` after outline.
 - **Related**: [skills/make-detail-plan/SKILL.md](../../skills/make-detail-plan/SKILL.md)
 
+### implementation step
+- **Definition**: workflow step のうち、detail より後の工程。決まった plan をもとに、実装・リリースを進める段階。step の一覧は `docs/architecture/claude-code/workflow.md` を参照。
+- **Related**: [workflow.md](../architecture/claude-code/workflow.md)
+
 ### intent
 
 - **Definition**: The scope, motivation, and non-goals that `/clarify-intent` settles with the user; the agreed baseline every later plan starts from.
@@ -79,11 +83,19 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
   Chosen in intent and never switched mid-session; orthogonal to the deliverable type.
 - **Related**: [architecture/claude-code/workflow.md](../architecture/claude-code/workflow.md#the-step-table-deliverable-type-x-pm-type)
 
+### pre-implementation step
+- **Definition**: workflow step のうち、`workflow_init` から detail までの工程。何をどう作るかを決める段階。step の一覧は `docs/architecture/claude-code/workflow.md` を参照。
+- **Related**: [workflow.md](../architecture/claude-code/workflow.md)
+
 ### presentation turn
 
 - **Definition**: The turn in which the model presents a plan (intent, outline, or detail) in a text block that ends with its plan-link line.
   The echo of the CONFIRM_* flag that the step's row holds follows that text block in the same turn when the Stop hook prompts for it, or else after the user replies; it reaches the dialog only when a link-closed presentation was recorded.
 - **Related**: [architecture/claude-code/workflow.md](../architecture/claude-code/workflow.md)
+
+### reset allowance
+- **Definition**: ユーザー確認なしで通せる `RESET_FROM` sentinel の残り回数。session で 2 回。hook が allow した reset ごとに 1 減り、pre-implementation step への reset をユーザーが承認すると 2 に戻る。
+- **Related**: [hooks.md](../architecture/claude-code/settings/hooks.md)
 
 ### RTK
 
