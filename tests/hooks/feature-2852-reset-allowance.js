@@ -7,10 +7,9 @@
 // Covered: spend / refill per phase, CONFIRM_* boundary, later target, forward and unpinned-profile
 // replay, unreadable input. Nothing here writes.
 // TL3 gap (what this test does NOT catch):
-// - the flag read count per decision (one read per flag) — not observable from the result.
+// - the flag read count per decision (one read per flag) - not observable from the result.
 // - decision time: the checkpoint hook into checkDecisionTime is covered by feature-2852-reset-from-gate.js.
 
-// lang-check: ignore — fixtures carry Japanese reset reasons to verify the reason block renders them.
 const { test, after } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
@@ -36,7 +35,7 @@ const DIR = "hooks/workflow-state/reset-allowance";
 let n = 0;
 const newSid = (tag) => `f2852-${tag}-${++n}`;
 
-// decideWith(state, sid, target, flags) — one decision with the CONFIRM_* flags fixed by a .env.
+// decideWith(state, sid, target, flags) - one decision with the CONFIRM_* flags fixed by a .env.
 function decideWith(state, sid, target, flags) {
   const decideReset = F.need(ENTRY, "decideReset");
   const cfg = confirmEnvRoot(BASE, flags || F.ALL_OFF);
@@ -45,7 +44,7 @@ function decideWith(state, sid, target, flags) {
   return r;
 }
 
-// decide(target, events, opts) — seeds a fresh session and decides one reset on it.
+// decide(target, events, opts) - seeds a fresh session and decides one reset on it.
 function decide(target, events, opts) {
   const o = opts || {};
   const sid = newSid(o.tag || "d");
@@ -211,7 +210,7 @@ test("boundary (b) control: a forward reset after the un-pinning reset still rep
 caseEnd();
 
 caseBegin("evidence-only-prefix-is-not-forward", "hooks/workflow-state/reset-allowance/forward.js");
-// forwardAt(events, target, path) — isForwardAt over the projected prefix state, under the given delivery path.
+// forwardAt(events, target, path) - isForwardAt over the projected prefix state, under the given delivery path.
 function forwardAt(events, target, deliveryPath) {
   const isForwardAt = F.need(ENTRY, "isForwardAt");
   const sid = newSid("fw");
@@ -387,10 +386,12 @@ caseEnd();
 
 caseBegin("reason-block-plain-text-kept", "hooks/workflow-state/reset-allowance/reason-block.js");
 test("control: a plain reason and plain rows are shown as written", () => {
-  const reason = "再実行: テスト失敗 (2回目, review)";
-  const rows = [row({ seq: 3, at: "2026-01-01T00:03:00.000Z", reason: "前回の reset 理由" })];
+  // Multibyte reasons, written as escapes, must pass through the block intact.
+  const reason = "\u{518D}\u{5B9F}\u{884C}: \u{30C6}\u{30B9}\u{30C8}\u{5931}\u{6557} (2\u{56DE}\u{76EE}, review)";
+  const prev = "\u{524D}\u{56DE}\u{306E} reset \u{7406}\u{7531}";
+  const rows = [row({ seq: 3, at: "2026-01-01T00:03:00.000Z", reason: prev })];
   const out = askReasonFn()(W, reason, askResult(rows));
-  for (const want of [reason, "前回の reset 理由", "2026-01-01T00:03:00.000Z", "#3", "allowance left: 0", "why: allowance-spent"]) {
+  for (const want of [reason, prev,"2026-01-01T00:03:00.000Z", "#3", "allowance left: 0", "why: allowance-spent"]) {
     assert.ok(out.includes(want), `missing ${JSON.stringify(want)}: ${out}`);
   }
 });
