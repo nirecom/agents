@@ -1,20 +1,12 @@
 # shellcheck shell=bash
 # Tests: hooks/workflow-run-tests.js
 # Tags: workflow, tests, runner, hook, provenance, TL2, scope:common
-#
-# Case group: quoted-argument false demotion (#1273), worker-dispatch provenance
-# (#1798) and contract-absence diagnosability (#1378).
-# Sourced by main-workflow-run-tests.sh; relies on helpers from common.sh.
-#
-# What this group adds over detection-matrix.sh: the matrix asserts the CLASSIFIER
-# verdict per command, while these cases drive the whole hook — real PostToolUse
-# stdin JSON in, real workflow-state file out — so the classifier, the provenance
-# resolver, the contract parser and the demotion annotations are exercised on the
-# same code path a live session takes.
+# Case group: quoted-argument false demotion (#1273), worker-dispatch provenance (#1798) and
+# contract-absence diagnosability (#1378). Sourced by main-workflow-run-tests.sh (helpers: common.sh).
+# Unlike detection-matrix.sh (classifier verdict per command), these cases drive the whole hook:
+# real PostToolUse stdin JSON in, real workflow-state file out.
 
-# get_step_annotation <session_id> <step> <key>
-# Reads the LAST step_annotation event for <step>/<key> from the event stream.
-# Prints the value, or "absent". (#1733 made annotations events, not step fields.)
+# get_step_annotation <session_id> <step> <key> — the LAST step_annotation value (#1733), or "absent".
 get_step_annotation() {
     local sid="$1" step="$2" key="$3"
     WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node -e "
@@ -37,17 +29,11 @@ run_quoted_arg_and_provenance_tests() {
     local SID STATUS ABSENT TRIGGER cmd
 
     # -----------------------------------------------------------------------
-    # (a) #1273 — a test path that appears only as an ARGUMENT VALUE must not
-    #     reach the hook's demotion machinery at all. Asserted as "no state file
-    #     was written", i.e. the protected resource is untouched, not merely that
-    #     the status happens to read `absent` (protection-fix Pattern 1).
+    # (a) #1273 — a test path appearing only as an ARGUMENT VALUE must not reach the demotion
+    #     machinery: asserted as "no state file written" (protection-fix Pattern 1).
+    #     write_tests is not seeded: isTestCommand() rejects these commands first, and any seeded
+    #     step would make run_tests read "pending", never "absent" (#1733 projection).
     # -----------------------------------------------------------------------
-    # Do NOT seed write_tests here (matches detection-matrix.sh's absent-row
-    # convention): isTestCommand() rejects these commands before the hook ever
-    # consults write_tests, so seeding it would only pollute the state file and
-    # make check_state_file_absent's "no state written" check structurally
-    # unreachable (once ANY step is marked, the #1733 steps projection reports
-    # run_tests as "pending", never "absent").
     for cmd in \
         'node bin/supervisor-report --detail "ran tests/feature-x.sh and it passed"' \
         'gh issue create --body "see tests/foo.sh for the repro"'
@@ -63,30 +49,11 @@ run_quoted_arg_and_provenance_tests() {
     done
 
     # -----------------------------------------------------------------------
-    # (b) #1798 — the worker-dispatch invocation form carries no literal
-    #     `tests/run-all.sh`, so the old RUN_ALL_SH_RE provenance check was
-    #     structurally always false. Recognising P1=worker-dispatch.js /
-    #     P2=test-runner is the #1798 fix and it stays: WD_COMMAND still REACHES
-    #     the demotion machinery (that is what QA-WD-NOC below observes).
-    #
-    #     What this row no longer asserts is COMPLETION. WD_COMMAND names
-    #     `/srv/checkout/agents/bin/worker-dispatch.js`, a path that resolves to
-    #     nothing on this machine and lies outside every real checkout, and the
-    #     row used to require `complete` because the identity check answered
-    #     "trusted" for any path it could not stat (`real === null → true`).
-    #
-    #     That is the NEW-H2 trust-boundary hole (#1273 round 3), the same one
-    #     QA-ABS/-TO/-WIN below document for the run-all.sh emitter: the hook
-    #     never executes anything, it only reads a command STRING and a stdout
-    #     STRING authored by the same caller, so an unverifiable path must score
-    #     as UNVERIFIED, not verified. The hand-written top-line RUN_CONTRACT
-    #     below therefore must NOT unlock the step, and the outcome is the same
-    #     "demoted to pending" convention QA-WD-NOC uses (here: provenance-absent
-    #     rather than contract-absent). The COMMAND is deliberately unchanged —
-    #     the nonexistent-absolute-path shape is exactly what must be rejected.
-    #     Positive worker-dispatch provenance (a REAL, resolvable emitter path
-    #     that does complete) is covered by
-    #     tests/hooks/fix-1273-run-tests-trust-boundary.sh and by
+    # (b) #1798 — WD_COMMAND (worker-dispatch.js test-runner) still REACHES the demotion
+    #     machinery, but its path resolves to nothing here, so it carries no emitter authority
+    #     (NEW-H2 trust-boundary hole, #1273 round 3): the hand-written RUN_CONTRACT must NOT
+    #     complete the step — demoted to pending (provenance-absent). Positive worker-dispatch
+    #     provenance: tests/hooks/fix-1273-run-tests-trust-boundary.sh and
     #     tests/bin/fix-1378-worker-yaml-contract-roundtrip.sh case (1).
     # -----------------------------------------------------------------------
     SID="qwd-ok-$$-$RANDOM"
@@ -108,13 +75,12 @@ log_tail: |
     fi
 
     # -----------------------------------------------------------------------
-    # (c) Same command, no contract in stdout → active demotion, and the demotion
-    #     must record WHICH command caused it. Without trigger_command a demotion
-    #     is unattributable after the fact (#1378's diagnosis cost).
+    # (c) Same command, no contract in stdout → the demotion records WHICH command caused it
+    #     (trigger_command, #1378). run_tests starts non-complete: since #2011 a provenance-less
+    #     run keeps a complete run_tests (tests/hooks/feature-2011-run-tests-provenance-gate.js).
     # -----------------------------------------------------------------------
     SID="qwd-noc-$$-$RANDOM"
     seed_write_tests "$SID" "complete"
-    seed_run_tests "$SID" "complete"
     run_run_tests_hook_with_stdout "$WD_COMMAND" 0 "$SID" \
         "status: pass
 exit_code: 0
@@ -179,23 +145,10 @@ log_tail: |
     fi
 
     # -----------------------------------------------------------------------
-    # (e) Absolute-path run-all.sh, NOT resolvable on disk and outside every real
-    #     checkout. These rows used to require `complete` — the IR resolver
-    #     matched the normalised path SUFFIX and the identity check answered
-    #     "trusted" for any path it could not stat (`real === null → true`).
-    #
-    #     That is the NEW-H2 trust-boundary hole (#1273 round 3): the hook never
-    #     executes anything, it only reads a command STRING and a stdout STRING
-    #     authored by the same caller, so an unverifiable path must score as
-    #     UNVERIFIED, not as verified. A path that cannot be resolved and is not
-    #     inside a real repo root therefore carries no emitter authority, and the
-    #     hand-supplied RUN_CONTRACT below must NOT unlock the step.
-    #
-    #     Expected outcome is the same "demoted to pending" convention QA-WD-NOC
-    #     uses: the runner is still detected, so the hook writes state — it just
-    #     refuses to complete (here: provenance-absent rather than
-    #     contract-absent). The COMMANDS are deliberately unchanged: the absolute
-    #     nonexistent-path-outside-any-repo shape is exactly what must be rejected.
+    # (e) Absolute-path run-all.sh, not resolvable on disk and outside every real checkout:
+    #     no emitter authority (NEW-H2 trust-boundary hole, #1273 round 3), so the
+    #     hand-supplied RUN_CONTRACT must NOT complete the step — demoted to pending
+    #     (provenance-absent), as QA-WD-OK. The commands are deliberately unchanged.
     #     Paired rows: tests/fix-1273-round3-provenance-identity.sh H2b/*.
     # -----------------------------------------------------------------------
     SID="qabs-$$-$RANDOM"
