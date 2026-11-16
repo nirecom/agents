@@ -33,7 +33,7 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Related**: [skills/make-detail-plan/SKILL.md](../../skills/make-detail-plan/SKILL.md)
 
 ### implementation step
-- **Definition**: workflow step のうち、detail より後の工程。決まった plan をもとに、実装・リリースを進める段階。step の一覧は `docs/architecture/claude-code/workflow.md` を参照。
+- **Definition**: A workflow step after detail, where the approved plan is implemented, tested, and released.
 - **Related**: [workflow.md](../architecture/claude-code/workflow.md)
 
 ### intent
@@ -84,7 +84,7 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Related**: [architecture/claude-code/workflow.md](../architecture/claude-code/workflow.md#the-step-table-deliverable-type-x-pm-type)
 
 ### pre-implementation step
-- **Definition**: workflow step のうち、`workflow_init` から detail までの工程。何をどう作るかを決める段階。step の一覧は `docs/architecture/claude-code/workflow.md` を参照。
+- **Definition**: A workflow step from `workflow_init` through detail, where what to build and how is decided.
 - **Related**: [workflow.md](../architecture/claude-code/workflow.md)
 
 ### presentation turn
@@ -94,7 +94,7 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Related**: [architecture/claude-code/workflow.md](../architecture/claude-code/workflow.md)
 
 ### reset allowance
-- **Definition**: ユーザー確認なしで通せる `RESET_FROM` sentinel の残り回数。session で 2 回。hook が allow した reset ごとに 1 減り、pre-implementation step への reset をユーザーが承認すると 2 に戻る。
+- **Definition**: The number of `RESET_FROM` sentinels a session may still run without a permission prompt; it starts at 2, drops by 1 for each reset the hook allows, and returns to 2 when the user approves a reset to a pre-implementation step.
 - **Related**: [hooks.md](../architecture/claude-code/settings/hooks.md)
 
 ### RTK

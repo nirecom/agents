@@ -10,7 +10,6 @@
 // tests/hooks/TL3-hook-reset-from-gate.sh's (Bash only). Neither file catches runInTerminal /
 // runCommands on a live host, nor two RESET_FROM echoes racing in one turn (WARN(2) is sequential).
 
-// lang-check: ignore — cases carry a full-width colon sentinel, a Japanese reason body and Japanese ask-reason regexes as data.
 const { test, after } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
@@ -42,7 +41,7 @@ const newSid = (tag) => `f2852g-${tag}-${++n}`;
 const sentinel = (step, reason) => `echo "<<WORKFLOW_RESET_FROM_${step}: ${reason || "fixture reset"}>>"`;
 const bodyCmd = (body) => `echo "<<WORKFLOW_RESET_FROM_write_code: ${body}>>"`;
 
-// runHook(sid, input, opts) — one PreToolUse call; answers { decision, reason } where decision is
+// runHook(sid, input, opts) - one PreToolUse call; answers { decision, reason } where decision is
 // allow / ask / deny / none. A hook that does not answer fails the case with its output.
 function runHook(sid, input, opts) {
   const o = opts || {};
@@ -76,7 +75,7 @@ function expectDecision(got, want, label) {
   assert.strictEqual(got.decision, want, `${label}: ${JSON.stringify(got)}`);
 }
 
-// session(events) — a fresh session standing at review_security with the given reset history.
+// session(events) - a fresh session standing at review_security with the given reset history.
 function session(items, tag) {
   const sid = newSid(tag || "s");
   F.seed(sid, F.history(CUR, items || []), { cwd: REPO });
@@ -124,7 +123,7 @@ test("runInTerminal with the canonical safe echo asks with the allowance full", 
 test("runCommands with one canonical safe element asks with the allowance full", () => {
   expectNonBashAsk(runHook(session([], "nb-cmds"), commands(sentinel("write_code"))), "runCommands canonical");
 });
-const SMART_QUOTES = [["U+201C", "“"], ["U+201D", "”"], ["U+201E", "„"]];
+const SMART_QUOTES = [["U+201C", "\u{201C}"], ["U+201D", "\u{201D}"], ["U+201E", "\u{201E}"]];
 for (const [name, q] of SMART_QUOTES) {
   const cmd = bodyCmd(`abc${q}; Remove-Item foo ;${q}`);
   test(`smart quote ${name} breakout: the command still matches RESET_FROM_RE_DQ`, () => {
@@ -172,7 +171,7 @@ test("a chained, piped or multi-element sentinel asks even with the allowance fu
 test("near-miss spellings of the sentinel ask", () => {
   const sid = session([]);
   const lookalikes = [
-    'echo "<<WORKFLOW_RESET_FROM_write_code： full-width colon>>"',
+    'echo "<<WORKFLOW_RESET_FROM_write_code\u{FF1A} full-width colon>>"',
     'echo "<<WORKFLOW_RESET_FROM_write_code : space before colon>>"',
     'echo "<<WORKFLOW_RESET_FROM_WRITE_CODE: upper case>>"',
     "echo '<<WORKFLOW_RESET_FROM_write_code: single quotes>>'",
@@ -264,8 +263,8 @@ test("the ask reason names this reset, the count, the allowance left and each ro
   const text = got.reason;
   assert.match(text, /write_code/, `target step: ${text}`);
   assert.match(text, /gamma-now/, `this reset's reason: ${text}`);
-  assert.match(text, /(?:reset|count|回数)[^\n]{0,40}\b[34]\b|\b[34]\b[^\n]{0,20}(?:reset|回)/i, `reset count: ${text}`);
-  assert.match(text, /(?:allowance|残り)[^\n]{0,40}\b0\b/i, `allowance left: ${text}`);
+  assert.match(text, /(?:reset|count)[^\n]{0,40}\b[34]\b|\b[34]\b[^\n]{0,20}reset/i, `reset count: ${text}`);
+  assert.match(text, /allowance[^\n]{0,40}\b0\b/i, `allowance left: ${text}`);
   const lines = text.split(/\r?\n/);
   // A past reset that went through an ask and was recorded reads back as "approved" (detail: replay outcome).
   for (const [i, outcome] of [[1, "passed"], [2, "passed"], [3, "approved"]]) {
@@ -337,7 +336,7 @@ for (const { name, input } of unsafeBodyCases) {
 }
 const safeBodyCases = [
   { name: "plain ascii", body: "fixture reset" },
-  { name: "japanese with colon, parentheses and comma", body: "再実行: テスト失敗 (2回目, review)" },
+  { name: "japanese with colon, parentheses and comma", body: "\u{518D}\u{5B9F}\u{884C}: \u{30C6}\u{30B9}\u{30C8}\u{5931}\u{6557} (2\u{56DE}\u{76EE}, review)" },
 ];
 for (const { name, body } of safeBodyCases) {
   test(`control: a clean body still allows: ${name}`, () => {
