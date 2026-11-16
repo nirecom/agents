@@ -244,3 +244,7 @@ Changes: run-tests-baseline no longer reports `budget-exhausted` forever for a t
 ### FEATURE: PR #3061 (2026-11-16)
 Background: fix(#3055): classify a branch-side root decoy hit as undetermined whe...
 Changes: run-tests-baseline: a test you did not change that hits a root decoy on the branch while failing the same way at the base is now auto-accepted as `root-decoy-hit-on-branch` and listed on the `Unverified tests:` line, instead of being reported as `new-case-failure-on-branch`. A passing base, or a test whose change status cannot be determined, still keeps run_tests pending.
+
+### FEATURE: PR #3075 (2026-11-16)
+Background: feat(#2957): let JS, PowerShell and Python tests load the shared test...
+Changes: Tests in a target repo written in JavaScript, PowerShell or Python can load the shared agents test harness through `AGENTS_TEST_HARNESS_DIR` instead of a copied harness, and still pass the pre-commit harness check.
