@@ -29,7 +29,8 @@ const CODE = "MISSING_TEST_RUNNER";
 const WARN_CODE = "TEST_RUNNER_CHECK_RUNTIME_UNAVAILABLE";
 const DOC = "skills/_shared/test-design/case-markers/js.md";
 const HINT_TEXT = "Require node:test and write each case as test(...): const { test } = require(\"node:test\"); "
-  + "keep the shared helpers from require(\"../lib/harness\")";
+  + "keep the shared helpers from require(\"../lib/harness\") (without a copy of the harness, "
+  + "load it with require(path.join(process.env.AGENTS_TEST_HARNESS_DIR, \"harness\")))";
 const HINT = `${HINT_TEXT} — see ${DOC}.`;
 const COMMIT_HEADLINE = "Commit blocked: test file(s) do not run under their language's required runner.";
 const highLine = (name) => `HIGH: ${name}: test entrypoint does not run under its required runner (skip-reason custom-runner) code=${CODE}`;

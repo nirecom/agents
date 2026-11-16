@@ -33,6 +33,23 @@ A top-level integer schema version, the same model as the workflow state file (`
 
 A category `dir` must not also appear in `supportDirs`.
 
+#### Loading the shared harness without a copy
+
+A target repo's test loads the agents harness from `AGENTS_TEST_HARNESS_DIR` (exported by `tests/run-all.sh`) instead of keeping a copy. The gate accepts these forms (registry `helperLibrary.sharedSourceRegex`):
+
+| Language | Example |
+|---|---|
+| js | `const H = require(path.join(process.env.AGENTS_TEST_HARNESS_DIR, "harness"));` |
+| pester | `. (Join-Path $env:AGENTS_TEST_HARNESS_DIR 'harness.ps1')` |
+| pytest | `sys.path.insert(0, os.environ["AGENTS_TEST_HARNESS_DIR"])`, then `import harness` |
+
+Constraints:
+
+- Write the load on one line: the check reads line by line, and the environment variable and `harness` must appear on the same line.
+- The line must start with the load: js with `require(` / `import(` or a `const|let|var ... =` prefix (not a bare assignment or `module.exports =`); pester with a leading dot (`Import-Module` is not accepted).
+- pytest: a file with only the `sys.path` line passes the gate, though the actual load is the `import harness` line.
+- To stop the check for a repo, set `tests.testHarness` to `off`.
+
 ### `migrate`
 
 Keys are `tracker`, `issues` and `tests`, and the only value is `done`. `/migrate` sets each key when the matching sub-skill finishes, and skips that sub-skill on later runs.
