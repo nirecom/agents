@@ -13,7 +13,8 @@ const { boundHits } = require("./hit-summary");
 const { recordParts } = require("./run-parts");
 
 // Evidence that belongs to ONE observed run: baseline (#2431), an UNRUNNABLE accept
-// (#2501 D5-7) and a baseline note (#2688). Any new run clears it, so a later state never
+// (#2501 D5-7), a baseline note (#2688) and the user's approval of an unobserved base (#3067).
+// Any new run clears it, so a later state never
 // inherits an older verdict. baseline_accept is the retired #2517 grant: never written now,
 // still cleared so a legacy state does not carry it past a new run. baseline_new_lines_seen
 // (#2956 S9) is deliberately absent: the PR must still disclose new lines a later run hides.
@@ -23,6 +24,7 @@ const RUN_TOMBSTONES = {
   unrunnable_accept_reason: null,
   baseline_accept: null,
   baseline_note: null,
+  baseline_unobserved_accept: null,
 };
 
 // run_parts is written only by a settled run that computed it; otherwise left as it was.

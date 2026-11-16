@@ -77,6 +77,7 @@ const STEP_ANNOTATION_KEYS = [
   "failing_test_exits",
   "run_parts",
   "baseline_note",
+  "baseline_unobserved_accept",
 ];
 
 // Step-entry fields that are STRUCTURE, never annotation. An annotation named
