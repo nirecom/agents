@@ -159,13 +159,13 @@ hooks/enforce-worktree/main-worktree-allows/standard.js|accepted|module.exports 
 hooks/lib/script-checkout-root.js|accepted|module.exports = {};
 docs/target-main-root.md|accepted|notes
 TABLE
-# The exempt set is docs/history.md, docs/history/, CHANGELOG.md, changelog/ and this file — from the root.
+# The exempt set is docs/history.md, docs/history/, CHANGELOG.md, docs/changelog/ and this file — from the root.
 table EXEMPT_ROWS <<TABLE
 docs/history.md|accepted|- renamed AGENTS_CONFIG_DIR
 docs/history/2026.md|accepted|- renamed mainRoot
 docs/history/a.md|accepted|- renamed MAIN_ROOT
 CHANGELOG.md|accepted|- renamed AGENTS_DIR
-changelog/2026-10.md|accepted|- dropped the acd anchor
+docs/changelog/2026-10.md|accepted|- dropped the acd anchor
 $SELF_REL|accepted|# name mainRoot
 TABLE
 table NOT_EXEMPT_ROWS <<'TABLE'
@@ -178,6 +178,7 @@ sub/CHANGELOG.md|env AGENTS_DIR@1|- renamed AGENTS_DIR
 CHANGELOG.md.bak|env AGENTS_DIR@1|- renamed AGENTS_DIR
 sub/changelog/2026.md|stem acd@1|- dropped the acd anchor
 changelog-old/2026.md|stem acd@1|- dropped the acd anchor
+changelog/2026-10.md|stem acd@1|- dropped the acd anchor
 tests/bin/other-residue.sh|name mainRoot@1|# name mainRoot
 sub/tests/bin/feature-2561-root-names-residue.sh|name mainRoot@1|# name mainRoot
 TABLE

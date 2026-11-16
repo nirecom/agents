@@ -61,13 +61,14 @@ function side(spec) {
 }
 
 // compare(base, branch, end) — { verdict, count, head, fpBase, fpBranch, raw }.
-function compare(base, branch, end = "normal", linesOut = null) {
+// over (optional): { root, baseWt, env } replaces --root / --base-wt and extends the child env.
+function compare(base, branch, end = "normal", linesOut = null, over = {}) {
   assert.ok(fs.existsSync(CLI), `comparer not implemented yet: ${CLI}`);
   const done = spawnSync(
     process.execPath,
     [CLI, "--base-res", side(base), "--branch-res", side(branch), "--file", TARGET, "--rename-map", RENAME_MAP,
-      "--root", ROOT, "--base-wt", BASE_WT, "--branch-end", end, ...(linesOut ? ["--new-lines-out", linesOut] : [])],
-    { encoding: "utf8", timeout: 30000 },
+      "--root", over.root || ROOT, "--base-wt", over.baseWt || BASE_WT, "--branch-end", end, ...(linesOut ? ["--new-lines-out", linesOut] : [])],
+    { encoding: "utf8", timeout: 30000, env: over.env ? { ...process.env, ...over.env } : process.env },
   );
   const line = String(done.stdout || "").split(/\r?\n/).find((l) => l.startsWith("RESULT\t"));
   assert.ok(line, `RESULT line (rc=${done.status} stdout=${done.stdout} stderr=${done.stderr})`);
@@ -295,6 +296,139 @@ test("compare: a new OPEN-at-end case on the branch is new; the same one on both
     { name: "open-case-added", base: one("X"), branch: { fail: { X: ["X"] }, open: { B: [] } }, verdict: "new", count: 1 },
     { name: "open-case-both-sides", base: { open: { B: [] } }, branch: { open: { B: [] } }, verdict: "same", count: 0 },
     { name: "open-case-with-detail-no-dup", base: { fail: { B: ["d"] } }, branch: { open: { B: ["d"] } }, verdict: "same", count: 0 },
+  ]);
+});
+caseEnd();
+
+// #3054: failure-line normalization must not depend on where a temp path sits in the line, nor on
+// how deeply the path separators are escaped. Fixtures are written in the folded spelling.
+// deep(p, k) — p's separators as one backslash (k=0, a raw native path) or 2^k backslashes (folded k times).
+const deep = (p, k) => p.replace(/[\\/]+/g, k === 0 ? "\\" : "\\".repeat(2 ** k));
+const nl = (n) => `${"\\".repeat(n)}n`; // an escaped newline: n=1 is the fold's own, 2+ is escaped again
+const tb = (n) => `${"\\".repeat(n)}t`; // an escaped tab, same depth scheme as nl()
+const DEPTHS = [0, 1, 2, 3, 4];
+const HOME = os.homedir();
+const same = (name, a, b) => ({ name, base: one(a), branch: one(b), verdict: "same", count: 0 });
+const kept = (name, a, b) => ({ name, base: one(a), branch: one(b), verdict: "new", count: 1 });
+// Rows about the literal /tmp rule run with the temp dir moved off /tmp, else Linux/WSL's own tmpdir rule would hide a miss.
+const NOTMP = { TMPDIR: path.join(HOME, "f3054-notmp"), TEMP: path.join(HOME, "f3054-notmp"), TMP: path.join(HOME, "f3054-notmp") };
+const nt = (r) => ({ ...r, env: NOTMP });
+// check3054(rows) — verdict, count, and for a "same" row the two fingerprints agree.
+function check3054(rows) {
+  for (const r of rows) {
+    const got = compare(r.base, r.branch, "normal", null, r);
+    assert.equal(got.verdict, r.verdict, `${r.name}: verdict (${got.raw})`);
+    assert.equal(got.count, r.count, `${r.name}: new_count (${got.raw})`);
+    if (r.verdict === "same") assert.equal(got.fpBase, got.fpBranch, `${r.name}: fp (${got.raw})`);
+  }
+}
+
+caseBegin("escape-depth-tmp-3054", "bin/lib/run-tests-baseline-compare/normalize.js");
+test("#3054 /tmp after an escaped newline, at any escape depth, normalizes", () => {
+  check3054([
+    ...[1, 2, 4].map((n) => same(`slash-tmp-after-newline-${n}`, `boom${nl(n)}/tmp/tmp.AAAA1/x.sh`, `boom${nl(n)}/tmp/tmp.BBBB2/x.sh`)),
+    same("slash-tmp-line-start", "/tmp/tmp.AAAA1/x.sh", "/tmp/tmp.BBBB2/x.sh"),
+    same("slash-tmp-after-space", "see /tmp/tmp.AAAA1/x.sh", "see /tmp/tmp.BBBB2/x.sh"),
+  ].map(nt));
+});
+test("#3054 relative tmp.XXXX names (mktemp shape) normalize wherever they sit", () => {
+  check3054([
+    ...[1, 2, 4].map((n) => same(`tmp-xxxx-after-newline-${n}`, `boom${nl(n)}tmp.AB12cd/x`, `boom${nl(n)}tmp.ZY98xw/x`)),
+    ...[1, 2].map((n) => same(`tmp-xxxx-after-tab-${n}`, `boom${tb(n)}tmp.AB12cd/x`, `boom${tb(n)}tmp.ZY98xw/x`)),
+    same("tmp-xxxx-line-start", "tmp.AB12cd/x", "tmp.ZY98xw/x"),
+    same("tmp-xxxx-after-space", "cd tmp.AB12cd", "cd tmp.ZY98xw"),
+    same("tmp-xxxx-after-separator", "in /work/tmp.AB12cd/x", "in /work/tmp.ZY98xw/x"),
+    ...[1, 2, 4].map((k) => same(`tmp-xxxx-after-backslash-sep-${k}`, `in ${deep("C:\\x\\tmp.AB12cd\\y", k)}`, `in ${deep("C:\\x\\tmp.ZY98xw\\y", k)}`)),
+    same("tmp-xxxx-len-4", "cd tmp.AB12", "cd tmp.CD34"),
+    same("tmp-xxxx-letters-only-standalone", "tmp.AbCdEf", "tmp.QwErTy"),
+    same("tmp-xxxx-letters-only-after-newline", `boom${nl(1)}tmp.AbCdEf/x`, `boom${nl(1)}tmp.QwErTy/x`),
+    same("tmp-xxxx-digits-vs-mixed", "tmp.123456", "tmp.AbCdEf"),
+    // Accepted tradeoff (detail plan): an all-lowercase suffix is deliberately not replaced.
+    kept("tmp-xxxx-all-lowercase", "tmp.abcdef", "tmp.ghijkl"),
+    kept("tmp-xxxx-len-3", "cd tmp.AB1", "cd tmp.CD3"),
+    kept("tmp-xxxx-dot-prefixed", "a.tmp.AB12cd", "a.tmp.ZY98xw"),
+    kept("tmp-xxxx-underscore-prefixed", "_tmp.AB12cd", "_tmp.ZY98xw"),
+    kept("tmp-xxxx-underscore-suffixed", "tmp.AB12cd_x", "tmp.ZY98xw_x"),
+  ]);
+});
+test("#3054 /tmp after an escaped newline or tab with a non-mktemp tail: only the /tmp lookbehind can match", () => {
+  check3054([
+    ...[1, 2, 4].map((n) => same(`slash-tmp-plain-after-newline-${n}`, `boom${nl(n)}/tmp/build-1/x`, `boom${nl(n)}/tmp/build-2/x`)),
+    ...[1, 2, 4].map((n) => same(`slash-tmp-plain-after-tab-${n}`, `boom${tb(n)}/tmp/build-1/x`, `boom${tb(n)}/tmp/build-2/x`)),
+  ].map(nt));
+});
+test("#3054 os.tmpdir() leaf (not mktemp-shaped, so only the tmps rule applies) at base depth 0 vs branch depth k, and both at depth k", () => {
+  const leaf = (d, k) => `read ${deep(path.join(tmpd, d, "x.txt"), k)}`;
+  check3054(DEPTHS.map((k) => same(`tmpdir-0-vs-${k}`, leaf("build-1", 0), leaf("build-2", k))));
+  check3054(DEPTHS.map((k) => same(`tmpdir-both-${k}`, leaf("build-1", k), leaf("build-2", k))));
+  check3054([same("tmpdir-0-vs-6", leaf("build-1", 0), leaf("build-2", 6)), same("tmpdir-3-vs-0", leaf("build-1", 3), leaf("build-2", 0))]);
+});
+caseEnd();
+
+caseBegin("escape-depth-home-root-3054", "bin/lib/run-tests-baseline-compare/normalize.js");
+test("#3054 home path: every (base depth, branch depth) pair reads the same", () => {
+  const rows = [];
+  for (const j of DEPTHS) for (const k of DEPTHS) if (j !== k) rows.push(same(`home-${j}-${k}`, `open ${deep(HOME, j)} failed`, `open ${deep(HOME, k)} failed`));
+  rows.push(same("home-0-vs-6", `open ${deep(HOME, 0)} failed`, `open ${deep(HOME, 6)} failed`));
+  check3054(rows);
+});
+// skipped off win32: only a win32 host folds path case, elsewhere the two spellings differ
+test("#3054 home path case-folds at depth 3 on a case-insensitive (win32) host", { skip: process.platform !== "win32" }, () => {
+  check3054([same("home-casefold-depth-3", `open ${deep(HOME, 3)} failed`, `open ${deep(HOME.toUpperCase(), 3)} failed`)]);
+});
+test("#3054 checkout root at depth 0..4 (and 0 vs 6) stays <root> (not eaten by <tmp>/<home>)", () => {
+  const at = (r, k) => `open ${deep(path.join(r, "bin", "x"), k)}`;
+  check3054([...DEPTHS.map((k) => same(`root-depth-${k}`, at(BASE_WT, k), at(ROOT, k))), same("root-0-vs-6", `open ${deep(BASE_WT, 0)} failed`, `open ${deep(ROOT, 6)} failed`)]); // no tail: tail escapes are not unified across depths (Accepted Tradeoffs)
+  // Host-independent order guard: the branch root sits under home / tmpdir, the base worktree outside both.
+  const under = (dir) => path.join(dir, "f3054-root");
+  check3054([["home", HOME], ["tmpdir", tmpd]].flatMap(([label, dir]) => [0, 1, 2].map((k) => (
+    { ...same(`root-under-${label}-depth-${k}`, at(BASE_WT, k), at(under(dir), k)), root: under(dir) }))));
+});
+test("#3054 home path at depth 4 on the branch never leaks the user name into the head", () => {
+  const user = os.userInfo().username;
+  const got = compare(one("boom"), { fail: { X: ["boom", `as ${deep(HOME, 4)} bad`] } });
+  assert.equal(got.verdict, "new", got.raw);
+  assert.equal(got.count, 1, got.raw);
+  const text = got.head.join("\n");
+  assert.ok(!text.includes(user), `head leaks the user name: ${text}`);
+  assert.ok(text.includes("<home>"), `head carries <home>: ${text}`);
+});
+test("#3054 a home split by an escaped newline before an n/t-initial segment is read as home (known looseness)", () => {
+  // A synthetic home (child HOME / USERPROFILE) whose last segment starts with n keeps this host-independent.
+  const synHome = path.join(path.dirname(ROOT), "nhome3054");
+  const split = `${deep(path.dirname(synHome), 1)}\\${path.basename(synHome)}`; // a lone backslash + n spells the fold's newline
+  check3054([{ ...same("home-split-by-newline", `open ${deep(synHome, 1)} failed`, `open ${split} failed`), env: { HOME: synHome, USERPROFILE: synHome } }]);
+});
+caseEnd();
+
+caseBegin("escape-depth-guards-3054", "bin/lib/run-tests-baseline-compare/normalize.js");
+test("#3054 names that merely look like temp paths are kept (over-replacement guards)", () => {
+  check3054([
+    kept("foo-slash-tmp", "see foo/tmp/a", "see foo/tmp/b"),
+    kept("foo-slash-tmp-after-newline", `boom${nl(1)}foo/tmp/a`, `boom${nl(1)}foo/tmp/b`),
+    kept("tmp-json-vs-test", "cd tmp.json", "cd tmp.test"),
+    kept("xtmp-prefixed", "cd xtmp.AB12cd", "cd xtmp.ZY98xw"),
+    kept("xtmp-prefixed-after-newline", `boom${nl(1)}xtmp.AB12cd`, `boom${nl(1)}xtmp.ZY98xw`),
+    kept("tmp-too-short", "cd tmp.A1", "cd tmp.B2"),
+    kept("slash-tmp-lookalike", "/tmpA/x", "/tmpB/x"),
+    kept("slash-tmp-lookalike-after-newline-2", `boom${nl(2)}/tmpA/x`, `boom${nl(2)}/tmpB/x`),
+    kept("n-before-slash-tmp", "see run/tmp/a", "see run/tmp/b"),
+    kept("t-before-slash-tmp", "see out/tmp/a", "see out/tmp/b"),
+    kept("n-before-tmp-xxxx", "cd intmp.AB12cd", "cd intmp.ZY98xw"),
+    kept("home-then-newline-text", `open ${deep(HOME, 1)}${nl(1)}xyz`, `open ${deep(HOME, 1)}${nl(1)}abc`),
+  ].map(nt));
+});
+caseEnd();
+
+caseBegin("escape-depth-issue-shapes-3054", "bin/lib/run-tests-baseline-compare/normalize.js");
+test("#3054 the three failures of #2941 (shapes synthesized from the issue text)", () => {
+  const f2475 = (d) => `review-plan-codex-input-limit: codex-core.sh missing codex-lang.sh${nl(1)}/tmp/tmp.${d}/codex-lang.sh: No such file`;
+  const f2681 = (d, k) => `{"error":"MODULE_NOT_FOUND","user":"${deep(HOME, k)}","dir":"tmp.${d}/cfg"}`;
+  const f468 = (d) => `{"T23b":"injected-top-level-field:workflow_aborted","dir":"tmp.${d}/state"}`;
+  check3054([
+    nt(same("feature-2475", f2475("AbC123"), f2475("XyZ789"))),
+    same("feature-2681", f2681("AB12cd", 0), f2681("ZY98xw", 2)),
+    same("feature-resume-session-468", f468("Qw3rTy"), f468("Zx9cVb")),
   ]);
 });
 caseEnd();

@@ -6,12 +6,10 @@
 const { execFileSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const { isAppendOnlyRecordPath: isExempt } = require("../../hooks/lib/append-only-record-path");
 
 const TOKEN_RE = new RegExp("CLAUDE_" + "WORKFLOW_DIR", "i");
-// SSOT exclusion list: append-only history records keep the old name by design.
-const EXEMPT = [(p) => p === "docs/history.md", (p) => p.startsWith("docs/history/"), (p) => p === "CHANGELOG.md", (p) => p.startsWith("changelog/")];
-
-const isExempt = (rel) => EXEMPT.some((f) => f(rel));
+// Append-only records keep the old name by design; hooks/lib/append-only-record-path.js owns the list.
 
 function git(repoRoot, args) {
   return execFileSync("git", ["-C", repoRoot, ...args], { maxBuffer: 256 * 1024 * 1024 });

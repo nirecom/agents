@@ -134,3 +134,22 @@ for (const c of BOUNDARY_CASES) {
   });
 }
 caseEnd();
+
+caseBegin("changelog-except-moved-to-docs", "bin/lib/check-migration-blocks/retired-tokens.txt");
+test("the docs/changelog/ copy is excepted while the old changelog/ copy is an error", () => {
+  const dir = path.join(NEUTRAL, "changelog-contrast");
+  for (const sub of ["docs/changelog", "changelog"]) {
+    fs.mkdirSync(path.join(dir, sub), { recursive: true });
+    fs.writeFileSync(path.join(dir, sub, "2026.md"), `- dropped ${TOKEN}\n`);
+  }
+  const env = { ...process.env };
+  delete env.CLAUDE_CODE_SESSION_ID;
+  const done = spawnSync(process.execPath, [CHECKER, "--retired-tokens-from", REGISTRY, "--all", dir],
+    { cwd: NEUTRAL, env, encoding: "utf8", timeout: 60000 });
+  const show = `rc=${done.status} stdout=${done.stdout} stderr=${done.stderr}`;
+  assert.strictEqual(done.status, 1, show);
+  assert.match(done.stdout, /^EXCEPTED docs\/changelog\/2026\.md: append-only record$/m, show);
+  assert.match(done.stdout, new RegExp(`^changelog/2026\\.md:1: error: retired token .* of migration ${MIGRATION_ID} `, "m"), show);
+  assert.doesNotMatch(done.stdout, /^docs\/changelog\/2026\.md:\d+: error:/m, show);
+});
+caseEnd();

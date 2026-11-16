@@ -16,6 +16,7 @@ const path = require("path");
 const LIB = path.join(__dirname, "..", "hooks", "lib");
 const REG = require(path.join(LIB, "plans-artifact-registry.js"));
 const { PLANS_ARTIFACT_TABLE_REL, loadPlansArtifactTable } = require(path.join(LIB, "plans-artifact-table.js"));
+const { isAppendOnlyRecordPath } = require(path.join(LIB, "append-only-record-path.js"));
 
 const SCAN_ROOTS = ["skills", "agents", "bin", "hooks", "rules", "docs"];
 const SKIP_DIRS = new Set([".git", "node_modules"]);
@@ -93,11 +94,6 @@ function judgedTable(root, stderr) {
   return loadPlansArtifactTable(file);
 }
 
-function isExcluded(rel) {
-  const r = rel.replace(/\\/g, "/");
-  return /^docs\/history(?:\.md$|\/)/.test(r) || /changelog/i.test(r);
-}
-
 function walk(root, rel, out) {
   let entries;
   try { entries = fs.readdirSync(path.join(root, rel), { withFileTypes: true }); } catch (e) {
@@ -108,7 +104,7 @@ function walk(root, rel, out) {
     const childRel = rel ? `${rel}/${ent.name}` : ent.name;
     if (ent.isDirectory()) {
       if (!SKIP_DIRS.has(ent.name)) walk(root, childRel, out);
-    } else if (ent.isFile() && !isExcluded(childRel)) out.push(childRel);
+    } else if (ent.isFile() && !isAppendOnlyRecordPath(childRel)) out.push(childRel);
   }
 }
 
