@@ -4,7 +4,6 @@
 const fs = require("fs");
 const {
   VALID_STEPS,
-  isSettledStatus,
   readState,
   getStatePath,
 } = require("../../../../hooks/workflow-state");
@@ -14,7 +13,8 @@ const {
 const { resolveSessionProfile } = require("../../../../hooks/workflow-state/session-profile");
 const { getClosesIssues } = require("../../../../hooks/workflow-state/session-facts");
 const { getWorkflowPlansDir } = require("../../../../hooks/lib/workflow-plans-dir");
-const { STEP_DESC, isTerminalStep } = require("./steps");
+const { firstUnsettledStep } = require("../../../../hooks/workflow-state/reconciled-current-step");
+const { STEP_DESC } = require("./steps");
 const { resolveRepoDir } = require("./repo-dir");
 
 function pad2(n) {
@@ -62,12 +62,8 @@ function renderListWithState(sid) {
 
   // Find current step (first non-settled). Terminal steps are never "current" —
   // the row is still rendered, just never marked [*].
-  let currentIdx = -1;
-  for (let i = 0; i < VALID_STEPS.length; i++) {
-    if (isTerminalStep(VALID_STEPS[i])) continue;
-    const s = listStatus(VALID_STEPS[i]);
-    if (!isSettledStatus(s)) { currentIdx = i; break; }
-  }
+  const cur = firstUnsettledStep(listStatus);
+  const currentIdx = cur === null ? -1 : VALID_STEPS.indexOf(cur);
 
   let issuesEmpty;
   try {

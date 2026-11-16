@@ -102,6 +102,12 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
   without a live probe (the TL3 check in `tests/hooks/TL3-hook-posttooluse-output-channels.sh` is off by default).
   `hooks/lib/sentinel-receipt.js` records each sentinel's receipt and outcome. The handler context keeps `signalFatal`
   as an alias of `pushUnapplied`; the other handlers were not renamed
+- `gate-reset-from-sentinel.js` (PreToolUse, matcher `Bash|runInTerminal|runCommands`, #2852) — lets a canonical
+  Bash `RESET_FROM` sentinel run without a prompt while the reset allowance (2 per session) lasts; `settings.json`
+  has no static allow row for it. The allowance is replayed from existing reset events: each allowed reset uses one,
+  and a user-approved reset to a pre-implementation step refills it to 2. It asks — never denies — for a non-Bash tool,
+  an unsafe sentinel body (`hasUnsafeSentinelBody`, shared with `scan-outbound.js`), a reset to a later step, an empty
+  allowance, a profile change, or any error. The ask reason lists the past resets (`hooks/workflow-state/reset-allowance/`).
 - `stop-sentinel-unapplied-notice.js` (Stop) — backstop for #2877 / #2902: scans the transcript (`stop-sentinel-unapplied-notice/scan.js`)
   for sentinels emitted by the main conversation that have a receipt but no applied outcome, and tells the user once
   through `systemMessage` only; it never blocks the stop. Sentinels a fork or subagent could not emit are

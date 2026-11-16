@@ -21,21 +21,25 @@ process.exit(ptu && ptu[0] && ptu[0].matcher === 'Bash' ? 0 : 1);
         fail "L6-a. settings.json PostToolUse missing Bash matcher"
     fi
 
-    # L6-b: permissions.ask contains reason-form USER_VERIFIED, RESET_FROM,
-    # and does NOT contain bare USER_VERIFIED (#404 contract change).
+    # L6-b: permissions.ask contains reason-form USER_VERIFIED and does NOT contain bare
+    # USER_VERIFIED (#404 contract change). RESET_FROM left permissions.ask in #2852: the
+    # PreToolUse hook gate-reset-from-sentinel decides allow or ask by the reset allowance.
     L6B_OUT=$(node -e "
 const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
 const ask = (s.permissions && s.permissions.ask) || [];
 const reasonUV = ask.some(e => e.includes('WORKFLOW_USER_VERIFIED: *'));
 const noBareUV = ask.every(e => e !== 'Bash(echo \"<<WORKFLOW_USER_VERIFIED>>\")');
-const hasRF = ask.some(e => e.includes('WORKFLOW_RESET_FROM'));
+const noRF = ask.every(e => !e.includes('WORKFLOW_RESET_FROM'));
+const pre = (s.hooks && s.hooks.PreToolUse) || [];
+const gateRF = pre.some(g => (g.hooks || []).some(h => String(h.command || '').includes('gate-reset-from-sentinel')));
 if (!reasonUV) { console.log('MISSING reason-form WORKFLOW_USER_VERIFIED: *'); process.exit(1); }
 if (!noBareUV) { console.log('BARE WORKFLOW_USER_VERIFIED still present in ask'); process.exit(1); }
-if (!hasRF) { console.log('MISSING WORKFLOW_RESET_FROM'); process.exit(1); }
+if (!noRF) { console.log('WORKFLOW_RESET_FROM still present in ask'); process.exit(1); }
+if (!gateRF) { console.log('MISSING PreToolUse gate-reset-from-sentinel'); process.exit(1); }
 process.exit(0);
 " -- "$SETTINGS" 2>&1) && L6B_OK=1 || L6B_OK=0
     if [ "$L6B_OK" = "1" ]; then
-        pass "L6-b. permissions.ask: reason-form USER_VERIFIED + RESET_FROM present; bare USER_VERIFIED absent"
+        pass "L6-b. permissions.ask: reason-form USER_VERIFIED present; bare USER_VERIFIED and RESET_FROM absent; PreToolUse gate-reset-from-sentinel registered"
     else
         fail "L6-b. permissions.ask contract violated: $L6B_OUT"
     fi
