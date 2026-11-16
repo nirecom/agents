@@ -7,29 +7,33 @@
 const REQ = "required";
 const SKIP = "skip";
 
-// [step, { "wf-code", "wf-meta" }, skipOnPaths, commitGate]
+const PRE = "pre-implementation";
+const IMPL = "implementation";
+
+// [step, { "wf-code", "wf-meta" }, skipOnPaths, commitGate, phase]
+// phase (#2852): the reset allowance refills on an approved reset to a pre-implementation step only.
 const ROWS = Object.freeze([
-  ["workflow_init", { "wf-code": REQ, "wf-meta": REQ }, [], "required"],
-  ["clarify_intent", { "wf-code": REQ, "wf-meta": REQ }, [], "required"],
-  ["research", { "wf-code": REQ, "wf-meta": REQ }, [], "exempt"],
-  ["outline", { "wf-code": REQ, "wf-meta": REQ }, [], "required"],
-  ["detail", { "wf-code": REQ, "wf-meta": SKIP }, [], "required"],
-  ["branching_complete", { "wf-code": REQ, "wf-meta": SKIP }, [], "required"],
-  ["write_tests", { "wf-code": REQ, "wf-meta": SKIP }, [], "required"],
-  ["review_tests", { "wf-code": REQ, "wf-meta": SKIP }, [], "required"],
-  ["write_code", { "wf-code": REQ, "wf-meta": SKIP }, [], "required"],
-  ["run_tests", { "wf-code": REQ, "wf-meta": SKIP }, [], "required"],
-  ["review_security", { "wf-code": REQ, "wf-meta": SKIP }, [], "required"],
-  ["docs", { "wf-code": REQ, "wf-meta": SKIP }, [], "required"],
-  ["review_docs", { "wf-code": REQ, "wf-meta": SKIP }, [], "required"],
-  ["push_branch", { "wf-code": REQ, "wf-meta": SKIP }, ["direct"], "exempt"],
-  ["user_verification", { "wf-code": REQ, "wf-meta": SKIP }, [], "deferred-in-worktree"],
-  ["merge_to_main", { "wf-code": REQ, "wf-meta": SKIP }, [], "exempt"],
-  ["cleanup", { "wf-code": REQ, "wf-meta": SKIP }, ["direct"], "deferred-in-worktree"],
-  ["pre_final_report_gate", { "wf-code": REQ, "wf-meta": REQ }, [], "exempt"],
-  ["final_report", { "wf-code": REQ, "wf-meta": REQ }, [], "exempt"],
-].map(([step, columns, skipOnPaths, commitGate]) => Object.freeze({
-  step, columns: Object.freeze(columns), skipOnPaths: Object.freeze(skipOnPaths), commitGate,
+  ["workflow_init", { "wf-code": REQ, "wf-meta": REQ }, [], "required", PRE],
+  ["clarify_intent", { "wf-code": REQ, "wf-meta": REQ }, [], "required", PRE],
+  ["research", { "wf-code": REQ, "wf-meta": REQ }, [], "exempt", PRE],
+  ["outline", { "wf-code": REQ, "wf-meta": REQ }, [], "required", PRE],
+  ["detail", { "wf-code": REQ, "wf-meta": SKIP }, [], "required", PRE],
+  ["branching_complete", { "wf-code": REQ, "wf-meta": SKIP }, [], "required", IMPL],
+  ["write_tests", { "wf-code": REQ, "wf-meta": SKIP }, [], "required", IMPL],
+  ["review_tests", { "wf-code": REQ, "wf-meta": SKIP }, [], "required", IMPL],
+  ["write_code", { "wf-code": REQ, "wf-meta": SKIP }, [], "required", IMPL],
+  ["run_tests", { "wf-code": REQ, "wf-meta": SKIP }, [], "required", IMPL],
+  ["review_security", { "wf-code": REQ, "wf-meta": SKIP }, [], "required", IMPL],
+  ["docs", { "wf-code": REQ, "wf-meta": SKIP }, [], "required", IMPL],
+  ["review_docs", { "wf-code": REQ, "wf-meta": SKIP }, [], "required", IMPL],
+  ["push_branch", { "wf-code": REQ, "wf-meta": SKIP }, ["direct"], "exempt", IMPL],
+  ["user_verification", { "wf-code": REQ, "wf-meta": SKIP }, [], "deferred-in-worktree", IMPL],
+  ["merge_to_main", { "wf-code": REQ, "wf-meta": SKIP }, [], "exempt", IMPL],
+  ["cleanup", { "wf-code": REQ, "wf-meta": SKIP }, ["direct"], "deferred-in-worktree", IMPL],
+  ["pre_final_report_gate", { "wf-code": REQ, "wf-meta": REQ }, [], "exempt", IMPL],
+  ["final_report", { "wf-code": REQ, "wf-meta": REQ }, [], "exempt", IMPL],
+].map(([step, columns, skipOnPaths, commitGate, phase]) => Object.freeze({
+  step, columns: Object.freeze(columns), skipOnPaths: Object.freeze(skipOnPaths), commitGate, phase: phase || null,
 })));
 
 const BY_STEP = new Map(ROWS.map((r) => [r.step, r]));
@@ -56,6 +60,12 @@ function commitGateOf(step) {
   return row ? row.commitGate : null;
 }
 
+// phaseOf(step) -> "pre-implementation" | "implementation"; null for an unknown step or a row without the column.
+function phaseOf(step) {
+  const row = typeof step === "string" ? BY_STEP.get(step) : undefined;
+  return row ? row.phase : null;
+}
+
 // Events written before a step rename keep the old name; readers fold them onto the current one.
 const LEGACY_STEP_NAMES = Object.freeze({ deliver: "merge_to_main" });
 
@@ -64,5 +74,5 @@ function canonicalStepName(name) {
 }
 
 module.exports = {
-  stepNames, isStepRequired, commitGateOf, canonicalStepName, DELIVERABLE_TYPES, DEFAULT_DELIVERABLE_TYPE,
+  stepNames, isStepRequired, commitGateOf, phaseOf, canonicalStepName, DELIVERABLE_TYPES, DEFAULT_DELIVERABLE_TYPE,
 };

@@ -283,6 +283,12 @@ function isStrictSentinel(cmd) {
   );
 }
 
+// The text inside a double-quoted sentinel echo can close the quote, expand, or split the command
+// when it holds any of these (#3027, #2852); a strict regex match alone does not exclude them.
+function hasUnsafeSentinelBody(body) {
+  return /["`$\\\r\n]/.test(String(body));
+}
+
 // --- Chain-boundary form detectors (workflow-gate.js only) ---
 // Intentionally BROADER than any per-category isSentinel() regex: they detect a
 // sentinel-shaped echo at a chain boundary `(?:^|&&\s*)` (start or right after
@@ -303,6 +309,7 @@ const CHAIN_BOUNDARY_SENTINEL_SQ_MARKER_RE =
 module.exports = {
   isSentinel,
   isStrictSentinel,
+  hasUnsafeSentinelBody,
   CHAIN_BOUNDARY_SENTINEL_DQ_RE,
   CHAIN_BOUNDARY_SENTINEL_SQ_MARKER_RE,
   MARKER_RE_DQ, MARKER_RE_SQ, RESET_FROM_RE_DQ, RESET_FROM_LOOKSLIKE_RE, USER_VERIFIED_RE_DQ,

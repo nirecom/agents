@@ -13,6 +13,7 @@ const os = require("node:os");
 const path = require("node:path");
 const fx = require("./fixture");
 const { classify } = require("../feature-2676-merged-allow-deny/fixture");
+const F2852 = require("../feature-2852-reset-allowance/fixture");
 
 const REPO = path.resolve(__dirname, "..", "..", "..");
 const SPAWN_TIMEOUT_MS = 30000;
@@ -163,6 +164,21 @@ const ORACLE = {
     { label: "OUTLINE_NOT_NEEDED with CONFIRM_OUTLINE=on", want: "none", setup: (context) => ({
       input: bash('echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: fixture>>"', { session_id: sidOf("gate-plan-skip-sentinel") }),
       env: { AGENTS_MAIN_ROOT: configRoot(context, ["CONFIRM_OUTLINE=on"]), CONFIRM_OUTLINE: "on" } }) },
+  ] },
+  "gate-reset-from-sentinel": { kind: "allow-deny", probes: [
+    // A session standing at write_tests with no past reset (the #2852 event-stream fixture).
+    { label: "RESET_FROM to a later step than the current one", want: "ask", setup: () => {
+      const sid = sidOf("gate-reset-from-sentinel");
+      F2852.seed(sid, F2852.history("write_tests", []));
+      return { input: bash('echo "<<WORKFLOW_RESET_FROM_docs: fixture>>"', { session_id: sid }) };
+    } },
+    { label: "RESET_FROM inside the reset allowance with CONFIRM_DETAIL=off", want: "allow", setup: (context) => {
+      const sid = sidOf("gate-reset-from-sentinel");
+      F2852.seed(sid, F2852.history("write_tests", []));
+      return { input: bash('echo "<<WORKFLOW_RESET_FROM_detail: fixture>>"', { session_id: sid }),
+        env: { AGENTS_MAIN_ROOT: configRoot(context, ["CONFIRM_DETAIL=off"]), CONFIRM_DETAIL: "off" } };
+    } },
+    { label: "not a RESET_FROM sentinel", want: "none", input: bash("git status", { session_id: sidOf("gate-reset-from-sentinel") }) },
   ] },
   "check-cross-platform": { kind: "allow-deny", probes: [
     { label: "commit with a Windows-only script", want: "deny", setup: (context) => {
