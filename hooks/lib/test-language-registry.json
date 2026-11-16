@@ -57,7 +57,7 @@
       "caseEmbedRules": { "file": "bin/lib/test-language-parts/pester-case-embed.sh", "function": "pester_case_embed", "node": { "file": "hooks/lib/test-gates/parts/external-runtime.js", "function": "analyzer" } },
       "tableDrivenDetector": { "file": "bin/lib/test-language-parts/pester.sh", "function": "has_table_driven_pester" },
       "envClearLine": { "file": "hooks/lib/test-gates/parts/env-clear/pester.js", "function": "envClearLine" },
-      "helperLibrary": { "path": "tests/lib/harness.ps1", "sourceRegex": "^[[:space:]]*\\.[[:space:]]+[^#]*lib['\"]?[[:space:]/\\\\]+['\"]?harness\\.ps1" },
+      "helperLibrary": { "path": "tests/lib/harness.ps1", "sourceRegex": "^[[:space:]]*\\.[[:space:]]+[^#]*lib['\"]?[[:space:]/\\\\]+['\"]?harness\\.ps1", "sharedSourceRegex": "^[[:space:]]*\\.[[:space:]]+[^#]*AGENTS_TEST_HARNESS_DIR[^#]*harness\\.ps1" },
       "codeLanguage": { "sourcePatterns": ["*.ps1", "*.psm1"], "shebangInterpreters": ["pwsh"] },
       "newFileNameShape": "<name>.Tests.ps1",
       "notationDoc": "skills/_shared/test-design/case-markers/pester.md",
@@ -92,7 +92,7 @@
       "caseEmbedRules": { "file": "bin/lib/test-language-parts/pytest-case-embed.sh", "function": "pytest_case_embed", "node": { "file": "hooks/lib/test-gates/parts/external-runtime.js", "function": "analyzer" } },
       "tableDrivenDetector": { "file": "bin/lib/test-language-parts/pytest.sh", "function": "has_table_driven_pytest" },
       "envClearLine": { "file": "hooks/lib/test-gates/parts/env-clear/pytest.js", "function": "envClearLine" },
-      "helperLibrary": { "path": "tests/lib/harness.py", "sourceRegex": "^(import harness([[:space:]]|$)|from harness import[[:space:]])" },
+      "helperLibrary": { "path": "tests/lib/harness.py", "sourceRegex": "^(import harness([[:space:]]|$)|from harness import[[:space:]])", "sharedSourceRegex": "^[[:space:]]*sys\\.path(\\.(insert|append)\\(|[[:space:]]*\\+=|\\[[^]]*\\][[:space:]]*=).*AGENTS_TEST_HARNESS_DIR" },
       "codeLanguage": { "sourcePatterns": ["*.py"], "shebangInterpreters": ["python3", "python"] },
       "newFileNameShape": "test_<name>.py",
       "notationDoc": "skills/_shared/test-design/case-markers/pytest.md",
@@ -126,7 +126,7 @@
       "caseEmbedRules": { "file": "bin/lib/test-language-parts/js-case-embed.sh", "function": "js_case_embed", "node": { "file": "bin/lib/test-language-parts/js-case-analyzer.js", "function": "analyze" } },
       "tableDrivenDetector": { "file": "bin/lib/test-language-parts/js.sh", "function": "has_table_driven_js" },
       "envClearLine": { "file": "hooks/lib/test-gates/parts/env-clear/js.js", "function": "envClearLine" },
-      "helperLibrary": { "path": "tests/lib/harness.js", "sourceRegex": "^[^/]*require\\([\"']\\.\\./lib/harness(\\.js)?[\"']\\)", "looseSourceRegex": true },
+      "helperLibrary": { "path": "tests/lib/harness.js", "sourceRegex": "^[^/]*require\\([\"']\\.\\./lib/harness(\\.js)?[\"']\\)", "sharedSourceRegex": "^[[:space:]]*((const|let|var)[[:space:]]+[^=]+=[[:space:]]*)?(await[[:space:]]+)?(require|import)[[:space:]]*\\(.*AGENTS_TEST_HARNESS_DIR.*harness", "looseSourceRegex": true },
       "codeLanguage": { "sourcePatterns": ["*.js", "*.cjs", "*.mjs"], "shebangInterpreters": ["node"] },
       "newFileNameShape": "<name>.js",
       "notationDoc": "skills/_shared/test-design/case-markers/js.md",
@@ -138,7 +138,7 @@
       },
       "newEntrypointRunner": {
         "rejectSkipReason": "custom-runner",
-        "hint": "Require node:test and write each case as test(...): const { test } = require(\"node:test\"); keep the shared helpers from require(\"../lib/harness\")"
+        "hint": "Require node:test and write each case as test(...): const { test } = require(\"node:test\"); keep the shared helpers from require(\"../lib/harness\") (without a copy of the harness, load it with require(path.join(process.env.AGENTS_TEST_HARNESS_DIR, \"harness\")))"
       },
       "note": "Not selfIdentifying: a .js file is a test only directly under a tests/<category>/ directory. The wrapper runs each file once, without --test, under a guard and a case reporter; a run that loaded node:test is settled by the node:test exit table. Every placed test file must load node:test (newEntrypointRunner; the name predates its widening to existing files)."
     },
