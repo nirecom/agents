@@ -158,13 +158,17 @@ function syncProgressQuietly(absPaths, input, { sync = defaultSync, now = Date.n
 
 // Drop the turn marker (always — required by #563 so the Stop guard sees it regardless
 // of CONFIRM_<STEP>).
+function sessionOf(input) {
+  const { resolveSessionId } = require("./workflow-state");
+  return resolveSessionId({
+    sessionIdFromInput: input.session_id,
+    transcriptPath: input.transcript_path,
+  });
+}
+
 function markTurn(filePath, absPath, input) {
   try {
-    const { resolveSessionId } = require("./workflow-state");
-    const sid = resolveSessionId({
-      sessionIdFromInput: input.session_id,
-      transcriptPath: input.transcript_path,
-    });
+    const sid = sessionOf(input);
     if (sid) {
       const { writeTurnMarker } = require("./lib/turn-marker");
       writeTurnMarker(sid, {
@@ -229,12 +233,20 @@ function gateOf(step, timeoutMs) {
   }
 }
 
-// entryFor(run, gateTimeoutMs) -> {stage, gate, url?, path?, reason?} — the plan-link row of one
-// written plan. The row is keyed by the artifact name, the gate by its step.
-function entryFor(run, gateTimeoutMs) {
+// readinessOf(sid, step, gate) -> the stage's stageReadiness state (#2961), judged on the gate already
+// probed; no session or a throw is unknown, which keeps the gate's duty.
+function readinessOf(sid, step, gate) {
+  if (!sid || !step) return "unknown";
+  try { return require("./lib/presentation-readiness").stageReadiness(sid, step, { gate }).state; } catch (_) { return "unknown"; }
+}
+
+// entryFor(run, gateTimeoutMs, sid) -> {stage, gate, readiness, url?, path?, reason?} — the plan-link
+// row of one written plan. The row is keyed by the artifact name, the gate by its step.
+function entryFor(run, gateTimeoutMs, sid) {
   let step = null;
   try { step = require("./workflow-state/plan-step-table").stepForSuffix(getSuffix(run.filePath)); } catch (_) { /* ERROR below */ }
-  return { ...linkEntryFor(run), gate: gateOf(step, gateTimeoutMs) };
+  const gate = gateOf(step, gateTimeoutMs);
+  return { ...linkEntryFor(run), gate, readiness: readinessOf(sid, step, gate) };
 }
 
 function linkEntryFor(run) {
@@ -273,7 +285,9 @@ function emitForArtifacts(filePaths, input, opts) {
     const notes = runs.map((r) => explanationKey(r.result))
       .filter((k) => Object.prototype.hasOwnProperty.call(EXPLANATIONS, k)).map((k) => EXPLANATIONS[k]);
     const deadline = start + budgetMs;
-    const entries = runs.map((r) => entryFor(r, Math.max(0, deadline - clock())));
+    let sid = null;
+    try { sid = sessionOf(input || {}); } catch (_) { sid = null; }
+    const entries = runs.map((r) => entryFor(r, Math.max(0, deadline - clock()), sid));
     const rows = renderModelContext(entries, { when: "after-write" });
     const ctx = withConvLang([rows, ...notes].join("\n"));
     out.hookSpecificOutput = {

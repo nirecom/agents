@@ -154,9 +154,9 @@ case_begin "kept-terms-follow-category-table" "docs/glossary/user.md"
 # The curated kept terms must each appear exactly once in their category file. The check
 # asserts presence, not a total: a later PR adding a qualifying entry must not break it.
 USER_TERMS=(AGENTS_MAIN_ROOT "confirm gate" "deliverable type" "delivery path" detail "state handoff record"
-            intent Jev meta outline plan-sync "PM type" "presentation turn" RTK sentinel
+            intent Jev meta outline plan-sync "PM type" RTK sentinel
             WF-CODE WF-META workflow "workflow step")
-INTERNAL_TERMS=("delivery operation" GATE_ACTION "in-skill step" IR "review round" SCRIPT_CHECKOUT_ROOT
+INTERNAL_TERMS=("delivery operation" GATE_ACTION "in-skill step" IR "plan presentation turn" "review round" SCRIPT_CHECKOUT_ROOT
                 "state handoff reader" "step table" TARGET_CHECKOUT_ROOT TARGET_MAIN_ROOT)
 # kept_terms_missing <user-file> <internal-file> — one line per curated term not present exactly once.
 kept_terms_missing() {

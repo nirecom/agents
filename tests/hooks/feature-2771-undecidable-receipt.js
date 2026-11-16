@@ -100,7 +100,7 @@ test("r17-unrecorded-stage-notice", () => noNewFailures(failureCount, () => {
   // Partial write: intent is left unpublished (no receipt link), outline is published.
   const s = R.sessionAt("outline", { tag: 1721 });
   const intent = R.linesFor(s.sid, "intent");
-  fs.writeFileSync(intent.plan, R.EDITED_INTENT);
+  R.editIntent(s.sid); // #2961: re-settles the audits the edit unsettled.
   const close = "Both plans are ready.\n\n" + `intent: \`${intent.fwd}\` (no URL: not-published)` + "\n" + s.urlLine;
   const st = ustop(s, turn(s, ["intent", "outline"], [A("a-anchor", T(close))]), Object.assign({ env: { CC_UNPUBLISHED_STAGE: "intent" } }, linked(close)));
   const msg = notice(st);
@@ -387,7 +387,7 @@ test("r27-undecidable-plan-lang-violation-no-receipt", () => noNewFailures(failu
   {
     // Co-presented: intent edited after approval (clean, unapproved) and the violating outline.
     const s = jaSession(2721);
-    fs.writeFileSync(R.linesFor(s.sid, "intent").plan, R.EDITED_INTENT);
+    R.editIntent(s.sid); // #2961: re-settles the audits the edit unsettled.
     const close = closing(s, ["intent", "outline"]);
     const st = ustop(s, turn(s, ["intent", "outline"], [A("a-anchor", T(close)), THINK("a-think")]), pin(linked(close)));
     check("r27 co-presented: the clean intent gets its receipt", R.receiptExists(s.sid, "clarify_intent"), snap(s.sid));

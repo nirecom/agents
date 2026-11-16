@@ -38,7 +38,7 @@ function r30(check) {
     // Mixed: intent edited after approval (unapproved) and outline unapproved; the anchored text presents
     // intent only, the final message presents intent and outline.
     const s = R.sessionAt("outline", { tag: 3011 });
-    fs.writeFileSync(R.linesFor(s.sid, "intent").plan, R.EDITED_INTENT);
+    R.editIntent(s.sid); // #2961: re-settles the audits the edit unsettled.
     const st = astop(s, ["intent", "outline"], closing(s, ["intent"]), relinked(closing(s, ["intent", "outline"])));
     check("r30 mixed: rc 0, stdout empty", silent(st), { rc: st.rc, out: st.out });
     const ri = R.readReceiptRaw(s.sid, "clarify_intent");
@@ -95,7 +95,7 @@ function r30(check) {
     // Intent final-only: intent edited after approval (unapproved), outline unapproved; the anchored text
     // presents outline only, the final message presents intent only. Only intent's marker is written.
     const s = R.sessionAt("outline", { tag: 3071 });
-    fs.writeFileSync(R.linesFor(s.sid, "intent").plan, R.EDITED_INTENT);
+    R.editIntent(s.sid); // #2961: re-settles the audits the edit unsettled.
     const st = astop(s, ["intent"], closing(s, ["outline"]), relinked(closing(s, ["intent"])));
     // outline has no marker and the final message does not name it, so it is not in mayHavePresented.
     check("r30 intent final-only: rc 0, stdout empty (no decision, no notice)", silent(st), { rc: st.rc, out: st.out });

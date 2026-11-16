@@ -52,6 +52,9 @@ const sid = X.uuidSid(2771);
 X.F.writePlan(sid, "intent");
 X.F.writePlan(sid, "outline");
 X.F.writeState(sid, { workflow_init: "complete", clarify_intent: "complete", research: "complete", outline: "pending" }, []);
+// #2961: only a stage whose pre-confirm audit admits it is presentable; settle both on the plans as written.
+const PCAS = require("../lib/pre-confirm-audit-settle");
+for (const st of ["intent", "outline"]) assert.ok(PCAS.trySettle(sid, st, "CONTINUE"), `fixture: ${st} audit settled`);
 const L = { intent: X.linesFor(sid, "intent"), outline: X.linesFor(sid, "outline") };
 const BOTH = "Here are the plans.\n\n" + L.intent.urlLine + "\n" + L.outline.urlLine;
 const OUTLINE_ONLY = "Here is the plan.\n\n" + L.outline.urlLine;

@@ -41,7 +41,8 @@ function r23(check) {
   check("r23 marker for outline, link line for detail: detail receipt recorded with anchorUuid \"\"", rc3 !== null && rc3.anchorUuid === "", snap(s3.sid));
   check("r23 marker for outline, link line for detail: no outline receipt", !R.receiptExists(s3.sid, "outline"), snap(s3.sid));
   const msg3 = notice(st3);
-  check("r23 marker for outline, link line for detail: the notice names outline, not detail", names(msg3, "outline") && !names(msg3, "detail"), { rc: st3.rc, out: st3.out });
+  // #2961: the approved outline is not presentable, so its marker alone no longer earns a notice.
+  check("r23 marker for outline, link line for detail: the notice names neither the approved outline nor detail", !names(msg3, "outline") && !names(msg3, "detail"), { rc: st3.rc, out: st3.out });
   const s4 = R.sessionAt("outline", { tag: 2341 });
   const st4 = d3b(s4, ["outline"], closing(s4, ["outline"]), { input: { stop_hook_active: true } });
   check("r23 stop_hook_active + marker: stdout empty, rc 0", silent(st4), { rc: st4.rc, out: st4.out });
@@ -96,7 +97,7 @@ function r29(check) {
     // intent is edited after approval (unapproved) and left unpublished; outline is published and clean.
     const s = R.sessionAt("outline", { tag });
     const intent = R.linesFor(s.sid, "intent");
-    fs.writeFileSync(intent.plan, R.EDITED_INTENT);
+    R.editIntent(s.sid); // #2961: re-settles the audits the edit unsettled.
     seedReceipts(s);
     const before = rawReceipts(s.sid);
     const close = "Both plans are ready.\n\n" + `intent: \`${intent.fwd}\` (no URL: not-published)` + "\n" + s.urlLine;

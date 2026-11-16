@@ -10,6 +10,7 @@ const { spawnSync } = require("child_process");
 const F = require("../feature-2277-plan-approval-gate/fixture");
 const CE = require("../../lib/confirm-env-fixture");
 const RS = require("../../lib/presentation-receipt-seed");
+const PCAS = require("../../lib/pre-confirm-audit-settle");
 
 const ROOT = F.ROOT;
 const STEP = { intent: "clarify_intent", outline: "outline", detail: "detail" };
@@ -46,6 +47,9 @@ const ECHO = (stage, id) => BASH(echoOf(stage), id || "e1");
 // sessionAt(stage, opts) -> {sid, stage, step, plan, fwd, line, urlLine}: a session whose current
 // step is the stage's step, every earlier gated stage approved, every plan up to the stage on disk.
 // opts.approved: also record an approval of the stage itself at the current sha.
+// opts.audit: false leaves the stage's pre-confirm audit unsettled. By default (#2961) the audit is
+// settled CONTINUE on the written plan, so the turn that writes it is a plan presentation turn; a
+// case whose subject is the audit itself (audit-wait, arm, cap) or a mid-turn passes audit: false.
 function sessionAt(stage, opts) {
   const o = opts || {};
   const sid = uuidSid(o.tag);
@@ -64,6 +68,7 @@ function sessionAt(stage, opts) {
   }
   if (o.approved) approvals.push({ step: STEP[stage] });
   F.writeState(sid, steps, approvals);
+  if (o.audit !== false) PCAS.trySettle(sid, stage, "CONTINUE");
   return Object.assign({ sid, stage, step: STEP[stage] }, linesFor(sid, stage));
 }
 

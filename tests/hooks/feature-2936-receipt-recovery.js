@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // tests/hooks/feature-2936-receipt-recovery.js
 // Tests: hooks/confirm-checkpoint/receipt-recovery.js, hooks/confirm-checkpoint.js, hooks/lib/presentation-turn.js, hooks/lib/turn-marker.js
-// Tags: TL2, hooks, confirm-checkpoint, confirm-plan, presentation-receipt, receipt-recovery, turn-marker, scope:issue-specific
+// Tags: TL2, hooks, confirm-checkpoint, confirm-plan, presentation-receipt, receipt-recovery, turn-marker, pre-confirm-audit, plan-presentation-turn, scope:issue-specific
 // TL3 gap: a real Stop hook killed by the host between the presentation and its receipt write; here
 // the Stop never runs, and the transcript, markers and plan mtime are what a killed Stop leaves behind.
 // #2936 S12: with no receipt, confirm-checkpoint records one from the previous turn only when that turn
@@ -34,6 +34,7 @@ afterAll(() => {
 const R = require("./feature-2729-presentation-receipt/fixture");
 const K = require("./feature-2936-stop-budget-kill/fixture");
 const P = require("./feature-2936-receipt-recovery/fixture");
+const PCAS = require("../lib/pre-confirm-audit-settle");
 
 let tag = 9500;
 const at = (stage, o) => R.sessionAt(stage || "outline", Object.assign({ tag: ++tag }, o || {}));
@@ -69,7 +70,13 @@ caseBegin("no-evidence-denies-with-the-hint", "hooks/confirm-checkpoint.js");
 const NO_EVIDENCE = [
   ["text after the link line", (s) => ({ last: K.closingOf(s) + "\n\nAnything else?" })],
   ["the step already approved", () => ({}), { approved: true }],
-  ["a plan-link block from the previous turn's markers", (s) => ({ markers: [[s.stage, 1000], ["intent", 1000]] })],
+  // #2961: an approved intent rewritten unchanged owes no link, so the intent is edited and its TR1
+  // settled on the edit — a plan presentation turn whose missing intent line blocks the Stop.
+  ["a plan-link block from the previous turn's markers", (s) => {
+    R.F.writePlan(s.sid, "intent", R.EDITED_INTENT);
+    assert.ok(PCAS.trySettle(s.sid, "intent", "CONTINUE"), "fixture: TR1 settled on the edited intent");
+    return { markers: [[s.stage, 1000], ["intent", 1000]] };
+  }],
 ];
 for (const [name, mk, sOpts] of NO_EVIDENCE) {
   test(`${name}: recoverReceipt runs and writes nothing; no-receipt deny with the hint`, () => {
@@ -178,7 +185,7 @@ const TAMPER = [
   ["an anchor without a uuid", () => ({ anchorUuid: null })],
   ["an anchor without a timestamp", () => ({ anchorTs: false })],
   ["an opener without a timestamp", () => ({ openerTs: false })],
-  ["the CONFIRM in the presentation turn itself", () => ({ sameTurn: true })],
+  ["the CONFIRM in the plan presentation turn itself", () => ({ sameTurn: true })],
 ];
 for (const [name, mk] of TAMPER) {
   test(`${name}: no recovery, the no-receipt deny`, () => {
@@ -275,5 +282,24 @@ test("after a recovered and spent receipt, the same CONFIRM again is refused by 
   assert.ok(second.denied && why(second).includes("(no-receipt)") && why(second).includes(P.HINT), show(second));
   calledOnceUnwritten(second);
   assert.deepEqual(P.events(s.sid, s.step), ["write", "consume"], "no second write");
+});
+caseEnd();
+
+// #2961: a turn whose plan audit is not settled is a mid-turn, not a plan presentation turn, so the
+// previous turn yields no receipt even when it closed on the link line. Driven through direct-driver.js:
+// the CONFIRM echo of the fixture settles the audit first, which would hide the mid-turn.
+caseBegin("mid-turn-never-recovers", "hooks/confirm-checkpoint/receipt-recovery.js");
+test("#2961 the previous turn is a mid-turn (audit unsettled): no receipt is recovered; once settled, the same pair is", () => {
+  const s = at("outline", { audit: false });
+  const k = P.pair(s);
+  const mid = P.direct(["recover", s.sid, k.tp, s.step, s.stage, "10000"]);
+  assert.equal(mid.missing, undefined, `the modules load: ${JSON.stringify(mid)}`);
+  assert.equal(mid.written, false, `a mid-turn recovers nothing: ${JSON.stringify(mid)}`);
+  assert.ok(!R.receiptExists(s.sid, s.step), "no receipt is written for a mid-turn");
+  const judged = P.direct(["judge", s.sid, k.tp, s.stage]);
+  assert.ok(!(judged.presented || []).some((p) => p[0] === s.stage), `the mid-turn presents no stage: ${JSON.stringify(judged)}`);
+  require("../lib/pre-confirm-audit-settle").trySettle(s.sid, s.stage, "CONTINUE");
+  const settled = P.direct(["recover", s.sid, k.tp, s.step, s.stage, "10000"]);
+  assert.equal(settled.written, true, `control: the settled plan presentation turn recovers: ${JSON.stringify(settled)}`);
 });
 caseEnd();

@@ -195,7 +195,7 @@ function presented(s, closing, o) {
     A("a-r", READ("t-r")), TRS("t-r", "u-tr2", BIG), R.A("a-anchor", R.T(closing)),
   ]);
 }
-test("a presentation turn whose prompt is past the first window continues and writes the receipt", () => {
+test("a plan presentation turn whose prompt is past the first window continues and writes the receipt", () => {
   const s = R.sessionAt("outline", { tag: 9361 });
   const closing = "Here is the plan.\n\n" + s.urlLine;
   const tp = presented(s, closing);

@@ -59,11 +59,9 @@ function auditDenyReason(sid, stepArg) {
     return `[pre-confirm-audit] ${label} denied: the ${step} audit could not be judged ` +
       `(${(e && e.message) || "unknown error"}), so the dialog stays closed. ${describeAcceptanceCommand(acc.runId)}`;
   }
+  // The dialog is the ask, so its admit is the gate's ask admit (#2961 auditAdmits).
+  if (PCA.auditAdmits(j, "ask") === "admit") return null;
   switch (j.state) {
-    case "settled-continue":
-    case "settled-warn":
-    case "accepted":
-      return null;
     case "unsettled":
       return `[pre-confirm-audit] ${label} denied: the ${step} audit of the current plan is not settled. ` +
         "Rerun next-step --gate and follow its GATE_ACTION (launch the supervisor-audit subagent on audit-wait), " +
@@ -72,7 +70,6 @@ function auditDenyReason(sid, stepArg) {
       return `[pre-confirm-audit] ${label} denied: audit ${j.runId} returned BLOCK for the current plan. ` +
         `Show its findings to the user and revise the plan. ${describeAcceptanceCommand(j.runId)}`;
     case "cap-reached":
-      if (PCA.isCapConfirmAcceptable(j)) return null;
       return `[pre-confirm-audit] ${label} denied: the ${step} audit reached its run cap without a settled ` +
         `verdict on the current plan (last run ${j.runId || "none"}). ${describeAcceptanceCommand(j.runId)}`;
     default:

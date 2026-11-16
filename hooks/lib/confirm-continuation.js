@@ -2,8 +2,8 @@
 // hooks/lib/confirm-continuation.js — which plan artifacts a turn presented (#2650, #2729), for the
 // Stop hook (stop-confirm-plan-guard.js), plus the wording it and confirm-checkpoint.js share.
 // A plan is presented when the turn's last assistant entry is text only and its last text block
-// closes on a run of plan-link lines holding the plan's line, while its step is unapproved and the
-// step's gate is not OFF. The Stop hook turns a presentation into a receipt
+// closes on a run of plan-link lines holding the plan's line, while its step is unapproved, the
+// step's gate is not OFF and its readiness makes the turn a plan presentation turn. The Stop hook turns a presentation into a receipt
 // (hooks/lib/presentation-receipt.js); confirm-checkpoint reads the transcript only to recover a
 // receipt a killed Stop left unwritten (confirm-checkpoint/receipt-recovery.js, #2936).
 // The presented list and the wording are keyed by the plan artifact name; the gate lookup is keyed
@@ -46,10 +46,14 @@ function gateForFrom(timeoutMsFor) {
 // (step -> gate) and linkFor (absPath -> link) let the caller share one probe per step and one git
 // lookup per file; without gateFor the gate is probed within timeoutMsFor().
 // receiptLink is null when the plan has no link that may stand for it (not published).
-function presentedArtifactsOfText({ sid, lastText, stages, plansDir, timeoutMsFor, gateFor, linkFor } = {}) {
+// readinessFor (sid, step -> state, #2961) drops a stage that is not presentable; without it, the
+// same stageReadiness is built from the gate lookup, so no caller judges a mid-turn differently.
+function presentedArtifactsOfText({ sid, lastText, stages, plansDir, timeoutMsFor, gateFor, linkFor, readinessFor } = {}) {
   if (typeof lastText !== "string" || !lastText || !Array.isArray(stages)) return [];
   const gate = typeof gateFor === "function" ? gateFor : gateForFrom(timeoutMsFor);
   const linkOf = typeof linkFor === "function" ? linkFor : (p) => PL.linkForFile(p, plansDir ? { plansDir } : {});
+  const RD = require("./presentation-readiness");
+  const readiness = typeof readinessFor === "function" ? readinessFor : RD.readinessForFrom(gate);
   const { checkPlanApproval } = require("../workflow-state/plan-approval-check");
   const { computeContentSha } = require("../workflow-state/completion-approval");
   const out = [];
@@ -63,16 +67,18 @@ function presentedArtifactsOfText({ sid, lastText, stages, plansDir, timeoutMsFo
     const g = gate(step);
     if (g === "OFF") continue;
     if (checkPlanApproval(sid, step, { gate: g }).verdict !== "unapproved") continue;
+    if (!RD.presentable(readiness(sid, step))) continue;
     out.push({ stage: artifact, absPath, reason: link.reason || null, receiptLink: PL.receiptLinkOf(link), contentSha: computeContentSha(absPath) });
   }
   return out;
 }
 
-// presentedArtifacts({sid, tail, plansDir, timeoutMsFor, gateFor, linkFor}): presentedArtifactsOfText
-// over every plan artifact, for a tail whose last assistant entry is its text-only last text entry.
-function presentedArtifacts({ sid, tail, plansDir, timeoutMsFor, gateFor, linkFor } = {}) {
+// presentedArtifacts({sid, tail, plansDir, timeoutMsFor, gateFor, linkFor, readinessFor}):
+// presentedArtifactsOfText over every plan artifact, for a tail whose last assistant entry is its
+// text-only last text entry.
+function presentedArtifacts({ sid, tail, plansDir, timeoutMsFor, gateFor, linkFor, readinessFor } = {}) {
   if (!textOnlyAnchor(tail)) return [];
-  return presentedArtifactsOfText({ sid, lastText: tail.lastTextBlock, stages: PLAN_ARTIFACT_NAMES, plansDir, timeoutMsFor, gateFor, linkFor });
+  return presentedArtifactsOfText({ sid, lastText: tail.lastTextBlock, stages: PLAN_ARTIFACT_NAMES, plansDir, timeoutMsFor, gateFor, linkFor, readinessFor });
 }
 
 // continuationArtifact(presented, currentArtifact) -> the plan artifact name the Stop hook asks to

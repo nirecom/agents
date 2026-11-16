@@ -190,7 +190,7 @@ const EXCLUDED = [
   ["delegated-reason (pre_final_report_gate)", "delegatedReason", (s) => assert.strictEqual(action(s).kv("REASON"), "'pre_final_report_gate'", "premise"), {}],
   ...DELEGATED.map((st) => [`${st} in flight`, "invoke", (s) => { F.markSteps(s.sc, s.sid, [[st, "in_progress"]]); assert.strictEqual(inFlight(s), st, "premise"); }, {}]),
   ["research and write_code both in flight", "invoke", (s) => { F.markSteps(s.sc, s.sid, [["research", "in_progress"], ["write_code", "in_progress"]]); assert.strictEqual(inFlight(s), "research", "premise"); }, {}],
-  // Neither wait can be seeded through real state from a hook run (a presentation turn / a live
+  // Neither wait can be seeded through real state from a hook run (a plan presentation turn / a live
   // merge poller), so the fake next-step prints the exact lines approval-reason.js / release-wait.js emit.
   ["awaiting-plan-approval", "invoke", null, { passes: true, extra: F.fakeNextStepEnv("stdout:ACTION=invoke\\nNEXT_SKILL=make-outline-plan\\nREASON='awaiting-plan-approval: make_outline_plan'\\n") }],
   ["human-web-merge-wait", "invoke", null, { passes: true, extra: F.fakeNextStepEnv("stdout:ACTION=invoke\\nNEXT_SKILL=merge-to-main\\nWAIT=human-web-merge\\n") }],

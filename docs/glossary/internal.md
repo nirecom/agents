@@ -50,6 +50,10 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
   The two-stage judge's query builds it, and the backup subagent reads it first.
 - **Related**: [architecture/jev/two-stage-broker.md](../architecture/jev/two-stage-broker.md)
 
+### plan presentation turn
+- **Definition**: 承認のために plan(intent、outline、detail)を提示するターン。plan の review loop と pre-confirm audit が終わり、`next-step --gate` が ask または proceed を返した後で、text block が plan-link 行で終わる(gate OFF の proceed では要約の中に一度書く)。plan を書く・直すだけのターンや、review・audit を待つターンは含まない。gate が ask のとき、その step の行が持つ CONFIRM_* flag の echo は、Stop hook が促したときは同じターンのその text block の後に、そうでなければユーザーの返答後に続く。link で閉じた提示が記録されたときだけ dialog に届く。
+- **Related**: [architecture/claude-code/workflow.md](../architecture/claude-code/workflow.md)
+
 ### plan step
 - **Definition**: One of the three workflow steps intent, outline, and detail; an earlier plan step takes priority over a later one.
 - **Related**: [skills/_shared/priority-hierarchy.md](../../skills/_shared/priority-hierarchy.md)

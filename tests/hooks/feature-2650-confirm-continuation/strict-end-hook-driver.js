@@ -69,7 +69,7 @@ if (mode === "stop") {
   };
   // #2731: the dialog systemMessage is the stage fact line (`[<stage>] ...`), no "Click Allow" wording.
   const passes = (r) => !r.deny && r.rc === 0 && r.json.decision !== "block" && /^\[(intent|outline|detail)\] /.test(r.msg);
-  // sameTurn(s, anchorText, extra, echoEntry) -> the presentation turn, the Stop feedback, extras, the echo.
+  // sameTurn(s, anchorText, extra, echoEntry) -> the plan presentation turn, the Stop feedback, extras, the echo.
   const sameTurn = (s, anchorText, extra, echoEntry) => [U("write the plan", "u-prompt"), A("a-write", W(s.plan)), TR("w1", "u-tr"),
     A("a-anchor", T(anchorText)), STOPFB(FB, "u-fb"), ...(extra || []), echoEntry || A("a-echo", ECHO(STAGE, "e1"))];
   // scene(label, build, {receipt, publish}): receipt=true seeds the receipt the Stop hook would have written.

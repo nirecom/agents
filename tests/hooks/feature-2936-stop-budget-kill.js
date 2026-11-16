@@ -47,7 +47,7 @@ function bounded(r, limit) {
 const noticeOnly = (r) => r.rc === 0 && typeof r.json.systemMessage === "string" && r.json.systemMessage !== "" && r.json.decision === undefined;
 
 caseBegin("forty-mb-transcript-presentation-continues-within-budget", "hooks/stop-confirm-plan-guard.js");
-test("a presentation turn after ~40 MB of history: receipt and continue within 3000 ms, a bounded read", () => {
+test("a plan presentation turn after ~40 MB of history: receipt and continue within 3000 ms, a bounded read", () => {
   const s = R.sessionAt("outline", { tag: 9401 });
   const closing = K.closingOf(s);
   const tp = K.onPrefix(PREFIX, s.sid, K.presentation(s, closing));
