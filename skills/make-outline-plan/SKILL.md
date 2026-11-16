@@ -125,7 +125,7 @@ MOP-8. Write the chosen approach to `<OUTLINE_MD>` per the Output Schema. Always
    Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
    - **`GATE_ACTION=audit-wait` / `audit-block`:** follow CPA-3.
    - **`GATE_ACTION=proceed`:** emit one-paragraph prose summary and proceed without `<<WORKFLOW_CONFIRM_OUTLINE>>`.
-   - **`GATE_ACTION=ask`:** follow the three confirm-plan CPA-3 steps — the presentation turn, then `echo "<<WORKFLOW_CONFIRM_OUTLINE: {one-line summary}>>"` alone — as the next message when the turn end is blocked, otherwise in the next turn; after Allow, co-emit the `make-detail-plan` Skill invocation. Revise → ask what to change, re-run outline-planner, loop back to MOP-7.
+   - **`GATE_ACTION=ask`:** follow the three confirm-plan CPA-3 steps — the plan presentation turn, then `echo "<<WORKFLOW_CONFIRM_OUTLINE: {one-line summary}>>"` alone — as the next message when the turn end is blocked, otherwise in the next turn; after Allow, co-emit the `make-detail-plan` Skill invocation. Revise → ask what to change, re-run outline-planner, loop back to MOP-7.
 
 ## Output Schema (`<OUTLINE_MD>`)
 

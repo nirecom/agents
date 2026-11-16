@@ -234,7 +234,7 @@ mismatch) reads as `pending` in the effective state. `next-step` answers it with
 `REASON=awaiting-plan-approval: <step>` and `ACTION=invoke` before its inconsistency scan, so
 later steps left `complete` do not abort the session; once the approval is recorded, the
 session resumes from the recorded position. That reason is a Stop exemption
-(`hooks/lib/stop-exemption-policy.js`): a presentation turn rightly ends while the user reads the plan.
+(`hooks/lib/stop-exemption-policy.js`): a plan presentation turn rightly ends while the user reads the plan.
 
 Progress gates: `gate-plan-skill-advance.js` only deters (it denies the next skill on
 `unapproved` and passes every unreadable state), while the side-effect owners fail closed —

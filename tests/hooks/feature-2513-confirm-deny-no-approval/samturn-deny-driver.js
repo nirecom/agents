@@ -1,5 +1,5 @@
 "use strict";
-// #2650/#2729 same-turn variant of ./pipeline-driver.js. The presentation turn left a presentation
+// #2650/#2729 same-turn variant of ./pipeline-driver.js. The plan presentation turn left a presentation
 // receipt (seeded here in the Stop hook's place), confirm-checkpoint passes the echo to the ask
 // dialog, and the user clicks Deny — so the host never runs PostToolUse. Then it checks that
 // nothing recorded the approval and the pass consumed the receipt. argv: <stage>.

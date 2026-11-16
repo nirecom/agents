@@ -194,8 +194,11 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
   (flush retry, the continue's re-read) against one process-start deadline
   (`hooks/stop-confirm-plan-guard/deadline.js`, `STOP_HOOK_TIMEOUT_MS` 5000), so the 5 s Stop
   timeout no longer kills it before the receipt is written; an overrun falls to the undecidable
-  path. The presentation turn judgment is shared with the CONFIRM PreToolUse through
+  path. The plan presentation turn judgment is shared with the CONFIRM PreToolUse through
   `hooks/lib/presentation-turn.js` (conditions unchanged).
+  Readiness (#2961): the guard, CONFIRM and `show-plan-link.js` read the stage's readiness from the
+  `stageReadiness` that `next-step --gate` uses (`hooks/lib/presentation-readiness.js`), so a turn
+  whose review or audit is not settled is a mid-turn and owes no plan-link line.
   Late recovery (#2936): when the CONFIRM echo finds no receipt, `hooks/confirm-checkpoint/receipt-recovery.js`
   re-judges the previous turn with that same function and, only if the Stop would have recorded it
   and nothing was written, consumed or edited since, writes the receipt for that one step. Any

@@ -1,5 +1,5 @@
 "use strict";
-// #2729 Gap 5 repro (session 1d12371e, R2): the presentation turn's last text block ends with the
+// #2729 Gap 5 repro (session 1d12371e, R2): the plan presentation turn's last text block ends with the
 // intent link line followed by a question, gate ON, intent unapproved. Stop must block with the
 // present-again reason ("not-last") and write no receipt. Under stop_hook_active the same input is
 // not blocked, but a supervisor finding is recorded and still no receipt is written.

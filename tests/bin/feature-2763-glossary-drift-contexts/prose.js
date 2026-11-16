@@ -44,7 +44,7 @@ function run(F) {
 }
 
 // Plan S4-2: the three background words, with the term set of the real glossary written per row.
-const BG_TERMS = ["presentation turn", "workflow", "workflow step", "detail", "GATE_ACTION"];
+const BG_TERMS = ["plan presentation turn", "workflow", "workflow step", "detail", "GATE_ACTION"];
 const BACKGROUND = [
   ["verb turns (.env.example)", "markdown",
     "# Format: any non-empty value turns no-delete mode on; unset or empty applies deletes (default).", [], BG_TERMS],

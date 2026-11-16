@@ -166,6 +166,18 @@ function isCapConfirmAcceptable(j) {
   return Boolean(j) && j.state === "cap-reached" && j.lastTerminal === true && CAP_CONFIRM_VERDICTS.includes(j.verdict);
 }
 
+// auditAdmits(j, action) -> "admit" | "arm" | "close": the one classification the gate
+// (decideAuditGate), the CONFIRM deny check and stageReadiness (#2961) share; each keeps its own text.
+// isCap overrides isCapConfirmAcceptable for a caller that injects it (decideAuditGate's deps).
+function auditAdmits(j, action, isCap) {
+  const state = j && j.state;
+  if (state === "settled-continue" || state === "settled-warn" || state === "accepted") return "admit";
+  // Only an ask has a CONFIRM dialog whose Allow can record the acceptance (#2873 D6).
+  if (state === "cap-reached") return action === "ask" && (isCap || isCapConfirmAcceptable)(j) ? "admit" : "close";
+  if (state === "unsettled") return "arm";
+  return "close";
+}
+
 // armStage(sid, step, ctx) -> the armAuditRun result. Never arms past the cap, and returns the
 // in-flight run as-is when it already judges the current plan, so a rerun gate counts nothing.
 function armStage(sid, step, ctx) {
@@ -208,5 +220,5 @@ function formatLaunch(runId, step) {
 
 module.exports = {
   AUDIT_RUN_CAP, CAP_CONFIRM_VERDICTS, triggerForPlanStep, judgeStage, armStage, acceptedOnError, formatLaunch,
-  lastStageRun, isCapConfirmAcceptable,
+  lastStageRun, isCapConfirmAcceptable, auditAdmits,
 };

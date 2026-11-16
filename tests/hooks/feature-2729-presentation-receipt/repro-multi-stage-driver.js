@@ -16,7 +16,7 @@ const noReceipts = (sid) => ["clarify_intent", "outline", "detail"].every((st) =
 function outlineWithEditedIntent(tag) {
   const s = R.sessionAt("outline", { tag });
   const intent = R.linesFor(s.sid, "intent");
-  fs.writeFileSync(intent.plan, R.EDITED_INTENT);
+  R.editIntent(s.sid);
   return Object.assign(s, { intent });
 }
 

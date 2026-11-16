@@ -75,7 +75,7 @@ caseEnd();
 
 caseBegin("step4 (a)-(e) outline: wait, settle, warn, block, re-arm on edit", "bin/workflow/lib/next-step/gate-mode.js");
 test("step4 (a)-(e) outline: wait, settle, warn, block, re-arm on edit", checked(() => {
-    const s = X.sessionAt("outline");
+    const s = X.sessionAt("outline", { audit: false });
     const a = gate(s.sid);
     const runA = (D.audit(s.sid).audit_run_id) || "";
     const entA = D.runEntry(s.sid, runA) || {};
@@ -121,7 +121,7 @@ caseEnd();
 
 caseBegin("step4 (f) cap: the fourth unsettled gate arms nothing and blocks", "bin/workflow/lib/next-step/gate-mode.js");
 test("step4 (f) cap: the fourth unsettled gate arms nothing and blocks", checked(() => {
-    const s = X.sessionAt("outline");
+    const s = X.sessionAt("outline", { audit: false });
     for (let i = 1; i <= 3; i += 1) {
       const g = gate(s.sid);
       check(`(f) round ${i}: audit-wait`, g.action === "audit-wait", g.out || g.err);
@@ -152,7 +152,7 @@ caseEnd();
 
 caseBegin("step4 (h)(i) approved stage and write_code arm nothing", "bin/workflow/lib/next-step/gate-mode.js");
 test("step4 (h)(i) approved stage and write_code arm nothing", checked(() => {
-    const s = X.sessionAt("outline", { approved: true });
+    const s = X.sessionAt("outline", { approved: true, audit: false });
     const h = gate(s.sid);
     check("(h) approved outline: proceed", h.action === "proceed", h.out || h.err);
     check("(h) approved outline: no run armed", D.ledgerOf(s.sid).length === 0, D.show(D.ledgerOf(s.sid)));
@@ -172,7 +172,7 @@ caseEnd();
 
 caseBegin("step4 (j) a Stop-hook Phase A after the gate arm mints no second run", "bin/workflow/lib/next-step/gate-mode.js");
 test("step4 (j) a Stop-hook Phase A after the gate arm mints no second run", checked(() => {
-    const s = X.sessionAt("outline");
+    const s = X.sessionAt("outline", { audit: false });
     const g = gate(s.sid);
     check("(j) gate armed", g.action === "audit-wait", g.out || g.err);
     try { S.finalize(s.sid, D.audit(s.sid).audit_run_id, "CONTINUE"); } catch (e) { check("(j) finalize", false, e.message); }
@@ -211,7 +211,7 @@ caseEnd();
 
 caseBegin("step4 (o) WORKFLOW_OFF skips only the audit judgment: original action, nothing armed or counted", "bin/workflow/lib/next-step/gate-mode.js");
 test("step4 (o) WORKFLOW_OFF skips only the audit judgment: original action, nothing armed or counted", checked(() => {
-    const s = X.sessionAt("outline");
+    const s = X.sessionAt("outline", { audit: false });
     const { getSessionStateDir } = require(path.join(ROOT, "hooks/workflow-state"));
     require("node:fs").writeFileSync(path.join(getSessionStateDir(s.sid), `${s.sid}.workflow-off`), "fixture\n");
     const o = gate(s.sid);
@@ -229,7 +229,7 @@ caseBegin("step4 (p) judgeStage takes the heaviest of each sub-check's newest te
 test("step4 (p) judgeStage takes the heaviest of each sub-check's newest terminal verdict", checked(() => {
     const fs = require("node:fs");
     const SH = require(path.join(ROOT, "hooks/lib/supervisor-state-writer/shared"));
-    const s = X.sessionAt("detail");
+    const s = X.sessionAt("detail", { audit: false });
     S.settle(s.sid, "detail", "CONTINUE");
     const base = D.ledgerOf(s.sid).slice(-1)[0] || {};
     const ledgerRuns = (rows) => {

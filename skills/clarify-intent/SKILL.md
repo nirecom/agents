@@ -75,7 +75,7 @@ Rerun CI-4a whenever a CI-5 Revise changes intent.md.
 
 CI-5. Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
 `GATE_ACTION=audit-wait` / `audit-block`: follow CPA-3.
-Apply the rest of the `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On `GATE_ACTION=ask`: follow the three CPA-3 steps — the presentation turn, then `echo "<<WORKFLOW_CONFIRM_INTENT: {one-line summary}>>"` alone — as the next message when the turn end is blocked, otherwise in the next turn; after Allow, run Completion and co-emit the `make-outline-plan` Skill invocation. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol CPA-1.
+Apply the rest of the `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On `GATE_ACTION=ask`: follow the three CPA-3 steps — the plan presentation turn, then `echo "<<WORKFLOW_CONFIRM_INTENT: {one-line summary}>>"` alone — as the next message when the turn end is blocked, otherwise in the next turn; after Allow, run Completion and co-emit the `make-outline-plan` Skill invocation. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol CPA-1.
 
 CI-5a. When a Revise loop substantively changed intent.md, run per issue N in the revised intent.md `## Issues`: `bash "$AGENTS_MAIN_ROOT/bin/github-issues/issue-body-append.sh" --issue <N> [--repo <slug>] --note "<one-paragraph summary of what changed this round>"`. Skip when `## Issues` is empty (Path C).
 
@@ -96,7 +96,7 @@ Run `bash "$AGENTS_MAIN_ROOT/skills/clarify-intent/scripts/run-completion.sh" --
 CI-C0. **Tracking-issue guard** — handled by `run-completion.sh`. Branch on its single stdout token:
 
 - `PROCEED` → proceed to CI-C1 (emit `<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>`).
-- `UNAPPROVED` → stop Completion; restart from the CI-5 presentation turn.
+- `UNAPPROVED` → stop Completion; restart from the CI-5 plan presentation turn.
 - `APPROVAL_UNKNOWN` → stop Completion; tell the user the intent approval could not be confirmed, then end the turn.
 - `CREATED:<N>` (Path C) → backfill `## Issues` from `(none — pending issue creation or NON_GITHUB)` to `- #<N>: <title>`, where `<title>` is the `**Title:**` line's content (matches the created issue's actual title) (Read + Edit). Re-run **guard-loop only**: `bash "$AGENTS_MAIN_ROOT/bin/github-issues/clarify-guard-loop.sh" --session-id "<session-id>" --plans-dir "<PLANS_DIR>"` → branch on its token below.
 - `CLOSED:<N>` → `AskUserQuestion` (`metadata.source=clarify-intent.closed`) "Issue #<N> is CLOSED. How to proceed?" — "Reopen and continue" / "Remove from `## Issues` and continue" (when intent.md `## Issues` has ≥ 2 entries only) / "Abort session" → re-run run-completion.sh.

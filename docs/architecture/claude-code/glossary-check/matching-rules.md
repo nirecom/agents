@@ -54,7 +54,7 @@ Still drift:
 - A hyphen for a space or a space for a hyphen, heading lines included. A hyphen variant is matched on the separator-stripped form, so splitting a one-word term (`work-flow`) or joining a multi-word term (`glossarydrift`) counts.
 - An identifier term split into English words, written without backticks.
 
-A whitespace break counts only where the term itself has a word break: `presentation-turn` is a variant of `presentation turn`, but `set up` is ordinary English, not a variant of `setup`.
+A whitespace break counts only where the term itself has a word break: `plan-presentation-turn` is a variant of `plan presentation turn`, but `set up` is ordinary English, not a variant of `setup`.
 
 **Lowercase acronym in code comment.** In a comment line of a code file, a term spelled wholly in
 capitals (`RTK`, `WF-CODE`) and written wholly in lower case with the same separators is not drift:

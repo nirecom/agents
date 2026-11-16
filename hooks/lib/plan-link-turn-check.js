@@ -66,12 +66,15 @@ function lastTextBlockOf(entries) {
   return texts.length > 0 ? texts[texts.length - 1] : null;
 }
 
-// stagesToCheck({ markers, turnEntries, includeConfirm }) -> deduplicated plan artifact names written
-// (turn marker) or, unless includeConfirm is false, CONFIRMed this turn.
-function stagesToCheck({ markers, turnEntries, includeConfirm } = {}) {
+// stagesToCheck({ markers, turnEntries, includeConfirm, presentable }) -> deduplicated plan artifact
+// names written (turn marker) or, unless includeConfirm is false, CONFIRMed this turn. presentable
+// (artifact name -> boolean, #2961) drops a written stage whose turn is no plan presentation turn;
+// a CONFIRMed stage is the presentation itself, so it is not filtered.
+function stagesToCheck({ markers, turnEntries, includeConfirm, presentable } = {}) {
   const found = new Set();
+  const keep = typeof presentable === "function" ? presentable : () => true;
   for (const m of Array.isArray(markers) ? markers : []) {
-    if (m && PLAN_ARTIFACT_NAMES.includes(m.suffix)) found.add(m.suffix);
+    if (m && PLAN_ARTIFACT_NAMES.includes(m.suffix) && !found.has(m.suffix) && keep(m.suffix)) found.add(m.suffix);
   }
   const entries = includeConfirm === false ? [] : Array.isArray(turnEntries) ? turnEntries : [];
   for (const entry of entries) {

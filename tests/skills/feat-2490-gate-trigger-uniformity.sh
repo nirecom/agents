@@ -167,7 +167,7 @@ check "Steps: CPA-1..3 run regardless of the gate, and the gate decides CPA-2's 
   "$(yn grep -qiE 'regardless of the gate.*CPA-2|CPA-2.*regardless of the gate|gate (decides|determines|selects).*CPA-2' "$CPA")"
 check "CPA-2: OFF puts the link once inside the summary" yes \
   "$(printf '%s\n' "$S2" | grep -E '\bOFF\b' | grep -iE 'summary' | grep -qiE 'once' && echo yes || echo no)"
-check "CPA-2: ON / ERROR end the presentation turn with the link lines" yes \
+check "CPA-2: ON / ERROR end the plan presentation turn with the link lines" yes \
   "$(printf '%s\n' "$S2" | grep -E '\bON\b' | grep -E 'ERROR' | grep -qiE 'last text block|end' && echo yes || echo no)"
 check "CPA-2: no sentence after the link lines" yes "$(printf '%s\n' "$S2" | grep -qiE 'no (text|sentence|prose) after|nothing after|not follow' && echo yes || echo no)"
 check "CPA-2: URL-capable env without URL -> publish before presenting" yes \
