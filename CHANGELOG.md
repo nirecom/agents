@@ -252,3 +252,7 @@ Changes: Tests in a target repo written in JavaScript, PowerShell or Python can 
 ### FEATURE: PR #3081 (2026-11-16)
 Background: feat(#2890,#2908): exempt append-only records from the glossary drift...
 Changes: Past changelog archives now live under `docs/changelog/` (moved from `changelog/`), and archived history and changelog files are no longer reported by the glossary drift check.
+
+### FEATURE: PR #3078 (2026-11-16)
+Background: feat(#2852): allow RESET_FROM sentinels without a prompt within a per...
+Changes: Workflow step resets (`RESET_FROM`) now run without a permission prompt up to twice per session; the prompt returns after that, for resets to a later step, and after a profile change, and lists the earlier resets.
