@@ -11,11 +11,11 @@
 // files. It never reads model-authored plan prose.
 
 const {
-  VALID_STEPS,
   isSettledStatus,
   readState,
   resolveSessionId,
 } = require("../../../../hooks/workflow-state");
+const { firstUnsettledStep } = require("../../../../hooks/workflow-state/reconciled-current-step");
 const { reconcileEffectiveState } = require("../../../../hooks/workflow-state/effective-state");
 const { resolveSessionProfile } = require("../../../../hooks/workflow-state/session-profile");
 const {
@@ -24,7 +24,6 @@ const {
   RECORDED_VERDICT_PREFIX,
 } = require("../../../../hooks/workflow-state/record-step-verdict");
 const { formatReviewTestsReopenNotice } = require("../../../../hooks/workflow-state/review-tests-reopen");
-const { isTerminalStep } = require("./steps");
 
 // `--status pending` is the existing `--reset` capability under another name, so
 // it goes through the same gate rather than acquiring the advance gate set.
@@ -55,16 +54,14 @@ function resolveCurrentStep(sessionId, opts) {
       steps = state.steps || null;
     }
     if (!steps) return null;
-    for (const step of VALID_STEPS) {
-      if (isTerminalStep(step)) continue;
+    // The raw read only refuses an evidence PROMOTION; a demotion of a recorded settle (veto,
+    // unapproved or glossary-refused complete, #2529) is kept, as the snapshot walk keeps it.
+    return firstUnsettledStep((step) => {
       const derivedStatus = (steps[step] || {}).status || "pending";
-      // The raw read only refuses an evidence PROMOTION; a demotion of a recorded settle (veto,
-      // unapproved or glossary-refused complete, #2529) is kept, as the snapshot walk keeps it.
-      const status = step === excludeDerivedFor && isSettledStatus(derivedStatus)
+      return step === excludeDerivedFor && isSettledStatus(derivedStatus)
         ? (rawSteps[step] || {}).status || "pending"
         : derivedStatus;
-      if (!isSettledStatus(status)) return step;
-    }
+    });
   } catch (_) { /* fail-open */ }
   return null;
 }

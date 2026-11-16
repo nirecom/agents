@@ -95,6 +95,7 @@ Traced by running each hook on a deny-side and a permitted-side input with every
 | `block-case-markers` | allow-deny hook | あり (with limit) | git and `bin/check-case-markers.sh` child processes |
 | `block-clearance-token-write` | allow-deny hook | あり (with limit) | git, through the workflow session id resolver, for a plans-dir entry nothing else places |
 | `supervisor-off-proposal-shim` | allow-deny hook | あり (with limit) | git, through the workflow session id resolver |
+| `gate-reset-from-sentinel` | allow-deny hook | あり (with limit) | git, through the workflow session id resolver and the evidence probes that reconcile the current step; past the limit it asks instead of allowing |
 | `check-japanese-in-docs` | allow-deny hook | あり (with limit) | git (and a forge query) to tell a private repo |
 | `gate-worktree-notes-lang` | allow-deny hook | あり (with limit) | git (and a forge query) to tell a private repo |
 | `enforce-system-ops`、`block-main-audit-verdict` | allow-deny hook | なし (none) | Pattern match over the command text; no child process, no file scan |

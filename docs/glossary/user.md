@@ -32,6 +32,10 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Definition**: The workflow step that turns the approved approach into a file-level implementation plan; produced by `/make-detail-plan` after outline.
 - **Related**: [skills/make-detail-plan/SKILL.md](../../skills/make-detail-plan/SKILL.md)
 
+### implementation step
+- **Definition**: A workflow step after detail, where the approved plan is implemented, tested, and released.
+- **Related**: [workflow.md](../architecture/claude-code/workflow.md)
+
 ### intent
 
 - **Definition**: The scope, motivation, and non-goals that `/clarify-intent` settles with the user; the agreed baseline every later plan starts from.
@@ -79,11 +83,19 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
   Chosen in intent and never switched mid-session; orthogonal to the deliverable type.
 - **Related**: [architecture/claude-code/workflow.md](../architecture/claude-code/workflow.md#the-step-table-deliverable-type-x-pm-type)
 
+### pre-implementation step
+- **Definition**: A workflow step from `workflow_init` through detail, where what to build and how is decided.
+- **Related**: [workflow.md](../architecture/claude-code/workflow.md)
+
 ### presentation turn
 
 - **Definition**: The turn in which the model presents a plan (intent, outline, or detail) in a text block that ends with its plan-link line.
   The echo of the CONFIRM_* flag that the step's row holds follows that text block in the same turn when the Stop hook prompts for it, or else after the user replies; it reaches the dialog only when a link-closed presentation was recorded.
 - **Related**: [architecture/claude-code/workflow.md](../architecture/claude-code/workflow.md)
+
+### reset allowance
+- **Definition**: The number of `RESET_FROM` sentinels a session may still run without a permission prompt; it starts at 2, drops by 1 for each reset the hook allows, and returns to 2 when the user approves a reset to a pre-implementation step.
+- **Related**: [hooks.md](../architecture/claude-code/settings/hooks.md)
 
 ### RTK
 
