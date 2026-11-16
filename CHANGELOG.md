@@ -248,3 +248,7 @@ Changes: run-tests-baseline: a test you did not change that hits a root decoy on
 ### FEATURE: PR #3075 (2026-11-16)
 Background: feat(#2957): let JS, PowerShell and Python tests load the shared test...
 Changes: Tests in a target repo written in JavaScript, PowerShell or Python can load the shared agents test harness through `AGENTS_TEST_HARNESS_DIR` instead of a copied harness, and still pass the pre-commit harness check.
+
+### FEATURE: PR #3081 (2026-11-16)
+Background: feat(#2890,#2908): exempt append-only records from the glossary drift...
+Changes: Past changelog archives now live under `docs/changelog/` (moved from `changelog/`), and archived history and changelog files are no longer reported by the glossary drift check.
