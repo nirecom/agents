@@ -161,3 +161,76 @@ class TestDocRotateSort:
         assert archive_dates == sorted(archive_dates), (
             f"dated archive not ascending: {archive_dates}"
         )
+
+
+# #2890: where a CHANGELOG archive is written. Both a root CHANGELOG.md and docs/CHANGELOG.md
+# archive into docs/changelog/ (parents created), undated entries go to legacy.md in the same dir,
+# and the ## Archived links are relative to the CHANGELOG's own dir.
+ARCHIVED_LINK_RE = re.compile(r"\]\(([^)]+)\)")
+
+
+def _rotate_changelog(path: Path) -> subprocess.CompletedProcess:
+    """A CHANGELOG with 3 dated 2026 entries and 1 undated entry, rotated keeping 1."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    entries = [_make_entry("FEATURE", "Undated", None, "")] + [
+        _make_entry("FEATURE", f"C{i}", f"2026-03-0{i}", f"c{i:03d}") for i in range(1, 4)
+    ]
+    path.write_text("# Changelog\n\n" + "\n".join(entries), encoding="utf-8")
+    return subprocess.run(
+        [sys.executable, str(DOC_ROTATE_PATH), str(path), "--floor", "1"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+
+def _archived_links(path: Path) -> list[str]:
+    block = path.read_text(encoding="utf-8").split("## Archived", 1)[1].split("\n### ", 1)[0]
+    return ARCHIVED_LINK_RE.findall(block)
+
+
+class TestChangelogArchivePlace:
+    def test_root_changelog_archives_into_docs_changelog(self, tmp_path):
+        result = _rotate_changelog(tmp_path / "CHANGELOG.md")
+        assert result.returncode == 0, result.stderr
+        new_dir = tmp_path / "docs" / "changelog"
+        assert "C1" in (new_dir / "2026.md").read_text(encoding="utf-8")
+        assert "Undated" in (new_dir / "legacy.md").read_text(encoding="utf-8")
+        assert not (tmp_path / "changelog").exists(), "the retired root changelog/ was written"
+        assert sorted(_archived_links(tmp_path / "CHANGELOG.md")) == [
+            "docs/changelog/2026.md",
+            "docs/changelog/legacy.md",
+        ]
+
+    def test_docs_changelog_archives_into_its_sibling_dir(self, tmp_path):
+        path = tmp_path / "docs" / "CHANGELOG.md"
+        result = _rotate_changelog(path)
+        assert result.returncode == 0, result.stderr
+        new_dir = tmp_path / "docs" / "changelog"
+        assert (new_dir / "2026.md").is_file() and (new_dir / "legacy.md").is_file()
+        assert not (tmp_path / "docs" / "docs").exists(), "docs/CHANGELOG.md archived under docs/docs/"
+        assert sorted(_archived_links(path)) == ["changelog/2026.md", "changelog/legacy.md"]
+
+    @pytest.mark.parametrize("rel", ["CHANGELOG.md", "docs/CHANGELOG.md", "pkg/CHANGELOG.md"])
+    def test_archived_links_resolve_from_the_changelog_dir(self, tmp_path, rel):
+        path = tmp_path / rel
+        result = _rotate_changelog(path)
+        assert result.returncode == 0, result.stderr
+        links = _archived_links(path)
+        assert len(links) == 2, links
+        for link in links:
+            assert (path.parent / link).is_file(), f"{rel}: {link} does not resolve"
+
+    def test_history_archive_place_is_unchanged(self, tmp_path):
+        """Control: only the changelog rule moved; a history.md still archives to its sibling history/."""
+        path = tmp_path / "history.md"
+        path.write_text("# History\n\n" + "\n".join(
+            _make_entry("FEATURE", f"H{i}", f"2026-04-0{i}", f"h{i:03d}") for i in range(1, 4)
+        ), encoding="utf-8")
+        result = subprocess.run(
+            [sys.executable, str(DOC_ROTATE_PATH), str(path), "--floor", "1"],
+            capture_output=True, text=True, timeout=120,
+        )
+        assert result.returncode == 0, result.stderr
+        assert (tmp_path / "history" / "2026.md").is_file()
+        assert not (tmp_path / "docs").exists()

@@ -75,7 +75,7 @@ dangling_refs() {
 # repo_refs <root> — `path:line:text` for every tracked text line carrying the token prefix.
 repo_refs() {
   git -C "$1" grep -nIE "${P}-[A-Z0-9]" -- . \
-    ':!docs/history.md' ':!docs/history/' ':!CHANGELOG.md' ':!changelog/' || true
+    ':!docs/history.md' ':!docs/history/' ':!CHANGELOG.md' ':!docs/changelog/' || true
 }
 
 # expect_kinds <file> <want> — the sorted `<F*>:<kind>` list check_headings reports.
@@ -124,7 +124,7 @@ case_begin "reference-checker-rejects-dangling-fixtures" "$CORE_REL"
 REPO="$TMP_ROOT/repo"
 harness_git_init "$REPO"
 git -C "$REPO" config core.autocrlf false
-mkdir -p "$REPO/rules" "$REPO/docs/history" "$REPO/changelog"
+mkdir -p "$REPO/rules" "$REPO/docs/history" "$REPO/docs/changelog"
 printf '## %s-UO User\n\nBody.\n\n## %s-E2C Class\n\nBody.\n' "$P" "$P" >"$REPO/rules/core-principles.md"
 {
   printf 'ok %s-UO and %s-E2C, (%s-UO) %s-UO-adjacent\n' "$P" "$P" "$P" "$P"
@@ -132,7 +132,7 @@ printf '## %s-UO User\n\nBody.\n\n## %s-E2C Class\n\nBody.\n' "$P" "$P" >"$REPO/
   printf 'pair %s-UO %s-ZZQ\n' "$P" "$P"
   printf 'not tokens: %s-4 %s-N %s-<code> X%s-ZZQ %s-UOs %s-ZZQ_x\n' "$P" "$P" "$P" "$P" "$P" "$P"
 } >"$REPO/notes.md"
-for rec in docs/history.md docs/history/old.md CHANGELOG.md changelog/2026.md; do
+for rec in docs/history.md docs/history/old.md CHANGELOG.md docs/changelog/2026.md; do
   printf 'record %s-ZZQ\n' "$P" >"$REPO/$rec"
 done
 git -C "$REPO" add -A

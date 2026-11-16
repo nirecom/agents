@@ -38,12 +38,12 @@ INCLUDE_ROOTS="skills agents rules docs"
 # Exclude (explicit list, never an implicit glob gap), with the reason inline:
 #   docs/history.md, docs/history/** — append-only history; records what the
 #     command line WAS at the time, so rewriting it would falsify the record.
-#   changelog/**                    — same append-only stream record.
+#   docs/changelog/**               — same append-only stream record.
 #   .claude/worktrees/**            — other agents' linked-worktree snapshots,
 #     not files this repo owns.
-# (changelog/ and .claude/ are outside INCLUDE_ROOTS today; they are listed so
-# the exclusion survives a future widening of the roots.)
-EXCLUDE_PATHS="docs/history.md docs/history changelog .claude/worktrees"
+# (.claude/ is outside INCLUDE_ROOTS today; it is listed so the exclusion
+# survives a future widening of the roots.)
+EXCLUDE_PATHS="docs/history.md docs/history docs/changelog .claude/worktrees"
 
 is_excluded() {
   local f="$1" p
@@ -127,7 +127,7 @@ echo "=== S0: the scan scope is non-empty and honours the exclusion list ==="
 SCAN_COUNT="$(printf '%s\n' "$SCAN_LIST" | grep -c '.' || true)"
 if [ "$SCAN_COUNT" -gt 0 ]; then pass "S0: the include scope resolved $SCAN_COUNT files"
 else fail "S0: the include scope resolved no files -- the scan would be vacuous"; fi
-if printf '%s\n' "$SCAN_LIST" | grep -qE '^(docs/history|changelog/|\.claude/worktrees/)'; then
+if printf '%s\n' "$SCAN_LIST" | grep -qE '^(docs/history|docs/changelog/|\.claude/worktrees/)'; then
   fail "S0b: an excluded append-only path leaked into the scan scope"
 else
   pass "S0b: no excluded append-only path is in the scan scope"
@@ -205,8 +205,8 @@ adjacent lines with NO continuation are not joined|mark|miss|node bin/workflow/n
 MATRIX
 
 # The exclusion list is load-bearing only if the excluded class really carries
-# hits: changelog/2026.md records the legacy --mark form as historical fact.
-if [ -f changelog/2026.md ] && [ -n "$(detect_mark_hits changelog/2026.md)" ]; then
+# hits: docs/changelog/2026.md records the legacy --mark form as historical fact.
+if [ -f docs/changelog/2026.md ] && [ -n "$(detect_mark_hits docs/changelog/2026.md)" ]; then
   pass "S3e: an excluded append-only file genuinely carries a legacy literal (exclusion is not a no-op)"
 else
   fail "S3e: no excluded append-only file carries a legacy literal -- the exclusion list may be stale"

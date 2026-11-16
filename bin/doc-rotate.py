@@ -19,6 +19,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent / "doc-rotate"))
+import changelog_archive  # noqa: E402
+
 DEFAULT_FLOOR = 20
 PRINT_SIZE_LIMITS = Path(__file__).resolve().parent / "print-size-limits"
 
@@ -163,6 +166,8 @@ def rotate(
         print(f"Error: {path} not found", file=sys.stderr)
         return 1
 
+    # Runs below the threshold too: a retired changelog/ dir moves on the next append.
+    changelog_archive.migrate(path, dry_run, _parse_entries)
     content = path.read_text(encoding="utf-8")
 
     # Line-count gate: skip if under threshold-warn
@@ -202,7 +207,7 @@ def rotate(
     for e in archive_dated:
         by_year.setdefault(e["date"].year, []).append(e)
 
-    archive_dir = path.parent / path.stem.lower()
+    archive_dir = changelog_archive.archive_dir_for(path)
 
     if dry_run:
         line_count = len(content.splitlines())
@@ -225,7 +230,7 @@ def rotate(
             print(f"Would generate/update {archive_dir}/index.md")
         return 0
 
-    archive_dir.mkdir(exist_ok=True)
+    archive_dir.mkdir(parents=True, exist_ok=True)
     stem_label = path.stem.capitalize()
 
     # Archive dated entries by year
@@ -273,7 +278,7 @@ def rotate(
             legacy_path.write_text(text, encoding="utf-8")
 
     # Build ## Archived section
-    archived_dir_name = archive_dir.name
+    archived_dir_name = changelog_archive.link_prefix(path)
     archived_lines = ["## Archived"]
     for y in sorted(by_year.keys()):
         archived_lines.append(f"- [{y}]({archived_dir_name}/{y}.md) — {len(by_year[y])} entries")

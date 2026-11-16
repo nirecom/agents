@@ -3,6 +3,7 @@
 // the SSOT read gate and the retired-relay tombstone. In-process: no child is started.
 const fs = require("node:fs");
 const path = require("node:path");
+const { isAppendOnlyRecordPath } = require("../../hooks/lib/append-only-record-path");
 
 const TABLE_REL = "bin/check-session-id-ssot/path-tables.txt";
 const SECTIONS = ["[ALLOWLIST]", "[TOMBSTONE_EXEMPT]", "[TOMBSTONE_ISOLATION_FILES_OUTSIDE_TESTS]"];
@@ -100,7 +101,7 @@ function isFile(abs) {
 }
 
 const readScope = (f) => !/^(tests|docs|changelog|\.git)\//.test(f) && !f.endsWith(".md");
-const tombScope = (f) => !/^(docs\/history\/|changelog\/|tests\/_archive\/|\.git\/)/.test(f) && f !== "docs/history.md" && f !== "CHANGELOG.md";
+const tombScope = (f) => !isAppendOnlyRecordPath(f) && !/^(tests\/_archive\/|\.git\/)/.test(f);
 
 // select(files, cwd, tables) -> { read, tomb }: the files each scan judges, in argument order.
 function select(files, cwd, tables) {

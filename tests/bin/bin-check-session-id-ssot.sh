@@ -180,9 +180,9 @@ run_guard
 expect_rc "G11 (docs/** and *.md excluded)" 0
 
 make_fixture g12
-add_file "changelog/2026-09.md" "- now reads process.env.SESSION_ID"
+add_file "docs/changelog/2026-09.md" "- now reads process.env.SESSION_ID"
 run_guard
-expect_rc "G12 (changelog/** excluded)" 0
+expect_rc "G12 (docs/changelog/** excluded)" 0
 
 # ---------------------------------------------------------------------------
 # G13: the allowlist. The resolver itself is exempt by whole-file path; the
@@ -348,7 +348,7 @@ expect_rc "T5 (word boundary: look-alike names are not tombstoned)" 0
 make_fixture t6
 add_file "docs/history/2026.md" "- dropped CLAUDE_SESSION_ID relay"
 add_file "docs/history.md" "- dropped CLAUDE_ENV_FILE read"
-add_file "changelog/2026.md" "- dropped CLAUDE_SESSION_ID relay"
+add_file "docs/changelog/2026.md" "- dropped CLAUDE_SESSION_ID relay"
 add_file "CHANGELOG.md" "- dropped CLAUDE_ENV_FILE read"
 add_file "tests/_archive/a.sh" "unset CLAUDE_SESSION_ID"
 run_guard
