@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Stop hook: structurally enforce the confirm-plan protocol. Dispatch only (#2936): the judgment of a
-// presentation turn is hooks/lib/presentation-turn.js (block reasons ranked in
+// plan presentation turn is hooks/lib/presentation-turn.js (block reasons ranked in
 // hooks/lib/presentation-turn/block-reasons.js); how a turn that is not blocked ends — receipts, the
 // undecidable record (#2771), the notice and the one continue (#2729) — is
 // hooks/stop-confirm-plan-guard/settle.js; the time budget, which runs from the process start, is

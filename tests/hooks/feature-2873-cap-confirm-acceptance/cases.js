@@ -32,7 +32,7 @@ const memo = new Map();
 function capFixture(row, verdict, tag) {
   const key = `${row.stage}|${verdict}|${tag || ""}`;
   if (memo.has(key)) return memo.get(key);
-  const s = D.X.sessionAt(row.stage);
+  const s = D.X.sessionAt(row.stage, { audit: false });
   for (let i = 1; i <= 3; i += 1) {
     const a = PCA().armStage(s.sid, row.step, { cwd: D.X.TDIR }) || {};
     if (a.ok !== true || !a.audit_run_id) throw new Error(`fixture arm ${i} refused: ${show(a)}`);

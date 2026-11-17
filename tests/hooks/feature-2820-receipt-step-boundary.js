@@ -200,7 +200,8 @@ test("close-on-link-reason-gate-key", () => {
   // planLinkReason finds the link in the last text block, then closeOnLinkReason judges the prose after it.
   const r = BR.firstBlock({ sid: s.sid, markers: [{ suffix: "intent", absPath: s.plan }],
     tail: { lastTextBlock: s.urlLine + "\n\nDoes this look right?", entries: [] }, gateFor, linkFor: () => ({ url: s.url }) }, []);
-  assert.ok(gateFor.seen.length === 2 && stepKeyed(gateFor.seen), JSON.stringify(gateFor.seen));
+  // #2961: the readiness filter reads the gate once more; the subject is the step key, not the count.
+  assert.ok(gateFor.seen.length >= 2 && stepKeyed(gateFor.seen), JSON.stringify(gateFor.seen));
   assert.ok(r && r.kind === "not-last", "an unapproved intent link followed by prose still blocks: " + JSON.stringify(r));
 });
 test("presented-artifacts-of-text-gate-key", () => {

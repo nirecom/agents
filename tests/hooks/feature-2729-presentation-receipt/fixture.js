@@ -1,5 +1,5 @@
 "use strict";
-// Shared #2729 fixture: the presentation turn, the Stop hook and confirm-checkpoint run as child
+// Shared #2729 fixture: the plan presentation turn, the Stop hook and confirm-checkpoint run as child
 // processes against a per-call config root (.env) and the publish-mode preload, plus raw access
 // to the presentation receipt and the supervisor findings. Builds on the #2650 fixture.
 // Requires WORKFLOW_STATE_DIR and WORKFLOW_PLANS_DIR pinned by the calling test.
@@ -119,9 +119,17 @@ function presentTurn(s, stages, closing, opts) {
 // The intent plan text edited after its approval (the approval hash no longer matches).
 const EDITED_INTENT = "# Intent\n\n## Goal\n\nfixture goal, edited after approval\n\n## Issues\n\n- #1 fixture\n\n## Constraints\n\nnone\n";
 
+// editIntent(sid, stages) — writes EDITED_INTENT and (#2961) settles the pre-confirm audit of each of
+// `stages` (default intent and outline: a later stage's audit covers intent too) on the new content,
+// so a turn that presents the edited intent stays a plan presentation turn.
+function editIntent(sid, stages) {
+  fs.writeFileSync(X.linesFor(sid, "intent").plan, EDITED_INTENT);
+  for (const st of stages || ["intent", "outline"]) PCAS.trySettle(sid, st, "CONTINUE");
+}
+
 module.exports = Object.assign({}, X, {
   CE, PRELOAD, BASE_VARS, DEFAULT_CFG, cfg, envFor, stop, echo,
-  receiptPath, readReceiptRaw, receiptExists, writeReceiptRaw, findings, sha256, presentTurn, EDITED_INTENT,
+  receiptPath, readReceiptRaw, receiptExists, writeReceiptRaw, findings, sha256, presentTurn, EDITED_INTENT, editIntent,
 });
 
 // echoAsync(sid, stage, opts) -> Promise of echo()'s result shape, from an async spawn, so several

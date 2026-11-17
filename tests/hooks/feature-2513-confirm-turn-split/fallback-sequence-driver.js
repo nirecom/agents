@@ -1,7 +1,7 @@
 "use strict";
 // #2650 mode "fallback <stage> <ends-on-link|ends-elsewhere>" of ../feature-2513-confirm-turn-split.sh,
 // rebased on the #2729 presentation receipt: one transcript grown through a whole run.
-// Presentation turn -> the first Stop writes the receipt and blocks with the continue prompt ->
+// Plan presentation turn -> the first Stop writes the receipt and blocks with the continue prompt ->
 // the continuation message ends WITHOUT the CONFIRM echo -> the second Stop (stop_hook_active)
 // does not block -> the user replies -> the echo's verdict follows the receipt alone, never the
 // shape of the previous turn. Prints PASS|name / FAIL|name|detail lines.
@@ -26,7 +26,7 @@ const grow = (...more) => {
   fs.writeFileSync(tp, entries.map((e) => JSON.stringify(e)).join("\n") + "\n");
 };
 
-// 1. Presentation turn: the plan is written and the anchor text closes on the plan-link line.
+// 1. Plan presentation turn: the plan is written and the anchor text closes on the plan-link line.
 X.turnMarker(s.sid, STAGE, s.plan);
 grow(U("write the plan", "u-prompt"), A("a-write", W(s.plan)), TR("w1", "u-tr"), A("a-anchor", T("Here is the plan.\n\n" + s.line)));
 const first = X.runStop(s.sid, tp);

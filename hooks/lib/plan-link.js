@@ -141,18 +141,26 @@ function entryLine(entry) {
   return p ? `${stage}: \`${p}\` (no URL: ${reason})` : `${stage}: (unavailable: ${reason})`;
 }
 
-const CONFIRM_DUTY = "End this turn's last text block (the presentation turn) with each line above as-is; do not repeat it in later turns. The CONFIRM echo follows when prompted, or after the user's reply, and never carries the line.";
+const CONFIRM_DUTY = "End this turn's last text block (the plan presentation turn) with each line above as-is; do not repeat it in later turns. The CONFIRM echo follows when prompted, or after the user's reply, and never carries the line.";
 const ON_DUTY = "End this turn's last text block with each line above as-is so the user can open the plan; do not repeat it in later turns. When the stage asks for confirmation, the CONFIRM echo follows when prompted, or after the user's reply.";
 const ON_DUTY_ONE = "End this turn's last text block with the line above as-is so the user can open the plan; do not repeat it in later turns.";
 const OFF_DUTY = "Show each line above once in this step's summary so the user can open the plan; it need not close the turn, and do not repeat it in later turns.";
 const OFF_DUTY_ONE = "Show the line above once in this step's summary; it need not close the turn, and do not repeat it in later turns.";
 const PUBLISH_NOTE = "This plan is not published yet: CONFIRM will not pass until it is published and presented with its URL line.";
+const INTERIM_DUTY = "This turn is a mid-turn for these plans (review or audit not settled, or already approved): do not write their plan-link lines now; the plan presentation turn comes after `next-step --gate` answers ask / proceed.";
+const INTERIM_DUTY_ONE = "This turn is a mid-turn for this plan: do not write its plan-link line now; the plan presentation turn comes after `next-step --gate` answers ask / proceed.";
 
-// An entry without a gate, or with ERROR, carries the ON duty (fail-safe).
-const dutyOf = (e) => (e && e.gate === "OFF" ? "OFF" : "ON");
+// A not-ready or approved stage is written in a mid-turn (#2961). An entry without readiness or a
+// gate, or with ERROR, carries the ON duty (fail-safe).
+const dutyOf = (e) => {
+  if (e && (e.readiness === "not-ready" || e.readiness === "approved")) return "INTERIM";
+  return e && e.gate === "OFF" ? "OFF" : "ON";
+};
+const DUTY_ONE = { OFF: OFF_DUTY_ONE, INTERIM: INTERIM_DUTY_ONE, ON: ON_DUTY_ONE };
+const DUTY_ALL = { OFF: OFF_DUTY, INTERIM: INTERIM_DUTY, ON: ON_DUTY };
 
 // renderModelContext(entries, {when: "after-write" | "confirm"}) -> additionalContext text.
-// after-write: the duty follows each entry's gate; one shared gate prints it once at the end.
+// after-write: the duty follows each entry's gate and readiness; one shared duty prints once at the end.
 function renderModelContext(entries, opts) {
   const list = Array.isArray(entries) ? entries : [];
   const confirm = Boolean(opts && opts.when === "confirm");
@@ -165,11 +173,11 @@ function renderModelContext(entries, opts) {
     const hasUrl = e && typeof e.url === "string" && /^https?:\/\//.test(e.url);
     const reason = e && REASON_VALUES.includes(e.reason) ? e.reason : REASONS.NOT_PUBLISHED;
     lines.push(hasUrl ? line : `${line} — ${REASON_TEXT[reason]}`);
-    if (mixed) lines.push(dutyOf(e) === "OFF" ? OFF_DUTY_ONE : ON_DUTY_ONE);
+    if (mixed) lines.push(DUTY_ONE[dutyOf(e)]);
     if (!confirm && !hasUrl && reason === REASONS.NOT_PUBLISHED && dutyOf(e) === "ON") lines.push(PUBLISH_NOTE);
   }
   if (confirm) lines.push(CONFIRM_DUTY);
-  else if (!mixed) lines.push(duties.has("OFF") ? OFF_DUTY : ON_DUTY);
+  else if (!mixed) lines.push(DUTY_ALL[duties.size === 1 ? [...duties][0] : "ON"]);
   lines.push(`When asked later where a plan is, run ${PLAN_LINK_COMMAND} and write its output as-is; never send the plan with SendUserFile.`);
   return lines.join("\n");
 }
@@ -179,6 +187,8 @@ module.exports = {
   REASON_TEXT,
   UNPUBLISHABLE_REASONS,
   PLAN_LINK_COMMAND,
+  INTERIM_DUTY,
+  INTERIM_DUTY_ONE,
   SESSION_ID_RE,
   isSessionId,
   linkFromSyncResult,

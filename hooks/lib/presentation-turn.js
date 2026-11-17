@@ -6,13 +6,14 @@
 
 const path = require("path");
 const { firstBlock } = require("./presentation-turn/block-reasons");
+const { readinessForFrom, presentable } = require("./presentation-readiness");
 
 const PROBE_RESERVE_MS = 500;
 
-// probesFor(deadline, {seedGates}) -> {plansDir, gateFor, linkFor}: one gate probe per step within
-// the budget (a spent budget reads ERROR, treated as ON) and one git lookup per plan file, shared
-// by every check. gateFor takes the workflow step; seedGates ({step: gate}) are gates already known,
-// not probed again.
+// probesFor(deadline, {seedGates}) -> {plansDir, gateFor, linkFor, readinessFor}: one gate probe per
+// step within the budget (a spent budget reads ERROR, treated as ON), one git lookup per plan file
+// and one stageReadiness per sid and step (#2961), shared by every check. gateFor takes the workflow
+// step; seedGates ({step: gate}) are gates already known, not probed again.
 function probesFor(deadline, { seedGates } = {}) {
   const { getWorkflowPlansDir } = require("./workflow-plans-dir");
   const { planGateState } = require("./confirm-gate/plan-gate");
@@ -32,19 +33,21 @@ function probesFor(deadline, { seedGates } = {}) {
     if (!links.has(key)) links.set(key, require("./plan-link").linkForFile(absPath, { plansDir }));
     return links.get(key);
   };
-  return { plansDir, gateFor, linkFor };
+  return { plansDir, gateFor, linkFor, readinessFor: readinessForFrom(gateFor) };
 }
 
-// judgePresentationTurn({sid, tail, markers, plansDir, gateFor, linkFor}) -> {block, presented,
-// anchorUuid}: the plans the tail presents, the first block reason (or null) and the uuid of the
-// entry holding the last text block ("" when none).
-function judgePresentationTurn({ sid, tail, markers, plansDir, gateFor, linkFor }) {
+// judgePresentationTurn({sid, tail, markers, plansDir, gateFor, linkFor, readinessFor}) -> {block,
+// presented, anchorUuid}: the plans the tail presents, the first block reason (or null) and the uuid
+// of the entry holding the last text block ("" when none). The duty side (plan-link) and the
+// presented side read the one readinessFor, so they cannot disagree on a mid-turn.
+function judgePresentationTurn({ sid, tail, markers, plansDir, gateFor, linkFor, readinessFor }) {
   const CC = require("./confirm-continuation");
-  const ctx = { sid, tail, markers: Array.isArray(markers) ? markers : [], plansDir, gateFor, linkFor };
-  const presented = CC.presentedArtifacts({ sid, tail, plansDir, gateFor, linkFor });
+  const rf = typeof readinessFor === "function" ? readinessFor : readinessForFrom(gateFor);
+  const ctx = { sid, tail, markers: Array.isArray(markers) ? markers : [], plansDir, gateFor, linkFor, readinessFor: rf };
+  const presented = CC.presentedArtifacts({ sid, tail, plansDir, gateFor, linkFor, readinessFor: rf });
   const block = firstBlock(ctx, presented);
   const anchorUuid = tail.lastTextEntry ? tail.lastTextEntry.uuid : "";
   return { block, presented, anchorUuid };
 }
 
-module.exports = { PROBE_RESERVE_MS, probesFor, judgePresentationTurn };
+module.exports = { PROBE_RESERVE_MS, probesFor, judgePresentationTurn, presentable };

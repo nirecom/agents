@@ -1,11 +1,13 @@
 "use strict";
-// hooks/lib/presentation-turn/block-reasons.js — the presentation turn's block reasons, ranked by
-// firstBlock: layer 2, plan-link, close-on-link, unpublished, plan-size / plan-lang.
+// hooks/lib/presentation-turn/block-reasons.js — the plan presentation turn's block reasons, ranked by
+// firstBlock: layer 2, plan-link, close-on-link, unpublished, plan-size / plan-lang. plan-link and
+// close-on-link judge only a stage whose readiness is presentable (#2961, ctx.readinessFor).
 
 const fs = require("fs");
 const path = require("path");
 const SP = require("../sentinel-patterns");
 const { PLAN_ARTIFACT_NAMES, rowFor, stepForSuffix } = require("../../workflow-state/plan-step-table");
+const { presentable, readinessForFrom } = require("../presentation-readiness");
 
 // The table's next skill for a plan artifact name; detail may also branch straight to BRANCHING_COMPLETE.
 function nextSkillFor(stage) {
@@ -93,11 +95,17 @@ function filesOf(sid, markers, plansDir, stage) {
   }
 }
 
+// The stage's readiness says the turn may present it: ready or unknown (the legacy behaviour).
+function presentableStage(ctx, stage) {
+  return presentable(ctx.readinessFor(ctx.sid, stepForSuffix(stage)));
+}
+
 function planLinkReason(ctx) {
   const { sid, markers, tail, plansDir, gateFor, linkFor } = ctx;
   const tc = require("../plan-link-turn-check");
-  // Stop judges only the stages this turn wrote; a CONFIRM turn is judged at PreToolUse.
-  const stages = tc.stagesToCheck({ markers, includeConfirm: false });
+  // Stop judges only the stages this turn wrote; a CONFIRM turn is judged at PreToolUse. The same
+  // filter serves the last (ON / ERROR) and the turn (OFF) scope.
+  const stages = tc.stagesToCheck({ markers, includeConfirm: false, presentable: (stage) => presentableStage(ctx, stage) });
   for (const stage of stages) {
     // OFF needs the line once in the turn; ON and ERROR need it in the last text block. The gate is
     // keyed by the step, the stages here by the plan artifact name.
@@ -135,6 +143,7 @@ function closeOnLinkReason(ctx) {
       const gate = gateFor(step);
       if (gate === "OFF") continue;
       if (checkPlanApproval(sid, step, { gate }).verdict !== "unapproved") continue;
+      if (!presentableStage(ctx, stage)) continue;
       return { kind: "not-last", reason: CC.presentAgainReason(stage, "not-last") };
     }
   }
@@ -152,8 +161,11 @@ function convLang(reason) {
   try { return require("../conv-lang").withConvLang(reason); } catch (_) { return reason; /* the bare reason still blocks */ }
 }
 
-// firstBlock(ctx, presented) -> {kind, reason} | null, in the order the reasons are ranked.
-function firstBlock(ctx, presented) {
+// firstBlock(ctx, presented) -> {kind, reason} | null, in the order the reasons are ranked. A ctx
+// without readinessFor gets the one built from its gateFor, as presentedArtifacts* do.
+function firstBlock(given, presented) {
+  const ctx = typeof given.readinessFor === "function" ? given
+    : Object.assign({}, given, { readinessFor: readinessForFrom(given.gateFor) });
   const { sid, tail } = ctx;
   const content = tail.lastAssistantEntry && tail.lastAssistantEntry.message && tail.lastAssistantEntry.message.content;
   const l2 = Array.isArray(content) ? layer2Reason(sid, content, tail.entries) : null;

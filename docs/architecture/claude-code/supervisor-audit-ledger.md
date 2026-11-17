@@ -60,6 +60,8 @@ order; the approval hash is untouched. `hooks/lib/pre-confirm-audit.js` owns the
   the stage just before it would return `ask` or `proceed`, whether the stage's
   CONFIRM is on or off. An already approved stage is not audited again. A detail
   scope change still returns `present-and-stop` first.
+  The gate reaches the ledger through `stageReadiness` (`hooks/lib/presentation-readiness.js`),
+  which only reads it; the Stop and CONFIRM hooks read the same judgment, and only the gate arms (#2961).
 - **Gate outcome.** `REASON` carries `pre-confirm-audit:<state>`; the extra output
   lines are `GATE_AUDIT_RUN_ID` and `GATE_AUDIT_VERDICT`.
 

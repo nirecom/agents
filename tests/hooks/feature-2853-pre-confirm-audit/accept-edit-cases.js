@@ -14,7 +14,7 @@ const judge = (sid) => {
 
 // acceptedBlock(tag, check) -> {sid, runB}: an outline session whose BLOCK run (below the cap) is accepted.
 function acceptedBlock(tag, check) {
-  const s = X.sessionAt("outline");
+  const s = X.sessionAt("outline", { audit: false });
   const runB = S.settle(s.sid, "outline", "BLOCK");
   const acc = D.accept(s.sid, runB) || {};
   check(`${tag} fixture: acceptance of the BLOCK run recorded`, acc.ok === true, D.show(acc));

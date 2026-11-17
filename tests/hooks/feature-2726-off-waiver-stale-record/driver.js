@@ -149,17 +149,19 @@ function modeIntent() {
   check("intent off + stale record: next-step --gate asks", g.GATE_ACTION === "ask", g._d);
   const e = R.echo(cur, "intent", { cfg });
   check("intent off + stale record: confirm-checkpoint goes to the judge (not skipped)", e.rc === 0 && !e.skipped, show({ rc: e.rc, json: e.json }));
-  // Positive path: the judge is reachable, not a dead end. The intent presentation turn makes the
+  // Positive path: the judge is reachable, not a dead end. The intent's plan presentation turn makes the
   // Stop hook write the receipt; the echo then reaches the dialog and spends the receipt.
   const pos = session("clarify_intent", "pending", "stale");
+  // #2961: the turn is a plan presentation turn only once the intent's pre-confirm audit is settled.
+  PCAS.trySettle(pos, "intent", "CONTINUE");
   const lines = R.linesFor(pos, "intent");
   const tp = R.presentTurn({ sid: pos }, ["intent"], "Here is the intent.\n\n" + lines.urlLine);
   const st = R.stop(pos, tp, { cfg });
-  check("intent off + stale record: the presentation turn makes Stop continue and write the receipt",
-    st.continued && R.receiptExists(pos, "intent"), show({ rc: st.rc, out: st.out, receipt: R.readReceiptRaw(pos, "intent") }));
+  check("intent off + stale record: the plan presentation turn makes Stop continue and write the receipt",
+    st.continued && R.receiptExists(pos, "clarify_intent"), show({ rc: st.rc, out: st.out, receipt: R.readReceiptRaw(pos, "clarify_intent") }));
   const ep = R.echo(pos, "intent", { cfg, transcriptPath: tp });
   check("intent off + stale record: after the presentation the echo reaches the dialog", ep.dialog, show({ rc: ep.rc, json: ep.json }));
-  check("intent off + stale record: the passing echo spends the intent receipt", !R.receiptExists(pos, "intent"), show(R.readReceiptRaw(pos, "intent")));
+  check("intent off + stale record: the passing echo spends the intent receipt", !R.receiptExists(pos, "clarify_intent"), show(R.readReceiptRaw(pos, "clarify_intent")));
 }
 
 const MODES = { "off-stale": modeOffStale, "on-none": modeOnNone, intent: modeIntent };

@@ -7,6 +7,7 @@
 const fs = require("fs");
 const { planRelintReason } = require("../lib/presentation-turn/block-reasons");
 const { PROBE_RESERVE_MS, probesFor } = require("../lib/presentation-turn");
+const { readinessForFrom, presentable } = require("../lib/presentation-readiness");
 const { PLAN_ARTIFACT_NAMES, stepForSuffix } = require("../workflow-state/plan-step-table");
 
 // recordReceipts(sid, presented, anchorUuid, carryMark) -> {written, failed}: one receipt per presented
@@ -59,7 +60,11 @@ function recordUndecidable({ sid, input, tail, markers, deadline, active, probes
   const CC = require("../lib/confirm-continuation");
   const maybe = UD.mayHavePresented({ sid, markers, input });
   if (deadline - Date.now() < PROBE_RESERVE_MS) return { unrecorded: maybe, written: [] };
-  const probes = given || probesFor(deadline);
+  const base = given || probesFor(deadline);
+  // Caller probes without readinessFor get the shared fallback, so the presented side and the
+  // unwritten filter below read one memo (#2961).
+  const probes = typeof base.readinessFor === "function" ? base
+    : Object.assign({}, base, { readinessFor: readinessForFrom(base.gateFor) });
   const anchored = UD.anchoredTailOf(tail);
   const inFinal = CC.presentedArtifactsOfText(Object.assign({ sid, lastText: input.last_assistant_message, stages: PLAN_ARTIFACT_NAMES }, probes));
   const fromTail = anchored ? CC.presentedArtifacts(Object.assign({ sid, tail: anchored }, probes)) : [];
@@ -75,7 +80,9 @@ function recordUndecidable({ sid, input, tail, markers, deadline, active, probes
   const written = [...both.written, ...finalOnly.written];
   const writtenStages = written.map((p) => p.stage);
   // mayHavePresented answers plan artifact names; the gate is keyed by the step.
-  const unwritten = maybe.filter((stage) => !writtenStages.includes(stage) && probes.gateFor(stepForSuffix(stage)) !== "OFF");
+  // A stage that is not presentable was written in a mid-turn: no receipt was owed.
+  const unwritten = maybe.filter((stage) => !writtenStages.includes(stage) && probes.gateFor(stepForSuffix(stage)) !== "OFF" &&
+    presentable(probes.readinessFor(sid, stepForSuffix(stage))));
   return { unrecorded: [...new Set([...relintBlocked, ...unpublished, ...failed, ...unwritten])], written };
 }
 

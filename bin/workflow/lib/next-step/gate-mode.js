@@ -16,7 +16,7 @@ const {
 } = require("../../../../hooks/lib/confirm-gate/probe");
 const { NEXT_STEP_GATE_PROBE_TIMEOUT_MS } = require("./gate-line");
 const { rowFor } = require("../../../../hooks/workflow-state/plan-step-table");
-const { checkPlanApproval } = require("../../../../hooks/workflow-state/plan-approval-check");
+const { stageReadiness } = require("../../../../hooks/lib/presentation-readiness");
 
 const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..", "..");
 
@@ -85,46 +85,42 @@ function decideAuditGate(row, action, deps) {
     return auditError(action, deps, acc.runId, e && e.message);
   }
   const base = { runId: j.runId || null, verdict: j.verdict || null, reason: "pre-confirm-audit:" + j.state };
-  switch (j.state) {
-    case "settled-continue":
-    case "accepted":
-      return Object.assign(base, { action, hint: HINTS[action] });
-    case "settled-warn": {
+  const PCA = require("../../../../hooks/lib/pre-confirm-audit");
+  const cls = PCA.auditAdmits(j, action, deps.isCapConfirmAcceptable);
+  if (cls === "admit") {
+    if (j.state === "settled-warn") {
       const { summary, summaryNote } = summaryFields(j.summary);
       const note = " The plan stage audit " + j.runId + " returned WARN: show its findings to the user " +
         "with the approval request." + summaryNote;
       return Object.assign(base, { action, note, summary, hint: HINTS[action] + note });
     }
-    case "settled-block": {
+    if (j.state === "cap-reached") {
       const { summary, summaryNote } = summaryFields(j.summary);
-      return Object.assign(base, { action: "audit-block", summary, hint: HINTS["audit-block"] + " Audit " + j.runId +
-        " returned BLOCK." + summaryNote + " " + describeAcceptanceCommand(j.runId) });
+      const note = " This plan stage reached its audit run cap: the last run " + j.runId + " returned " + j.verdict +
+        " and no later plan was audited. Show its findings and where the plan addresses each with the approval " +
+        "request. The CONFIRM Allow approves the plan and also records the acceptance of this audit verdict " +
+        "(a Deny records neither)." + summaryNote;
+      return Object.assign(base, { action, note, summary, hint: HINTS[action] + note });
     }
-    case "cap-reached": {
-      const isCap = deps.isCapConfirmAcceptable || require("../../../../hooks/lib/pre-confirm-audit").isCapConfirmAcceptable;
-      // Only an ask has a CONFIRM dialog whose Allow can record the acceptance (#2873 D6).
-      if (action === "ask" && isCap(j)) {
-        const { summary, summaryNote } = summaryFields(j.summary);
-        const note = " This plan stage reached its audit run cap: the last run " + j.runId + " returned " + j.verdict +
-          " and no later plan was audited. Show its findings and where the plan addresses each with the approval " +
-          "request. The CONFIRM Allow approves the plan and also records the acceptance of this audit verdict " +
-          "(a Deny records neither)." + summaryNote;
-        return Object.assign(base, { action, note, summary, hint: HINTS[action] + note });
-      }
-      return Object.assign(base, { action: "audit-block", hint: HINTS["audit-block"] + " This stage reached its " +
-        "audit run cap, so no new audit is armed; the last run is " + (j.runId || "none") + ". " + describeAcceptanceCommand(j.runId) });
-    }
-    case "unsettled": {
-      let arm;
-      try { arm = deps.armStage(sid, step, deps.ctx) || {}; } catch (e) { return auditError(action, deps, j.runId, e && e.message); }
-      const runId = arm.audit_run_id || arm.run_id;
-      if (arm.ok !== true || !runId) return auditError(action, deps, j.runId, "arm refused: " + (arm.reason || "unknown"));
-      const { formatLaunch } = require("../../../../hooks/lib/pre-confirm-audit");
-      return Object.assign(base, { action: "audit-wait", runId, hint: HINTS["audit-wait"] + " " + formatLaunch(runId, step) });
-    }
-    default:
-      return auditError(action, deps, j.runId, "unknown audit state " + j.state);
+    return Object.assign(base, { action, hint: HINTS[action] });
   }
+  if (cls === "arm") {
+    let arm;
+    try { arm = deps.armStage(sid, step, deps.ctx) || {}; } catch (e) { return auditError(action, deps, j.runId, e && e.message); }
+    const runId = arm.audit_run_id || arm.run_id;
+    if (arm.ok !== true || !runId) return auditError(action, deps, j.runId, "arm refused: " + (arm.reason || "unknown"));
+    return Object.assign(base, { action: "audit-wait", runId, hint: HINTS["audit-wait"] + " " + PCA.formatLaunch(runId, step) });
+  }
+  if (j.state === "settled-block") {
+    const { summary, summaryNote } = summaryFields(j.summary);
+    return Object.assign(base, { action: "audit-block", summary, hint: HINTS["audit-block"] + " Audit " + j.runId +
+      " returned BLOCK." + summaryNote + " " + describeAcceptanceCommand(j.runId) });
+  }
+  if (j.state === "cap-reached") {
+    return Object.assign(base, { action: "audit-block", hint: HINTS["audit-block"] + " This stage reached its " +
+      "audit run cap, so no new audit is armed; the last run is " + (j.runId || "none") + ". " + describeAcceptanceCommand(j.runId) });
+  }
+  return auditError(action, deps, j.runId, "unknown audit state " + j.state);
 }
 
 function clean(s) {
@@ -186,15 +182,17 @@ function runGate(rawSession, opts) {
   // one approval judgment it shares with evaluateCompletionApproval; the value line stays the raw flag.
   const row = rowFor(step);
   if (value === "OFF" && row && !row.offWaivable) reasons.push("no-off-waiver");
-  const appr = row ? checkPlanApproval(sid, step) : null;
-  const off = row ? appr.verdict === "approved" : value === "OFF";
+  // #2961: the approval and the audit are read once by stageReadiness, the judgment the hooks share;
+  // no gate is passed, so checkPlanApproval probes it as before. Its hooks-only state is not read here.
+  const r = row ? stageReadiness(sid, step) : null;
+  const off = row ? r.action === "proceed" : value === "OFF";
   let action = off ? "proceed" : "ask";
   let hint = HINTS[action];
   // #2853: a plan stage the user has not approved yet waits for its pre-confirm audit.
-  const audited = Boolean(row) && !(appr.verdict === "approved" && !appr.waived);
+  const audited = Boolean(row) && r.audit !== null;
   const withAudit = (act, h, rs) => {
     if (!audited) return print(act, gateLine, h, rs.join(", "));
-    const a = auditBranch(sid, step, row, act);
+    const a = auditBranch(sid, step, row, act, r.audit);
     const outHint = a.action === act ? h + (a.note || "") : a.hint;
     return print(a.action, gateLine, outHint, rs.concat(a.reason).join(", "), a);
   };
@@ -221,17 +219,19 @@ function runGate(rawSession, opts) {
   return withAudit(action, hint, reasons);
 }
 
-// The audit branch as runGate calls it: the WORKFLOW_OFF marker skips only this judgment (ARP-EXBG
-// user exit), and any failure outside decideAuditGate's own handling still closes the gate.
-function auditBranch(sid, step, row, action) {
+// The audit branch as runGate calls it, over stageReadiness's audit record: the WORKFLOW_OFF marker
+// skips only this judgment (ARP-EXBG user exit), and any failure outside decideAuditGate's own
+// handling still closes the gate. The stubs replay the recorded judgment; arming stays real.
+function auditBranch(sid, step, row, action, audit) {
+  if (audit.skipped) return { action, hint: HINTS[action], reason: "pre-confirm-audit:skipped-workflow-off", runId: null, verdict: null };
+  if (audit.threw !== undefined) return auditError(action, null, null, audit.threw);
   try {
-    const { isWorkflowOff } = require("../../../../hooks/lib/session-markers");
-    if (isWorkflowOff(sid)) return { action, hint: HINTS[action], reason: "pre-confirm-audit:skipped-workflow-off", runId: null, verdict: null };
     const PCA = require("../../../../hooks/lib/pre-confirm-audit");
     return decideAuditGate(Object.assign({ step }, row), action, {
       sid, step, ctx: { cwd: process.cwd() },
-      judgeStage: PCA.judgeStage, armStage: PCA.armStage, acceptedOnError: PCA.acceptedOnError,
-      isCapConfirmAcceptable: PCA.isCapConfirmAcceptable,
+      judgeStage: () => { if (audit.judgeError !== undefined) throw new Error(audit.judgeError); return audit.j; },
+      acceptedOnError: () => { if ("accError" in audit) throw new Error(audit.accError); return audit.acc; },
+      armStage: PCA.armStage, isCapConfirmAcceptable: PCA.isCapConfirmAcceptable,
     });
   } catch (e) {
     return auditError(action, null, null, e && e.message);

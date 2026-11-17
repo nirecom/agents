@@ -107,7 +107,7 @@ else
     SCP_C_ACT="$(scp_log_field "$SCP_LOG_C" 0 active)"
     SCP_C_REASON="$(scp_log_field "$SCP_LOG_C" 0 reason)"
     if [[ "$SCP_C_ACT" == "false" && "$SCP_C_ST" == "2" && "$SCP_C_REASON" == *"[confirm-plan] continue:"* ]]; then
-        pass "SCP-C1a. the presentation turn's first Stop blocks with the continuation reason"
+        pass "SCP-C1a. the plan presentation turn's first Stop blocks with the continuation reason"
     else
         fail "SCP-C1a. continuation block — active=$SCP_C_ACT status=$SCP_C_ST reason=$SCP_C_REASON claude rc=$SCP_C_RC output: $SCP_C_OUT"
     fi

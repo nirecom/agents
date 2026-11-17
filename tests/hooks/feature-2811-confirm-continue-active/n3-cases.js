@@ -2,7 +2,6 @@
 // N3 cases (write failures) and the notice ordering: a receipt or mark write that fails is reported
 // and never turns into a continue; a notice rides along with a continue. check(name, ok, detail) is
 // the entry file's reporter.
-const fs = require("fs");
 const R = require("../feature-2729-presentation-receipt/fixture");
 const H = require("./helpers");
 
@@ -45,7 +44,7 @@ function staleReceiptFailure(check) {
 function noticeWithContinue(check) {
   const mk = (tag) => {
     const s = R.sessionAt("outline", { tag });
-    fs.writeFileSync(R.linesFor(s.sid, "intent").plan, R.EDITED_INTENT);
+    R.editIntent(s.sid);
     return s;
   };
   const failIntent = { pre: [H.MARK_FAULT], env: H.faultEnv("receipt", "intent") };

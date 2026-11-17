@@ -113,7 +113,7 @@ if (mode === "R3") {
 } else if (mode === "R6") {
   const s = R.sessionAt("outline", { tag: 6 });
   const intent = R.linesFor(s.sid, "intent");
-  fs.writeFileSync(intent.plan, R.EDITED_INTENT);
+  R.editIntent(s.sid);
   const st = R.stop(s.sid, R.presentTurn(s, ["intent", "outline"], "Both plans.\n\n" + intent.urlLine + "\n" + s.urlLine));
   check("R6 two stages presented: both receipts are written", R.receiptExists(s.sid, "clarify_intent") &&R.receiptExists(s.sid, "outline"), show({ rc: st.rc, out: st.out }));
   check("R6 the continuation names only the current step's stage", st.continued && st.reason.includes("WORKFLOW_CONFIRM_OUTLINE") && !/\bintent\b|CONFIRM_INTENT/i.test(st.reason.replace(/[^\n]*plan-link[^\n]*/g, "")),st.reason || st.out);
@@ -260,7 +260,7 @@ if (mode === "R3") {
     // Two stages in one turn, no seed: intent unpublished (the block cause), outline published.
     // The publishable outline must not get a receipt written ahead of the block decision.
     const s = R.sessionAt("outline", { tag: 109 });
-    fs.writeFileSync(R.linesFor(s.sid, "intent").plan, R.EDITED_INTENT);
+    R.editIntent(s.sid);
     const close = "Both plans are ready.\n\n" + pathLine(s, "intent", "not-published") + "\n" + s.urlLine;
     const st = R.stop(s.sid, R.presentTurn(s, ["intent", "outline"], close), { env: { CC_UNPUBLISHED_STAGE: "intent" } });
     check("R10 two stages, intent unpublished: Stop blocks (unpublished)", st.blocked && presentAgain(st.reason, "intent"), show({ rc: st.rc, out: st.out }));

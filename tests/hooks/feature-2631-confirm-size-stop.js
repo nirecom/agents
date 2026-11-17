@@ -49,7 +49,7 @@ test("C6 layer2", () => noNewFailures(F.failureCount, () => F.run("C6 layer2", (
 })));
 caseEnd();
 
-// present(s) -> the #2650 presentation turn: the plan is written, the turn closes on its plan-link line.
+// present(s) -> the #2650 plan presentation turn: the plan is written, the turn closes on its plan-link line.
 function present(s) {
   const entries = [X.U("write the plan", "u-prompt"), X.A("a-write", X.W(s.plan)), X.TR("w1", "u-tr")];
   X.turnMarker(s.sid, s.stage, s.plan);
@@ -72,11 +72,11 @@ test("C6 continuation", () => noNewFailures(F.failureCount, () => F.run("C6 cont
   markStarted(ok.sid);
   F.startedSanity(ok.sid);
   const rc = C.stop(ok.sid, present(ok));
-  F.check("control: a presentation turn at HARD is continued", rc.rc === 2 && rc.reason.startsWith(CONT), rc.raw);
+  F.check("control: a plan presentation turn at HARD is continued", rc.rc === 2 && rc.reason.startsWith(CONT), rc.raw);
   const s = X.sessionAt("detail", { body: C.planOf(h + 1) });
   markStarted(s.sid);
   const r = C.stop(s.sid, present(s));
-  F.check("a presentation turn at HARD+1 blocks with the plan-size reason (no continuation)",
+  F.check("a plan presentation turn at HARD+1 blocks with the plan-size reason (no continuation)",
     C.blockedWith(r, C.SIZE_PREFIX, [path.basename(s.plan), h + 1]), r.raw);
 })));
 caseEnd();

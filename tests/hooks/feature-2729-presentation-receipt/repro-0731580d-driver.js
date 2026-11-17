@@ -1,5 +1,5 @@
 "use strict";
-// #2729 Gap 4 repro (session 0731580d, R1): a presentation turn closed on the outline link line,
+// #2729 Gap 4 repro (session 0731580d, R1): a plan presentation turn closed on the outline link line,
 // a continuation, an Agent call, a denied echo, a task-notification user entry, then a turn that
 // closes on the outline AND intent link lines (intent edited after its approval). The last echo
 // must reach the dialog: the presentation receipt, not the previous turn's shape, decides.
@@ -11,7 +11,7 @@ const { A, T, TR, STOPFB, BASH, check, show } = R;
 const s = R.sessionAt("outline", { tag: 731 });
 const intent = R.linesFor(s.sid, "intent");
 
-// 1-2: the presentation turn closes on the outline link line (published); Stop continues.
+// 1-2: the plan presentation turn closes on the outline link line (published); Stop continues.
 const tp1 = R.presentTurn(s, ["outline"], "Here is the outline.\n\n" + s.urlLine);
 const st1 = R.stop(s.sid, tp1);
 check("R1 first presentation: Stop continues for the CONFIRM echo", st1.continued, show({ rc: st1.rc, out: st1.out }));
@@ -32,7 +32,7 @@ check("R1 the first echo consumes the outline receipt", !R.receiptExists(s.sid, 
 const notif = { type: "user", origin: { kind: "task-notification" }, message: { role: "user", content: "<task-notification>agent done</task-notification>" }, uuid: "u-notif" };
 
 // 6: the next turn rewrites intent (after its approval) and outline; it closes on both link lines.
-fs.writeFileSync(intent.plan, R.EDITED_INTENT);
+R.editIntent(s.sid);
 R.turnMarker(s.sid, "intent", intent.plan);
 R.turnMarker(s.sid, "outline", s.plan);
 const turn3 = turn2.concat([
