@@ -51,7 +51,7 @@ function expectDeny(label, r, s) {
   ok(label + " — reason never invites a same-turn retry", !/retry|try again/i.test(reason), reason);
 }
 
-// The presentation turn: Write, the anchor text with the link, the Stop feedback, then extras and the echo.
+// The plan presentation turn: Write, the anchor text with the link, the Stop feedback, then extras and the echo.
 const sameTurn = (s, extra) => [U("write the plan", "u-prompt"), A("a-write", W(s.plan)), TR("w1", "u-tr"),
   A("a-anchor", T("Here is the plan.\n\n" + s.line)), STOPFB(FB, "u-fb"), ...(extra || []), A("a-echo", ECHO(STAGE, "e1"))];
 const fresh = () => X.sessionAt(STAGE);

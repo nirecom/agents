@@ -4,7 +4,7 @@
 // #2650: renderModelContext's instruction line closes only the current turn with the plan-link
 // line and forbids repeating it in later turns; the after-write variant names the CONFIRM echo
 // only for a stage that asks for confirmation. The header, entry and lookup lines stay unchanged.
-// TL3 gap: whether a real model follows the instruction (ends only the presentation turn with the
+// TL3 gap: whether a real model follows the instruction (ends only the plan presentation turn with the
 // plan-link line, never repeats it later or in the CONFIRM echo) is not verified here.
 const { isolate } = require("../lib/harness");
 
@@ -89,7 +89,7 @@ for (const m of MODES.filter((x) => x.header === HEADER_AFTER_WRITE)) {
   });
 }
 
-test("case 2 [confirm]: presentation turn only, not repeated later, CONFIRM echo never carries the line", () => {
+test("case 2 [confirm]: plan presentation turn only, not repeated later, CONFIRM echo never carries the line", () => {
   const instr = instructionOf(linesOf(ENTRIES, { when: "confirm" }));
   assertTurnScoped(instr, "confirm");
   assert.match(instr, NEVER_CARRIES_RE, `confirm: the CONFIRM echo never carries the line (got: ${instr})`);

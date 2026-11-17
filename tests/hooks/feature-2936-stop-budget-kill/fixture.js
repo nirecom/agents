@@ -1,6 +1,6 @@
 "use strict";
 // Private fixture of tests/hooks/feature-2936-stop-budget-kill.js: a ~40 MB transcript prefix built
-// once, presentation turns appended to copies of it, a Stop guard run that times itself and counts
+// once, plan presentation turns appended to copies of it, a Stop guard run that times itself and counts
 // its transcript reads (read-count-preload.js), and the timestamped turn pair of a killed Stop.
 // The caller pins the isolation (isolate(), CLAUDE_TRANSCRIPT_BASE_DIR, cwd) before requiring it.
 const fs = require("fs");

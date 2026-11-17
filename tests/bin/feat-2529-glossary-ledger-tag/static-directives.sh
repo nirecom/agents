@@ -71,7 +71,7 @@ cpa="$(lt_block "$R/skills/_shared/confirm-plan.md" '^\*\*CPA-3')"
 lt_has "CPA-3: runs check-glossary-drift before the gate check" "check-glossary-drift" "$cpa"
 lt_has "CPA-3: with --record" "--record" "$cpa"
 lt_line_with "CPA-3: one line puts the list in all three presentations" "$cpa" \
-  "presentation turn" "present-and-stop" "proceed" "glossary-drift-check.md"
+  "plan presentation turn" "present-and-stop" "proceed" "glossary-drift-check.md"
 
 ud="$R/skills/update-docs/SKILL.md"
 lt_has "UD-5: references the same list" "glossary-drift-check.md" "$(lt_block "$ud" '^UD-5\.')"

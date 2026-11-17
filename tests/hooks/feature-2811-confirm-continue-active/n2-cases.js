@@ -92,7 +92,7 @@ function notContinued(check) {
 // otherStage: (k) the current stage failed to record, another stage did: notice only, no continue.
 function otherStage(check) {
   const s = R.sessionAt("outline", { tag: 8281 });
-  require("fs").writeFileSync(R.linesFor(s.sid, "intent").plan, R.EDITED_INTENT);
+  R.editIntent(s.sid);
   const run = H.rereadRun(s, ["intent", "outline"], "both", "flushed");
   const st = H.stopOf(s, run.tp, run.opts(false, { pre: [H.MARK_FAULT], env: H.faultEnv("receipt", "outline") }));
   check("k: current stage (outline) fails to record, intent recorded: no continue, exit 0", st.rc === 0 && H.noDecision(st), { rc: st.rc, out: st.out });

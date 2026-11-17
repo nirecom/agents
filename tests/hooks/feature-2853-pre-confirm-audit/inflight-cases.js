@@ -14,7 +14,7 @@ const judge = (sid) => {
 
 // armedOutline(tag, check) -> {sid, runId}: an outline session whose TR2 run is armed and left unsettled.
 function armedOutline(tag, check) {
-  const s = X.sessionAt("outline");
+  const s = X.sessionAt("outline", { audit: false });
   const g = D.gate(s.sid);
   const runId = D.audit(s.sid).audit_run_id || "";
   check(`${tag} fixture: the first gate arms a run`, g.action === "audit-wait" && runId !== "" && g.lines.GATE_AUDIT_RUN_ID === runId,

@@ -44,7 +44,7 @@ function run(check) {
   for (const [verdict, action] of [["WARN", "ask"], ["BLOCK", "audit-block"]]) {
     for (const [label, summary] of SUMMARIES) {
       const name = `(q) ${verdict} ${label}`;
-      const s = X.sessionAt("outline");
+      const s = X.sessionAt("outline", { audit: false });
       let runId = null;
       try { runId = settleWith(s.sid, verdict, summary); } catch (e) { check(`${name}: fixture settle`, false, e.message); continue; }
       const g = gate(s.sid);
@@ -68,7 +68,7 @@ function run(check) {
     // Empty summary: no GATE_AUDIT_SUMMARY line, so a skill never shows an empty "Summary" block.
     for (const [label, summary] of [["null", null], ["empty", ""], ["whitespace only", " \n\t "]]) {
       const name = `(q) ${verdict} ${label} summary`;
-      const s = X.sessionAt("outline");
+      const s = X.sessionAt("outline", { audit: false });
       try { settleWith(s.sid, verdict, summary); } catch (e) { check(`${name}: fixture settle`, false, e.message); continue; }
       const g = gate(s.sid);
       check(`${name}: action ${action}`, g.action === action, g.out || g.err);

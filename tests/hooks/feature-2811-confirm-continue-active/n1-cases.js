@@ -56,6 +56,8 @@ function limitAndCarry(check) {
   check("c: four active Stops over one plan continue exactly once", continues === 1, "continues=" + continues);
 
   fs.appendFileSync(s.plan, "\nedited after the first continue\n");
+  // #2961: settle the audit again on the changed plan, so the re-presentation stays presentable.
+  require("../../lib/pre-confirm-audit-settle").trySettle(s.sid, "outline", "CONTINUE");
   const st = run(true);
   check("d: a changed plan (new contentSha) drops the mark: continues again", H.isContinue(st, "outline") && H.marked(s.sid, "outline"), { rc: st.rc, out: st.out });
 

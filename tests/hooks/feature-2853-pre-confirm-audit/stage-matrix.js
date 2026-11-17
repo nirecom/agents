@@ -23,7 +23,7 @@ function flagsFor(row) {
 function run(check) {
   for (const row of ROWS) {
     const tag = `[${row.step} ${row.flag}=${row.value}]`;
-    const s = D.X.sessionAt(row.stage);
+    const s = D.X.sessionAt(row.stage, { audit: false });
     const over = flagsFor(row);
     const w = D.gate(s.sid, over);
     check(`${tag} unaudited: audit-wait`, w.action === "audit-wait", w.out || w.err);

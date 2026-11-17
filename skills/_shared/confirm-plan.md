@@ -8,18 +8,18 @@ The gate check of CPA-3 alone is also used by `write-tests` (CONFIRM_TESTS), `wr
 ## Steps
 
 CPA-1 through CPA-3 run regardless of the gate; the gate (`CONFIRM_<STEP>`, default `on`) decides how CPA-2 closes and which branch CPA-3 takes.
-CPA-2's plan-link line belongs to the turn that wrote the plan; a later turn writes it only to present the plan again.
+CPA-2's plan-link line belongs to the plan presentation turn — the turn in which the stage is ready to confirm (review and audit settled), not every turn that writes the plan; a later turn writes it only to present the plan again.
 
 **CPA-1 — Write the artifact.** Use the Write tool. No diff is shown in chat; CPA-2's breadcrumb is the only plan surface.
 
 **CPA-2 — Plan link.** After the Write returns, `show-plan-link.js` syncs the artifact through plan-sync and hands you its plan-link line as additional context: the blob URL plus the local path when the plan was published, otherwise the local path plus a reason.
-Each plan step's gate sets the duty. OFF: write the line as-is once inside the summary of the turn that wrote the plan.
-ON / ERROR: end the last text block of the presentation turn with the plan-link lines, with no text after them; CPA-3 decides whether the turn then closes.
+Each plan step's gate sets the duty. OFF: write the line as-is once inside the summary of the plan presentation turn.
+ON / ERROR: end the last text block of the plan presentation turn with the plan-link lines, with no text after them; CPA-3 decides whether the turn then closes.
 When this environment can publish the plan but the line has no URL, publish it first (rewrite it through the Write or Edit tool so plan-sync runs), then present it.
 To look the line up later, run `node "$AGENTS_MAIN_ROOT/bin/plan-link" --step <step>` and write its output as-is.
 Never hand the plan over with `SendUserFile`.
 Never copy the blob URL into a PR body, `history.md`, `CHANGELOG.md`, or a public issue — the plan repo is private; leak guard: `docs/architecture/claude-code/plan-sync.md`.
-Enforcement (Stop): `stop-confirm-plan-guard.js` reads each stage's gate and blocks a turn that wrote a plan without its line, a link line of an unapproved stage followed by other text, or an unpublished plan where a URL can be made.
+Enforcement (Stop): `stop-confirm-plan-guard.js` reads each stage's gate and readiness and blocks a plan presentation turn that wrote a plan without its line, a link line of an unapproved stage followed by other text, or an unpublished plan where a URL can be made.
 `stop-confirm-plan-guard.js` records a presentation receipt only for a turn it lets through that closes on the link lines; a blocked turn records none and keeps earlier receipts.
 When the transcript tail is undecidable, it records each stage the final message closes on, never blocks, and tells the user which stages got no receipt.
 It sends the `[confirm-plan] continue:` prompt at most once per receipt, also when the presentation followed a Stop block.
@@ -29,7 +29,7 @@ When the Stop hook left no receipt, `confirm-checkpoint.js` records it from the 
 
 **CPA-3 — Gate check (`next-step --gate`).**
 Run the standalone command `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --gate` and follow the `GATE_ACTION` line of its stdout.
-Plan steps: before `--gate`, run `check-glossary-drift --step <clarify_intent|outline|detail> --record` per `skills/_shared/glossary-drift-check.md`, and put that file's approval list in the presentation turn, the `present-and-stop` presentation, and the `proceed` summary.
+Plan steps: before `--gate`, run `check-glossary-drift --step <clarify_intent|outline|detail> --record` per `skills/_shared/glossary-drift-check.md`, and put that file's approval list in the plan presentation turn, the `present-and-stop` presentation, and the `proceed` summary.
 Never interpret ON/OFF yourself, and never read `GATE_ACTION` as a different value.
 `--gate` judges the RECORDED current step, which can lag the step the calling skill is on: when the step named at the start of `REASON` (`<step>: CONFIRM_X=...`) is not your own step, treat the result as `none`.
 - `proceed`: take the caller's OFF branch (plan steps: print a one-paragraph prose summary, then proceed; the summary carries the CPA-2 plan-link line once). When `GATE_HINT` carries a warning sentence (e.g. a failed scope-change check), relay it to the user in that summary.

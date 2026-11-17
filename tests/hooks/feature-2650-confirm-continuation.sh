@@ -51,7 +51,7 @@ case_begin "continuation-predicates-and-wording" "hooks/lib/confirm-continuation
 ccn_run unit-driver.js
 case_end
 
-# A1-A5 / B1-B4: the presentation turn closes on the plan-link line — no text after it in the
+# A1-A5 / B1-B4: the plan presentation turn closes on the plan-link line — no text after it in the
 # anchor, no assistant text between the anchor and the echo.
 case_begin "a1-a5-strict-turn-end-predicates" "hooks/lib/confirm-continuation.js"
 ccn_run unit-driver.js strict

@@ -1,6 +1,6 @@
 "use strict";
 // #2650 Stop-hook continuation branch (N1-N21, T6), driven by ./continuation.sh, rebased on the
-// #2729 presentation receipt. A presentation turn that wrote a plan, ends on its plan-link line
+// #2729 presentation receipt. A plan presentation turn that wrote a plan, ends on its plan-link line
 // and has no approval while the gate is not OFF gets decision:block "[confirm-plan] continue:"
 // and a receipt anchored to the last text entry. Every "no continuation" case runs its continuing
 // twin first. Receipt lifecycle and multi-stage cases: tests/hooks/feature-2729-presentation-receipt.sh.

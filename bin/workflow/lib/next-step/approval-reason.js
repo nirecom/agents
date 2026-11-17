@@ -37,7 +37,7 @@ function approvalWaitFor(sid, currentStep, state) {
     const hint =
       "The " + currentStep + " plan has no approval on record. Resume the named skill at its confirm " +
       "step only; do not re-run its planner or rewrite the plan. Re-present the current plan and end " +
-      "that presentation turn with the plan-link line (bin/plan-link); when the turn-end prompt asks for it, " +
+      "that plan presentation turn with the plan-link line (bin/plan-link); when the turn-end prompt asks for it, " +
       "emit echo \"<<" + sentinel + ": {summary}>>\" alone. Otherwise emit it after the user replies with " +
       "approval. If the user denies or asks " +
       "for changes, revise the plan and wait for the fix to be approved.";
