@@ -256,3 +256,7 @@ Changes: Past changelog archives now live under `docs/changelog/` (moved from `c
 ### FEATURE: PR #3078 (2026-11-16)
 Background: feat(#2852): allow RESET_FROM sentinels without a prompt within a per...
 Changes: Workflow step resets (`RESET_FROM`) now run without a permission prompt up to twice per session; the prompt returns after that, for resets to a later step, and after a profile change, and lists the earlier resets.
+
+### FEATURE: PR #3100 (2026-11-17)
+Background: feat(#3067): restore user-approval path for run-tests-baseline outcomes not observable at base
+Changes: When the baseline rerun cannot observe a failing test at the merge base (unrunnable, timeout-ambiguous, or a rerun that did not finish), you can now approve those tests with one sentinel instead of the run staying blocked. The approval covers only the listed tests and the commit it was given on, and the PR body lists them as unverified.
