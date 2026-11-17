@@ -14,6 +14,8 @@
 #   5 no baseline (base predates the root names or the case details: merge main and re-run;
 #     stderr gives the steps for a branch with no own commits),
 #   6 unattributed hits: `BASELINE_HITS: count=N` then `HIT: <line>` lines, 8 re-run requested.
+#   On 1 / 8, stderr may offer the user approval sentinel when every blocker is approvable (#3067);
+#   the classification is bound to HEAD (`--head`), so a checkout whose HEAD cannot be read exits 2.
 # Child test output goes to log files only, never to stdout.
 
 set -uo pipefail
@@ -86,6 +88,7 @@ done < <(printf '%s\n' "$FAILING_OUT" | sed '1d')
 
 ROOT="$(git -C "$WT_ARG" rev-parse --show-toplevel 2>/dev/null)" || die 2 "not a git checkout: $WT_ARG"
 ROOT="$(rtb_wt_native "$ROOT")"
+HEAD_SHA="$(git -C "$ROOT" rev-parse --verify --quiet HEAD 2>/dev/null)" || die 2 "HEAD of $ROOT cannot be read"
 
 export RTB_LEDGER_REPO="$ROOT"
 run_all_dur_repo_id "$ROOT" >/dev/null
@@ -237,7 +240,7 @@ for i in "${!TESTS[@]}"; do
     *) N_UND=$((N_UND + 1)) ;;
   esac
 done
-rec_args=(record --session "$SID" --seq "$SEQ" --classification "$(rtb_wt_native "$CLS_FILE")")
+rec_args=(record --session "$SID" --seq "$SEQ" --classification "$(rtb_wt_native "$CLS_FILE")" --head "$HEAD_SHA")
 [ -z "$B2" ] || rec_args+=(--base "$B2")
 [ "$HAS_NOTE" = 0 ] || rec_args+=(--note "$NOTE")
 node "$(rtb_wt_native "$RTB_EVIDENCE")" "${rec_args[@]}" >&2

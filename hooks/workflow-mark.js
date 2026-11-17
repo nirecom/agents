@@ -35,6 +35,7 @@ const userVerifiedHandler = require("./workflow-mark/user-verified-handler");
 const markStepHandler = require("./workflow-mark/mark-step-handler");
 const reviewTestsHandler = require("./workflow-mark/review-tests-handler");
 const runTestsAcceptHandler = require("./workflow-mark/run-tests-accept-handler");
+const runTestsBaselineUnobservedHandler = require("./workflow-mark/run-tests-baseline-unobserved-handler");
 const glossaryAcceptHandler = require("./workflow-mark/glossary-accept-handler");
 const workflowAbortHandler = require("./workflow-mark/workflow-abort-handler");
 const enforceOverrideHandlers = require("./workflow-mark/enforce-override-handlers");
@@ -60,7 +61,7 @@ const HANDLERS = [
   confirmApprovalHandler, userVerifiedHandler,
   // review-tests-handler must run BEFORE mark-step-handler so the dedicated
   // REVIEW_TESTS_COMPLETE / REVIEW_TESTS_WARNINGS sentinels reach their owner.
-  reviewTestsHandler, runTestsAcceptHandler, glossaryAcceptHandler, workflowAbortHandler, markStepHandler,
+  reviewTestsHandler, runTestsAcceptHandler, runTestsBaselineUnobservedHandler, glossaryAcceptHandler, workflowAbortHandler, markStepHandler,
   enforceOverrideHandlers, supervisorBlockOverrideHandler, resetHandler,
 ];
 
@@ -189,7 +190,9 @@ const state = readState(sessionId);
 const repoCwd = resolveRepoCwd({ command, input, stateCwd: state && state.cwd });
 
 // signalFatal is the pre-#2824 name of pushUnapplied, kept for the handlers not yet renamed.
-const ctx = { sessionId, pushMessage, pushUnapplied, signalFatal: pushUnapplied, repoCwd };
+// toolCwd: the Bash call's own cwd, which the commit gate also judges (#3067 binds HEAD to it).
+const toolCwd = input.tool_input && typeof input.tool_input.cwd === "string" ? input.tool_input.cwd : undefined;
+const ctx = { sessionId, pushMessage, pushUnapplied, signalFatal: pushUnapplied, repoCwd, toolCwd };
 
 const isUnapplied = (m) => m.severity === "unapplied";
 for (const cmd of sentinelParts) {

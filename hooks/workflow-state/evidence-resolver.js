@@ -213,7 +213,8 @@ function describeEvidence(step) {
     return [
       "NO completion evidence exists: hasCompletionEvidence(\"run_tests\") is always false — "
         + "completion is recorded only by a run (workflow-run-tests.js on the RUN_CONTRACT, "
-        + "bin/run-tests-baseline, RUN_TESTS_UNRUNNABLE_ACCEPTED); a MARK_STEP / --advance / "
+        + "bin/run-tests-baseline, RUN_TESTS_UNRUNNABLE_ACCEPTED, RUN_TESTS_BASELINE_UNOBSERVED_ACCEPTED); "
+        + "a MARK_STEP / --advance / "
         + "--mark complete answers already on a recorded complete and is refused otherwise",
       "SKIP only: when every staged file is human-facing docs (isDocsOnlyStaged), "
         + "echo \"<<WORKFLOW_RUN_TESTS_NOT_NEEDED: {reason}>>\" records it as skipped; "

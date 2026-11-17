@@ -54,6 +54,29 @@ function aggregate(entries) {
   return { verdict: "record", count: by.auto.length, basis: by.auto.length > 0 ? BASIS.AUTO : BASIS.PROOF };
 }
 
+// #3067: pending details whose base result was never observed; exact match only, so a suffixed
+// (via-rename) or near-miss detail stays unapprovable (fail-closed). Disjoint from AUTO_UNDETERMINED.
+const APPROVABLE_UNDETERMINED = new Set(["unrunnable-at-base", "ambiguous-exit-124", "ambiguous-exit-142"]);
+
+// isApprovable({ class, detail }) — a row the user may approve without a base observation.
+function isApprovable(e) {
+  const d = dispositionOf(e);
+  if (d === "rerun") return true;
+  return d === "pending" && e.class === "undetermined" && APPROVABLE_UNDETERMINED.has(e.detail);
+}
+
+// approvable(entries) — { ok, rows, blocking }: ok only when every row is proof, auto or approvable
+// and at least one row is approvable; blocking lists the unapprovable pending rows.
+function approvable(entries) {
+  const rows = [];
+  const blocking = [];
+  for (const e of entries) {
+    if (isApprovable(e)) rows.push(e);
+    else if (dispositionOf(e) === "pending") blocking.push(e);
+  }
+  return { ok: rows.length > 0 && blocking.length === 0, rows, blocking };
+}
+
 // sanitizeNote(text) — one line of at most NOTE_MAX chars, or null when nothing is left.
 function sanitizeNote(text) {
   if (typeof text !== "string") return null;
@@ -61,4 +84,7 @@ function sanitizeNote(text) {
   return one === "" ? null : one;
 }
 
-module.exports = { BASIS, NOTE_MAX, dispositionOf, aggregate, sanitizeNote };
+module.exports = {
+  BASIS, NOTE_MAX, AUTO_UNDETERMINED, APPROVABLE_UNDETERMINED,
+  dispositionOf, aggregate, isApprovable, approvable, sanitizeNote,
+};

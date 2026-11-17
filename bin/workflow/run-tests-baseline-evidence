@@ -5,9 +5,11 @@
 //     exit 0: `SEQ=<n>`, one failing test path per line, then `EXIT\t<code>\t<path>` per recorded
 //     exit (#2688); exit 3: not classifiable;
 //     exit 7: `HIT_COUNT=<n>` then the recorded hit lines (unattributed hits, #2669).
-//   record --session <sid> --seq <n> --classification <file> [--base <sha>] [--note <text>]
+//   record --session <sid> --seq <n> --classification <file> [--base <sha>] [--note <text>] [--head <sha>]
 //     exit 0 completed (prints the completion_basis), 1 classification unmet, 2 usage,
 //     3 state moved or not pending, 8 classification unfinished (re-run requested).
+//     --head (40/64 lowercase hex) binds the classification to the commit it was made on; on
+//     exit 1 / 8 stderr may offer the #3067 user approval when every blocker is approvable.
 //   rerun-list --session <sid>
 //     exit 0: one path per line (failing tests + worktree-change HIT ids, #2803); 3 state;
 //     exit 9: a HIT names no test, so only a full rerun is safe. Read-only.
@@ -23,7 +25,7 @@ const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 const SESSION_ONLY = new Set(["rerun-list", "input-version"]);
 const USAGE =
   "usage: run-tests-baseline-evidence failing --session <sid>\n" +
-  "       run-tests-baseline-evidence record --session <sid> --seq <n> --classification <file> [--base <sha>] [--note <text>]\n" +
+  "       run-tests-baseline-evidence record --session <sid> --seq <n> --classification <file> [--base <sha>] [--note <text>] [--head <sha>]\n" +
   "       run-tests-baseline-evidence rerun-list --session <sid>\n" +
   "       run-tests-baseline-evidence input-version --session <sid>";
 
@@ -41,7 +43,7 @@ function parseArgs(sub, argv) {
   const opts = {};
   const known = SESSION_ONLY.has(sub)
     ? { "--session": "session" }
-    : { "--session": "session", "--seq": "seq", "--classification": "classification", "--base": "base", "--note": "note" };
+    : { "--session": "session", "--seq": "seq", "--classification": "classification", "--base": "base", "--note": "note", "--head": "head" };
   for (let i = 0; i < argv.length; i++) {
     const key = known[argv[i]];
     if (key === undefined || i + 1 >= argv.length) usage(`bad argument: ${argv[i]}`);
@@ -62,8 +64,11 @@ function main() {
   if (sub === "record") {
     if (!opts.seq || !/^[1-9][0-9]*$/.test(opts.seq)) usage("--seq <positive integer> is required");
     if (!opts.classification) usage("--classification <file> is required");
+    if (opts.head !== undefined && !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(opts.head)) {
+      usage("--head must be a 40- or 64-digit lowercase hex commit id");
+    }
     const file = normalizeCwd(opts.classification) || opts.classification;
-    const r = lib.recordFromFile(opts.session, Number(opts.seq), file, opts.base, opts.note);
+    const r = lib.recordFromFile(opts.session, Number(opts.seq), file, opts.base, opts.note, opts.head);
     finish(r.code, r.code === lib.EXIT.OK ? `RECORDED completion_basis=${r.basis}\n` : null, r.reason);
   }
   if (sub === "rerun-list") {
