@@ -51,7 +51,8 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Related**: [architecture/jev/two-stage-broker.md](../architecture/jev/two-stage-broker.md)
 
 ### plan presentation turn
-- **Definition**: 承認のために plan(intent、outline、detail)を提示するターン。plan の review loop と pre-confirm audit が終わり、`next-step --gate` が ask または proceed を返した後で、text block が plan-link 行で終わる(gate OFF の proceed では要約の中に一度書く)。plan を書く・直すだけのターンや、review・audit を待つターンは含まない。gate が ask のとき、その step の行が持つ CONFIRM_* flag の echo は、Stop hook が促したときは同じターンのその text block の後に、そうでなければユーザーの返答後に続く。link で閉じた提示が記録されたときだけ dialog に届く。
+- **Definition**: The turn in which the model presents a plan (intent, outline, or detail) for approval, after its review loop and pre-confirm audit have finished and `next-step --gate` returned ask or proceed; its text block ends with the plan-link line (on a gate-OFF proceed, the summary carries it once).
+  A turn that only writes or revises a plan, or waits for a review or audit, is not one; on ask, the echo of the step's CONFIRM_* flag follows that text block in the same turn when the Stop hook prompts for it, or else after the user replies, and reaches the dialog only when a link-closed presentation was recorded.
 - **Related**: [architecture/claude-code/workflow.md](../architecture/claude-code/workflow.md)
 
 ### plan step
