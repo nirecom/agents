@@ -208,6 +208,14 @@ When the runtime cannot be installed on this host, `echo "<<WORKFLOW_RUN_TESTS_U
 - **Disclosure**: the Final Report and the PR body carry one `Unverified tests:` line from `hooks/lib/run-tests-completion-note.js`: the count, the distinct causes and the note for `baseline-auto-accepted`; for `baseline-unobserved-accepted` the count, the distinct details and the user's reason, plus a second line for the classification's auto-accepted rows when there are any; and a fixed legacy line for `baseline-user-accepted`. The next run of the hook clears `baseline_note` and `failing_test_exits`. A record that saw new failure lines keeps them per path in `baseline_new_lines_seen`, which no later run clears; once `run_tests` completes, by any basis, each path adds a `- Baseline new failure lines:` line (200 characters at most).
 - **Output**: each `BASELINE:` line ends ` new=<N> head=<json>` when the comparer found new lines (N counts them all; the head holds the first three, also written to the `new failure lines:` file named on stderr); `BASELINE_SUMMARY:` adds `file_verdict=` and `new_on_branch=`. The classification file has five columns: path, class, detail, new-line count, head JSON.
 
+### What the unobserved-base approval means (#3067)
+
+- **Scope**: the baseline reruns only the tests that failed on the branch, at the merge base (the commit where the branch left main, or the sha the user recorded; never the latest main). Whether the branch broke a test is judged by that rerun.
+- **Why it exists**: for some failing tests the rerun gives no usable result, so "already failing at the base" can be neither proven nor refuted. The cases are a test that cannot run at the base (`unrunnable-at-base`), an exit 124 / 142 that cannot be told from the test's own failure, and a rerun that did not finish (`rerun` rows). The user may let these through.
+- **What approving does**: it records that those failures were not checked against the base and accepts them as is. It does not claim they are harmless, and it never covers a test that passed at the base or whose failure lines differ from the base's (`new-case-failure-on-branch`): that is a regression to fix.
+- **Reach**: the approval is bound to the HEAD it was given on and to the listed tests; it stays in the PR body as an `Unverified tests:` line.
+- Like the other `*_ACCEPTED` sentinels, the dialog shows only the user's reason; this section is the reference for what agreeing means.
+
 ### Partial re-run (#2803)
 
 - A run-all HIT that is not this session's change is not a HIT: a change to the shared `$common/config`, or to the head of a tree other than the run's own checkout (a main worktree fast-forward), is printed as a `worktree-change (foreign, not a hit)` line and not counted. `config.worktree` of the own checkout still counts. The same library serves the base run, so both sides treat it alike.
