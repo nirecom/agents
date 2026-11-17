@@ -1,28 +1,29 @@
 "use strict";
 // run-tests-baseline-evidence.js — the state side of bin/run-tests-baseline (#2431).
 // `failing` hands the hook-recorded failing list to the CLI; `record` completes
-// run_tests when the classification passes the #2688 allow-list (disposition.js).
+// run_tests when the classification passes the #2688 allow-list (disposition.js), and
+// otherwise offers the user approval when every blocker is approvable (approval.js, #3067).
 // Each check and its write share ONE appendEvents builder so no other run or reset
 // can slip in between (observed evidence, Class O; not markStep).
 
 const fs = require("fs");
 const path = require("path");
 const disposition = require(path.join(__dirname, "run-tests-baseline-evidence", "disposition"));
+const { approvalHint } = require(path.join(__dirname, "run-tests-baseline-evidence", "approval"));
+const {
+  NO_LIST, HITS_WHY, hitCount, failingPrecondition, dispatchPrecondition, unrunnablePrecondition, coverStatus,
+} = require(path.join(__dirname, "run-tests-baseline-evidence", "preconditions"));
 
 const STATE_IO = path.join(__dirname, "..", "..", "..", "hooks", "workflow-state", "state-io");
 const ORIGIN = "run-tests-baseline-evidence";
-// "unrunnable" is excluded: a missing runtime is fixed by installing it, never by a baseline.
-const FAILING_OUTCOMES = ["fail", "timeout", "runner-error"];
 const VALID_CLASSES = ["preexisting", "preexisting-inherited", "broken", "undetermined",
   "flaky-timeout-on-branch", "passes-alone-on-branch", "file-verdict-preexisting", "new-case-failure-on-branch"];
-const NO_LIST = "failing_tests is not a non-empty list";
 
 // Exit codes: 0 completed / listed, 1 classification does not authorize
 // completion, 2 usage error, 3 state is not in the expected shape (or moved),
 // 7 `failing` found a run with unattributed hits (#2669; the CLI reports it as its own exit 6),
 // 8 the classification did not finish (budget, worktree, setup); re-run /run-tests.
 const EXIT = { OK: 0, UNMET: 1, USAGE: 2, STATE: 3, HITS: 7, RERUN: 8 };
-const HITS_WHY = "the run left unattributed hits (HITS>0); no failure in it can be classified";
 
 function stateIo() {
   return require(STATE_IO);
@@ -30,24 +31,6 @@ function stateIo() {
 
 function runTestsEntry(steps) {
   return steps && typeof steps === "object" ? steps.run_tests || null : null;
-}
-
-// The recorded hit_count when it is a positive integer, else 0.
-function hitCount(entry) {
-  const n = entry ? entry.hit_count : undefined;
-  return Number.isInteger(n) && n > 0 ? n : 0;
-}
-
-// Why the entry cannot be baseline-classified, or null when it can.
-function failingPrecondition(entry) {
-  if (!entry) return "run_tests has no state entry";
-  if (entry.status !== "pending") return `run_tests status is ${entry.status}, not pending`;
-  if (hitCount(entry) > 0) return HITS_WHY;
-  if (!FAILING_OUTCOMES.includes(entry.run_outcome)) return "run_outcome is not a failing value";
-  const ft = entry.failing_tests;
-  if (!Array.isArray(ft) || ft.length === 0) return NO_LIST;
-  if (!ft.every((p) => typeof p === "string" && p !== "")) return "failing_tests holds a non-path entry";
-  return null;
 }
 
 function isListless(entry) {
@@ -59,22 +42,6 @@ function isListless(entry) {
 function listlessHint(entry, pre) {
   if (pre !== NO_LIST || !isListless(entry)) return "";
   return "\nRe-run /run-tests so the failing tests are recorded, then run bin/run-tests-baseline again.";
-}
-
-function settlement() {
-  return require(path.join(__dirname, "..", "..", "..", "hooks", "workflow-state", "dispatch-settlement"));
-}
-
-// #2544: the failing list may come from a dispatch outcome. It stands only while no
-// newer test-runner dispatch is unsettled and the outcome it came from is unchanged.
-function dispatchPrecondition(sessionId, entry) {
-  const s = settlement();
-  const { unsettled, reason } = s.listUnsettled({ sessionId });
-  if (reason) return reason;
-  if (unsettled.some((u) => u.worker === "test-runner")) return "a newer test-runner dispatch has not settled";
-  const source = entry.outcome_source;
-  if (source === null || source === undefined) return null;
-  return s.outcomeSourceStatus({ sessionId, source }) === "match" ? null : "outcome source changed or missing";
 }
 
 function failing(sessionId) {
@@ -149,20 +116,11 @@ function newLinesSeen(entry, entries) {
   return [annotation("baseline_new_lines_seen", Object.assign({}, base, add))];
 }
 
-// Set cover by path identity: duplicates never stand in for an omitted path.
-function coverStatus(failingTests, entries) {
-  const want = new Set(failingTests);
-  const have = new Set(entries.map((e) => e.path));
-  const missing = [...want].filter((p) => !have.has(p));
-  const foreign = [...have].filter((p) => !want.has(p));
-  return { covered: missing.length === 0 && foreign.length === 0, missing, foreign };
-}
-
 function annotation(key, value) {
   return { kind: "step_annotation", step: "run_tests", key, value, provenance: "observed", origin: ORIGIN };
 }
 
-function record(sessionId, seq, entries, base, note) {
+function record(sessionId, seq, entries, base, note, head) {
   const verdict = { code: EXIT.STATE, reason: "state was not examined" };
   stateIo().appendEvents(sessionId, (_events, current) => {
     const entry = runTestsEntry(current && current.steps);
@@ -175,7 +133,7 @@ function record(sessionId, seq, entries, base, note) {
       verdict.reason = why;
       return [];
     }
-    const classification = [annotation("baseline_classification", { base: base || null, entries })]
+    const classification = [annotation("baseline_classification", Object.assign({ base: base || null }, head ? { head } : {}, { entries }))]
       .concat(newLinesSeen(entry, entries));
     const cover = coverStatus(entry.failing_tests, entries);
     if (!cover.covered) {
@@ -186,21 +144,20 @@ function record(sessionId, seq, entries, base, note) {
     const agg = disposition.aggregate(entries);
     if (agg.verdict === "pending") {
       verdict.code = EXIT.UNMET;
-      verdict.reason = `${agg.count} failing test(s) are neither pre-existing at the merge base nor an auto-accepted cause`;
+      verdict.reason = `${agg.count} failing test(s) are neither pre-existing at the merge base nor an auto-accepted cause` +
+        (approvalHint(entry, entries) || "");
       return classification;
     }
     if (agg.verdict === "rerun") {
       verdict.code = EXIT.RERUN;
-      verdict.reason = `${agg.count} failing test(s) could not be classified this time; re-run /run-tests, then bin/run-tests-baseline`;
+      verdict.reason = `${agg.count} failing test(s) could not be classified this time; re-run /run-tests, then bin/run-tests-baseline` +
+        (approvalHint(entry, entries) || "");
       return classification;
     }
-    // A selected test that never ran (UNRUNNABLE) proves nothing about itself, so the step stays
-    // pending however the failures classify; only the hook's own exact 0 clears this.
-    if (entry.unrunnable_count !== 0) {
+    const unrunnable = unrunnablePrecondition(entry);
+    if (unrunnable !== null) {
       verdict.code = EXIT.UNMET;
-      verdict.reason = Number.isInteger(entry.unrunnable_count)
-        ? `${entry.unrunnable_count} selected test(s) were UNRUNNABLE; install the missing runtime and re-run /run-tests`
-        : "the failing run recorded no unrunnable_count; re-run /run-tests";
+      verdict.reason = unrunnable;
       return classification;
     }
     verdict.code = EXIT.OK;
@@ -219,7 +176,7 @@ function record(sessionId, seq, entries, base, note) {
   return verdict;
 }
 
-function recordFromFile(sessionId, seq, file, base, note) {
+function recordFromFile(sessionId, seq, file, base, note, head) {
   let entries;
   try {
     entries = parseClassification(fs.readFileSync(file, "utf8"));
@@ -227,7 +184,7 @@ function recordFromFile(sessionId, seq, file, base, note) {
     return { code: EXIT.USAGE, reason: `cannot read classification: ${e.message}` };
   }
   try {
-    return record(sessionId, seq, entries, base, note);
+    return record(sessionId, seq, entries, base, note, head);
   } catch (e) {
     return { code: EXIT.STATE, reason: `state write failed: ${e.message}` };
   }

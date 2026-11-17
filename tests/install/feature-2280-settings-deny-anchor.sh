@@ -231,28 +231,34 @@ for (const k of ["allow", "ask"]) {
 }
 process.stdout.write(String(arr(p.ask).includes(rule)) + "\0");
 '
-t_unrunnable_accept_ask() {
-    local ua=() tmp_np
-    dp_node_path "$TMPROOT"; tmp_np="$DP_NODE_PATH"
+# #3067: the same three rows for every user-approval sentinel that completes run_tests without a
+# green run; <label> names the sentinel, <sub> is the fixture subdir that keeps the splits apart.
+t_unrunnable_accept_ask() { # <label> <sub> <rule> <cmd>
+    local label="$1" sub="$2" rule="$3" cmd="$4" ua=() tmp_np
+    mkdir -p "$TMPROOT/$sub"
+    dp_node_path "$TMPROOT"; tmp_np="$DP_NODE_PATH/$sub"
     dp_node_path "$SETTINGS"
-    mapfile -d '' -t ua < <(node -e "$UA_SPLIT_JS" "$DP_NODE_PATH" "$tmp_np" "$UA_RULE")
+    mapfile -d '' -t ua < <(node -e "$UA_SPLIT_JS" "$DP_NODE_PATH" "$tmp_np" "$rule")
     if (( ${#ua[@]} != 1 )) || [[ "${ua[0]}" == ERROR:* ]]; then
-        echo "FAIL: harness -- unrunnable-accept split returned [${ua[*]}]"; exit 1
+        echo "FAIL: harness -- $label split returned [${ua[*]}]"; exit 1
     fi
     ROWS=$((ROWS + 1))
-    assert_eq "UA1: permissions.ask carries the exact UNRUNNABLE_ACCEPTED sentinel rule" "true" "${ua[0]}"
-    dp_req ua-allow "$tmp_np/ua-allow-as-deny.json" "$UA_CMD"
-    dp_req ua-ask "$tmp_np/ua-ask-as-deny.json" "$UA_CMD"
-    dp_run "unrunnable-accept"
+    assert_eq "UA1 ($label): permissions.ask carries the exact sentinel rule" "true" "${ua[0]}"
+    dp_req "$sub-allow" "$tmp_np/ua-allow-as-deny.json" "$cmd"
+    dp_req "$sub-ask" "$tmp_np/ua-ask-as-deny.json" "$cmd"
+    dp_run "$label"
     ROWS=$((ROWS + 1))
-    dp_get ua-allow
-    assert_eq "UA2: no permissions.allow Bash rule auto-approves the accept sentinel (hits: ${DENY_HITS:-none})" \
+    dp_get "$sub-allow"
+    assert_eq "UA2 ($label): no permissions.allow Bash rule auto-approves the sentinel (hits: ${DENY_HITS:-none})" \
         "NO-MATCH" "$DENY_VERDICT"
     ROWS=$((ROWS + 1))
-    dp_get ua-ask
-    assert_eq "UA3: the permissions.ask rule matches the accept sentinel command" "MATCHED" "$DENY_VERDICT"
+    dp_get "$sub-ask"
+    assert_eq "UA3 ($label): the permissions.ask rule matches the sentinel command" "MATCHED" "$DENY_VERDICT"
 }
-t_unrunnable_accept_ask
+t_unrunnable_accept_ask "unrunnable-accept" "ua" "$UA_RULE" "$UA_CMD"
+UO_RULE='Bash(echo "<<WORKFLOW_RUN_TESTS_BASELINE_UNOBSERVED_ACCEPTED: *>>")'
+UO_CMD='echo "<<WORKFLOW_RUN_TESTS_BASELINE_UNOBSERVED_ACCEPTED: base worktree could not start the test>>"'
+t_unrunnable_accept_ask "baseline-unobserved-accept" "uo" "$UO_RULE" "$UO_CMD"
 
 # #2688: the baseline accept sentinel (#2517) is retired -- run_tests completes from the recorded
 # baseline evidence alone, so settings.json carries no ask row for it and no allow rule either.
@@ -357,8 +363,8 @@ t_abort_accepted_ask
 # covers every retained push floor row, incl. the positional `*-f` / `*-f *`; PEND under ANCHORED=0) +
 # bug-reproduction-evidence 1 + row_is_well_formed selftest 4 + retired read-only allow 5 (#2403) + unrunnable-accept ask 3 (#2501) +
 # baseline-accept retired 3 (#2688) + glossary-accept ask 4 (#2529) + 2617 over-match 49 (#2617; OV7 adds 4 positional `*-f *` MATCHED rows)
-# + abort-accepted ask 4 (#2920).
-ROWS_EXPECTED=261
+# + abort-accepted ask 4 (#2920) + baseline-unobserved-accept ask 3 (#3067).
+ROWS_EXPECTED=264
 assert_eq "T-budget: every table executed its full row count" "$ROWS_EXPECTED" "$ROWS"
 
 echo ""

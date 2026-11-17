@@ -73,6 +73,17 @@ function collectIncompleteSteps({ state, commitSnapshot, sessionId, repoDir, doc
       }
     }
 
+    // #3067: a baseline-unobserved approval holds only on the HEAD it was given at.
+    if (step === "run_tests") {
+      const { checkUnobservedApproval } = require("./run-tests-approval-checker");
+      const ra = checkUnobservedApproval(stepState, { repoDir, docsOnly });
+      if (ra.action === "block") {
+        incompleteReasons[step] = ra.reason;
+        incomplete.push(step);
+        continue;
+      }
+    }
+
     if (status === "complete") continue;
     // H1 (TOCTOU): a run_tests skip is honored only while the CURRENT staged set is docs-only.
     if (status === "skipped" && skippable.includes(step) && (step !== "run_tests" || docsOnly)) continue;
