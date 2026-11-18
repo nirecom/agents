@@ -264,3 +264,7 @@ Changes: When the baseline rerun cannot observe a failing test at the merge base
 ### FEATURE: PR #3107 (2026-11-18)
 Background: feat(#3083): count sentinel approval and meta-resume idle as wait in step-durations
 Changes: step-durations report: time spent waiting for workflow-sentinel approval and for a meta-message resume is now counted as wait, so net time no longer includes that idle.
+
+### FEATURE: PR #3110 (2026-11-18)
+Background: fix(#3094): retry win32 EPERM on the workflow-state rename; rebuild invalid command-guard cache entry (#2966)
+Changes: Fixed workflow sentinels not being applied on Windows when the state file was briefly held open by another reader; the state write now retries the rename for up to 750 ms.;Fixed a command-guard test cache entry with an empty `bin/` never being rebuilt on Windows.
