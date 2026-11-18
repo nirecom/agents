@@ -10,6 +10,7 @@ const fs = require("fs");
 const path = require("path");
 const { withStateLock } = require("./state-lock");
 const { getSessionStateDir } = require("./state-root");
+const { renameWithRetry } = require("./rename-retry");
 const { getCurrentContext, resolveWorktreeContext } = require("./core/context");
 const {
   projectState,
@@ -286,7 +287,7 @@ function writeStateLocked(sessionId, state) {
         throw e;
       }
     }
-    fs.renameSync(tmpPath, filePath);
+    renameWithRetry(tmpPath, filePath);
   } catch (e) {
     try {
       fs.unlinkSync(tmpPath);
