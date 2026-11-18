@@ -93,6 +93,8 @@ try {
 
     Invoke-InstallStep "Installing Claude Code" "$SCRIPT_CHECKOUT_ROOT\install\win\claude-code.ps1"
 
+    Invoke-InstallStep "Updating npm" "$SCRIPT_CHECKOUT_ROOT\install\win\npm.ps1"
+
     Invoke-InstallStep "Installing Codex" "$SCRIPT_CHECKOUT_ROOT\install\win\codex.ps1"
 
     # --- BEGIN session-sync gate ---

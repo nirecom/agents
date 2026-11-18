@@ -76,7 +76,7 @@ mkdir -p "$FAKE_ROOT/mock-bin"
 
 # NOP sub-scripts — must cover every sub-script install.sh calls unconditionally or conditionally.
 for _stub in dotfileslink.sh claude-code.sh session-sync-init.sh vscode-settings.sh \
-             global-gitignore.sh codex.sh gh.sh jq.sh shellcheck.sh pwsh.sh codegraph.sh rtk.sh glab.sh; do
+             global-gitignore.sh npm.sh codex.sh gh.sh jq.sh shellcheck.sh pwsh.sh codegraph.sh rtk.sh glab.sh; do
     printf '#!/usr/bin/env bash\nexit 0\n' > "$FAKE_ROOT/install/linux/$_stub"
     chmod +x "$FAKE_ROOT/install/linux/$_stub"
 done

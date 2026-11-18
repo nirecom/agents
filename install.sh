@@ -58,6 +58,10 @@ printf -- "${C_BOLD}--- Installing Claude Code ---${C_RESET}\n"
 export PATH="$HOME/.local/bin:$PATH"
 
 echo ""
+printf -- "${C_BOLD}--- Updating npm ---${C_RESET}\n"
+"$SCRIPT_CHECKOUT_ROOT/install/linux/npm.sh"
+
+echo ""
 printf -- "${C_BOLD}--- Installing Codex ---${C_RESET}\n"
 "$SCRIPT_CHECKOUT_ROOT/install/linux/codex.sh"
 
