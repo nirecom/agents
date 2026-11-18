@@ -338,7 +338,7 @@ The installer brings in everything marked **✓** automatically; the rest must a
 | `git` | Repo clone; `core.hooksPath` is set to the repo's `hooks/` directory | — (needed to clone the repo first) |
 | `bash` | All shell hooks (`pre-commit`, `commit-msg`) and `bin/` scripts | — |
 | PowerShell 5+ (Windows) | Bootstraps `install.ps1` | — (needed to run the installer) |
-| Node.js | All Claude Code hooks in `settings.json` run via `node hooks/*.js` | ✓ (installs `nvm`/`fnm`, then Node via npm) |
+| Node.js | All Claude Code hooks in `settings.json` run via `node hooks/*.js` | ✓ (installs `nvm`/`fnm`, then Node via npm; npm itself is updated to latest — skipped when package-manager-managed, not writable, or unsupported by the current Node) |
 | [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) | The framework targets Claude Code; without it, hooks/skills have no host | ✓ |
 | `jq` (≥1.6) | JSON encoding in `bin/review-plan-codex` and the doc-append pipeline | ✓ |
 | [GitHub CLI (`gh`)](https://cli.github.com/) | Issue/PR operations, private-repo detection, and Projects v2 throughout the workflow | ✓ (run `gh auth refresh -s project` for the `project` scope) |
