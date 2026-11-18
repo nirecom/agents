@@ -54,10 +54,23 @@ function textOf(content) {
   return t ? t.text : null;
 }
 
+// A resume caused by a finished background task, not by a person or a peer.
+const TASK_NOTIFICATION_RE = /^\s*<task-notification/;
+function isTaskNotification(rec, text) {
+  return (rec.origin && rec.origin.kind === "task-notification") || (text !== null && TASK_NOTIFICATION_RE.test(text));
+}
+
+// A Bash call carrying a workflow sentinel waits on the approval hook until its tool_result returns.
+function isSentinelBash(c) {
+  return c.name === "Bash" && !!c.input && typeof c.input.command === "string" && c.input.command.includes("<<WORKFLOW_");
+}
+
 async function scanTranscript(file) {
   const r = { title: "", first: null, last: null, skills: [], waits: [] };
-  const askOpen = new Map();
+  const toolWaitOpen = new Map();
   let prevTs = null;
+  // First stop_hook_summary since the last user/assistant record: the idle that a meta resume ends.
+  let stopTs = null;
   const rl = readline.createInterface({ input: fs.createReadStream(file, "utf8"), crlfDelay: Infinity });
   for await (const line of rl) {
     if (!line) continue;
@@ -70,23 +83,35 @@ async function scanTranscript(file) {
     if (r.first === null || ts < r.first) r.first = ts;
     if (r.last === null || ts > r.last) r.last = ts;
     const content = rec.message && rec.message.content;
+    if (rec.type === "system") {
+      if (rec.subtype === "stop_hook_summary" && stopTs === null) stopTs = ts;
+      continue;
+    }
     if (rec.type === "assistant" && Array.isArray(content)) {
       for (const c of content) {
         if (!c || c.type !== "tool_use") continue;
         const label = c.name === "Skill" && c.input ? skillLabel(c.input.skill) : null;
         if (label) r.skills.push({ at: ts, label });
-        if (c.name === "AskUserQuestion") askOpen.set(c.id, ts);
+        if (c.name === "AskUserQuestion" || isSentinelBash(c)) toolWaitOpen.set(c.id, ts);
       }
+      stopTs = null;
     } else if (rec.type === "user") {
       for (const c of Array.isArray(content) ? content : []) {
-        if (c && c.type === "tool_result" && askOpen.has(c.tool_use_id)) {
-          r.waits.push([askOpen.get(c.tool_use_id), ts]);
-          askOpen.delete(c.tool_use_id);
+        if (c && c.type === "tool_result" && toolWaitOpen.has(c.tool_use_id)) {
+          r.waits.push([toolWaitOpen.get(c.tool_use_id), ts]);
+          toolWaitOpen.delete(c.tool_use_id);
         }
       }
       const t = textOf(content);
-      if (t !== null && !rec.isMeta && !rec.isCompactSummary && !NOT_HUMAN.test(t) && prevTs !== null && ts > prevTs) {
+      if (rec.isMeta && rec.turnCompanion) continue;
+      if (rec.isMeta && !isTaskNotification(rec, t)) {
+        if (stopTs !== null && ts > stopTs) r.waits.push([stopTs, ts]);
+        stopTs = null;
+      } else if (t !== null && !rec.isMeta && !rec.isCompactSummary && !NOT_HUMAN.test(t) && prevTs !== null && ts > prevTs) {
         r.waits.push([prevTs, ts]);
+        stopTs = null;
+      } else if (!rec.isMeta) {
+        stopTs = null;
       }
     }
     // Queue / attachment / system records written just before a prompt must not move the wait start.
