@@ -91,9 +91,10 @@ try {
 
     Invoke-InstallStep "Creating symlinks" "$SCRIPT_CHECKOUT_ROOT\install\win\dotfileslink.ps1"
 
-    Invoke-InstallStep "Installing Claude Code" "$SCRIPT_CHECKOUT_ROOT\install\win\claude-code.ps1"
-
+    # npm first: raising Node here would hide npm-installed globals (Claude Code) from new shells if they were installed before it.
     Invoke-InstallStep "Updating npm" "$SCRIPT_CHECKOUT_ROOT\install\win\npm.ps1"
+
+    Invoke-InstallStep "Installing Claude Code" "$SCRIPT_CHECKOUT_ROOT\install\win\claude-code.ps1"
 
     Invoke-InstallStep "Installing Codex" "$SCRIPT_CHECKOUT_ROOT\install\win\codex.ps1"
 
