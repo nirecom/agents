@@ -68,6 +68,18 @@ case "$OUT" in
 esac
 case_end
 
+case_begin "pick-highest-version-of-major-satisfying-range" "install/lib/npm-engine-check.js"
+ENGINE_CHECK="$SCRIPT_CHECKOUT_ROOT/install/lib/npm-engine-check.js"
+PICKED="$(printf 'v24.14.0\nv24.15.0\nv25.0.0\n' | node "$ENGINE_CHECK" --pick '^22.22.2 || ^24.15.0 || >=26.0.0' 24)"
+PICK_RC=$?
+assert_eq "$PICK_RC" "0"
+assert_eq "$PICKED" "24.15.0"
+NONE="$(printf 'v24.14.0\nv24.14.1\n' | node "$ENGINE_CHECK" --pick '^24.15.0' 24)"
+NONE_RC=$?
+assert_eq "$NONE_RC" "1"
+assert_eq "$NONE" ""
+case_end
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 [[ "$FAIL" -eq 0 ]]

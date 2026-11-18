@@ -63,6 +63,18 @@ Describe 'compatible-node-runs-npm-install' -Tag 'target:install/win/npm.ps1' {
     }
 }
 
+Describe 'pick-highest-version-of-major-satisfying-range' -Tag 'target:install/lib/npm-engine-check.js' {
+    It '--pick prints the highest satisfying version of the major, exit 1 when none' {
+        $check = Join-Path $script:AgentsDir 'install\lib\npm-engine-check.js'
+        $out = @('v24.14.0', 'v24.15.0', 'v25.0.0') | & node $check --pick '^22.22.2 || ^24.15.0 || >=26.0.0' 24
+        $LASTEXITCODE | Should -Be 0
+        ($out | Out-String).Trim() | Should -Be '24.15.0'
+        $none = @('v24.14.0', 'v24.14.1') | & node $check --pick '^24.15.0' 24
+        $LASTEXITCODE | Should -Be 1
+        ($none | Out-String).Trim() | Should -Be ''
+    }
+}
+
 Describe 'incompatible-node-skips-with-manual-command' -Tag 'target:install/lib/npm-engine-check.js' {
     It 'range not satisfied -> no npm install, warning carries the manual command, exit 0' {
         $r = Invoke-NpmStep 'skip' '>=999.0.0'
