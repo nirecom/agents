@@ -49,7 +49,7 @@ make_install_sh_sandbox() {
     # so one unstubbed name aborts the whole run at exit 127.
     local s
     for s in dotfileslink claude-code codex session-sync-init vscode-settings \
-             global-gitignore gh glab jq shellcheck pwsh codegraph rtk; do
+             global-gitignore npm gh glab jq shellcheck pwsh codegraph rtk; do
         cat > "$sb/agents/install/linux/$s.sh" <<EOF
 #!/bin/bash
 printf 'was-called %s\n' "\$*" >> "$sb/calls/$s"
@@ -150,7 +150,7 @@ make_install_ps1_sandbox() {
     # same steps (plus its plan-sync-init wrapper), so an unstubbed name fails it the same way.
     local s
     for s in dotfileslink claude-code codex session-sync-init plan-sync-init vscode-settings \
-             global-gitignore gh glab jq shellcheck pwsh codegraph rtk; do
+             global-gitignore npm gh glab jq shellcheck pwsh codegraph rtk; do
         printf 'Add-Content -Path "%s\\%s" -Value ("was-called " + ($args -join " "))\n' \
             "$calls_win" "$s" > "$sb/agents/install/win/$s.ps1"
     done
