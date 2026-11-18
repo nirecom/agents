@@ -1,6 +1,6 @@
 "use strict";
 // Tests: tests/lib/command-guard/ssh-stub.js, tests/lib/command-guard/main.js, tests/lib/command-guard/resolve-target.js, tests/lib/command-guard-build.js
-// Tags: scope:issue-specific, tl2, command-guard, fixture-isolation, ssh-stub
+// Tags: scope:issue-specific, tl2, command-guard, fixture-isolation, ssh-stub, regression-2966, build-cache-recovery
 // The command guard lets an ssh URL through only when the ssh command git would run starts the
 // guard.conf `sshstub=` stub itself (#2768): GIT_SSH_COMMAND, else core.sshCommand, else GIT_SSH.
 // A copy, a wrapper, shell syntax, another transport, or a guard with no stub declared is refused.
@@ -226,5 +226,72 @@ test("a guard.conf without sshstub= (or naming a missing file) refuses the stub 
   withStubLine(missing, `sshstub=${TMP}/absent.sh`);
   expectRefuse(repo, envWith({ GIT_SSH_COMMAND: `sh "${TMP}/absent.sh"` }), ["ls-remote", "origin"], missing);
   assert.strictEqual(refOf(BARE, "refs/heads/g"), "");
+});
+caseEnd();
+
+// #2966: --out recovers an invalid cache entry (bin/ empty or holding only TOOLS files) before publishing,
+// and never deletes anything else.
+const { NETWORK_TOOLS } = require("../lib/command-guard/classify");
+const TOOLS = ["git", ...NETWORK_TOOLS];
+let outN = 0;
+const freshOut = () => `${TMP}/out${++outN}`;
+const buildOut = (dir) => spawnSync(process.execPath, [BUILDER, "--out", dir], { encoding: "utf8", timeout: 120000 });
+const builtTools = (dir) => TOOLS.filter((t) => fs.existsSync(`${dir}/bin/${t}${EXE}`));
+
+caseBegin("builder-rebuilds-an-empty-bin-entry", "tests/lib/command-guard-build.js");
+test("E1 an outDir holding only an empty bin/ is rebuilt into a valid entry", () => {
+  const dir = freshOut();
+  fs.mkdirSync(`${dir}/bin`, { recursive: true });
+  const r = buildOut(dir);
+  assert.strictEqual(r.status, 0, `exit 0:\n${r.stderr}`);
+  assert.deepStrictEqual(builtTools(dir), TOOLS, "every guard tool is published");
+});
+caseEnd();
+
+caseBegin("builder-rebuilds-a-partial-bin-entry", "tests/lib/command-guard-build.js");
+test("E2 a bin/ with only some TOOLS-named files is rebuilt into a valid entry", () => {
+  const dir = freshOut();
+  fs.mkdirSync(`${dir}/bin`, { recursive: true });
+  fs.writeFileSync(`${dir}/bin/git${EXE}`, "partial");
+  const r = buildOut(dir);
+  assert.strictEqual(r.status, 0, `exit 0:\n${r.stderr}`);
+  assert.deepStrictEqual(builtTools(dir), TOOLS, "every guard tool is published");
+  assert.notStrictEqual(fs.readFileSync(`${dir}/bin/git${EXE}`, "utf8"), "partial", "the partial file is replaced");
+});
+caseEnd();
+
+caseBegin("builder-keeps-a-valid-entry", "tests/lib/command-guard-build.js");
+test("E3 a valid entry is not rebuilt: files keep their mtime and inode", () => {
+  const dir = freshOut();
+  assert.strictEqual(buildOut(dir).status, 0, "first build");
+  const stat = () => TOOLS.map((t) => { const s = fs.statSync(`${dir}/bin/${t}${EXE}`); return [s.mtimeMs, s.ino]; });
+  const before = stat();
+  const r = buildOut(dir);
+  assert.strictEqual(r.status, 0, `exit 0:\n${r.stderr}`);
+  assert.deepStrictEqual(stat(), before, "untouched");
+});
+caseEnd();
+
+caseBegin("builder-keeps-foreign-content-beside-bin", "tests/lib/command-guard-build.js");
+test("E4 a keep.txt in outDir survives; the build fails with exit 1 and 'cannot publish the guard'", () => {
+  const dir = freshOut();
+  fs.mkdirSync(`${dir}/bin`, { recursive: true });
+  fs.writeFileSync(`${dir}/keep.txt`, "mine");
+  const r = buildOut(dir);
+  assert.strictEqual(r.status, 1, `exit 1:\n${r.stderr}`);
+  assert.ok(r.stderr.includes("cannot publish the guard"), `message: ${r.stderr}`);
+  assert.strictEqual(fs.readFileSync(`${dir}/keep.txt`, "utf8"), "mine", "keep.txt survives with its content");
+});
+caseEnd();
+
+caseBegin("builder-keeps-foreign-content-inside-bin", "tests/lib/command-guard-build.js");
+test("E5 a non-TOOLS bin/other.sh survives; the build fails with exit 1 and 'cannot publish the guard'", () => {
+  const dir = freshOut();
+  fs.mkdirSync(`${dir}/bin`, { recursive: true });
+  fs.writeFileSync(`${dir}/bin/other.sh`, "mine");
+  const r = buildOut(dir);
+  assert.strictEqual(r.status, 1, `exit 1:\n${r.stderr}`);
+  assert.ok(r.stderr.includes("cannot publish the guard"), `message: ${r.stderr}`);
+  assert.strictEqual(fs.readFileSync(`${dir}/bin/other.sh`, "utf8"), "mine", "other.sh survives with its content");
 });
 caseEnd();
