@@ -11,7 +11,7 @@ build_fake_root() {
     mkdir -p "$FAKE_ROOT/install/linux" "$FAKE_ROOT/mock-bin" "$FAKE_ROOT/fake-nvm"
 
     for _stub in dotfileslink.sh claude-code.sh session-sync-init.sh vscode-settings.sh \
-                 global-gitignore.sh codex.sh jq.sh shellcheck.sh pwsh.sh codegraph.sh rtk.sh; do
+                 global-gitignore.sh npm.sh codex.sh jq.sh shellcheck.sh pwsh.sh codegraph.sh rtk.sh; do
         printf '#!/usr/bin/env bash\nexit 0\n' > "$FAKE_ROOT/install/linux/$_stub"
         chmod +x "$FAKE_ROOT/install/linux/$_stub"
     done
