@@ -11,7 +11,7 @@ The root decoy ([root-names.md](root-names.md) "The decoy tree") catches a test 
 - `TEST_RUN_ROOT` is reused when set; otherwise a fresh `run-<pid>-<rand>` is made under `<TEST_HOST_TMPDIR>/agents-test-runs-<user>`. `run-*` directories older than a day are removed there first.
 - `TEST_HOST_TMPDIR` records the temp area the run started from, before the pin below moves it.
 - `TMPDIR`, `TMP` and `TEMP` are pinned to `<run root>/tmp`, so `mktemp`, `make_tmp` and `os.tmpdir()` all land inside the run root. `TMPDIR` stays in POSIX form under MSYS; `TMP` / `TEMP` take the Windows form native tools read.
-- Build caches (the root decoy, the guard binaries) sit under `<TEST_HOST_TMPDIR>/agents-test-cache-<user>`, never under `$HOME`. `tests/lib/test-cache-base.js` owns that path.
+- Build caches (the root decoy, the guard binaries) sit under `<TEST_HOST_TMPDIR>/agents-test-cache-<user>`, never under `$HOME`. `tests/lib/test-cache-base.js` owns that path. A guard cache entry whose `bin/` is empty or lacks any `TOOLS` binary is unusable: before the rebuild is published, only its `TOOLS`-named files (and `bin/` and the entry directory, when empty) are removed, and no other file is ever deleted.
 
 `test_run_root_ensure` and `command_guard_ensure` record what they pinned (`_TEST_RUN_ROOT_PIN`, `_COMMAND_GUARD_PIN`). When nothing has moved since, a nested harness load reuses the pin without converting any path again, because each `cygpath` call is a process on Windows.
 
