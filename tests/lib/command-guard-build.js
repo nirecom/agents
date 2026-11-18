@@ -180,6 +180,21 @@ function buildBin(binDir, workDir) {
 
 const isBuilt = (dir) => TOOLS.every((t) => fs.existsSync(path.join(dir, "bin", `${t}${EXE}`)));
 
+// #2966: --out may name any dir, so only TOOLS-named files go and dirs only when empty; never recursive.
+function removeInvalidEntry(outDir) {
+  const bin = path.join(outDir, "bin");
+  for (const tool of TOOLS) {
+    try {
+      fs.unlinkSync(path.join(bin, `${tool}${EXE}`));
+    } catch (_) {}
+  }
+  for (const dir of [bin, outDir]) {
+    try {
+      fs.rmdirSync(dir);
+    } catch (_) {}
+  }
+}
+
 function buildOut(outArg) {
   const outDir = path.resolve(toNative(outArg));
   if (isBuilt(outDir)) return outDir;
@@ -190,9 +205,7 @@ function buildOut(outArg) {
   let failure = null;
   try {
     buildBin(path.join(tmp, "bin"), work);
-    try {
-      fs.rmdirSync(outDir);
-    } catch (_) {}
+    if (!isBuilt(outDir)) removeInvalidEntry(outDir);
     try {
       fs.renameSync(tmp, outDir);
     } catch (err) {
