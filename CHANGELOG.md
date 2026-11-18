@@ -260,3 +260,7 @@ Changes: Workflow step resets (`RESET_FROM`) now run without a permission prompt
 ### FEATURE: PR #3100 (2026-11-17)
 Background: feat(#3067): restore user-approval path for run-tests-baseline outcomes not observable at base
 Changes: When the baseline rerun cannot observe a failing test at the merge base (unrunnable, timeout-ambiguous, or a rerun that did not finish), you can now approve those tests with one sentinel instead of the run staying blocked. The approval covers only the listed tests and the commit it was given on, and the PR body lists them as unverified.
+
+### FEATURE: PR #3107 (2026-11-18)
+Background: feat(#3083): count sentinel approval and meta-resume idle as wait in step-durations
+Changes: step-durations report: time spent waiting for workflow-sentinel approval and for a meta-message resume is now counted as wait, so net time no longer includes that idle.
