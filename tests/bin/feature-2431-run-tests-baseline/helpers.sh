@@ -82,7 +82,13 @@ rtb_cli_run() {
   RTB_CLI_OUT="$(cd "$TMPROOT" && export RUN_ALL_CACHE_DIR="$cache" && run_with_timeout 120 \
     bash "$BASELINE_CLI" --session "$sid" --worktree "$repo" "${extra[@]}" 2>&1)" \
     || RTB_CLI_RC=$?
+  # decide corpus (2): for each run that reached the hand-off, check unrecorded=0 and compared >= 1 in the divergence log.
+  # Only a run where every test is legitimately no_comparison is exempted, by the caller prefixing RTB_CLI_ZERO_COMPARED_OK=<reason,...>.
+  adl_check "decide-shadow ($sid)" "$RTB_CLI_OUT" "$cache" min_compared=1 "zero_compared_ok=${RTB_CLI_ZERO_COMPARED_OK:-}"
 }
+
+# shellcheck source=tests/bin/bin-run-tests-baseline-decide-corpus/assert-divergence-log.sh
+. "$_HELPERS_SCRIPT_CHECKOUT_ROOT/tests/bin/bin-run-tests-baseline-decide-corpus/assert-divergence-log.sh"
 
 # baseline_summary <pre> <inh> <brk> <und> <file_verdict> <new_on_branch> — the exact
 # BASELINE_SUMMARY line (#2956 S8 adds the last two counts), for `grep -qxF`.

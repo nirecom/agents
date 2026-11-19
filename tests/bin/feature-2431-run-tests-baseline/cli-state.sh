@@ -96,7 +96,9 @@ run_cli_launcher_setup_failed_cases() {
       "$launched" > "$stub"
     amb_repo "$repo" "$stub"
     seed_failing "lsf$launched-$$" "$t"
-    rtb_cli_run "$(cli_case_cache "lsf$launched")" "$repo" "lsf$launched-$$"
+    # not-launched rc 2 is exec-setup-failed (outside decide).
+    if [ "$launched" = 0 ]; then RTB_CLI_ZERO_COMPARED_OK=outside-decide rtb_cli_run "$(cli_case_cache "lsf$launched")" "$repo" "lsf$launched-$$"
+    else rtb_cli_run "$(cli_case_cache "lsf$launched")" "$repo" "lsf$launched-$$"; fi
     if [ "$launched" = 0 ]; then
       if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: undetermined[[:space:]]+$t[[:space:]]+exec-setup-failed"; then
         pass "C3-launcher-setup-failed: not-launched rc 2 at base classified undetermined exec-setup-failed"
@@ -153,7 +155,7 @@ run_cli_legacy_launcher_wrapper_cases() {
   git -C "$repo" checkout -q feature
   git -C "$repo" merge -q --no-edit main
   seed_failing "lwr-$$" "$t"
-  rtb_cli_run "$(cli_case_cache lwr)" "$repo" "lwr-$$"
+  RTB_CLI_ZERO_COMPARED_OK=outside-decide rtb_cli_run "$(cli_case_cache lwr)" "$repo" "lwr-$$"
   if printf '%s\n' "$RTB_CLI_OUT" \
       | grep -qE "^BASELINE: undetermined[[:space:]]+$t[[:space:]]+base-launcher-predates-result-conversion\$"; then
     pass "C3-legacy-launcher-wrapper: wrapper entry under a stateless base launcher is undetermined"

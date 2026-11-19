@@ -65,6 +65,8 @@ eb_cli_run() {
   RTB_CLI_RC=0
   RTB_CLI_OUT="$(cd "$TMPROOT" && export RUN_ALL_CACHE_DIR="$1" && run_with_timeout 120 \
     env SECONDS=530 bash "$BASELINE_CLI" --session "$3" --worktree "$2" 2>&1)" || RTB_CLI_RC=$?
+  # decide corpus (2): for each run that reached the hand-off, check unrecorded=0 in the divergence log.
+  adl_check "decide-shadow ($3)" "$RTB_CLI_OUT" "$1"
 }
 
 eb_cli_note() {
@@ -171,6 +173,8 @@ eb_cli_lang_cap() {
   RTB_CLI_RC=0
   RTB_CLI_OUT="$(cd "$TMPROOT" && export RUN_ALL_CACHE_DIR="$cache" && run_with_timeout 120 \
     bash "$BASELINE_CLI" --session "$sid" --worktree "$repo" 2>&1)" || RTB_CLI_RC=$?
+  # decide corpus (2): for each run that reached the hand-off, check unrecorded=0 in the divergence log.
+  adl_check "decide-shadow ($sid)" "$RTB_CLI_OUT" "$cache"
   row="$(awk -F'\t' '$4 == "tests/bin/j.js" { print $5 }' "$cache"/branch.v2.*.seg 2>/dev/null | tail -n 1)"
   if [ "$row" = "timeout-after-180s" ]; then
     pass "S2-5: the real CLI records the js branch timeout at the registry cap (timeout-after-180s)"

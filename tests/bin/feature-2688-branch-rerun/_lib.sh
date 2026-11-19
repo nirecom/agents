@@ -132,4 +132,9 @@ rtb() {
   RTB_RC=0
   RTB_OUT="$(cd "$TMPROOT/cwd" && env RUN_ALL_CACHE_DIR="$(np "$cache")" "$@" bash "$RWT" 120 \
     bash "$BASELINE_CLI" --session "$sid" --worktree "$(np "$repo")" --per-test-timeout 10 2>&1)" || RTB_RC=$?
+  # decide corpus (2): for each run that reached the hand-off, check unrecorded=0 in the divergence log.
+  adl_check "decide-shadow ($sid)" "$RTB_OUT" "$cache" "$@"
 }
+
+# shellcheck source=tests/bin/bin-run-tests-baseline-decide-corpus/assert-divergence-log.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/bin-run-tests-baseline-decide-corpus/assert-divergence-log.sh"

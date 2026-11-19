@@ -25,6 +25,9 @@ for _lib in ledger timeout worktree exec homeref branch rename compare classify;
   # shellcheck source=/dev/null
   . "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-$_lib.sh"
 done
+# shellcheck source=bin/lib/run-tests-baseline-decide-shadow.sh
+. "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-decide-shadow.sh"
+rtb_decide_shadow_install
 
 RTB_EVIDENCE="$SCRIPT_CHECKOUT_ROOT/bin/workflow/run-tests-baseline-evidence"
 RTB_RESOLVE="$SCRIPT_CHECKOUT_ROOT/bin/resolve-merge-base.sh"
@@ -240,6 +243,7 @@ for i in "${!TESTS[@]}"; do
     *) N_UND=$((N_UND + 1)) ;;
   esac
 done
+rtb_decide_shadow_compare_before_handoff
 rec_args=(record --session "$SID" --seq "$SEQ" --classification "$(rtb_wt_native "$CLS_FILE")" --head "$HEAD_SHA")
 [ -z "$B2" ] || rec_args+=(--base "$B2")
 [ "$HAS_NOTE" = 0 ] || rec_args+=(--note "$NOTE")
