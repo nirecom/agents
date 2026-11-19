@@ -195,7 +195,9 @@ run_ledger_inherit_cases() {
       continue
     fi
     seed_failing "inh${variant}b-$$" "$t"
-    rtb_cli_run "$cache" "$repo" "inh${variant}b-$$"
+    # variant 0 is decided by ledger inheritance alone (outside decide), so there is no line to compare.
+    if [ "$variant" = "0" ]; then RTB_CLI_ZERO_COMPARED_OK=outside-decide rtb_cli_run "$cache" "$repo" "inh${variant}b-$$"
+    else rtb_cli_run "$cache" "$repo" "inh${variant}b-$$"; fi
     if [ "$variant" = "0" ]; then
       if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: preexisting-inherited[[:space:]]+$t" \
         && [ "$RTB_CLI_RC" -eq 0 ]; then

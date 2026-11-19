@@ -74,7 +74,7 @@ run_cli_stage_order_cases() {
   so_repo "$repo"
   seed_failing "$sid" tests/bin/t.sh
   export RTB_BUDGET_TOTAL=50
-  rtb_cli_run "$cache" "$repo" "$sid" --per-test-timeout 10
+  RTB_CLI_ZERO_COMPARED_OK=outside-decide rtb_cli_run "$cache" "$repo" "$sid" --per-test-timeout 10
   unset RTB_BUDGET_TOTAL
   so_ck "rerun: budget exhaustion exits 8" 8 "$RTB_CLI_RC"
   so_has "rerun: budget-exhausted is reported" "budget-exhausted"

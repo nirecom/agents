@@ -71,6 +71,8 @@ rtb "$R.cache" "$R" "c1b-$$"
 ck "cache: second run exit 0" 0 "$RTB_RC"
 absent "cache: second run did not re-run (same input_version)" "$R.marks/branch"
 has_line "cache: second run still flaky" "BASELINE: flaky-timeout-on-branch tests/bin/t.sh"
+# decide corpus (2): exit-<N>-then-pass hits the outside-decide list first (comparison step 1 precedes step 2).
+adl_expect "decide-shadow (c1b-$$)" tests/bin/t.sh "no:outside-decide"
 ls "$R.cache"/branch.v2.*.seg >/dev/null 2>&1 && pass "cache: a branch.v2 segment was written" \
   || fail "cache: a branch.v2 segment was written" "$(ls -A "$R.cache" 2>&1)"
 if awk -F'\t' 'NF != 7 || $1 != "b2" { bad = 1 } END { exit bad ? 1 : (NR ? 0 : 1) }' "$R.cache"/branch.v2.*.seg 2>/dev/null; then
@@ -117,6 +119,8 @@ absent "fails-alone: cached result skips the branch re-run" "$R.marks/branch"
 has_line "fails-alone: still goes on to base (file verdict, test changed)" \
   "BASELINE: file-verdict-preexisting tests/bin/t.sh test-file-changed"
 lacks_line "fails-alone: cached fails-alone is not read as a pass" "flaky-timeout-on-branch"
+# decide corpus (2): a test whose branch result was read from the cache has no branch side capture, so it is no_comparison.
+adl_expect "decide-shadow (c4b-$$)" tests/bin/t.sh "no:branch-result-reused-from-cache"
 case_end
 
 # A broken or old-format segment is not used and falls back to a standalone re-run (fail-closed). Create one valid segment,
