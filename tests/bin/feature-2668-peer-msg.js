@@ -15,7 +15,7 @@ const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
 const cp = require("node:child_process");
-const { agentsListText, realAgentsListText, REAL_OWN_LINE, REAL_OWN_LINE_NO_SUFFIX, uuid, makeFixtures, load, tmpRoot } = require("./feature-2668-find-peer/fixtures");
+const { agentsListText, realAgentsListText, REAL_OWN_LINE, REAL_OWN_LINE_2026_11_09, REAL_OWN_LINE_NO_SUFFIX, uuid, makeFixtures, load, tmpRoot } = require("./feature-2668-find-peer/fixtures");
 
 // TL3 gap: a real SendMessage carrying the header to a peer and the peer's real ack are not
 // exercised (model tools). Closest-to-action mitigation: verification (a)(b) of the detail plan,
@@ -33,8 +33,8 @@ const SELF = uuid("5e1f5e1f");
 const PEER = uuid("bee71234");
 const MSG = "0d9c8b7a-6f5e-4d3c-8b2a-1f0e9d8c7b6a";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const SELF_NAME = `#2668 Peer [${SELF.slice(0, 8)}]`;
-const selfList = () => P.writeFile("agents.txt", agentsListText([{ ref: "r7", name: SELF_NAME, sessionId: SELF }, { ref: "r8", name: `#1 Other [${PEER.slice(0, 8)}]`, sessionId: PEER }]));
+const SELF_NAME = `#2668 Peer sid-${SELF.slice(0, 8)}`;
+const selfList = () => P.writeFile("agents.txt", agentsListText([{ ref: "r7", name: SELF_NAME, sessionId: SELF }, { ref: "r8", name: `#1 Other sid-${PEER.slice(0, 8)}`, sessionId: PEER }]));
 const asSelf = { CLAUDE_CODE_SESSION_ID: SELF };
 const headerLine = (out) => (String(out).split(/\r?\n/).find((l) => l.startsWith("[peer-msg v1] ")) || null);
 
@@ -43,8 +43,9 @@ for (const [label, h] of [
   ["reply-kind session-id", { fromSession: SELF, msgId: MSG, replyTo: SELF, replyKind: "session-id" }],
   ["reply-kind ref", { fromSession: SELF, msgId: MSG, replyTo: "r7", replyKind: "ref" }],
   ["reply-kind from", { fromSession: SELF, msgId: MSG, replyTo: "from", replyKind: "from" }],
-  ["reply-kind name with a multi-bracket reply-to", { fromSession: SELF, msgId: MSG, replyTo: "#1 T [12345678] [r7]", replyKind: "name" }],
-  ["a PM header with a name reply-to", { fromSession: SELF, msgId: MSG, replyTo: "#1 T [12345678] [r7]", replyKind: "name", role: "pm", pmIssues: "#1,#2" }],
+  ["reply-kind name with a suffixed name and its [ref]", { fromSession: SELF, msgId: MSG, replyTo: "#1 T sid-12345678 [r7]", replyKind: "name" }],
+  ["reply-kind name with a [bracket] title", { fromSession: SELF, msgId: MSG, replyTo: "#1 [WIP] T sid-12345678 [r7]", replyKind: "name" }],
+  ["a PM header with a name reply-to", { fromSession: SELF, msgId: MSG, replyTo: "#1 T sid-12345678 [r7]", replyKind: "name", role: "pm", pmIssues: "#1,#2" }],
   ["a PM header", { fromSession: SELF, msgId: MSG, replyTo: SELF, replyKind: "session-id", role: "pm", pmIssues: "#1,#2" }],
 ]) {
   test(`PM1 header ${label}: format then parse gives the fields back`, () => {
@@ -131,7 +132,7 @@ for (const [kind, fromVerified, withList, code, replyTo, replyKind] of [
 }
 test("PM2 header on a verified name policy with the own session missing from the list -> 5 not-in-list, no header", () => {
   withPolicy("name", true);
-  const other = P.writeFile("agents-other.txt", agentsListText([{ ref: "r8", name: `#1 Other [${PEER.slice(0, 8)}]`, sessionId: PEER }]));
+  const other = P.writeFile("agents-other.txt", agentsListText([{ ref: "r8", name: `#1 Other sid-${PEER.slice(0, 8)}`, sessionId: PEER }]));
   const r = headerAt(["--agents-file", other]);
   assert.strictEqual(r.code, 5, `${r.out}${r.err}`);
   assert.ok(/^REASON=not-in-list$/m.test(r.out), r.out);
@@ -139,7 +140,7 @@ test("PM2 header on a verified name policy with the own session missing from the
 });
 test("PM2 header on the production policy and a real ListAgents dump (own session only on the header line) -> name destination", () => {
   withPolicy("name", true);
-  const dump = P.writeFile("agents-real.txt", realAgentsListText([{ ref: "d4e5f6", name: `#1 Other [${PEER.slice(0, 8)}]` }], { name: SELF_NAME, ref: "c0ffee" }));
+  const dump = P.writeFile("agents-real.txt", realAgentsListText([{ ref: "d4e5f6", name: `#1 Other sid-${PEER.slice(0, 8)}` }], { name: SELF_NAME, ref: "c0ffee" }));
   const r = headerAt(["--agents-file", dump]);
   assert.strictEqual(r.code, 0, `${r.out}${r.err}`);
   const m = (headerLine(r.out) || "").match(HEADER_RE);
@@ -149,11 +150,12 @@ test("PM2 header on the production policy and a real ListAgents dump (own sessio
 });
 // Real-format own line cases: [label, own, exit, reason, reply-to]. Peer row is fixed.
 const REAL_SID = uuid("4f6187e3");
-const peerRow = [{ ref: "d4e5f6", name: `#1 Other [${PEER.slice(0, 8)}]` }];
-const peerBlock = `Peer sessions (1):\n  #1 Other [${PEER.slice(0, 8)}] [d4e5f6]  ·  interactive  ·  idle  ·  started 7h ago\n`;
+const peerRow = [{ ref: "d4e5f6", name: `#1 Other sid-${PEER.slice(0, 8)}` }];
+const peerBlock = `Peer sessions (1):\n  #1 Other sid-${PEER.slice(0, 8)} [d4e5f6]  ·  interactive  ·  idle  ·  started 7h ago\n`;
 for (const [label, text, withVerified, code, reason, replyTo] of [
-  ["the verbatim real own line", `${REAL_OWN_LINE}\n${peerBlock}`, true, 0, null, "[PM] #2728 #2927 PM infra / sentinel issues [4f6187e3] [42d2bd]"],
-  ["the legacy quoted own line", realAgentsListText(peerRow, { name: `#2668 Peer [${REAL_SID.slice(0, 8)}]`, ref: "c0ffee", quoted: true }), true, 0, null, `#2668 Peer [${REAL_SID.slice(0, 8)}] [c0ffee]`],
+  ["the verbatim real own line", `${REAL_OWN_LINE}\n${peerBlock}`, true, 0, null, "[PM] #2728 #2927 PM infra / sentinel issues sid-4f6187e3 [42d2bd]"],
+  ["the legacy quoted own line", realAgentsListText(peerRow, { name: `#2668 Peer sid-${REAL_SID.slice(0, 8)}`, ref: "c0ffee", quoted: true }), true, 0, null, `#2668 Peer sid-${REAL_SID.slice(0, 8)} [c0ffee]`],
+  ["the own line observed on 2026-11-09 (retired bracket suffix)", realAgentsListText(peerRow, { raw: REAL_OWN_LINE_2026_11_09 }), true, 5, "not-in-list", null],
   ["an own line without the 8-digit suffix (no fallback to reply-kind=from)", realAgentsListText(peerRow, { raw: REAL_OWN_LINE_NO_SUFFIX }), true, 5, "not-in-list", null],
   ["an unreadable This-session-is line", realAgentsListText(peerRow, { raw: "This session is [PM] x [42d2bd]" }), true, 2, "agents-list-unparsable", null],
 ]) {
@@ -179,7 +181,7 @@ test("PM2 header real dump with FROM_REPLY_VERIFIED=false: same reply-to as when
   assert.strictEqual(r.code, 0, `${r.out}${r.err}`);
   const m = (headerLine(r.out) || "").match(HEADER_RE);
   assert.ok(m, r.out);
-  assert.strictEqual(m[3], "[PM] #2728 #2927 PM infra / sentinel issues [4f6187e3] [42d2bd]");
+  assert.strictEqual(m[3], "[PM] #2728 #2927 PM infra / sentinel issues sid-4f6187e3 [42d2bd]");
   assert.strictEqual(m[4], "name");
 });
 test("PM2 header --role pm --pm-issues adds the PM suffix", () => {

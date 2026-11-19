@@ -46,6 +46,7 @@ const PERSISTED_TOP_LEVEL_KEYS = [
   "session_worktree",
   "verbose_prompt",
   "merge_base_baseline",
+  "pm",
   "events",
   "current",
 ];

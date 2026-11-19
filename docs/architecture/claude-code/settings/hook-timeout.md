@@ -99,7 +99,7 @@ Traced by running each hook on a deny-side and a permitted-side input with every
 | `check-japanese-in-docs` | allow-deny hook | あり (with limit) | git (and a forge query) to tell a private repo |
 | `gate-worktree-notes-lang` | allow-deny hook | あり (with limit) | git (and a forge query) to tell a private repo |
 | `enforce-system-ops`、`block-main-audit-verdict` | allow-deny hook | なし (none) | Pattern match over the command text; no child process, no file scan |
-| `block-memory-direct`、`block-history-direct`、`block-shell-config`、`block-tests-direct`、`block-send-user-file` | allow-deny hook | なし (none) | Path and command-text checks plus the session state file; no child process, no file scan |
+| `block-memory-direct`、`block-history-direct`、`block-shell-config`、`block-tests-direct`、`block-send-user-file`、`block-pm-state-write` | allow-deny hook | なし (none) | Path and command-text checks plus the session state file; no child process, no file scan |
 | `enforce-issue-close`、`block-subagent-sentinels`、`gate-plan-skip-sentinel`、`gate-plan-skill-advance` | allow-deny hook | なし (none) | Command / skill-name match plus the session state file; no child process, no file scan |
 | `block-comment-block-size`、`gate-plan-lang` | allow-deny hook | なし (none) | Reads only the content being written; no child process, no file scan |
 | `confirm-checkpoint` | allow-deny hook | なし (none) | Denies through `emitDeny`, so it is an allow-deny hook by definition; left out of #2676 by scope (classified only). No child process on the traced paths, except the no-receipt recovery (#2936): it reads gate state through `probesFor`, which can launch gate probes for steps other than the target, bounded by its own `CONFIRM_HOOK_TIMEOUT_MS` (15000) deadline |

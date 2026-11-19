@@ -1,5 +1,5 @@
 "use strict";
-// next-step's quiet layer (#1607, #2920), checked in this order: paused, workflow-off, aborted.
+// next-step's quiet layer (#1607, #2920, #2941), checked in this order (by reason): `pm-session`, paused, workflow-off, aborted.
 // resolveQuietExit(sid, state) -> { action, skill, hint, reason } | null. Fail-open: an error
 // reading a marker or the state yields null so the ordinary walk runs.
 
@@ -52,7 +52,22 @@ function aborted(sid, state) {
   };
 }
 
+// #2941: a PM session has no workflow; the paused is non-resumable (no RESUME sentinel applies).
+function pmSession(sid) {
+  const pm = require(HOOKS + "/pm-session/schema");
+  const raw = require(HOOKS + "/workflow-state/state-io").readRawState(sid);
+  if (!pm.hasPmMark(raw)) return null;
+  const hint = pm.isActivePm(raw)
+    ? "This is a PM session: it has no workflow steps and no session-close. Take no workflow action; manage the issue list with /pm-add and /pm-remove."
+    : "This PM session has ended (archived). Take no workflow action; start new work in a new session.";
+  return { action: "paused", skill: "", reason: "pm-session", hint };
+}
+
 function resolveQuietExit(sid, state) {
+  try {
+    const pm = pmSession(sid);
+    if (pm) return pm;
+  } catch (_e) { /* fail-open */ }
   try {
     const quiet = pausedOrOff(sid);
     if (quiet) return quiet;

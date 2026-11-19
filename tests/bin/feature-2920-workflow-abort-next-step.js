@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // Tests: bin/workflow/next-step, bin/workflow/lib/next-step/verdict.js, bin/workflow/lib/next-step/quiet-exits.js
-// Tags: TL2, next-step, workflow-abort, quiet-layer, regression-2920, scope:issue-specific, pwsh-not-required
+// Tags: TL2, next-step, workflow-abort, quiet-layer, regression-2920, scope:issue-specific, pwsh-not-required, pm-session
 // #2920 S5-5: next-step answers an aborted session from its quiet layer — scenario A (abort-sentinel)
 // sends it to /worktree-end until cleanup settles or a downstream adopts it, scenario B (adopt-auto / abort-cli) is done at
 // once and names the downstream. paused and workflow-off still win over the abort (order paused -> off -> abort).
@@ -137,6 +137,100 @@ test("S5-5: quiet-exits.js exports resolveQuietExit", () => {
   let m;
   try { m = require(path.join(LIB, "quiet-exits.js")); } catch (e) { assert.fail(`quiet-exits.js not loadable: ${String(e.message).split("\n")[0]}`); }
   assert.strictEqual(typeof m.resolveQuietExit, "function");
+});
+caseEnd();
+
+// #2941: a session carrying the PM mark (active or archived) gets the non-resumable `ACTION=paused REASON=pm-session`,
+// never `invoke workflow-init`; the HINT tells an active PM from a finished one.
+const P = require("../lib/pm-state-fixture");
+function seedPmSession(sid, archivedAt) {
+  seedLive(sid);
+  const st = P.raw(sid);
+  st.pm = P.pm({ tag: `PM-ns${archivedAt ? "x" : "a"}`, issues: [2941], archived_at: archivedAt });
+  P.writeRaw(sid, st);
+}
+caseBegin("pm-session-quiet-exit-2941", "bin/workflow/lib/next-step/quiet-exits.js");
+test("#2941: active and archived PM sessions -> ACTION=paused REASON=pm-session, not invoke workflow-init", () => {
+  seedPmSession("ns-pm-active", null);
+  seedPmSession("ns-pm-archived", "2026-11-02T00:00:00.000Z");
+  const a = nextStep("ns-pm-active");
+  const z = nextStep("ns-pm-archived");
+  for (const r of [a, z]) {
+    assert.deepStrictEqual([r.kv.ACTION, r.kv.REASON], ["paused", "pm-session"], r.out);
+    assert.notStrictEqual(r.kv.NEXT_SKILL, "workflow-init", r.out);
+  }
+  assert.ok((a.kv.NEXT_HINT || "").length > 0 && (z.kv.NEXT_HINT || "").length > 0, `${a.out}\n${z.out}`);
+  assert.notStrictEqual(a.kv.NEXT_HINT, z.kv.NEXT_HINT, "the HINT must tell an active PM from an archived one");
+});
+test("#2941 control: the same session without the PM mark is not pm-session", () => {
+  seedLive("ns-pm-control");
+  assert.notStrictEqual(nextStep("ns-pm-control").kv.REASON, "pm-session");
+});
+// A real PM session never starts a workflow: its state is a fresh state plus the `pm` key only.
+test("#2941: not-started state carrying only pm (active and archived) -> ACTION=paused REASON=pm-session", () => {
+  for (const [sid, archivedAt] of [["ns-pm-ns-active", null], ["ns-pm-ns-archived", "2026-11-02T00:00:00.000Z"]]) {
+    P.seedPm(sid, P.pm({ tag: "PM-nsns", issues: [2941], archived_at: archivedAt }), { ctx: CTXR });
+    assert.strictEqual(P.wfInitStatus(sid), "pending", "premise: workflow not started");
+    const r = nextStep(sid);
+    assert.deepStrictEqual([r.kv.ACTION, r.kv.REASON], ["paused", "pm-session"], r.out);
+    assert.notStrictEqual(r.kv.NEXT_SKILL || "", "workflow-init", r.out);
+  }
+});
+test("#2941 control: not-started state without pm -> invoke workflow-init", () => {
+  P.seedState("ns-pm-ns-control", { ctx: CTXR });
+  const r = nextStep("ns-pm-ns-control");
+  assert.deepStrictEqual([r.kv.ACTION, r.kv.NEXT_SKILL], ["invoke", "workflow-init"], r.out);
+});
+// `pm` that is not an object is no PM mark (hasPmMark). [] is left out: it is typeof "object" and counts as a mark today.
+for (const [label, bad] of [["null", null], ["string", "x"], ["true", true], ["zero", 0]]) {
+  test(`#2941: pm=${label} on a not-started state is not a PM session -> invoke workflow-init`, () => {
+    const sid = `ns-pm-bad-${label}`;
+    P.seedPm(sid, bad, { ctx: CTXR });
+    const r = nextStep(sid);
+    assert.notStrictEqual(r.kv.REASON, "pm-session", r.out);
+    assert.deepStrictEqual([r.kv.ACTION, r.kv.NEXT_SKILL], ["invoke", "workflow-init"], r.out);
+  });
+}
+caseEnd();
+
+// #2941: the PM session reason (`pm-session`) is checked before paused / workflow-off / aborted, and its paused is non-resumable.
+caseBegin("pm-session-quiet-order-2941", "bin/workflow/lib/next-step/quiet-exits.js");
+const assertPmQuiet = (r) => {
+  assert.deepStrictEqual([r.kv.ACTION, r.kv.REASON], ["paused", "pm-session"], r.out);
+  assert.notStrictEqual(r.kv.NEXT_SKILL || "", "worktree-end", r.out);
+  const hint = r.kv.NEXT_HINT || "";
+  for (const s of ["WORKFLOW_NEXT_STEP_RESUME", "WORKFLOW_ENFORCE_WORKFLOW_ON"]) assert.ok(!hint.includes(s), `NEXT_HINT must not offer ${s}: ${r.out}`);
+};
+test("#2941 order: active PM + paused marker -> pm-session, no resume sentinel in the HINT", () => {
+  seedPmSession("ns-pmo-pause", null);
+  writePause("ns-pmo-pause");
+  assertPmQuiet(nextStep("ns-pmo-pause"));
+});
+test("#2941 order: active PM + workflow-off -> pm-session, no restore sentinel in the HINT", () => {
+  seedPmSession("ns-pmo-off", null);
+  writeOff("ns-pmo-off");
+  assertPmQuiet(nextStep("ns-pmo-off"));
+});
+test("#2941 order: active PM + abort sentinel -> pm-session, not invoke worktree-end", () => {
+  seedPmSession("ns-pmo-abort", null);
+  X.rawAbort("ns-pmo-abort", "abort-sentinel");
+  assertPmQuiet(nextStep("ns-pmo-abort"));
+});
+test("#2941 order: archived PM + paused marker -> still pm-session", () => {
+  seedPmSession("ns-pmo-arch-pause", "2026-11-02T00:00:00.000Z");
+  writePause("ns-pmo-arch-pause");
+  assertPmQuiet(nextStep("ns-pmo-arch-pause"));
+});
+caseEnd();
+
+// #2941: the PM session check is fail-open — a corrupt state file is no PM mark and no crash.
+caseBegin("pm-session-corrupt-state-2941", "bin/workflow/lib/next-step/quiet-exits.js");
+test("#2941: corrupt state JSON -> next-step does not crash, prints ACTION=, REASON is not pm-session", () => {
+  fs.writeFileSync(P.statePath("ns-pm-corrupt"), "{not json");
+  const r = nextStep("ns-pm-corrupt");
+  assert.ok(r.code !== null && !/^\s+at /m.test(r.out), `no crash (no uncaught stack): ${r.out}`);
+  assert.ok(typeof r.kv.ACTION === "string" && r.kv.ACTION.length > 0, `an ACTION= line: ${r.out}`);
+  assert.notStrictEqual(r.kv.REASON, "pm-session", r.out);
 });
 caseEnd();
 

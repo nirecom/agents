@@ -13,6 +13,7 @@ reflects every terminal action.
 ## Pre-flight
 
 - `AGENTS_MAIN_ROOT` must be set.
+- Run `node "$AGENTS_MAIN_ROOT/bin/pm-state" show --session "$CLAUDE_CODE_SESSION_ID"`; when it prints a `tag` (archived included), stop: a PM session has no session-close.
 - Caller context (pull_request path): `/worktree-end` WE-1..WE-18a have
   already completed (PR merged, worktree removed; `<CONTROL_DIR>/final-report-env.json` exists).
 - Caller context (direct: merge_to_main is complete): `/merge-to-main` pushed to the default branch. No worktree-end

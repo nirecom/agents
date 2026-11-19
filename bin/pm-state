@@ -1,0 +1,7 @@
+#!/usr/bin/env node
+"use strict";
+// bin/pm-state — the PM state CLI (#2941). Dispatch only; usage and logic: bin/lib/pm-state/cli.js.
+
+const { main } = require("./lib/pm-state/cli");
+
+process.exitCode = main(process.argv.slice(2));

@@ -48,7 +48,9 @@ _CASE_N=0
 # setup_case fills with the per-case mocks.
 CFG="$ROOT_TMP/mock-checkout"
 . "$__LIB_SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
-script_checkout_fixture_copy "$CFG" bin/workflow bin/parse-issue-tokens hooks/lib hooks/workflow-state
+# bin/lib (forge-issue-links.js, required by meta-classify since #2941) and hooks/pm-session
+# (the driver's PM session refusal) are part of what the driver loads.
+script_checkout_fixture_copy "$CFG" bin/workflow bin/parse-issue-tokens bin/lib hooks/lib hooks/workflow-state hooks/pm-session
 DRIVER="${WID_DRIVER_OVERRIDE:-$CFG/bin/workflow/workflow-init-driver}"
 
 # --- per-case environment ---------------------------------------------------

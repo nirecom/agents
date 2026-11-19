@@ -1,17 +1,13 @@
 #!/usr/bin/env bash
 # tests/install/feature-supervisor-settings-registration.sh
 # Tests: settings.json
-# Tags: supervisor, em-supervisor, settings-registration, scope:issue-specific, hook-registration, pwsh-not-required
+# Tags: supervisor, em-supervisor, settings-registration, scope:issue-specific, hook-registration, pwsh-not-required, pm-session
 # L3 gap (what this test does NOT catch):
-# - The shim actually firing in a live Claude Code session (requires real claude -p)
-# - settings.json being read by the Claude Code process at session startup
-# - matcher string correctly routing PreToolUse events at runtime
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
-
-# C3 [HIGH]: Static check that settings.json registers supervisor-off-proposal-shim.js
-# in hooks.PreToolUse with matcher === "Bash|runInTerminal|runCommands".
-# RED-EXPECTED until /write-code adds the entry.
+# - The shim firing in a live Claude Code session, settings.json read at session startup, and
+#   the matcher string routing PreToolUse events at runtime (requires real claude -p).
+# Mitigation: WORKFLOW_USER_VERIFIED preflight, bin/check-verification-gate.sh category hook-registration.
+# C3 [HIGH]: settings.json registers supervisor-off-proposal-shim.js in hooks.PreToolUse with
+# matcher === "Bash|runInTerminal|runCommands". #2941 PM1/PM2: see run_pm_2941.
 
 set -u
 
@@ -242,6 +238,51 @@ try {
     pass "C4: settings.json PreToolUse entry.hooks[i].command references supervisor-off-proposal-shim.js (file exists)"
 }
 run_c4
+
+# #2941 PM1: block-pm-state-write.js sits in a PreToolUse group covering Edit/Write and in one
+# covering Bash; PM2: the issue-title hook (also the PM writer) has a 10 s timeout.
+# TL3 gap: Claude Code routing a live Write/Bash call to the guard is not exercised.
+run_pm_2941() {
+    local r
+    r=$(run_with_timeout 10 node -e "
+const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
+const groups = (s.hooks && s.hooks.PreToolUse) || [];
+const has = (g, f) => Array.isArray(g.hooks) && g.hooks.some((h) => h && typeof h.command === 'string' && h.command.includes(f));
+const tokens = (g) => String(g.matcher || '').split('|');
+const guard = groups.filter((g) => g && has(g, 'block-pm-state-write.js'));
+const edit = guard.some((g) => tokens(g).includes('Edit') && tokens(g).includes('Write'));
+const bash = guard.some((g) => tokens(g).includes('Bash'));
+let t = null;
+for (const g of (s.hooks && s.hooks.UserPromptSubmit) || []) for (const h of g.hooks || []) if (h && String(h.command).includes('user-prompt-submit-issue-title.js')) t = h.timeout;
+process.stdout.write([edit, bash, t].join(','));
+" "$SETTINGS_NODE" 2>&1)
+    case "$r" in
+        true,true,*) pass "PM1: block-pm-state-write.js is registered for Edit/Write and for Bash" ;;
+        *) fail "PM1: block-pm-state-write.js registration (edit,bash,timeout)=$r" ;;
+    esac
+    case "$r" in
+        *,*,10) pass "PM2: the issue-title hook timeout is 10" ;;
+        *) fail "PM2: the issue-title hook timeout is not 10: (edit,bash,timeout)=$r" ;;
+    esac
+}
+run_pm_2941
+
+# #2941 PM3: the tool names block-pm-state-write.js is registered under are exactly the file-write tools
+# (Edit|Write|MultiEdit|editFiles|NotebookEdit) and the shell tools (Bash|runInTerminal|runCommands|PowerShell).
+run_pm_2941_tools() {
+    local r
+    r=$(run_with_timeout 10 node -e "
+const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
+const groups = ((s.hooks && s.hooks.PreToolUse) || []).filter((g) => g && Array.isArray(g.hooks) && g.hooks.some((h) => h && String(h.command).includes('block-pm-state-write.js')));
+const names = [...new Set(groups.flatMap((g) => String(g.matcher || '').split('|')))].sort();
+process.stdout.write(names.join(','));
+" "$SETTINGS_NODE" 2>&1)
+    case "$r" in
+        Bash,Edit,MultiEdit,NotebookEdit,PowerShell,Write,editFiles,runCommands,runInTerminal) pass "PM3: block-pm-state-write.js matchers are exactly the write and command tools ($r)" ;;
+        *) fail "PM3: block-pm-state-write.js matcher tool names=$r" ;;
+    esac
+}
+run_pm_2941_tools
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

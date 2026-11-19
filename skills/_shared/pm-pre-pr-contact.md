@@ -21,7 +21,7 @@ ListAgents, SendMessage and AskUserQuestion are model tools, so these steps stay
 ## PPC-2. Confirm the PM is in ListAgents
 
 - Run ListAgents and write its output to a file under the session scratchpad with the Write tool.
-- Count the PM as present only when one entry's name matches `PM_NAME_PREFIX_RE`, contains the first number of the recorded `pm-issues`, and ends with the suffix equal to the first 8 characters of the recorded `from-session`.
+- Count the PM as present only when one entry's name matches `PM_NAME_PREFIX_RE`, contains the first number of the recorded `pm-issues`, and ends with the `SESSION_NAME_SUFFIX_RE` suffix (`hooks/lib/session-name.js`): ` sid-` followed by the first 8 characters of the recorded `from-session`.
 - When no entry qualifies, including a matching name with a different suffix, stop and AskUserQuestion: the PM may not have been started again by hand.
 
 ## PPC-3. Send
