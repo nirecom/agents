@@ -1,8 +1,8 @@
 "use strict";
 
 const { spawnSync } = require("child_process");
-const { buildGhSpawn, buildGitSpawn } = require("../spawn-env");
-const { parseOriginOwnerRepo } = require("../../../../../hooks/lib/parse-remote-url");
+const { buildGhSpawn } = require("../spawn-env");
+const { resolveOwnerRepoFromOrigin, parseOwnerRepoFromApiUrl, META_LABEL } = require("../../../../lib/forge-issue-links");
 const { sanitizeLine } = require("../../../../../hooks/lib/output-sanitize");
 
 // Phase: meta-classify (#2087). Runs before wip-check so meta issues never
@@ -16,7 +16,7 @@ function metaClassify(state) {
 
   if (issues.length === 0) return { done: false };
 
-  const metaIssues = issues.filter((n) => (state.label_sets[n] || []).includes("meta"));
+  const metaIssues = issues.filter((n) => (state.label_sets[n] || []).includes(META_LABEL));
 
   if (metaIssues.length === issues.length) {
     // Resolved once from origin, not per issue (#1899).
@@ -74,33 +74,10 @@ function metaClassify(state) {
     process.stderr.write(
       `[workflow-init] Stripping ${metaIssues.length} meta issue(s) from session: #${metaIssues.join(", #")}\n`
     );
-    state.issues = issues.filter((n) => !(state.label_sets[n] || []).includes("meta"));
+    state.issues = issues.filter((n) => !(state.label_sets[n] || []).includes(META_LABEL));
   }
 
   return { done: false };
-}
-
-// Identity comes from the origin remote alone — no fallback (#1899).
-function resolveOwnerRepoFromOrigin() {
-  const [cmd, args, opts] = buildGitSpawn(["remote", "get-url", "origin"]);
-  const result = spawnSync(cmd, args, opts);
-  if (result.status !== 0 || !result.stdout) {
-    return { ok: false, message: "no 'origin' remote is configured" };
-  }
-  const url = String(result.stdout).split(/\r?\n/)[0].trim();
-  const parsed = parseOriginOwnerRepo(url);
-  if (!parsed.ok) return { ok: false, message: parsed.message };
-  return { ok: true, ownerRepo: parsed.ownerRepo };
-}
-
-// Parses "https://api.github.com/repos/OWNER/REPO" -> "OWNER/REPO", or null.
-const API_REPOS_PREFIX = "https://api.github.com/repos/";
-
-function parseOwnerRepoFromApiUrl(repositoryUrl) {
-  if (typeof repositoryUrl !== "string") return null;
-  if (!repositoryUrl.startsWith(API_REPOS_PREFIX)) return null;
-  const rest = repositoryUrl.slice(API_REPOS_PREFIX.length).replace(/\/+$/, "");
-  return /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(rest) ? rest : null;
 }
 
 // Returns { ok: true, subIssues: [...] } or { ok: false, reason }, never a

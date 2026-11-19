@@ -1,8 +1,10 @@
 "use strict";
 // run(input, deps) -> the session name to emit, or null (#299, #2668, #2993). A session with issues gets
-// the work name, one without gets the none name once, unless its transcript already holds a custom-title
-// (a /rename from before the hook): that name stays. The record makes each name emit once, so a later
-// /rename stays too. After a resume the first prompt gives the name again while it is still ours.
+// the work name, a PM session the pm name (#2941), one without gets the none name once, unless its
+// transcript already holds a custom-title (a /rename from before the hook): that name stays. The record
+// makes each name emit once, so a later /rename stays too. After a resume the first prompt gives a
+// " sid-xxxxxxxx" name again while it is still ours; candidateFor is shared with bin/session-name so the
+// CLI names a PM session as the hook does.
 // deps: {fetchTitle?(ref), now?(), spawnSync?} — test seams; fail-open, never throws.
 
 const fs = require("fs");
@@ -78,15 +80,17 @@ function latestCustomTitle(file) {
 }
 
 // resumeName(sid, state, input, rec, toWindowsPath) -> the emitted name again (its suffix moved to this session id)
-// when the transcript's latest custom-title still equals it; null otherwise (a /rename wins).
+// when the transcript's latest custom-title still equals it and it ends in the sid- suffix; null
+// otherwise (a /rename wins; an old-form or suffix-less name has no reader and is not given again).
 function resumeName(sid, state, input, rec, toWindowsPath) {
   if (typeof rec.last_emitted !== "string") return null;
+  const m = rec.last_emitted.match(SN.SESSION_NAME_SUFFIX_RE);
+  if (!m) return null;
   const ctx = state && state.session_start_context;
   const raw = typeof input.transcript_path === "string" && input.transcript_path ? input.transcript_path : ctx && ctx.transcript_path;
   if (typeof raw !== "string" || !raw) return null;
   if (latestCustomTitle(toWindowsPath(raw)) !== rec.last_emitted) return null;
-  const m = rec.last_emitted.match(SN.SESSION_NAME_SUFFIX_RE);
-  return m ? rec.last_emitted.slice(0, m.index) + SN.sessionSuffix(sid) : rec.last_emitted;
+  return rec.last_emitted.slice(0, m.index) + SN.sessionSuffix(sid);
 }
 
 // candidateFor(target, rec, d, cwd, now, sid, transcriptPath) -> the name this prompt asks for, or null.
@@ -98,9 +102,26 @@ function candidateFor(target, rec, d, cwd, now, sid, transcriptPath) {
     const repo = repoFor(cwd, d.spawnSync);
     return repo ? SN.composeSessionName({ kind: "none", repo, sessionId: sid }) : null;
   }
+  if (target.kind === "pm") {
+    // No title for #A (none, or given up): the objective-only form, the same as with no ref.
+    const fetched = target.refs.length > 0 ? titleFor(target.refs[0], rec, d, cwd, now) : null;
+    const refs = fetched ? target.refs : [];
+    const title = fetched || target.objective;
+    return title ? SN.composeSessionName({ kind: "pm", tag: target.tag, refs, title, sessionId: sid }) : null;
+  }
   const title = titleFor(target.refs[0], rec, d, cwd, now);
   if (!title) return null;
   return SN.composeSessionName({ kind: target.kind, refs: target.refs, title: target.objective || title, sessionId: sid });
+}
+
+// respond(input, deps) -> {block, context, notice, title}: the PM writer (#2941) runs first so a typed
+// /pm-init names its own prompt; a writer that throws is skipped (fail-open), a refusal names nothing.
+// notice is the writer's one sentence for the user (the entry emits it as systemMessage).
+function respond(input, deps) {
+  let w = {};
+  try { w = require("../pm-session/writer").runPmWriter(input, deps) || {}; } catch (_) { w = {}; }
+  if (w.block) return { block: w.block, context: null, notice: null, title: null };
+  return { block: null, context: w.context || null, notice: w.notice || null, title: run(input, deps) };
 }
 
 function run(input, deps) {
@@ -137,4 +158,4 @@ function run(input, deps) {
   }
 }
 
-module.exports = { run, titleFor, repoFor, ORIGIN_TIMEOUT_MS, TRACKER_TIMEOUT_MS, MAX_ATTEMPTS, COOLDOWN_MS, TITLE_MAX };
+module.exports = { run, respond, titleFor, repoFor, candidateFor, ORIGIN_TIMEOUT_MS, TRACKER_TIMEOUT_MS, MAX_ATTEMPTS, COOLDOWN_MS, TITLE_MAX };

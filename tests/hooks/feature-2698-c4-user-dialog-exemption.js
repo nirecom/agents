@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/stop-premature-stop-guard.js, hooks/supervisor-guard.js, hooks/lib/stop-exemption-policy.js
-// Tags: TL2, hooks, stop-hook, c4, c2, supervisor-guard, exemption, user-dialog-turn, premature-stop, mechanism-failure, scope:issue-specific, ask-user-question, system-message-contract, workflow-abort, regression-2920
+// Tags: TL2, hooks, stop-hook, c4, c2, supervisor-guard, exemption, user-dialog-turn, premature-stop, mechanism-failure, scope:issue-specific, ask-user-question, system-message-contract, workflow-abort, regression-2920, pm-session
 // #2698 change 1: the real C4 Stop hook stays silent (no block, no finding) when the turn ends
 // a dialog with the user, while the same session blocks for a non-dialog turn and for no
 // transcript; the mechanism-failure lane still blocks on a stall. The real C2 supervisor-guard
@@ -284,4 +284,71 @@ for (const origin of ["abort-sentinel", "abort-cli"]) {
     assert.deepStrictEqual(X.readSup(dir, sid).alert, before.alert, "the alert was consumed");
   });
 }
+caseEnd();
+
+// #2941: a PM session quiets C4 through its own session row. The fake next-step answers
+// ACTION=invoke, so next-step's own `pm-session` quiet exit cannot hide a broken row or a broken
+// buildExemptionDeps wiring; the spawn spy shows next-step is never started for a PM session.
+const F = require("./feature-2461-jev/fixture");
+const PMF = F.lib("tests/lib/pm-state-fixture.js");
+const PM_ROOT = X.tmpRoot("c4pm");
+const mock = F.startMock(require("node:path").join(PM_ROOT, "mock"));
+after(() => { mock.stop(); X.rmRoot(PM_ROOT); });
+const WORK = [X.U("go"), X.A(X.TU("Bash", { command: "ls" })), X.R(), X.A(X.T("Next I will edit report.js."))];
+const ARCHIVED = "2026-11-02T00:00:00.000Z";
+function pmStop(name, archivedAt) {
+  const sc = F.scene(PM_ROOT, name);
+  const sid = F.newSid();
+  F.seedStarted(sc, sid);
+  if (archivedAt !== undefined) {
+    const r = F.nodeEval(sc, null, `const P = require(${JSON.stringify(PMF)}); const st = P.raw(process.argv[2]);
+st.pm = P.pm({ tag: "PM-c4fake", issues: [2941], archived_at: process.argv[3] === "-" ? null : process.argv[3] }); P.writeRaw(process.argv[2], st);`,
+    [sid, archivedAt || "-"], { JEV: "off" });
+    assert.strictEqual(r.status, 0, `fixture: seeding the pm key failed: ${r.stderr}`);
+  }
+  const tp = F.writeTranscript(sc, "t", WORK);
+  const spy = F.spyEnv(sc);
+  const fake = F.fakeNextStepEnv("stdout:ACTION=invoke\\nNEXT_SKILL=research\\n");
+  const extra = Object.assign({}, spy, fake, { NODE_OPTIONS: `${spy.NODE_OPTIONS} ${fake.NODE_OPTIONS}` });
+  mock.conv(0.02, { "work-remaining": 0.97 });
+  const before = mock.count("systemone");
+  const o = F.runHook(sc, mock, C4, { session_id: sid, hook_event_name: "Stop", stop_hook_active: false, transcript_path: tp, cwd: F.fwd(sc.cwd) }, extra);
+  const nextSteps = F.spyCalls(sc).filter((c) => c.args.length && F.fwd(c.args[0]).endsWith("bin/workflow/next-step")).length;
+  return { o, q: mock.count("systemone") - before, nextSteps };
+}
+
+caseBegin("pm-session-c4-row-wiring-2941", "hooks/stop-premature-stop-guard.js");
+test("#2941 control: a started session without the pm key, fake next-step ACTION=invoke -> C4 block (rc=2)", () => {
+  const r = pmStop("ctl");
+  assert.strictEqual(r.o.status, 2, `rc 2 (stdout: ${r.o.stdout.slice(0, 200)} stderr: ${r.o.stderr.slice(0, 200)})`);
+  assert.ok(r.o.json && /\[C4 premature-stop\]/.test(r.o.json.reason || ""), `C4 block (got ${r.o.stdout.slice(0, 200)})`);
+  assert.ok(r.nextSteps >= 1, "premise: the spy sees next-step started");
+});
+for (const [label, archivedAt] of [["active", null], ["archived", ARCHIVED]]) {
+  test(`#2941: a started session with an ${label} pm key, fake next-step ACTION=invoke -> exit 0, no output, next-step not started, Jev not asked`, () => {
+    const r = pmStop(label, archivedAt);
+    assert.strictEqual(r.o.status, 0, `rc 0 (stdout: ${r.o.stdout.slice(0, 200)} stderr: ${r.o.stderr.slice(0, 200)})`);
+    assert.strictEqual(r.o.stdout, "", "no decision payload");
+    assert.strictEqual(r.nextSteps, 0, "the session row answers before next-step is started");
+    assert.strictEqual(r.q, 0, "Jev not asked");
+  });
+}
+caseEnd();
+
+caseBegin("pm-session-build-exemption-deps-2941", "hooks/stop-premature-stop-guard.js");
+test("#2941: the real buildExemptionDeps().isPmSession -> true for active / archived pm, false for no pm key / pm=null", () => {
+  const sc = F.scene(PM_ROOT, "deps");
+  const cases = ["active", "archived", "none", "null"].map((m) => [m, F.newSid()]);
+  const r = F.nodeEval(sc, null, `const P = require(${JSON.stringify(PMF)});
+const isPm = require(${JSON.stringify(F.lib(C4))}).buildExemptionDeps().isPmSession;
+const out = {};
+for (const [m, sid] of JSON.parse(process.argv[2])) {
+  if (m === "none") P.seedState(sid);
+  else P.seedPm(sid, m === "null" ? null : P.pm({ tag: "PM-deps", issues: [2941], archived_at: m === "archived" ? process.argv[3] : null }));
+  out[m] = isPm(sid);
+}
+console.log(JSON.stringify(out));`, [JSON.stringify(cases), ARCHIVED], { JEV: "off" });
+  assert.strictEqual(r.status, 0, `child failed: ${r.stderr}`);
+  assert.deepStrictEqual(r.json, { active: true, archived: true, none: false, null: false });
+});
 caseEnd();

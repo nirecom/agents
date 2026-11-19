@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // tests/hooks/feature-2804-sweep-sidecar.js
 // Tests: hooks/workflow-state/state-io/zombie-cleanup.js
-// Tags: TL2, hooks, workflow-state, zombie-cleanup, presentation-receipt, sidecar, state-retention, regression-2652, scope:issue-specific, pwsh-not-required
+// Tags: TL2, hooks, workflow-state, zombie-cleanup, presentation-receipt, sidecar, state-retention, regression-2652, scope:issue-specific, pwsh-not-required, pm-session
 // #2804 Step 1: the sweep judges `<sid>.json` (stem matches SESSION_ID_VALID_RE) as state by its
 // activity time, and every other `*.json` as a sidecar it never reads: kept while `<owner>.json`
 // exists, else removed only after CONTROL_RETENTION_DAYS (30) of mtime. Before #2804 a receipt
@@ -258,5 +258,17 @@ caseBegin("s5-retention-boundary-table", "hooks/workflow-state/state-io/zombie-c
   for (const [name, days, kept] of STATES.concat(MARKERS)) {
     check(`S5b: ${name} at ${days} days is ${kept ? "kept" : "removed"}`, exists(name) === kept, `exists=${exists(name)}`);
   }
+}
+caseEnd();
+
+caseBegin("pm-state-never-swept-2941", "hooks/workflow-state/state-io/zombie-cleanup.js");
+{
+  // #2941: a state carrying the PM mark holds the used-tag list, so the sweep skips it at any age.
+  const pmOf = (tag, archivedAt) => ({ tag, issues: [{ number: 2941 }], objective: "t", current_since: ago(45), upstream_session_id: null, assignment_log: [], sequence: { updated_at: null, tables: [] }, archived_at: archivedAt });
+  const ROWS = [["pm-active.json", pmOf("PM-swa", null), true], ["pm-archived.json", pmOf("PM-swz", ago(41)), true], ["pm-control.json", undefined, false]];
+  for (const [name, pm] of ROWS) put(name, Object.assign(v2(name.slice(0, -5), 50, 40), pm ? { pm } : {}), 40);
+  const threw = sweep();
+  check("PM: the sweep does not throw", threw === null, threw);
+  for (const [name, , kept] of ROWS) check(`PM: ${name} 40 days idle is ${kept ? "kept" : "removed"}`, exists(name) === kept, `exists=${exists(name)}`);
 }
 caseEnd();

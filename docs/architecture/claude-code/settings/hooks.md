@@ -351,7 +351,7 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
   Fail-open throughout: a missing id only makes plan-sync append a commit instead of replacing one.
 - `user-prompt-submit-issue-title.js` (UserPromptSubmit) — names the session through `sessionTitle`
   (#299, #2668) built by `composeSessionName` from a typed `/workflow-init #N` or the intent's `## Issues`; format and
-  `[xxxxxxxx]` suffix: [cross-session-messaging.md §2](../../cross-session-messaging.md#2-session-name-format).
+  ` sid-xxxxxxxx` suffix: [cross-session-messaging.md §2](../../cross-session-messaging.md#2-session-name-format).
   Titles come from the forge tracker (`issueTitle`), cached in `<first_session_id>.control/issue-title.json` (a session
   without workflow state uses its own control dir). A `work`/`pm` name is emitted when it differs from `last_emitted`;
   the `none` name of a session with no issue only while nothing was emitted, so a later `/rename` stays. Fail-open: errors emit `{}`.

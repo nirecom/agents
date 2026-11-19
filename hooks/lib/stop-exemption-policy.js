@@ -25,6 +25,10 @@ const EXEMPTION_MATRIX = Object.freeze({
   // (workflow-aborted-cleanup) or done, never paused. promptNotify:false — detectStalledSteps
   // returns [] for an aborted session, so the notifier has nothing to say.
   "workflow-aborted": { c4: true, c2: false, nextStep: false, promptNotify: false },
+  // #2941: a PM session (hooks/pm-session/schema.js hasPmMark, archived included) runs no workflow.
+  // nextStep:true — next-step answers the non-resumable paused REASON=pm-session, never invoke
+  // workflow-init. promptNotify:false — the pre-workflow-init row already quiets the notifier.
+  "pm-session": { c4: true, c2: false, nextStep: true, promptNotify: false },
   // promptNotify:false — this primitive only exists once next-step has spoken;
   // the UserPromptSubmit notifier never invokes next-step, so it can't occur.
   "delegated-reason":  { c4: true,  c2: false, nextStep: false, promptNotify: false },

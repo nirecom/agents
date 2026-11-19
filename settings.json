@@ -403,7 +403,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/user-prompt-submit-issue-title.js\"",
-            "timeout": 5
+            "timeout": 10
           }
         ]
       }
@@ -469,6 +469,16 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-history-direct.js\"",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|editFiles|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-pm-state-write.js\"",
             "timeout": 15
           }
         ]
@@ -639,6 +649,16 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-history-direct.js\"",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|runInTerminal|runCommands|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-pm-state-write.js\"",
             "timeout": 15
           }
         ]

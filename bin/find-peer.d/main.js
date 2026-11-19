@@ -8,7 +8,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { parseAgentsList, resolveFromList } = require("./agents-list");
+const { parseAgentsList, resolveFromList, NOT_IN_LIST_HINT } = require("./agents-list");
 const { holderResult, readHolderViaWipState } = require("./holder");
 const { originResult, readIssueBodyViaForge } = require("./origin");
 
@@ -84,7 +84,11 @@ function run(argv, deps) {
 
   const sid = found.sessionId;
   const dest = list ? resolveFromList(list.entries, kind, sid) : { destination: sid };
-  if (dest.code !== undefined) return failure(dest.code, dest.reason);
+  if (dest.code !== undefined) {
+    const f = failure(dest.code, dest.reason);
+    if (kind === "name" && dest.reason === "not-in-list") f.stdout += `HINT=${NOT_IN_LIST_HINT}\n`;
+    return f;
+  }
   return { code: 0, stdout: `ROLE=${role}\nSESSION_ID=${sid}\nDESTINATION=${dest.destination}\nDESTINATION_KIND=${kind}\n` };
 }
 
