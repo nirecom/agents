@@ -4,6 +4,7 @@
 // /workflow-init (#1633). A typed slash command expands to prompt text, never a
 // Skill tool call, so hooks/postuse-step-in-flight-mark.js cannot see it.
 // Fail-open throughout: a missed mark only delays when the WF reads as begun.
+// A PM session (#2941, the pm key, archived included) never gets the mark.
 
 const fs = require("fs");
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
@@ -29,6 +30,8 @@ function main() {
     transcriptPath: typeof input.transcript_path === "string" ? input.transcript_path : "",
   });
   if (!sid) return;
+  // Runs in parallel with the PM writer (#2941), so it judges the PM mark itself: no workflow in a PM session.
+  if (require("./pm-session/schema").hasPmMark(require("./workflow-state/state-io").readRawState(sid))) return;
 
   require("./lib/wf-init-begun-mark").markWorkflowInitBegun(sid);
 }

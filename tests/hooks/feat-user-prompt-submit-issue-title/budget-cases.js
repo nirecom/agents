@@ -1,6 +1,6 @@
 "use strict";
 // Time-budget and retry cases of tests/hooks/feat-user-prompt-submit-issue-title.js (#299): the
-// spawn path stays inside the 5 s hook timeout, and failed fetches cool down. No case markers.
+// spawn path stays inside the 10 s hook timeout, and failed fetches cool down. No case markers.
 const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -20,12 +20,12 @@ function budget(F) {
     assert.strictEqual(c.MAX_ATTEMPTS, 3);
     assert.strictEqual(c.COOLDOWN_MS, 10 * F.MIN);
   });
-  test("H4 settings.json registers the hook under UserPromptSubmit with timeout 5", () => {
+  test("H4 settings.json registers the hook under UserPromptSubmit with timeout 10", () => {
     const s = JSON.parse(fs.readFileSync(path.join(F.ROOT, "settings.json"), "utf8"));
     const hooks = ((s.hooks && s.hooks.UserPromptSubmit) || []).flatMap((g) => g.hooks || []);
     const h = hooks.find((x) => String(x.command).includes("hooks/user-prompt-submit-issue-title.js"));
     assert.ok(h, "no UserPromptSubmit entry runs hooks/user-prompt-submit-issue-title.js");
-    assert.strictEqual(h.timeout, 5, JSON.stringify(h));
+    assert.strictEqual(h.timeout, 10,JSON.stringify(h));
   });
   for (const variant of ["a: git sleeps", "b: gh sleeps"]) {
     test(`H4 ${variant}: run returns a non-string in < 4500 ms with the budgeted timeouts`, () => {

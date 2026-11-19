@@ -15,7 +15,7 @@ const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
 const cp = require("node:child_process");
-const { agentsListText, realAgentsListText, REAL_OWN_LINE, REAL_OWN_LINE_NO_SUFFIX, uuid, parseKv, makeFixtures, load, tmpRoot } = require("./feature-2668-find-peer/fixtures");
+const { agentsListText, realAgentsListText, REAL_OWN_LINE, REAL_OWN_LINE_2026_11_09, REAL_OWN_LINE_NO_SUFFIX, uuid, parseKv, makeFixtures, load, tmpRoot } = require("./feature-2668-find-peer/fixtures");
 
 // TL3 gap: the real ListAgents dump and a real SendMessage delivery to the returned destination
 // are not exercised (ListAgents and SendMessage are model tools; FP10 feeds a hand-built dump in the
@@ -32,7 +32,7 @@ const main = load("bin/find-peer.d/main.js");
 const U = uuid("1a2b3c4d");
 const U_TWIN = uuid("1a2b3c4d");
 const OTHER = uuid("9f8e7d6c");
-const sfx = (sid) => ` [${sid.slice(0, 8)}]`;
+const sfx = (sid) => ` sid-${sid.slice(0, 8)}`;
 
 // run(argv, o) -> {code, kv, out, holderCalls, bodyCalls}; o.holder / o.body are a value or a
 // function (a function may throw); o.list writes an --agents-file from entries (or raw text).
@@ -93,7 +93,8 @@ test("FP3 name: found by the suffix", () => {
 for (const [label, list, code, reason] of [
   ["the suffix was removed by /rename (the title still matches)", [{ ref: "r1", name: "#42 Fix it" }], 5, "not-in-list"],
   ["two names carry the same 8 digits", [{ ref: "r1", name: `#42 Fix it${sfx(U)}` }, { ref: "r2", name: `#43 Twin${sfx(U_TWIN)}` }], 6, "ambiguous"],
-  ["an upper-case suffix", [{ ref: "r1", name: `#42 Fix it [${U.slice(0, 8).toUpperCase()}]` }], 5, "not-in-list"],
+  ["an upper-case suffix", [{ ref: "r1", name: `#42 Fix it sid-${U.slice(0, 8).toUpperCase()}` }], 5, "not-in-list"],
+  ["the retired bracket suffix", [{ ref: "r1", name: `#42 Fix it [${U.slice(0, 8)}]` }], 5, "not-in-list"],
   ["another session's suffix", [{ ref: "r1", name: `#42 Fix it${sfx(OTHER)}` }], 5, "not-in-list"],
   ["the suffix not at the end", [{ ref: "r1", name: `#42${sfx(U)} Fix it` }], 5, "not-in-list"],
 ]) {
@@ -237,7 +238,7 @@ test("FP10 real format: --session self on a ref policy -> 5 not-in-list (no row 
 
 // Own-session line forms (real, legacy quoted, malformed). Each row: [id, label, text, code, reason|null, want?, self?].
 const REAL_SID = uuid("4f6187e3");
-const REAL_NAME = "[PM] #2728 #2927 PM infra / sentinel issues [4f6187e3]";
+const REAL_NAME = "[PM] #2728 #2927 PM infra / sentinel issues sid-4f6187e3";
 const dumpWith = (o) => realAgentsListText([peer], o);
 const base = { name: `#42 Self${sfx(U)}`, ref: "c0ffee" };
 const CASES = [
@@ -256,6 +257,7 @@ const CASES = [
   ["A4 a readable own line plus an unreadable one -> unparsable", `${realAgentsListText([], base)}This session is [PM] x [42d2bd]\n`, 2, "agents-list-unparsable"],
   ["X8 upper-case hex ref is refused", dumpWith({ raw: `This session is ${base.name} [C0FFEE] — clause` }), 2, "agents-list-unparsable"],
   ["E1 real own line without the 8-digit suffix stays not-in-list", dumpWith({ raw: REAL_OWN_LINE_NO_SUFFIX }), 5, "not-in-list", null, REAL_SID],
+  ["E4 the own line observed on 2026-11-09 (retired bracket suffix) is not-in-list", dumpWith({ raw: REAL_OWN_LINE_2026_11_09 }), 5, "not-in-list", null, REAL_SID],
   ["E3 zero peers with a real own line", `This session is ${base.name} [c0ffee] — clause.\nPeer sessions (0):\n`, 0, null, `${base.name} [c0ffee]`],
   ["X1 no clause, no quotes", dumpWith({ raw: "This session is [PM] x [42d2bd]" }), 2, "agents-list-unparsable"],
   ["X2 clause with brackets", dumpWith({ raw: "This session is [PM] x [42d2bd] — the name (see [ref])." }), 2, "agents-list-unparsable"],
@@ -274,5 +276,25 @@ for (const [name, list, code, reason, want, self] of CASES) {
 }
 test("FP10 real format: E2 a real own line on a ref policy -> 5 not-in-list", () => {
   failed(run(["--session", "self"], { policy: "ref", self: U, list: dumpWith(base) }), 5, "not-in-list");
+});
+// #2941 Steps 9: a name-kind not-in-list carries one HINT= line (the peer may still have the retired
+// " [xxxxxxxx]" or no suffix; /rename with the bin/session-name output fixes it); a ref-kind one does not.
+const hintOf = (r) => (Array.isArray(r.kv.HINT_all) ? r.kv.HINT_all : r.kv.HINT === undefined ? [] : [r.kv.HINT]);
+for (const [label, o] of [
+  ["the 2026-11-09 own line (--session self)", { argv: ["--session", "self"], self: REAL_SID, list: dumpWith({ raw: REAL_OWN_LINE_2026_11_09 }) }],
+  ["an old-form peer row (--issue)", { argv: ["--issue", "42"], holder: U, list: realAgentsListText([peer, { ref: "a1b2c3", name: `#42 Fix it [${U.slice(0, 8)}]` }]) }],
+]) {
+  test(`FP11 name: ${label} -> not-in-list with one HINT= naming sid- and /rename`, () => {
+    const r = run(o.argv, { policy: "name", self: o.self, holder: o.holder, list: o.list });
+    failed(r, 5, "not-in-list");
+    const h = hintOf(r);
+    assert.strictEqual(h.length, 1, r.out);
+    assert.ok(h[0].includes("sid-") && h[0].includes("/rename") && h[0].includes("bin/session-name"), r.out);
+  });
+}
+test("FP11 ref: not-in-list carries no HINT=", () => {
+  const r = run(["--issue", "42"], { policy: "ref", holder: U, list: [{ ref: "r9", name: "x", sessionId: OTHER }] });
+  failed(r, 5, "not-in-list");
+  assert.deepStrictEqual(hintOf(r), [], r.out);
 });
 caseEnd();

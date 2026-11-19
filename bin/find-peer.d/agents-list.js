@@ -1,7 +1,7 @@
 "use strict";
 // The ListAgents dump given through --agents-file, and the destination it maps a session id to.
 // Observed real row (verification (b), 2026-11-09): "  <name> [<ref6hex>]  ·  <kind>  ·  <state>  ·  ..."
-// — no session id is listed, so a session id resolves only through the " [xxxxxxxx]" name suffix.
+// — no session id is listed, so a session id resolves only through the " sid-xxxxxxxx" name suffix.
 // Observed real own row: "This session is <name> [<ref6hex>] — <clause without brackets>" (name unquoted); the quoted form is older.
 // The older placeholder "- [<ref>] <name>[ session=<id>]" is still accepted (test fixtures).
 
@@ -40,15 +40,16 @@ function parseAgentsList(text) {
   return entries;
 }
 
-// nameMatches(name, sid) — the name ends in " [xxxxxxxx]" carrying the first 8 hex digits of sid.
+// nameMatches(name, sid) — the name ends in " sid-xxxxxxxx" carrying the first 8 hex digits of sid;
+// the retired " [xxxxxxxx]" form is not matched (#2941).
 function nameMatches(name, sid) {
   const m = SESSION_NAME_SUFFIX_RE.exec(name);
   return Boolean(m) && m[1] === sid.slice(0, 8).toLowerCase();
 }
 
 // resolveFromList(entries, kind, sid) -> {destination} | {code, reason}. Only "ref" and "name" read a list.
-// The "name" destination is "<name> [<ref6>]": a bare name ending in " [xxxxxxxx]" is read as a [ref]
-// and refused as unreachable (observed 2026-11-09), so the harness [ref] is always appended.
+// The "name" destination is "<name> [<ref6>]": a bare name was refused as unreachable (observed
+// 2026-11-09, with the then " [xxxxxxxx]" suffix read as a [ref]), so the harness [ref] is always appended.
 function resolveFromList(entries, kind, sid) {
   const hits = kind === "ref"
     ? entries.filter((e) => e.sessionId === sid).map((e) => e.ref)
@@ -58,4 +59,8 @@ function resolveFromList(entries, kind, sid) {
   return { destination: hits[0] };
 }
 
-module.exports = { parseAgentsList, resolveFromList, nameMatches };
+// The HINT= line of a kind "name" not-in-list: the peer's name may still carry the retired suffix.
+const NOT_IN_LIST_HINT = "the peer's session name may still end in the retired \" [xxxxxxxx]\" form or carry no suffix; "
+  + "in that session, /rename it with the output of bin/session-name (the current suffix is \" sid-xxxxxxxx\").";
+
+module.exports = { parseAgentsList, resolveFromList, nameMatches, NOT_IN_LIST_HINT };

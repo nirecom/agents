@@ -80,6 +80,14 @@ const ORACLE = {
     { label: "Edit a temp file", want: "approve", setup: (context) => ({
       input: call("Edit", { file_path: `${context.tempDir("bsc")}/a.txt`, old_string: "a", new_string: "b" }) }) },
   ] },
+  "block-pm-state-write": { kind: "allow-deny", probes: [
+    { label: "shell write to a session state file", want: "deny", setup: () => {
+      const sid = sidOf("block-pm-state-write");
+      return { input: bash(`echo x > ${forward(path.join(sessionStateDir(sid), `${sid}.json`))}`, { session_id: sid }) };
+    } },
+    { label: "Write a temp file", want: "approve", setup: (context) => ({
+      input: call("Write", { file_path: `${context.tempDir("bpsw")}/a.json`, content: "{\"pm\": {}}\n" }) }) },
+  ] },
   "block-memory-direct": { kind: "allow-deny", probes: [
     { label: "Write into the auto-memory dir", want: "deny", input: call("Write", {
       file_path: path.join(os.homedir(), ".claude", "projects", "c-" + "-git-agents", "memory", "example.md"), content: "x\n" },

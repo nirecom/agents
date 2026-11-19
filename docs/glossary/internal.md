@@ -50,6 +50,11 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
   The two-stage judge's query builds it, and the backup subagent reads it first.
 - **Related**: [architecture/jev/two-stage-broker.md](../architecture/jev/two-stage-broker.md)
 
+### ListAgents ref
+
+- **Definition**: The 6-character bracket ListAgents appends after a name when it shows a session; unlike the session-name suffix it is not part of the session id, and it must never be copied into a title.
+- **Related**: [architecture/cross-session-messaging.md](../architecture/cross-session-messaging.md)
+
 ### plan presentation turn
 - **Definition**: The turn in which the model presents a plan (intent, outline, or detail) for approval, after its review loop and pre-confirm audit have finished and `next-step --gate` returned ask or proceed; its text block ends with the plan-link line (on a gate-OFF proceed, the summary carries it once).
   A turn that only writes or revises a plan, or waits for a review or audit, is not one; on ask, the echo of the step's CONFIRM_* flag follows that text block in the same turn when the Stop hook prompts for it, or else after the user replies, and reaches the dialog only when a link-closed presentation was recorded.

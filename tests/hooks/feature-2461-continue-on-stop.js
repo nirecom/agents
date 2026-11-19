@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // tests/hooks/feature-2461-continue-on-stop.js
 // Tests: hooks/lib/jev-continue-on-stop.js, hooks/stop-premature-stop-guard.js, hooks/lib/stop-exemption-policy.js
-// Tags: TL2, hooks, jev, stop-guard, continue-on-stop, continuation, exemption, mock-server, scope:issue-specific, pwsh-not-required
+// Tags: TL2, hooks, jev, stop-guard, continue-on-stop, continuation, exemption, mock-server, scope:issue-specific, pwsh-not-required, pm-session
 // #2461 Step 4: when the stop guard would let a stop through, it asks Jev whether work was left
 // undone, except while a human or a delegated step is being waited on; a confident yes blocks the
 // stop once per turn with a fixed reason. shouldConsult owns the route table; each scene below
@@ -249,5 +249,98 @@ test("jev-wait-on-invoke: a next-step-output C4 row and a c4 EXEMPTION_MATRIX ro
   for (const e of C4_EXEMPTIONS) assert.strictEqual((EXEMPTION_MATRIX[e.id] || {}).c4, true, `${e.id} has a c4 matrix row`);
   const lines = fs.readFileSync(path.join(F.REPO, GUARD), "utf8").split("\n").length - 1;
   assert.ok(lines <= 300, `${GUARD} is ${lines} lines`);
+});
+caseEnd();
+
+caseBegin("pm-session-exemption-row", "hooks/lib/stop-exemption-policy.js");
+test("#2941 pm-session: an EXEMPTION_MATRIX row with nextStep:true, registered in the C4 guard when c4 is true", () => {
+  const { EXEMPTION_MATRIX } = require(F.lib("hooks/lib/stop-exemption-policy.js"));
+  const row = EXEMPTION_MATRIX["pm-session"];
+  assert.ok(row, "EXEMPTION_MATRIX has no pm-session row");
+  for (const k of ["c4", "c2", "nextStep", "promptNotify"]) assert.strictEqual(typeof row[k], "boolean", `pm-session.${k}`);
+  assert.strictEqual(row.nextStep, true);
+  const { C4_EXEMPTIONS } = require(F.lib(GUARD));
+  assert.strictEqual(C4_EXEMPTIONS.some((e) => e.id === "pm-session"), row.c4, "C4_EXEMPTIONS must match the c4 column");
+});
+caseEnd();
+
+// #2941: the real C4 hook against a started session (ACTION=invoke, so C4 would block) carrying the pm key.
+const PMF = F.lib("tests/lib/pm-state-fixture.js");
+function addPm(s, archivedAt) {
+  const r = F.nodeEval(s.sc, null, `
+const P = require(${JSON.stringify(PMF)});
+const st = P.raw(process.argv[2]);
+st.pm = P.pm({ tag: "PM-c4", issues: [2941], archived_at: process.argv[3] === "-" ? null : process.argv[3] });
+P.writeRaw(process.argv[2], st);`, [s.sid, archivedAt || "-"], { JEV: "off" });
+  assert.strictEqual(r.status, 0, `fixture: seeding the pm key failed: ${r.stderr}`);
+}
+caseBegin("pm-session-c4-hook-2941", "hooks/stop-premature-stop-guard.js");
+test("#2941 control: a started session without the pm key -> C4 block (rc=2)", () => {
+  const s = scene("pm-c4-control", "invoke");
+  YES();
+  const r = stop(s);
+  assert.strictEqual(r.o.status, 2, `stdout ${r.o.stdout.slice(0, 200)}`);
+  assert.ok(r.block && r.block.reason.includes("[C4 premature-stop]"));
+});
+for (const [name, archivedAt] of [["active", null], ["archived", "2026-11-02T00:00:00.000Z"]]) {
+  test(`#2941: the same session with an ${name} pm key -> exit 0, no output, Jev not asked`, () => {
+    const s = scene(`pm-c4-${name}`, "invoke");
+    addPm(s, archivedAt);
+    YES();
+    const r = stop(s);
+    assert.strictEqual(r.o.status, 0, `stdout ${r.o.stdout.slice(0, 200)} stderr ${r.o.stderr.slice(0, 200)}`);
+    assert.strictEqual(r.o.stdout, "");
+    assert.strictEqual(r.q, 0);
+  });
+}
+// A real PM session never starts a workflow: a fresh state plus the pm key only (P.seedPm).
+// The `pre-workflow-init` row precedes the `pm-session` row, so it is what silences this state; the
+// discriminating control is the started non-PM block above, since a not-started non-PM state is silent too.
+function seedFresh(s, pmArchivedAt) {
+  const r = F.nodeEval(s.sc, null, `
+const P = require(${JSON.stringify(PMF)});
+const a = process.argv[3];
+if (a === "none") P.seedState(process.argv[2]);
+else P.seedPm(process.argv[2], P.pm({ tag: "PM-c4ns", issues: [2941], archived_at: a === "-" ? null : a }));`, [s.sid, pmArchivedAt], { JEV: "off" });
+  assert.strictEqual(r.status, 0, `fixture: seeding the fresh state failed: ${r.stderr}`);
+}
+for (const [name, arg] of [["active pm", "-"], ["archived pm", "2026-11-02T00:00:00.000Z"], ["no pm (not-started control)", "none"]]) {
+  test(`#2941: not-started state, ${name} -> exit 0, no output, Jev not asked`, () => {
+    const s = scene(`pm-c4-ns-${name.replace(/[^a-z]+/g, "-")}`, "none");
+    seedFresh(s, arg);
+    YES();
+    const r = stop(s);
+    assert.strictEqual(r.o.status, 0, `stdout ${r.o.stdout.slice(0, 200)} stderr ${r.o.stderr.slice(0, 200)}`);
+    assert.strictEqual(r.o.stdout, "");
+    assert.strictEqual(r.q, 0);
+  });
+}
+caseEnd();
+
+caseBegin("pm-session-first-exemption-2941", "hooks/lib/stop-exemption-policy.js");
+test("#2941 firstExemption: only isPmSession holds -> 'pm-session'; with it false -> null", () => {
+  const { firstExemption } = require(F.lib(GUARD));
+  const deps = (pm) => ({
+    isWorkflowOff: () => false, isNextStepPaused: () => false, isWorkflowStarted: () => true,
+    anyStepInFlight: () => null, isWorkflowAborted: () => false, isPmSession: () => pm,
+  });
+  const degraded = [];
+  assert.strictEqual(firstExemption("session", { sid: "pm-fe" }, deps(true), degraded), "pm-session");
+  assert.strictEqual(firstExemption("session", { sid: "pm-fe" }, deps(false), degraded), null);
+  assert.deepStrictEqual(degraded, []);
+});
+test("#2941 firstExemption: isPmSession throws -> null, degraded ['pm-session']; deps without it -> null, nothing degraded", () => {
+  const { firstExemption } = require(F.lib(GUARD));
+  const base = {
+    isWorkflowOff: () => false, isNextStepPaused: () => false, isWorkflowStarted: () => true,
+    anyStepInFlight: () => null, isWorkflowAborted: () => false,
+  };
+  const thrown = [];
+  const throwing = Object.assign({}, base, { isPmSession: () => { throw new Error("boom"); } });
+  assert.strictEqual(firstExemption("session", { sid: "pm-fe-throw" }, throwing, thrown), null);
+  assert.deepStrictEqual(thrown, ["pm-session"]);
+  const absent = [];
+  assert.strictEqual(firstExemption("session", { sid: "pm-fe-absent" }, base, absent), null);
+  assert.deepStrictEqual(absent, []);
 });
 caseEnd();

@@ -1,7 +1,7 @@
 "use strict";
 // tests/hooks/feat-wf-init-prompt-args.js
 // Tests: hooks/lib/step-in-flight-policy.js
-// Tags: TL1, scope:common, wf-init, user-prompt-submit, prompt
+// Tags: TL1, scope:common, wf-init, user-prompt-submit, prompt, pm-session
 // #299: wfInitPromptArgs(prompt) returns the arguments of a typed /wf-init or /workflow-init
 // (wrapped <command-args> content, or the rest of a bare first line), null for anything else.
 // It reuses WF_INIT_WRAPPED_RE / WF_INIT_BARE_RE, so it agrees with promptInvokesWfInit.
@@ -57,5 +57,20 @@ caseEnd();
 caseBegin("wf-init-prompt-args-non-string-is-null", "hooks/lib/step-in-flight-policy.js");
 for (const bad of [null, undefined, 42]) {
   test(`non-string ${String(bad)} -> null`, () => assert.strictEqual(wfInitPromptArgs()(bad), null));
+}
+caseEnd();
+
+// #2941: the wrapped form is anchored at the prompt start, and a cross-session message never
+// counts as a typed /wf-init (it delegates to hooks/lib/typed-slash-command.js).
+const P = require("../lib/pm-state-fixture");
+const NOT_TYPED = [
+  ["wrapped /wf-init after leading prose", `look:\n${wrapped("wf-init", "#12")}`],
+  ["cross-session message carrying wrapped /wf-init", P.crossSession(wrapped("wf-init", "#12"))],
+  ["cross-session message carrying bare /workflow-init", P.crossSession("/workflow-init #12")],
+];
+caseBegin("wf-init-prompt-args-anchored-2941", "hooks/lib/step-in-flight-policy.js");
+for (const [label, prompt] of NOT_TYPED) {
+  test(`${label} -> args null`, () => assert.strictEqual(wfInitPromptArgs()(prompt), null));
+  test(`${label} -> promptInvokesWfInit false`, () => assert.strictEqual(require(MOD).promptInvokesWfInit(prompt), false));
 }
 caseEnd();

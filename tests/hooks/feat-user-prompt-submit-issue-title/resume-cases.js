@@ -14,7 +14,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const cp = require("node:child_process");
 
-const sfx = (sid) => ` [${sid.slice(0, 8).toLowerCase()}]`;
+const { sfx } = require("./name-cases");
 const titleRecord = (sid, t) => `${JSON.stringify({ type: "custom-title", sessionId: sid, customTitle: t })}\n`;
 
 function makeResume(F) {
@@ -193,6 +193,40 @@ function resumeNames(F) {
     ];
     fs.writeFileSync(tpath, `${lines.join("\n")}\n`);
     assert.strictEqual(R.prompt(sid, "hello", tpath), `neutral${sfx(sid)}`);
+  });
+  suffixForms(F, R);
+}
+
+// suffixForms(F, R) — resumeName after the suffix change (#2941 Steps 4): a name ending in the new
+// form moves to this session id; an old-form or suffix-less name is not given again (no old-form
+// reader) and its record stays as it was; a prompt that can build a name gives the new form.
+function suffixForms(F, R) {
+  const SN = require(require("node:path").join(F.ROOT, "hooks", "lib", "session-name.js"));
+  // armed(lastEmitted) -> a session whose record holds lastEmitted, whose transcript's latest
+  // custom-title equals it, and whose resume mark is armed (as SessionStart source=resume leaves it).
+  const armed = (lastEmitted) => {
+    const sid = crypto.randomUUID();
+    const tpath = R.transcript(sid);
+    F.seed(sid, { transcript: tpath });
+    fs.writeFileSync(tpath, titleRecord(sid, lastEmitted));
+    fs.mkdirSync(path.dirname(F.recordPath(sid)), { recursive: true });
+    fs.writeFileSync(F.recordPath(sid), JSON.stringify({ v: 1, last_emitted: lastEmitted, titles: {}, failures: {} }));
+    assert.strictEqual(SN.armResumeMark(sid), true, "the resume mark was not armed");
+    return { sid, tpath };
+  };
+  test("N6 resume of a new-form name: the suffix moves to this session id", () => {
+    const s = armed("#12 Title12 sid-0badc0de");
+    assert.strictEqual(R.prompt(s.sid, "hello", s.tpath), `#12 Title12${sfx(s.sid)}`);
+  });
+  test("N6 resume of an old-form name with no candidate gives nothing and leaves the record unchanged", () => {
+    const s = armed("x [0badc0de]");
+    const before = fs.readFileSync(F.recordPath(s.sid), "utf8");
+    assert.strictEqual(R.prompt(s.sid, "hello", s.tpath), null);
+    assert.strictEqual(fs.readFileSync(F.recordPath(s.sid), "utf8"), before);
+  });
+  test("N6 resume of an old-form name where the prompt builds a name gives the new form", () => {
+    const s = armed("#12 Title12 [0badc0de]");
+    assert.strictEqual(R.prompt(s.sid, "/wf-init #12", s.tpath), `#12 Title12${sfx(s.sid)}`);
   });
 }
 

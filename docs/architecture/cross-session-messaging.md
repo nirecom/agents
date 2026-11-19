@@ -2,7 +2,8 @@
 
 How one Claude Code session finds the SendMessage destination of another session from an issue
 number or a session id, and how the sender confirms the message arrived (#2668). The PM
-Supervisor (#2941) is the first consumer: it sends instructions to working sessions from outside.
+supervisor (#2927) is the first consumer: its PM session sends instructions to each workflow
+session from outside.
 
 ## 1. Why a convention, not a registry
 
@@ -17,27 +18,39 @@ Supervisor (#2941) is the first consumer: it sends instructions to working sessi
 ## 2. Session name format
 
 `hooks/lib/session-name.js` (`composeSessionName`) owns the format; `bin/session-name` prints it
-for a manual `/rename`.
+for a manual `/rename` of a workflow session.
 
 | Kind | Name |
 |---|---|
-| `work` | `#A[ #B …] <title of #A> [xxxxxxxx]` |
-| `pm` | `[PM] #A[ #B #C …] <title> [xxxxxxxx]` |
-| `none` | `<repo name> [xxxxxxxx]` |
+| `work` | `#A[ #B …] <title of #A> sid-xxxxxxxx` |
+| `pm` | `[PM] <tag>: #A[ #B #C …] <title> sid-xxxxxxxx` |
+| `pm` with no issues, or archived | `[PM] <tag>: <objective> sid-xxxxxxxx` |
+| `none` | `<repo name> sid-xxxxxxxx` |
 
 - `[ #B …]` marks optional extra issues; an issue of another repo shows as `repo#N`.
 - Issue numbers come before the title because plugins and apps show only the first characters
   of a name.
-- PM title: the `/pm-init <objective>` text as is, or the title of the first issue only for
-  `/pm-init #A #B …` (the titles of B, C are never fetched).
+- PM session: the PM tag right after `[PM]` identifies the PM. The issues are its assigned list
+  from the PM state, and the title is the title of the first issue only (the titles of B, C are
+  never fetched), or the `/pm-init` theme when the list is empty.
+- A PM session is named by the issue-title hook alone, from its state, each time the list
+  changes through `/pm-init`, `/pm-add`, `/pm-remove` or `/resume-session --from`; no PM renames
+  itself by hand.
 - `none` name: the repo part of the origin URL, falling back to the cwd basename.
-- Suffix `[xxxxxxxx]`: the lower-cased first 8 characters of the current session id, appended to
-  all three kinds. A session id that is not UUID-shaped gets no suffix and is never matched.
-- The title is cleaned and cut like `cleanTitle` / `TITLE_MAX`; numbers and suffix are never cut.
-- Matching reads the suffix only, through `SESSION_NAME_SUFFIX_RE`; `PM_NAME_PREFIX_RE` tells a
-  PM session apart. Both regexes live only in `hooks/lib/session-name.js`.
-- When you `/rename` by hand, keep the suffix `bin/session-name` prints. A session whose suffix
-  was removed cannot be found by `find-peer` when the destination is a name (§5).
+- session-name suffix ` sid-xxxxxxxx`: a space, `sid-` and the lower-cased first 8 characters of
+  the current session id, appended to every kind. It is not bracketed, because ListAgents reads a
+  trailing bracket as its `[ref]` (§8, Verification (b)). A session id that is not UUID-shaped gets no session-name suffix and is
+  never matched.
+- The title is cleaned and cut like `cleanTitle` / `TITLE_MAX`; numbers, PM tag and session-name
+  suffix are never cut.
+- Matching reads the session-name suffix only, through `SESSION_NAME_SUFFIX_RE`;
+  `PM_NAME_PREFIX_RE` tells a PM session apart. Both regexes live only in
+  `hooks/lib/session-name.js`.
+- The ListAgents ref, the 6-character bracket ListAgents appends when it shows a name, is not the
+  session-name suffix; never copy it into a title.
+- When you `/rename` by hand, keep the session-name suffix `bin/session-name` prints. A session
+  whose session-name suffix was removed cannot be found by `find-peer` when the destination is a
+  name (§5).
 
 How and when the hook emits the name, including sessions without workflow state:
 [claude-code/settings/hooks.md](claude-code/settings/hooks.md) (`user-prompt-submit-issue-title.js`).
@@ -167,29 +180,34 @@ ListAgents names a session by its title. A session never titled shows its defaul
 
 ### Verification (b) — accepted destination shape
 
-Observed 2026-11-09 (Claude Code 2.1.319): sending the bare title `PROBE-2668 [4845aca2]` to a peer
-was refused as unreachable, because the trailing bracket is read as a `[ref]`. Sending
-`PROBE-2668 [4845aca2] [ba91da]` (title plus the ListAgents `[ref]`) was delivered. Addressing one's own
+Observed 2026-11-09 (Claude Code 2.1.319), with the bracketed session-name suffix of that time
+(` [xxxxxxxx]`): sending the bare title `PROBE-2668 [4845aca2]` to a peer was refused as unreachable,
+because the trailing bracket is read as a `[ref]`. Sending
+`PROBE-2668 [4845aca2] [ba91da]` (title plus the ListAgents ref) was delivered. Addressing one's own
 session that way is refused ("also addresses this session"). The destination kind is therefore `name`,
-the destination is `<title> [<ref6>]`, and a session id resolves through the ` [xxxxxxxx]` title suffix.
+the destination is `<title> [<ref6>]`, and a session id resolves through the session-name suffix of
+the title. Because a trailing bracket collides with the ListAgents `[ref]`, the suffix moved to the
+unbracketed ` sid-xxxxxxxx` form (§2).
 
 ### Verification (b) — reply to `from` and ListAgents output format
 
-A ListAgents row reads `<name> [<ref 6 hex>]  ·  <kind>  ·  <state>  ·  …`; no session id is listed.
+A ListAgents row reads `<name> [<ref 6 hex>]  ·  <kind>  ·  <state>  ·  …`, the bracket being the
+ListAgents ref; no session id is listed.
 A reply addressed to an incoming message's `from` attribute arrived end to end: a peer answered a ping
 with `pong`, and this session replied to that message's `from` (`uds:\\.\pipe\LOCAL\cc-msg-…`) with
 no name involved (`FROM_REPLY_VERIFIED` is true). Whether the peer then read that reply is not observed.
 
 The dump opens with the own-session line `This session is <name> [<ref6>] — <clause>`, followed by
 `Peer sessions (N):` and the rows. The name is unquoted (it never starts with `"`) and may contain spaces,
-brackets and the 8-digit suffix `[xxxxxxxx]`; the separator is the last ` [<ref6>] — `, because the clause
+brackets and the session-name suffix ` sid-xxxxxxxx`; the separator is the last ` [<ref6>] — ` (the
+ListAgents ref), because the clause
 holds no `[…]`. The older form `This session is "<name>" [<ref6>].` is still accepted. The real line was
 captured in a PM session.
 The own session appears only on that first line, never as a row, so `agents-list.js` reads it to resolve a
 `--session self` lookup. A `This session is` line matching neither form is not skipped: the parse fails
 with `agents-list-unparsable` (exit 2), so a format change surfaces at its cause instead of as
-`not-in-list`. Only `Peer sessions (N):` is skipped as a header. A name without the 8-digit suffix stays
-`not-in-list`; hooks adding the suffix to the PM name (#2941) resolves that.
+`not-in-list`. Only `Peer sessions (N):` is skipped as a header. A name without the session-name suffix
+stays `not-in-list`; since #2941 the issue-title hook names every PM session with it (§2).
 
 ### Title reflection: minimal hook and known upstream bugs
 

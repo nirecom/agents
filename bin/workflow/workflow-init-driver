@@ -45,6 +45,7 @@ const plansDir =
   path.join(require("os").homedir(), ".workflow-plans");
 
 const nonGithub = process.env.NON_GITHUB === "1";
+const isPmSession = (sid) => { try { return require("../../hooks/pm-session/schema").hasPmMark(require("../../hooks/workflow-state/state-io").readRawState(sid)); } catch (_) { return false; } };
 
 // --- Session ID resolution --------------------------------------------------
 
@@ -445,13 +446,8 @@ function runPipeline(state, startPhase, tokens, sessionId, ckptFile) {
 function main() {
   const { resumePath, answer, phaseOnly, tokens } = parseArgs(process.argv);
 
-  {
-    const tokErr = validateTokens(tokens);
-    if (tokErr) {
-      emitBlocked("<pre-session>", tokErr.reason, tokErr.nextHint);
-      return;
-    }
-  }
+  const tokErr = validateTokens(tokens);
+  if (tokErr) return void emitBlocked("<pre-session>", tokErr.reason, tokErr.nextHint);
 
   const { sid: sessionId, reliable: sidReliable } = resolveSessionId();
   // wipSid: the session ID to pass to wip-state.sh; null when not reliably resolved.
@@ -463,6 +459,8 @@ function main() {
     emitBlocked("<pre-session>", "control_dir_unavailable", String(e && e.message ? e.message : e));
     return;
   }
+  // A PM session (#2941, archived included) runs no workflow: the last line against a Skill-tool wf-init.
+  if (isPmSession(sessionId)) return void emitBlocked(ckptFile, "pm-session", "this is a PM session; no workflow runs here. Start the work in a new session.");
 
   // NON_GITHUB=1 → immediate done/Path C (also writes context.md)
   if (nonGithub) {

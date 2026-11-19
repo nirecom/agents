@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // Tests: hooks/workflow-state/inheritance/apply.js, hooks/workflow-state/inheritance/adopt.js
-// Tags: TL2, session-inherit, workflow-state, state-handoff-record, event-stream, regression-2652, scope:issue-specific, dup-group-keep:size-hard-limit, pwsh-not-required, regression-2920, workflow-abort
+// Tags: TL2, session-inherit, workflow-state, state-handoff-record, event-stream, regression-2652, scope:issue-specific, dup-group-keep:size-hard-limit, pwsh-not-required, regression-2920, workflow-abort, regression-2941, pm-session
 // #2652 S4: adopting (--from) a session-upstream whose state carries state handoff records — the
 // records stay generation-local (not copied), the downstream's own records survive (re-)adoption
 // and never trip the overwrite guard, and the upstream's records stay readable by sid.
@@ -312,6 +312,36 @@ caseBegin("adopt-upstream-record-failure", "hooks/workflow-state/inheritance/ado
     if (fired === 0) throw new Error("no write onto u-wfail.json was attempted: the failure was never injected");
     eq(F.bytes("u-wfail"), upBefore, "upstream state bytes");
     eq(abortsIn("u-wfail").length, 0, "abort events in the upstream");
+  });
+}
+caseEnd();
+
+// #2941: buildCopy never carries the upstream's `pm` into the clone and keeps the downstream's own,
+// so two files never share one current_since (the current generation stays decidable).
+const P = require("../lib/pm-state-fixture");
+const UP_PM = P.pm({ tag: "PM-adopt", issues: [11], current_since: "2026-10-01T00:00:00.000Z" });
+const DOWN_PM = P.pm({ tag: "PM-adopt", issues: [11, 12], current_since: "2026-11-01T00:00:00.000Z", upstream_session_id: "u-pm" });
+const withPm = (sid, pm) => { const st = F.raw(sid); st.pm = pm; F.writeRaw(sid, st); };
+
+caseBegin("adopt-keeps-pm-generation-local", "hooks/workflow-state/inheritance/apply.js");
+{
+  check("#2941: the downstream keeps its own pm; the upstream's pm is not copied over it", () => {
+    F.seedUpstream("u-pm");
+    withPm("u-pm", UP_PM);
+    F.seedDownstream("d-pm-own");
+    withPm("d-pm-own", DOWN_PM);
+    const r = adoptSoft("d-pm-own", "u-pm");
+    if (r.error) throw new Error(r.error);
+    eq(F.raw("d-pm-own").pm, DOWN_PM, "downstream pm");
+    eq(F.raw("u-pm").pm, UP_PM, "upstream pm (untouched)");
+  });
+  check("#2941: a downstream without pm stays without one after adopting a PM upstream", () => {
+    F.seedUpstream("u-pm2");
+    withPm("u-pm2", UP_PM);
+    F.seedDownstream("d-pm-none");
+    const r = adoptSoft("d-pm-none", "u-pm2");
+    if (r.error) throw new Error(r.error);
+    eq("pm" in F.raw("d-pm-none"), false, "pm key in the downstream");
   });
 }
 caseEnd();
