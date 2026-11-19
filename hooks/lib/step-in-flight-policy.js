@@ -5,6 +5,9 @@
 //
 // DEPENDENCY-FREE ON PURPOSE: required from the hooks tree and from
 // hooks/workflow-state/lifecycle.js alike, so any require() would close a cycle.
+// The one exception, typed-slash-command.js, is itself dependency-free.
+
+const { typedSlashCommand } = require("./typed-slash-command");
 
 // Steps whose work is genuinely delegated to a subagent. write_code is excluded
 // deliberately — it keeps its own isWriteCodeInFlight predicate.
@@ -78,29 +81,14 @@ function isWfInitDispatch(toolName, skillOrToolInput) {
   return WF_INIT_SKILLS.some((s) => s.toLowerCase() === lowered);
 }
 
-const WF_INIT_NAME_ALT = WF_INIT_SKILLS.join("|");
-const WF_INIT_WRAPPED_RE = new RegExp("<command-name>/(?:[\\w-]+:)?(?:" + WF_INIT_NAME_ALT + ")(?![\\w-])");
-const WF_INIT_BARE_RE = new RegExp("^/(?:[\\w-]+:)?(?:" + WF_INIT_NAME_ALT + ")(?![\\w-])");
-
-// A typed slash command reaches UserPromptSubmit either wrapped in <command-name> or
-// bare on the prompt's first line; a mention elsewhere in the text is not an invocation.
-function promptInvokesWfInit(prompt) {
-  if (typeof prompt !== "string") return false;
-  if (WF_INIT_WRAPPED_RE.test(prompt)) return true;
-  return WF_INIT_BARE_RE.test(prompt.split(/\r?\n/)[0]);
+// Recognition is hooks/lib/typed-slash-command.js (anchored, cross-session excluded, #2941).
+function wfInitPromptArgs(prompt) {
+  const hit = typedSlashCommand(prompt, WF_INIT_SKILLS);
+  return hit ? hit.args : null;
 }
 
-// The arguments of a typed wf-init (wrapped <command-args>, or the rest of a bare first line);
-// null when the prompt does not invoke wf-init — same recognition as promptInvokesWfInit.
-function wfInitPromptArgs(prompt) {
-  if (typeof prompt !== "string") return null;
-  if (WF_INIT_WRAPPED_RE.test(prompt)) {
-    const m = prompt.match(/<command-args>([\s\S]*?)<\/command-args>/);
-    return m ? m[1].trim() : "";
-  }
-  const first = prompt.split(/\r?\n/)[0];
-  const m = first.match(WF_INIT_BARE_RE);
-  return m ? first.slice(m[0].length).trim() : null;
+function promptInvokesWfInit(prompt) {
+  return wfInitPromptArgs(prompt) !== null;
 }
 
 function isLookaheadDispatchTool(toolName) {

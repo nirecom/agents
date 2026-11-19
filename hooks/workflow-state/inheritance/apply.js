@@ -93,6 +93,9 @@ function buildCopy(downstreamSid, createdAt, upstreamSid, upstream, downstream) 
   if (isPlainObject(downCtx) && JSON.stringify(downCtx) !== JSON.stringify(clone.session_start_context)) {
     clone.session_start_context = JSON.parse(JSON.stringify(downCtx));
   }
+  // The pm key is the session-downstream's own (#2941): a PM generation never comes from a copy.
+  if (downstream && isPlainObject(downstream.pm)) clone.pm = JSON.parse(JSON.stringify(downstream.pm));
+  else delete clone.pm;
 
   // Where this process runs and on which model are session-downstream facts; dropping them
   // in the copy would make state.cwd / session_model describe the session-upstream.

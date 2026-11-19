@@ -1,7 +1,7 @@
 "use strict";
 // tests/hooks/feat-user-prompt-submit-issue-title.js
 // Tests: hooks/user-prompt-submit-issue-title.js, hooks/user-prompt-submit-issue-title/target.js, hooks/user-prompt-submit-issue-title/title.js, hooks/user-prompt-submit-issue-title/record.js, hooks/lib/session-name.js, bin/session-name, hooks/session-start.js
-// Tags: TL1, TL2, scope:common, user-prompt-submit, session-title, issue-title
+// Tags: TL1, TL2, scope:common, user-prompt-submit, session-title, issue-title, pm-session
 // #299: a wf-init session gets "#N <issue title>" via hookSpecificOutput.sessionTitle. Assumed API:
 // run(input, deps) from the entry; deps = {fetchTitle(ref) -> string|null, now() -> ms, spawnSync};
 // without fetchTitle the hook runs originUrl + tracker.issueTitle with deps.spawnSync. Constants
@@ -30,6 +30,8 @@ const output = require(path.join(DIR, "output-cases.js"));
 const forge = require(path.join(DIR, "forge-cases.js"));
 const names = require(path.join(DIR, "name-cases.js"));
 const resume = require(path.join(DIR, "resume-cases.js"));
+const pmNames = require(path.join(DIR, "pm-name-cases.js"));
+const cliCases = require(path.join(DIR, "session-name-cli-cases.js"));
 const F = makeFixtures(tmp);
 // #2668 CLI cases share the fake gh / glab and child env of the find-peer tests.
 const P = require(path.join(__dirname, "..", "bin", "feature-2668-find-peer", "fixtures.js")).makeFixtures(path.join(tmp, "cli"));
@@ -44,7 +46,7 @@ target.begunMark(F);
 target.cacheAndNonTarget(F);
 caseEnd();
 
-caseBegin("H4 the real spawn path stays inside the 5 s hook budget", "hooks/user-prompt-submit-issue-title/title.js");
+caseBegin("H4 the real spawn path stays inside the 10 s hook budget", "hooks/user-prompt-submit-issue-title/title.js");
 budget.budget(F);
 caseEnd();
 
@@ -100,8 +102,16 @@ caseBegin("N4 the hook names a UUID session: work, none once, never over an emit
 names.hookNames(F);
 caseEnd();
 
-caseBegin("N5 bin/session-name fetches the title of the first pm ref only", "bin/session-name");
-names.cli(F, P);
+caseBegin("N5 bin/session-name pm prints the hook's tagged name; work keeps its tag-less refs", "bin/session-name");
+cliCases.cli(F, P);
+caseEnd();
+
+caseBegin("P1-P5 a PM session is named by its tag and assignment, by its objective at 0 refs or archived", "hooks/user-prompt-submit-issue-title/target.js");
+pmNames.pmNames(F);
+caseEnd();
+
+caseBegin("PO1-PO3 the hook process wires the PM writer: block, context with title, fail-open", "hooks/user-prompt-submit-issue-title.js");
+pmNames.pmOutput(F);
 caseEnd();
 
 caseBegin("N6 SessionStart new / resume give the name again only while it is still ours", "hooks/session-start.js");

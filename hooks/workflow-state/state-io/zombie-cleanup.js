@@ -8,6 +8,7 @@ const { normalizeStateVersion, SESSION_ID_VALID_RE } = require("./core");
 const { listStateRoots } = require("./state-root");
 const { RECEIPT_DIR_SUFFIX } = require("../../lib/instructions-loaded-receipt");
 const { WORKER_LOGS_DIRNAME } = require("./control-dir");
+const { hasPmMark } = require("../../pm-session/schema");
 
 // Last moment this session showed a sign of life. Since #1733 that is `created_at`
 // plus the newest `events[].at` — reading the retired `steps[*].updated_at` would
@@ -166,6 +167,8 @@ function cleanupRoot(workflowDir, maxAgeDays) {
     try {
       const raw = fs.readFileSync(filePath, "utf8");
       const state = JSON.parse(raw);
+      // A PM file (archived included) is the tag and generation history: never swept (#2941).
+      if (hasPmMark(state)) continue;
       if (lastActivityMs(state) < stateCutoff) fs.unlinkSync(filePath);
     } catch (e) {
       // Unreadable, corrupt, or a subdirectory — skip THIS entry only. The sweep

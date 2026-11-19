@@ -234,8 +234,8 @@ if run_case "EV8/annotation-keys"; then
     next_sid
     _ev_script=$(cat <<'JS'
 const bad = [];
-// #2688: baseline_accept (the retired user grant) is gone; failing_test_exits, run_parts and baseline_note are new.
-const want = ["baseline_classification", "baseline_note", "completion_basis", "dispatch_unsettled", "failing_test_exits", "failing_tests", "hit_count", "hit_summary",
+// #2688: baseline_accept (the retired user grant) is gone; failing_test_exits, run_parts and baseline_note are new; #3067 adds baseline_unobserved_accept.
+const want = ["baseline_classification", "baseline_note", "baseline_unobserved_accept", "completion_basis", "dispatch_unsettled", "failing_test_exits", "failing_tests", "hit_count", "hit_summary",
   "inherit_revert_reason", "outcome_source", "reopen_reason", "reset_reason", "review_scope_manifest", "run_outcome", "run_parts", "skip_judgment", "skip_reason",
   "skip_verdict", "unrunnable_accept_reason", "unrunnable_count", "unrunnable_missing_files", "unrunnable_runtimes", "warnings_accepted_reason", "warnings_summary", "write_code_scope_manifest", "wsid"];
 const exported = Array.from(E.STEP_ANNOTATION_KEYS || []).slice().sort();
@@ -260,21 +260,21 @@ fi
 case_end
 
 case_begin "ev9-persisted-keys-set-equality" "hooks/workflow-state/state-io/projection.js"
-echo "== EV9: PERSISTED_TOP_LEVEL_KEYS is exactly the twenty-two documented keys (v5, #2527; #2304 adds upstream_session_id/upstream_copy_seq; #2311 adds previous_session_ids; #2748 adds first_session_id) =="
+echo "== EV9: PERSISTED_TOP_LEVEL_KEYS is exactly the twenty-three documented keys (v5, #2527; #2304 adds upstream_session_id/upstream_copy_seq; #2311 adds previous_session_ids; #2748 adds first_session_id; #2941 adds pm) =="
 if run_case "EV9/persisted-keys-set-equality"; then
     next_sid
     _ev_script=$(cat <<'JS'
 const P = require("./hooks/workflow-state/state-io/projection");
 const want = ["auto_merge_pr", "auto_merge_pr_origin", "auto_merge_pr_source", "closes_issues", "created_at", "current", "deliverable_type", "delivery_path",
   "delivery_path_origin", "events", "first_session_id", "last_pushed_sha", "merge_base_baseline",
-  "previous_session_ids", "project_management_type", "session_id", "session_start_context", "session_worktree",
+  "pm", "previous_session_ids", "project_management_type", "session_id", "session_start_context", "session_worktree",
   "upstream_copy_seq", "upstream_session_id", "verbose_prompt", "version"].sort();
 const got = Array.from(P.PERSISTED_TOP_LEVEL_KEYS || []).slice().sort();
 console.log(got.length + " " + (got.join(",") === want.join(",") ? "MATCH" : "GOT:" + got.join(",")));
 JS
 )
     nodejs "$SID" "$PRE$_ev_script"
-    assert_eq "EV9/persisted-keys-set-equality" "22 MATCH" "$NODE_OUT"
+    assert_eq "EV9/persisted-keys-set-equality" "23 MATCH" "$NODE_OUT"
 fi
 case_end
 

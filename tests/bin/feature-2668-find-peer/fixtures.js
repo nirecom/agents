@@ -22,8 +22,11 @@ function agentsListText(entries) {
 
 // The clause that ends the own-session line of a real ListAgents dump (shared by the two constants below).
 const OWN_CLAUSE = "the name other sessions use to message it (it is not listed below; a message to it would be a message to yourself).";
-// The own-session line captured verbatim from a PM session (no quotes around the name; ends with " — <clause>").
-const REAL_OWN_LINE = `This session is [PM] #2728 #2927 PM infra / sentinel issues [4f6187e3] [42d2bd] — ${OWN_CLAUSE}`;
+// The own-session line captured verbatim from a PM session on 2026-11-09 (no quotes around the name; ends
+// with " — <clause>"), in the retired " [xxxxxxxx]" suffix form: a negative case now (#2941 Steps 9).
+const REAL_OWN_LINE_2026_11_09 = `This session is [PM] #2728 #2927 PM infra / sentinel issues [4f6187e3] [42d2bd] — ${OWN_CLAUSE}`;
+// The observed line with only its suffix part replaced by the current " sid-xxxxxxxx" form.
+const REAL_OWN_LINE = REAL_OWN_LINE_2026_11_09.replace(" [4f6187e3] ", " sid-4f6187e3 ");
 // The same shape with no 8-digit suffix on the name (a PM name the hook did not suffix).
 const REAL_OWN_LINE_NO_SUFFIX = `This session is [PM] #2728 #2927 PM [42d2bd] — ${OWN_CLAUSE}`;
 
@@ -31,7 +34,7 @@ const REAL_OWN_LINE_NO_SUFFIX = `This session is [PM] #2728 #2927 PM [42d2bd] �
 // lines, then per peer "  <name> [<ref6>]  ·  <kind>  ·  <state>  ·  started 7h ago"; e.raw replaces a row.
 // The first line is the real shape `This session is <name> [<ref6>] — <clause>`; own.quoted renders the
 // older `This session is "<name>" [<ref6>].`; own.raw replaces the whole line.
-function realAgentsListText(entries, own = { name: "#1 Self [00000000]", ref: "000000" }) {
+function realAgentsListText(entries, own = { name: "#1 Self sid-00000000", ref: "000000" }) {
   const rows = entries.map((e) => (e.raw !== undefined ? e.raw : `  ${e.name} [${e.ref}]  ·  ${e.kind || "interactive"}  ·  ${e.state || "idle"}  ·  started 7h ago`));
   let head;
   if (own.raw !== undefined) head = own.raw;
@@ -131,4 +134,4 @@ function load(rel) {
   }
 }
 
-module.exports = { ROOT, agentsListText, realAgentsListText, OWN_CLAUSE, REAL_OWN_LINE, REAL_OWN_LINE_NO_SUFFIX, uuid, parseKv, makeFixtures, load, tmpRoot: () => fs.mkdtempSync(path.join(os.tmpdir(), "find-peer-")) };
+module.exports = { ROOT, agentsListText, realAgentsListText, OWN_CLAUSE, REAL_OWN_LINE, REAL_OWN_LINE_2026_11_09, REAL_OWN_LINE_NO_SUFFIX, uuid, parseKv, makeFixtures, load, tmpRoot: () => fs.mkdtempSync(path.join(os.tmpdir(), "find-peer-")) };

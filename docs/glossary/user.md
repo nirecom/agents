@@ -41,6 +41,12 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Definition**: The scope, motivation, and non-goals that `/clarify-intent` settles with the user; the agreed baseline every later plan starts from.
 - **Related**: [skills/clarify-intent/SKILL.md](../../skills/clarify-intent/SKILL.md)
 
+### issue sequence table
+
+- **Definition**: The table a PM session keeps of the order in which to start the issues in its scope: one table per group of issues whose start order constrains each other, each table a row of waves, each wave the issues that can start together.
+  The PM updates it on its own judgment through `bin/pm-state set-sequence`.
+- **Related**: [skills/pm-init/SKILL.md](../../skills/pm-init/SKILL.md)
+
 ### Jev
 
 - **Definition**: The third-party typed classifier from TypeSafe AI that returns one probability per yes/no question; with `JEV=on` it makes several automatic judgments in this repository.
@@ -77,10 +83,27 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
   `bin/plan-link` prints a session's plan-link line.
 - **Related**: [architecture/claude-code/plan-sync.md](../architecture/claude-code/plan-sync.md)
 
+### PM session
+
+- **Definition**: A session started with `/pm-init` under a PM tag that holds an assigned issue list and an issue sequence table and implements nothing itself; it runs no workflow and has no session-close.
+  A different concept from the PM type.
+- **Related**: [skills/pm-init/SKILL.md](../../skills/pm-init/SKILL.md)
+
+### PM supervisor
+
+- **Definition**: The whole mechanism that oversees several workflow sessions issue by issue; a PM session plays that role.
+- **Related**: [architecture/cross-session-messaging.md](../architecture/cross-session-messaging.md)
+
+### PM tag
+
+- **Definition**: The one-word name the user gives a PM session so it can be called briefly: letters, digits and `-`, unique case-insensitively and never reused once used.
+  It appears as `<tag>:` right after `[PM]` in the session name and doubles as the PM's id.
+- **Related**: [skills/pm-init/SKILL.md](../../skills/pm-init/SKILL.md)
+
 ### PM type
 
 - **Definition**: How a session proceeds (project management type): `waterfall` (step order enforced), `off` (the `WORKFLOW_OFF` marker), or `agile` (planned, not implemented).
-  Chosen in intent and never switched mid-session; orthogonal to the deliverable type.
+  Chosen in intent and never switched mid-session; orthogonal to the deliverable type, and unrelated to a PM session.
 - **Related**: [architecture/claude-code/workflow.md](../architecture/claude-code/workflow.md#the-step-table-deliverable-type-x-pm-type)
 
 ### pre-implementation step
@@ -100,6 +123,11 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 
 - **Definition**: A marker string of the form `<<WORKFLOW_...>>` that hooks detect to drive workflow state — step-complete marks, skip declarations, OFF switches, and the like.
 - **Related**: [skills/enforce-workflow-off/SKILL.md](../../skills/enforce-workflow-off/SKILL.md)
+
+### session-name suffix
+
+- **Definition**: The `sid-` mark and the first 8 characters of the session id at the end of a session name; part of the title, kept even through `/rename`.
+- **Related**: [architecture/cross-session-messaging.md](../architecture/cross-session-messaging.md)
 
 ### short form
 
@@ -130,6 +158,11 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 
 - **Definition**: The end-to-end sequence from clarify through outline, detail, implementation, and verification to close, numbered with `WF-<TYPE>-N` and driven by hooks and sentinels.
 - **Related**: [CLAUDE.md](../../CLAUDE.md)
+
+### workflow session
+
+- **Definition**: A session started with `/wf-init` that makes one PR; it is overseen by a PM session.
+- **Related**: [skills/workflow-init/SKILL.md](../../skills/workflow-init/SKILL.md)
 
 ### workflow step
 

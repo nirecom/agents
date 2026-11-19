@@ -39,6 +39,8 @@ const C4_EXEMPTIONS = [
   { id: "step-in-flight",    phase: "session", test: (c, d) => !!d.anyStepInFlight(c.sid) },
   // #2920: an aborted session has no pending work to nudge toward; quiets both lanes.
   { id: "workflow-aborted",  phase: "session", test: (c, d) => d.isWorkflowAborted(c.sid) === true },
+  // #2941: a PM session (archived included) has no workflow to nudge toward.
+  { id: "pm-session", phase: "session", test: (c, d) => typeof d.isPmSession === "function" && d.isPmSession(c.sid) },
   { id: "delegated-reason",  phase: "next-step-output",
     test: (c, _d) => DELEGATED_REASONS.has(c.reason) },
   // #2277/#2650: a plan presentation turn with no CONFIRM echo from its continuation, or after a Deny, waits for approval.
@@ -94,9 +96,10 @@ function buildExemptionDeps() {
   const { isWorkflowStarted, anyStepInFlight, isLookaheadOnlyInFlight, isWorkflowAborted } =
     require("./workflow-state");
   const { isUserDialogTurn } = require("./lib/user-dialog-turn");
+  const isPmSession = (sid) => require("./pm-session/schema").hasPmMark(require("./workflow-state/state-io").readRawState(sid));
   return {
     isWorkflowOff, isNextStepPaused, isWorkflowStarted,
-    anyStepInFlight, isLookaheadOnlyInFlight, isUserDialogTurn, isWorkflowAborted,
+    anyStepInFlight, isLookaheadOnlyInFlight, isUserDialogTurn, isWorkflowAborted, isPmSession,
   };
 }
 
