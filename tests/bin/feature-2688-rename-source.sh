@@ -19,6 +19,8 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 BASELINE_CLI="$SCRIPT_CHECKOUT_ROOT/bin/run-tests-baseline"
 RENAME_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-rename.sh"
+# shellcheck source=tests/bin/bin-run-tests-baseline-decide-corpus/assert-divergence-log.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/bin-run-tests-baseline-decide-corpus/assert-divergence-log.sh"
 
 TMPROOT="$(make_tmp)"
 readonly TMPROOT
@@ -113,6 +115,11 @@ present "rename: the old path ran at base" "$R.marks/old-at-base"
 has_line "rename: file-verdict line for the new path" "BASELINE: file-verdict-preexisting tests/bin/new-t.sh test-file-changed"
 has_line "rename: detail names the old path" "-via-rename:tests/bin/old-t.sh"
 ck "rename: completion_basis" "baseline-auto-accepted" "$(field "$S" completion_basis)"
+# decide corpus (2): the merge base side capture (old path) is bound to the new path via RUN_REL, and the comparison matches.
+# The corpus (1) _lib uses the same file name in both commits, so only this case covers the rename mapping.
+# An adl_expect match checks that the COMPARED line's path is new-t.sh and that decide's (class, detail) equals live.
+adl_check "decide-shadow ($S)" "$RTB_OUT" "$R.cache"
+adl_expect "decide-shadow ($S)" tests/bin/new-t.sh match
 case_end
 
 case_begin "added-test-without-rename-stays-pending" "bin/lib/run-tests-baseline-rename.sh"
