@@ -268,3 +268,7 @@ Changes: step-durations report: time spent waiting for workflow-sentinel approva
 ### FEATURE: PR #3110 (2026-11-18)
 Background: fix(#3094): retry win32 EPERM on the workflow-state rename; rebuild invalid command-guard cache entry (#2966)
 Changes: Fixed workflow sentinels not being applied on Windows when the state file was briefly held open by another reader; the state write now retries the rename for up to 750 ms.;Fixed a command-guard test cache entry with an empty `bin/` never being rebuilt on Windows.
+
+### FEATURE: PR #3117 (2026-11-20)
+Background: feat(#3068 #3069 #3070): add comparison side result parser, data-tabl...
+Changes: `bin/run-tests-baseline` now prints one extra stderr line per run, `run-tests-baseline: decide shadow: compared=N unrecorded=N no_comparison=N log=<path>`, from a shadow check of the upcoming classification table; it never changes the classification, exit code or recorded state, and `RUN_TESTS_BASELINE_DECIDE_SHADOW=off` turns it off.
