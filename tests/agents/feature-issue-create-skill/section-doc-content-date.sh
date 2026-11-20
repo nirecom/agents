@@ -1,4 +1,4 @@
-# D1-D4 doc checks, T1-T4 content date tests
+# D1-D3 doc checks, T1-T4 content date tests
 # Each case is a function; run_case backgrounds it, run_case_sync runs a static check in-process.
 
 # D1: skills/issue-create/SKILL.md exists with name: issue-create and description:
@@ -36,18 +36,6 @@ case_d3() {
     fi
 }
 run_case_sync case_d3
-
-# D4: CLAUDE.md mentions /issue-create
-case_d4() {
-    if [[ ! -f "$CLAUDE_MD" ]]; then
-        fail "D4: CLAUDE.md not found"
-    elif grep -q "/issue-create" "$CLAUDE_MD"; then
-        pass "D4: CLAUDE.md mentions /issue-create"
-    else
-        fail "D4: CLAUDE.md does not mention /issue-create — RED until implementation"
-    fi
-}
-run_case_sync case_d4
 
 # T1: Content Date happy path — item-add with --format json, item-edit with right args, no warnings
 case_t1() {

@@ -16,7 +16,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
-const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { caseBegin, caseEnd, isolate, gitInit } = require("../lib/harness");
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const CLI = path.join(ROOT, "bin", "workflow", "run-tests-baseline-evidence");
@@ -29,7 +29,7 @@ process.env.CLAUDE_TRANSCRIPT_BASE_DIR = path.join(TMP, "transcripts");
 process.env.RUN_ALL_CACHE_DIR = path.join(TMP, "cache");
 after(() => { restore(); fs.rmSync(TMP, { recursive: true, force: true }); });
 
-const { mergeParts } = require(path.join(ROOT, "hooks", "workflow-run-tests", "run-parts.js"));
+const { mergeParts, recordParts } = require(path.join(ROOT, "hooks", "workflow-run-tests", "run-parts.js"));
 const { outcomeFields, resultFromOutcome } = require(path.join(ROOT, "bin", "worker-dispatch", "emit.js"));
 const { dispositionOf, sanitizeNote, NOTE_MAX } = require(
   path.join(ROOT, "bin", "workflow", "lib", "run-tests-baseline-evidence", "disposition.js"));
@@ -236,5 +236,125 @@ test("record-keeps-the-detail-column", () => {
   const p = record("detail-pending", [[B, "passes-alone-on-branch", "exit-1-then-pass"]]);
   assert.equal(p.rc, 1, p.err);
   assert.equal(entry(p.id).status, "pending");
+});
+caseEnd();
+
+// #3063 C1: a same-version part pushed out of the run_parts window (MAX_PARTS) must not take its
+// failure or its open hold with it; a full run rebuilds the window and clears the hold.
+const WINDOW = 50;
+const savedBranches = process.env.DEFAULT_BRANCHES;
+process.env.DEFAULT_BRANCHES = "main,master";
+after(() => {
+  if (savedBranches === undefined) delete process.env.DEFAULT_BRANCHES;
+  else process.env.DEFAULT_BRANCHES = savedBranches;
+});
+const REPO = path.join(TMP, "repo").replace(/\\/g, "/");
+fs.mkdirSync(REPO);
+gitInit(REPO);
+fs.writeFileSync(path.join(REPO, "README.md"), "fixture\n");
+for (const args of [["config", "user.email", "t@example.invalid"], ["config", "user.name", "t"],
+  ["checkout", "-q", "-b", "main"], ["add", "-A"], ["commit", "-q", "-m", "base"]]) {
+  const g = spawnSync("git", ["-C", REPO, ...args], { encoding: "utf8", timeout: 30000 });
+  if (g.status !== 0) throw new Error(`git ${args.join(" ")} failed: ${g.stderr || g.error}`);
+}
+
+const start = (label) => {
+  const id = sid(label);
+  appendEvents(id, [{ kind: "step_status", step: "run_tests", status: "pending", provenance: "observed", origin: "run-tests-hook" }]);
+  return id;
+};
+const setParts = (id, parts) => appendEvents(id, [ann("run_parts", parts)]);
+// rec - one recordParts call on the fixture repo, its run_parts persisted as record-run does.
+function rec(id, args, executed, failing = []) {
+  const r = recordParts({ sessionId: id, part: { args, root: REPO, cwd: REPO, results: null },
+    run: { trusted: true, contract: { executed, unrunnable: 0 }, failing, exits: {}, hitCount: 0, hitSummary: [], unrunnable: 0 } });
+  setParts(id, r.runParts);
+  return r;
+}
+const greens = (n, iv) => Array.from({ length: n }, () => ({ ...part([B], [], {}), input_version: iv }));
+function pad(id, n) {
+  const prev = entry(id).run_parts;
+  setParts(id, prev.concat(greens(n, prev[prev.length - 1].input_version)));
+}
+const truncatedIn = (r) => r.runParts.filter((e) => e.truncated === true).length;
+let repoIv = null;
+function repoVersion() {
+  if (repoIv === null) repoIv = rec(start("iv"), [B], 1).runParts[0].input_version;
+  assert.equal(typeof repoIv, "string", "fixture: the repo has an input_version");
+  return repoIv;
+}
+
+// overflow - the first part, then WINDOW proven greens of b: the first part leaves the window.
+function overflow(label, args, executed) {
+  const id = start(label);
+  const first = rec(id, args, executed, [A]);
+  assert.equal(typeof first.runParts[0].input_version, "string", "fixture: the repo has an input_version");
+  pad(id, WINDOW - 1);
+  const r = rec(id, [B], 1);
+  assert.equal(r.runParts.length, WINDOW);
+  assert.equal(r.runParts.some((e) => e.seq === first.runParts[0].seq), false, "fixture: the first part left the window");
+  return { id, first, r };
+}
+
+caseBegin("window-overflow-of-unknown-failure-holds-open", "hooks/workflow-run-tests/run-parts.js");
+test("window-overflow-of-unknown-failure-holds-open", () => {
+  const { first, r } = overflow("ovf-unknown", ["tests/bin"], 3);
+  assert.equal(first.selection, "unknown");
+  assert.ok(r.merged && r.merged.open === true, `the pushed-out unknown failure must hold run_tests open: ${JSON.stringify(r.merged)}`);
+  assert.equal(r.runParts[r.runParts.length - 1].truncated, true, "the element that pushed it out is marked truncated");
+});
+caseEnd();
+
+caseBegin("window-overflow-of-proven-failure-keeps-it", "hooks/workflow-run-tests/run-parts.js");
+test("window-overflow-of-proven-failure-keeps-it", () => {
+  const { first, r } = overflow("ovf-proven", [A], 1);
+  assert.deepEqual(first.selection, [A]);
+  assert.equal(truncatedIn(r), 1, "fixture: the pusher shares the pushed-out part's input_version");
+  assert.equal(r.merged.open, true, `a's pushed-out failure must hold run_tests open: ${JSON.stringify(r.merged)}`);
+});
+caseEnd();
+
+caseBegin("window-of-exactly-max-parts-is-not-truncated", "hooks/workflow-run-tests/run-parts.js");
+test("window-of-exactly-max-parts-is-not-truncated", async (t) => {
+  for (const [label, args, executed, open] of [["unknown", ["tests/bin"], 3, true], ["proven", [A], 1, false]]) {
+    await t.test(label, () => {
+      const id = start(`edge-${label}`);
+      rec(id, args, executed, [A]);
+      pad(id, WINDOW - 2);
+      const r = rec(id, [B], 1);
+      assert.equal(r.runParts.length, WINDOW, "nothing is pushed out");
+      assert.equal(truncatedIn(r), 0);
+      assert.equal(r.merged.open, open);
+      assert.deepEqual(r.merged.failingTests, [A]);
+    });
+  }
+});
+caseEnd();
+
+caseBegin("window-overflow-of-another-version-stays-closed", "hooks/workflow-run-tests/run-parts.js");
+test("window-overflow-of-another-version-stays-closed", () => {
+  const iv = repoVersion();
+  const id = start("ovf-other");
+  setParts(id, [{ ...part("unknown", [A], {}), input_version: "iv-other" }].concat(greens(WINDOW - 1, iv)));
+  const r = rec(id, [B], 1);
+  assert.equal(r.runParts.length, WINDOW);
+  assert.equal(r.runParts.some((e) => e.input_version === "iv-other"), false, "fixture: the other-version part left the window");
+  assert.equal(truncatedIn(r), 0, "pushing out another version's part truncates nothing");
+  assert.equal(r.merged.open, false);
+  assert.deepEqual(r.merged.failingTests, []);
+});
+caseEnd();
+
+caseBegin("full-rebuild-clears-window-truncation", "hooks/workflow-run-tests/run-parts.js");
+test("full-rebuild-clears-window-truncation", () => {
+  const { id, r } = overflow("ovf-rebuild", ["tests/bin"], 3);
+  assert.ok(r.merged && r.merged.open === true, `precondition: the overflow holds run_tests open: ${JSON.stringify(r.merged)}`);
+  const full = rec(id, [], 3);
+  assert.deepEqual(full.runParts.map((e) => e.selection), ["full"]);
+  assert.equal(truncatedIn(full), 0);
+  assert.ok(full.merged === null || full.merged.open !== true, JSON.stringify(full.merged));
+  const next = rec(id, [B], 1);
+  assert.equal(truncatedIn(next), 0);
+  assert.equal(next.merged.open, false, "the window is no longer held open after the rebuild");
 });
 caseEnd();

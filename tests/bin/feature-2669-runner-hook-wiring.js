@@ -36,6 +36,10 @@ caseBegin("real-run-without-hits-stays-green", "hooks/workflow-run-tests.js");
 test("real-run-without-hits-stays-green", () => noNewFailures(fails, realRun.withoutHits));
 caseEnd();
 
+caseBegin("real-run-stdout-unknown-selection-stays-open", "hooks/workflow-run-tests.js");
+test("real-run-stdout-unknown-selection-stays-open", () => noNewFailures(fails, realRun.stdoutUnknownSelectionStaysOpen));
+caseEnd();
+
 caseBegin("a-clean-run-after-a-hit-run-clears-the-hits", "hooks/workflow-run-tests/dispatch-outcome.js");
 test("a-clean-run-after-a-hit-run-clears-the-hits", () => noNewFailures(fails, realRun.hitThenCleanInOneSession));
 caseEnd();

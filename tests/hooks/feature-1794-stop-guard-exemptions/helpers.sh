@@ -19,6 +19,12 @@ MARK_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
 NEXT_STEP="$SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step"
 PLAN_FIXTURE_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture.js"
 
+# xfail pins (#3113): SessionStart no longer adopts the upstream, so the I-case inheritance rows
+# are known gaps. xfail.sh shares the entrypoint's FAIL counter; the entrypoint calls xfail_summary.
+XFAIL_ISSUE='#3113'
+# shellcheck source=/dev/null
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/xfail.sh"
+
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'stopexempt1794'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
@@ -26,11 +32,15 @@ node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else 
 # next-step's current step is `research` → ACTION=invoke (C4 would normally block).
 # #2277: the clarify_intent complete needs a real approval record (no migration).
 seed_started() {
-    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" "$RWT" 15 node -e "
+    # clarify_intent's completion is glossary-gated: record the check from a throwaway repo first.
+    local repo="$1/.seed-repo"
+    [ -d "$repo/.git" ] || mk_fixture_repo "$repo"
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" "$RWT" 30 node -e "
 const wf = require('$STATEIO_NODE');
 wf.markStep('$2', 'workflow_init', 'complete');
 require('$PLAN_FIXTURE_NODE').approveLive('$2', 'clarify_intent');
-wf.markStep('$2', 'clarify_intent', 'complete');" >/dev/null 2>&1
+require('$_SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/glossary-check-record.js')
+  .completeWithRecord('$2', 'clarify_intent', '$(node_path "$repo")', wf.markStep);" >/dev/null 2>&1
 }
 
 # seed_preinit <tn> <sid> — state file exists, workflow_init still pending.

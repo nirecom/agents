@@ -3,10 +3,21 @@
 // split-suite dispatcher that only gains a group string was caught as a case addition.
 // addedOnlyData(entry, file, others) -> true when every added code line is a data line (a quoted
 // literal inside an array, an array opening or element, a lone `)`), false when any added line is a command or no
-// line is added (fail-closed), null for a non-bash entry (the caller keeps its own judgment).
+// line is added (fail-closed), null for an entry whose case-embed part is not the one this guard
+// scans with (the caller keeps its own judgment). The registry part, not the entry id, decides.
 // Added = the file's code-line texts whose count exceeds that of every version in others.
 
+const path = require("path");
+const R = require("../registry");
 const { scan } = require("../parts/bash-case-embed");
+
+const SCANNER = require.resolve("../parts/bash-case-embed");
+
+// True when the entry's caseEmbedRules part is the scanner above (path.relative folds case on win32).
+function scansWithThisPart(entry) {
+  const p = R.partOf(entry, "caseEmbedRules");
+  return p !== null && path.relative(SCANNER, path.join(R.REPO_ROOT, ...p.file.split("/"))) === "";
+}
 
 const DQ = '"(?:[^"\\\\$`]|\\\\.|\\$(?!\\())*"';
 const SQ = "'[^']*'";
@@ -44,7 +55,7 @@ function counts(lines) {
 }
 
 function addedOnlyData(entry, file, others) {
-  if (!entry || entry.id !== "bash") return null;
+  if (!scansWithThisPart(entry)) return null;
   try {
     const lines = codeOf(file);
     const kinds = classify(lines);

@@ -235,15 +235,17 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
   re-verification, not a bug) — re-emit the completion sentinel immediately before checking workflow state if this happens.
   **Two recording routes (#2544).** Besides the stdout route above, a test-runner dispatch leaves
   `<stem>.outcome.json` in the session control dir (written only by the dispatcher, exclusive create).
-  Every Bash call, whatever its command, first settles the latest test-runner dispatch
-  (`hooks/workflow-run-tests/dispatch-outcome.js`): a trusted outcome is recorded through the same
+  Every Bash call, whatever its command, first settles every unconsumed test-runner dispatch in
+  dispatch order (#3063, `hooks/workflow-run-tests/dispatch-outcome.js`): a trusted outcome is recorded through the same
   judgement as stdout (`record-run.js`, the hook's only run_tests writer) and then marked
   `<stem>.ingested`; a replay of the same outcome bytes records nothing. Trust requires a regular file,
   a valid shape, matching worker/stem/session, the payload's SHA-256 and `cwd`, and a `.dispatched`
-  marker; `failing_tests` is kept only when every name exists under that `cwd`. While the latest dispatch
-  is unsettled, a non-test call demotes a stale complete or failing record to `pending`, and a test
+  marker; `failing_tests` is kept only when every name exists under that `cwd`. An outcome older than an ingested one only adds failures; a recorded full run
+  supersedes older unusable dispatches. Settlement holds the workflow-state lock (`withStateLock`), so
+  concurrent hooks ingest one at a time. While any dispatch is unsettled, or the control dir cannot be
+  scanned or the lock times out (`dispatch-unsettled`), a non-test call demotes a stale complete or failing record to `pending`, and a test
   call's stdout may demote but never complete. `outcome_source` records which outcome bytes a state
-  write came from; `bin/run-tests-baseline-evidence` refuses (exit 3) when a newer dispatch is unsettled
+  write came from; `bin/run-tests-baseline-evidence` refuses (exit 3) when any dispatch is unsettled
   or those bytes changed.
 - `detect-worktree-conflict.js` (PostToolUse, matcher: `Bash|runInTerminal|runCommands`) — when a
   failed terminal command's stderr matches `fatal: '<branch>' is already used by worktree`, emits a

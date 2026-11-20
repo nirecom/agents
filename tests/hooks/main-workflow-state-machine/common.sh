@@ -9,6 +9,25 @@ ERRORS=0
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 pass() { echo "PASS: $1"; }
 
+# Known source gaps pinned to #3113. xfail.sh counts an XPASS in FAIL, while this suite
+# exits on ERRORS, so mwsm_xfail folds every XPASS into ERRORS.
+FAIL=0
+XFAIL_ISSUE='#3113'
+# shellcheck source=tests/lib/xfail.sh
+. "$DOTFILES_DIR/tests/lib/xfail.sh"
+mwsm_xfail() {
+    local before="$FAIL"
+    "$@"
+    ERRORS=$((ERRORS + FAIL - before))
+}
+
+# mwsm_yes_if <cmd...> — prints yes when the command succeeds, no otherwise.
+mwsm_yes_if() { if "$@"; then echo yes; else echo no; fi; }
+# mwsm_is_docs_only_block <gate-result> — the gate blocked and named the docs-only rule.
+mwsm_is_docs_only_block() {
+    printf '%s' "$1" | grep -q '"block"' && printf '%s' "$1" | grep -qi "docs-only"
+}
+
 run_with_timeout() {
     if command -v timeout >/dev/null 2>&1; then timeout 120 "$@"
     else perl -e 'alarm 120; exec @ARGV' -- "$@"; fi
@@ -129,7 +148,7 @@ run_gate() {
     # so the result does not depend on which rule is in force.
     session_repo_fixture_attach "$ARMED_GATE_CHECKOUT" "$repo" || return 1
     echo "$json" | CLAUDE_PROJECT_DIR="$repo" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
-        AGENTS_MAIN_ROOT="$repo" node "$ARMED_GATE_HOOK" 2>/dev/null || true
+        AGENTS_MAIN_ROOT="$repo" env -u CLAUDE_CODE_SESSION_ID node "$ARMED_GATE_HOOK" 2>/dev/null || true
 }
 
 expect_approve_gate() {
@@ -162,7 +181,7 @@ expect_block_gate_contains() {
 run_mark_hook() {
     local repo="$1" json="$2"
     echo "$json" | CLAUDE_PROJECT_DIR="$repo" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
-        node "$MARK_HOOK" 2>/dev/null || true
+        env -u CLAUDE_CODE_SESSION_ID node "$MARK_HOOK" 2>/dev/null || true
 }
 
 # Reads through readState (workflow-state-tool field), so a v4 event-stream file

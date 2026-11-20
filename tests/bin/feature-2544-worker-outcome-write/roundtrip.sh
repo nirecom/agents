@@ -10,6 +10,8 @@ RT_PROBE_JS="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2544-dispatch-outcome/pro
 F2544_AGENTS="$(np "$SCRIPT_CHECKOUT_ROOT")"
 export F2544_AGENTS
 RT_LATER_CMD="git status"
+# tr_json selects one path; a part whose EXECUTED differs from the selection count is unknown.
+PASS_ONE_CANNED='[{"status":0,"stdout":"Results: PASS=1 FAIL=0 SKIP=0\nRUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0\n"}]'
 
 rt_probe() { node "$(np "$RT_PROBE_JS")" "$@" 2>/dev/null; }
 rt_step() { rt_probe field "$1" run_tests "$2"; }
@@ -45,7 +47,7 @@ rt_dispatch() {
 
 group_roundtrip_pass() {
     local sid="s2544rtpass" stem="worker-test-runner-1" rec
-    rt_dispatch "roundtrip-pass" "$sid" "$stem" "$PASS_CANNED" || return 0
+    rt_dispatch "roundtrip-pass" "$sid" "$stem" "$PASS_ONE_CANNED" || return 0
     assert_eq "roundtrip-pass/control-stdout-status" "pass" "$(field_of status)"
     assert_eq "roundtrip-pass/control-pending-before-the-later-call" "pending" "$(rt_step "$sid" status)"
     rt_hook "$sid" "$RT_LATER_CMD"

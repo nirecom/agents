@@ -10,13 +10,13 @@ run_structure_smoke_tests() {
     echo ""
     echo "=== Section 6: Structure Smoke ==="
 
-    # L6-a: PostToolUse hooks contains a Bash matcher
+    # L6-a: some PostToolUse entry matches Bash (its position in the list is not the contract)
     if node -e "
 const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-const ptu = s.hooks && s.hooks.PostToolUse;
-process.exit(ptu && ptu[0] && ptu[0].matcher === 'Bash' ? 0 : 1);
+const ptu = (s.hooks && s.hooks.PostToolUse) || [];
+process.exit(ptu.some(g => String(g.matcher || '').split('|').includes('Bash')) ? 0 : 1);
 " -- "$SETTINGS" 2>/dev/null; then
-        pass "L6-a. settings.json PostToolUse[0].matcher === 'Bash'"
+        pass "L6-a. settings.json has a PostToolUse entry whose matcher includes Bash"
     else
         fail "L6-a. settings.json PostToolUse missing Bash matcher"
     fi
@@ -44,14 +44,25 @@ process.exit(0);
         fail "L6-b. permissions.ask contract violated: $L6B_OUT"
     fi
 
-    # L6-c: permissions.deny contains ~/.claude/projects/workflow path
+    # L6-c: the workflow state dir is protected by the placement guard of
+    # block-clearance-token-write (a PreToolUse hook on Edit/Write), not by permissions.deny.
+    local l6c_dir="$TMPDIR_BASE/l6c-state"
+    mkdir -p "$l6c_dir"
     if node -e "
 const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-const deny = (s.permissions && s.permissions.deny) || [];
-process.exit(deny.some(e => e.includes('.claude/projects/workflow')) ? 0 : 1);
-" -- "$SETTINGS" 2>/dev/null; then
-        pass "L6-c. permissions.deny contains .claude/projects/workflow path"
+const pre = (s.hooks && s.hooks.PreToolUse) || [];
+const m = (g) => String(g.matcher || '').split('|');
+const hit = pre.some(g => m(g).includes('Edit') && m(g).includes('Write')
+  && (g.hooks || []).some(h => String(h.command || '').includes('block-clearance-token-write.js')));
+process.exit(hit ? 0 : 1);
+" -- "$SETTINGS" 2>/dev/null \
+       && env -u CLAUDE_CODE_SESSION_ID WORKFLOW_STATE_DIR="$l6c_dir" node -e "
+const path = require('path');
+const { classifyPlacement } = require(path.join(process.argv[1], 'hooks/block-clearance-token-write/placement-guard.js'));
+process.exit(classifyPlacement(path.join(process.argv[2], 'x.json'), {}) === 'control-dir' ? 0 : 1);
+" -- "$DOTFILES_DIR" "$l6c_dir" 2>/dev/null; then
+        pass "L6-c. workflow state dir is write-protected by block-clearance-token-write (placement-guard)"
     else
-        fail "L6-c. permissions.deny missing .claude/projects/workflow path"
+        fail "L6-c. workflow state dir is write-protected by block-clearance-token-write (placement-guard)"
     fi
 }

@@ -16,7 +16,7 @@ const { parseWorkerVerdict, workerVerdictVetoes } = require("./workflow-run-test
 const { demotionReason } = require("./workflow-run-tests/demotion");
 const { extractFailingTests, extractFailingExits, emitterRoot } = require("./workflow-run-tests/failing-list");
 const { runAllArgs, resultPaths } = require("./workflow-run-tests/run-parts");
-const { applyDispatchOutcome } = require("./workflow-run-tests/dispatch-outcome");
+const { applyDispatchOutcome, SCAN_FAILED_STEM } = require("./workflow-run-tests/dispatch-outcome");
 const { recordRun } = require("./workflow-run-tests/record-run");
 const { runAllHits, workerHits } = require("./workflow-run-tests/hit-summary");
 const { CONTRACT_PREFIX_RE, findSingleContract, runtimeLabels } = require("./lib/run-contract");
@@ -241,7 +241,9 @@ let dispatch = { ingested: false, unsettledStem: null, message: null };
 try {
   dispatch = applyDispatchOutcome({ sessionId, triggerCommand: sanitizeTrigger(command), isTest: testCommand });
 } catch (e) {
-  // fail-open: an unreadable control dir leaves the stdout route as before
+  // fail-open: an unreadable control dir leaves the stdout route as before. A lock timeout left
+  // outcomes unscanned, so stdout may take run_tests away but never grant it (dispatch-unsettled).
+  if (e && e.name === "StateLockTimeoutError") dispatch.unsettledStem = SCAN_FAILED_STEM;
 }
 
 if (!testCommand) done(dispatch.message);

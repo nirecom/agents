@@ -33,12 +33,13 @@ function settlement() {
 }
 
 // #2544: the failing list may come from a dispatch outcome. It stands only while no
-// newer test-runner dispatch is unsettled and the outcome it came from is unchanged.
+// test-runner dispatch is unsettled (#3063: any of them) and its outcome is unchanged.
 function dispatchPrecondition(sessionId, entry) {
   const s = settlement();
   const { unsettled, reason } = s.listUnsettled({ sessionId });
   if (reason) return reason;
-  if (unsettled.some((u) => u.worker === "test-runner")) return "a newer test-runner dispatch has not settled";
+  const stems = unsettled.filter((u) => u.worker === "test-runner").map((u) => u.stem);
+  if (stems.length > 0) return `a test-runner dispatch has not settled: ${stems.join(", ")}`;
   const source = entry.outcome_source;
   if (source === null || source === undefined) return null;
   return s.outcomeSourceStatus({ sessionId, source }) === "match" ? null : "outcome source changed or missing";

@@ -3,9 +3,9 @@
 # Tests: hooks/workflow-state/dispatch-settlement.js, hooks/workflow-run-tests/dispatch-outcome.js
 # Tags: workflow, run-tests, worker-dispatch, unsettled, classifier, tl1, scope:issue-specific
 # Sourced by ../feature-2544-dispatch-outcome.sh — helpers come from common.sh.
-# "Unsettled" is decided from file existence alone: the latest .dispatched marker of a
-# worker that records an outcome, with no .ingested beside it. Sequences are compared as
-# decimal strings because a 16-digit sequence does not survive a Number() round trip.
+# "Unsettled" is decided from file existence alone: every .dispatched marker of a worker
+# that records an outcome with no .ingested beside it, in dispatch order (#3063). Sequences
+# are compared as decimal strings: a 16-digit sequence does not survive a Number() round trip.
 
 # f2544_d_files <sid> <space-separated control file names> — "~" stands for the stem prefix.
 f2544_d_files() {
@@ -27,13 +27,13 @@ published-but-never-dispatched|~-1.json|none
 dispatched-but-no-outcome|~-1.json ~-1.dispatched|~-1
 outcome-present-not-ingested|~-1.json ~-1.dispatched ~-1.outcome.json|~-1
 ingested|~-1.json ~-1.dispatched ~-1.outcome.json ~-1.ingested|none
-newer-ingested-older-not|~-1.dispatched ~-2.dispatched ~-2.ingested|none
+newer-ingested-older-not|~-1.dispatched ~-2.dispatched ~-2.ingested|~-1
 older-ingested-newer-not|~-1.dispatched ~-1.ingested ~-2.dispatched|~-2
 newer-published-only|~-1.dispatched ~-1.ingested ~-2.json|none
 ten-outranks-nine|~-9.dispatched ~-9.ingested ~-10.dispatched|~-10
 only-unsequenced|~.dispatched|~
 unsequenced-settled|~.dispatched ~.ingested|none
-unsequenced-older-than-sequenced|~.dispatched ~-1.dispatched ~-1.ingested|none
+unsequenced-older-than-sequenced|~.dispatched ~-1.dispatched ~-1.ingested|~
 sequenced-newer-than-settled-unsequenced|~.dispatched ~.ingested ~-1.dispatched|~-1
 worker-that-records-no-outcome|worker-commit-push-1.json worker-commit-push-1.dispatched|none
 legacy-stem-is-not-counted|~-1.legacy-1700000000000.dispatched|none
@@ -106,8 +106,8 @@ f2544_d_mtime_reversal() {
   f2544_d_mtime_pair "$sid" 7 3
   f2544_eq "D/latest mtime: newer lower-seq marker beats older higher-seq marker" \
     "$(f2544_probe latest "$sid" test-runner)" "$F2544_T-3/3"
-  f2544_eq "D/latest mtime: the unsettled stem follows the same order" \
-    "$(f2544_probe unsettled "$sid")" "$F2544_T-3"
+  f2544_eq "D/latest mtime: every unsettled stem is listed in the same order" \
+    "$(f2544_probe unsettled "$sid")" "$F2544_T-7,$F2544_T-3"
 
   sid="f2544-d-mtime-higher-seq-newer"
   f2544_d_mtime_pair "$sid" 3 7

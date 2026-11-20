@@ -78,8 +78,8 @@ function wire(tag, tests) {
   seedPrefix(outSid);
   const d = dispatch(fileSid, tests);
   hook(fileSid, "git status", 0, "");
-  hook(outSid, d.command, d.status === null ? 1 : d.status, d.stdout);
-  return { d, sids: { file: fileSid, out: outSid }, file: runTests(fileSid), out: runTests(outSid) };
+  const outHook = hook(outSid, d.command, d.status === null ? 1 : d.status, d.stdout);
+  return { d, sids: { file: fileSid, out: outSid }, file: runTests(fileSid), out: runTests(outSid), outHook };
 }
 
 // baseline(sid) — the real baseline CLI over what the hook recorded for sid, run once per sid.
@@ -191,20 +191,43 @@ function withoutHits() {
     eq(clean.d.status, 0, "dispatcher exit");
     return undefined;
   });
-  for (const [label, key] of ROUTES) {
-    check(`control: ${label} — run_tests completes with a pass`, () => {
-      if (ready(clean)) return ready(clean);
-      eq([clean[key].status, clean[key].run_outcome], ["complete", "pass"], "status, run_outcome");
-      return undefined;
-    });
-    check(`control: ${label} — no hit count or summary is left`, () => {
-      if (ready(clean)) return ready(clean);
-      const e = clean[key];
-      if (e.hit_count !== undefined && e.hit_count !== null && e.hit_count !== 0) return `hit_count ${show(e.hit_count)}`;
-      if (Array.isArray(e.hit_summary) && e.hit_summary.length > 0) return `hit_summary ${show(e.hit_summary)}`;
-      return undefined;
-    });
-  }
+  check("control: file route — run_tests completes with a pass", () => {
+    if (ready(clean)) return ready(clean);
+    eq([clean.file.status, clean.file.run_outcome], ["complete", "pass"], "status, run_outcome");
+    return undefined;
+  });
+  check("control: file route — no hit count or summary is left", () => noHitsLeft(clean.file));
+}
+
+function noHitsLeft(e) {
+  if (ready(clean)) return ready(clean);
+  if (e.hit_count !== undefined && e.hit_count !== null && e.hit_count !== 0) return `hit_count ${show(e.hit_count)}`;
+  if (Array.isArray(e.hit_summary) && e.hit_summary.length > 0) return `hit_summary ${show(e.hit_summary)}`;
+  return undefined;
+}
+
+// #3063: the worker's stdout proves no selection, so the clean run is held open by run-parts-open.
+function stdoutUnknownSelectionStaysOpen() {
+  check("stdout route: a clean run stays pending with a pass outcome", () => {
+    if (ready(clean)) return ready(clean);
+    eq([clean.out.status, clean.out.run_outcome], ["pending", "pass"], "status, run_outcome");
+    return undefined;
+  });
+  check("stdout route: the hook reports run-parts-open as the demotion reason", () => {
+    if (ready(clean)) return ready(clean);
+    eq(JSON.parse(clean.outHook || "{}").systemMessage, "[run_tests] pending (run-parts-open)", "systemMessage");
+    return undefined;
+  });
+  check("stdout route: the run's part is recorded with an unknown selection, not as a failure", () => {
+    if (ready(clean)) return ready(clean);
+    const e = clean.out;
+    const parts = Array.isArray(e.run_parts) ? e.run_parts : [];
+    eq((parts[parts.length - 1] || {}).selection, "unknown", "last run_parts selection");
+    eq([e.last_run_failed, e.outcome_source], [false, null], "last_run_failed, outcome_source");
+    if (Array.isArray(e.failing_tests) && e.failing_tests.length > 0) return `failing_tests ${show(e.failing_tests)}`;
+    return undefined;
+  });
+  check("stdout route: no hit count or summary is left", () => noHitsLeft(clean.out));
 }
 
 // A later clean run in the same session tombstones both hit fields: recordPass writes them as
@@ -274,4 +297,4 @@ function baselineOnRealRun() {
   }
 }
 
-module.exports = { prepare, withHits, withoutHits, hitThenCleanInOneSession, baselineOnRealRun, FIX, git, wire, baseline, ROUTES };
+module.exports = { prepare, withHits, withoutHits, stdoutUnknownSelectionStaysOpen, hitThenCleanInOneSession, baselineOnRealRun, FIX, git, wire, baseline, ROUTES };

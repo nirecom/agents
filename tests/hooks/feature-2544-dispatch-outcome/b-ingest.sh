@@ -194,7 +194,7 @@ f2544_b_late_older_outcome() {
   f2544_eq "B/late: the older outcome does not demote the newer result" "$(f2544_status "$sid")" "complete"
   f2544_eq "B/late: the older failing list is not recorded" "$(f2544_field "$sid" failing_tests)" "absent"
   f2544_eq "B/late: outcome_source still names the newer dispatch" "$(f2544_source_stem "$sid")" "$new"
-  f2544_eq "B/late: the older outcome is never ingested" "$(f2544_probe exists "$sid" "$old.ingested")" "no"
+  f2544_eq "B/late: the older stem is superseded by the newer full pass, so its outcome is never read" "$(f2544_probe exists "$sid" "$old.ingested")" "yes"
 }
 
 f2544_b_unrelated_command() {

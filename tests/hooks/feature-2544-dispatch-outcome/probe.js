@@ -129,7 +129,8 @@ const MODES = {
     const l = load(SETTLEMENT);
     if (l.missing) return out(l.missing);
     const r = l.mod.listUnsettled({ sessionId: a[0] });
-    const stems = (r.unsettled || []).map((u) => u.stem).sort().join(",") || "none";
+    // Dispatch order, not sorted: listUnsettled returns every unconsumed stem in order (#3063).
+    const stems = (r.unsettled || []).map((u) => u.stem).join(",") || "none";
     out(typeof r.reason === "string" && r.reason !== "" ? `${stems}|reason` : stems);
   },
   latest() {

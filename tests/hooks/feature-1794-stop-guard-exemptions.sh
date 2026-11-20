@@ -124,7 +124,7 @@ run_I12
 run_I13
 run_I14
 
-echo ""
+xfail_summary
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 [ "$FAIL" -gt 0 ] && exit 1
 exit 0

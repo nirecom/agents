@@ -121,16 +121,17 @@ test_S2_worktree_end_no_step7() {
     fi
 }
 
-test_S3_claude_md_routes_session_close() {
-    local f="${SCRIPT_CHECKOUT_ROOT}/CLAUDE.md"
+# The session-close route lives in the next-step step table, not in CLAUDE.md.
+test_S3_step_table_routes_session_close() {
+    local f="${SCRIPT_CHECKOUT_ROOT}/bin/workflow/lib/next-step/steps.js"
     if [ ! -f "$f" ]; then
-        skip "S3_claude_md_routes_session_close (CLAUDE.md missing)"
+        fail "S3_step_table_routes_session_close: bin/workflow/lib/next-step/steps.js missing"
         return
     fi
-    if grep -q "/session-close" "$f"; then
-        pass "S3_claude_md_routes_session_close: CLAUDE.md references /session-close"
+    if grep -q '"session-close"' "$f"; then
+        pass "S3_step_table_routes_session_close: steps.js routes to the session-close skill"
     else
-        fail "S3_claude_md_routes_session_close: /session-close not found in CLAUDE.md"
+        fail "S3_step_table_routes_session_close: \"session-close\" not found in steps.js"
     fi
 }
 
@@ -218,7 +219,7 @@ test_T7_schema_probes_aggregated
 
 test_S1_session_close_skill_exists
 test_S2_worktree_end_no_step7
-test_S3_claude_md_routes_session_close
+test_S3_step_table_routes_session_close
 test_S4_issue_close_finalize_has_step_l
 test_S5_no_worktree_final_report_references
 test_S6_session_close_step4_uses_skeleton

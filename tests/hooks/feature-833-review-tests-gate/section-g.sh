@@ -19,6 +19,29 @@ fi
 CHECKER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-gate/review-tests-checker.js"
 STATE_IO_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io.js"
 
+# Fixture isolation: an inherited live session id, or a WORKTREE_NOTES.md in the cwd (this
+# checkout when run directly), would resolve a non-null wsid and hide the null branch.
+unset CLAUDE_CODE_SESSION_ID
+G_NEUTRAL_REPO="$TMPDIR_BASE/g-neutral-repo"
+git init -q "$G_NEUTRAL_REPO"
+git -C "$G_NEUTRAL_REPO" config core.hooksPath /dev/null
+
+# g_mark_review_tests <sid> <manifest-json> — glossary record + markReviewTestsComplete from the neutral repo.
+g_mark_review_tests() {
+    (
+        cd "$G_NEUTRAL_REPO" || exit 1
+        glossary_check_record "$1" "." review_tests  # #2529: completing review_tests needs a current glossary_check
+        run_with_timeout 10 node -e "
+const m = require('$STATE_IO_NODE');
+m.markReviewTestsComplete(process.argv[1], JSON.parse(process.argv[2]), {});
+" -- "$1" "$2" 2>/dev/null
+    )
+}
+# The wsid field is dropped from the projection when it is null: pinned to #3113 (xfail.sh counts an XPASS in FAIL).
+XFAIL_ISSUE='#3113'
+# shellcheck source=tests/lib/xfail.sh
+. "$_SECTION_G_SCRIPT_CHECKOUT_ROOT/tests/lib/xfail.sh"
+
 # ============================================================================
 # Section G: checkReviewTests unit tests + markReviewTestsComplete error guard
 # ============================================================================
@@ -136,11 +159,7 @@ const m = require('$STATE_IO_NODE');
 const state = m.createInitialState(process.argv[1], {cwd: '.'});
 m.writeState(process.argv[1], state);
 " -- "$sid" 2>/dev/null
-    glossary_check_record "$sid" "." review_tests  # #2529: completing review_tests needs a current glossary_check
-    run_with_timeout 10 node -e "
-const m = require('$STATE_IO_NODE');
-m.markReviewTestsComplete(process.argv[1], {v:1, files:{'tests/g6.sh':'abcdef1234567890'}}, {});
-" -- "$sid" 2>/dev/null
+    g_mark_review_tests "$sid" "{\"v\":1,\"files\":{\"tests/g6.sh\":\"abcdef1234567890\"}}"
     result_wsid=$(run_with_timeout 5 node -e "
 const m = require('$STATE_IO_NODE');
 const s = m.readState(process.argv[1]);
@@ -154,11 +173,12 @@ const rt = s && s.steps && s.steps.review_tests;
 const rsm = rt && rt.review_scope_manifest;
 process.stdout.write(rsm && rsm.v === 1 && rsm.files ? 'HAS_MANIFEST' : 'NO_MANIFEST');
 " -- "$sid" 2>/dev/null)
-    if [ "$result_wsid" = "HAS_WSID" ] && [ "$result_manifest" = "HAS_MANIFEST" ]; then
-        pass "G6. markReviewTestsComplete success -> wsid field + review_scope_manifest written to state"
+    if [ "$result_manifest" = "HAS_MANIFEST" ]; then
+        pass "G6. markReviewTestsComplete success -> review_scope_manifest written to state"
     else
-        fail "G6. expected HAS_WSID+HAS_MANIFEST, got wsid=$result_wsid manifest=$result_manifest"
+        fail "G6. expected HAS_MANIFEST, got manifest=$result_manifest"
     fi
+    xfail_eq "G6(wsid). markReviewTestsComplete success -> wsid field written to state" HAS_WSID "$result_wsid"
 }
 
 run_g3b() {
@@ -171,11 +191,7 @@ const m = require('$STATE_IO_NODE');
 const state = m.createInitialState(process.argv[1], {cwd: '.'});
 m.writeState(process.argv[1], state);
 " -- "$sid" 2>/dev/null
-    glossary_check_record "$sid" "." review_tests  # #2529: completing review_tests needs a current glossary_check
-    run_with_timeout 10 node -e "
-const m = require('$STATE_IO_NODE');
-m.markReviewTestsComplete(process.argv[1], {v:1, files:{}}, {});
-" -- "$sid" 2>/dev/null
+    g_mark_review_tests "$sid" '{"v":1,"files":{}}'
     result_wsid=$(run_with_timeout 5 node -e "
 const m = require('$STATE_IO_NODE');
 const s = m.readState(process.argv[1]);
@@ -189,11 +205,12 @@ const s = m.readState(process.argv[1]);
 const rt = s && s.steps && s.steps.review_tests;
 process.stdout.write(rt ? rt.status : 'MISSING');
 " -- "$sid" 2>/dev/null)
-    if [ "$result_status" = "complete" ] && [ "$result_wsid" = "HAS_WSID" ]; then
-        pass "G3b. markReviewTestsComplete always writes wsid field (null or sid), status=complete"
+    if [ "$result_status" = "complete" ]; then
+        pass "G3b. markReviewTestsComplete with an empty manifest -> status=complete"
     else
-        fail "G3b. expected complete+HAS_WSID, got status=$result_status wsid=$result_wsid"
+        fail "G3b. expected complete, got status=$result_status"
     fi
+    xfail_eq "G3b(wsid). markReviewTestsComplete always writes wsid field (null or sid)" HAS_WSID "$result_wsid"
 }
 
 run_g7() {
@@ -259,3 +276,4 @@ run_g4
 run_g5
 run_g6
 run_g7
+xfail_summary

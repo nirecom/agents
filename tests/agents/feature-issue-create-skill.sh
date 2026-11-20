@@ -5,7 +5,7 @@
 # live Windows Git Bash. Mitigation: WORKFLOW_USER_VERIFIED preflight, bin/check-verification-gate.sh
 # category skill-orchestration.
 # Tests the /issue-create skill: bin/github-issues/issue-create.sh (gh issue create wrapper),
-# skills/issue-create/SKILL.md frontmatter, rules/github-issues.md "Issue creation", CLAUDE.md mention.
+# skills/issue-create/SKILL.md frontmatter, rules/github-issues.md "Issue creation".
 # RED: fails clean while bin/github-issues/issue-create.sh is missing.
 # Cases run in parallel subshells (feature-issue-create-skill/case-runner.sh); output keeps definition order.
 
@@ -23,7 +23,6 @@ DISPATCH="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-dispatch.sh"
 SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/issue-create/SKILL.md"
 WORKFLOW_INIT_MD="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/SKILL.md"
 RULES_GH="$SCRIPT_CHECKOUT_ROOT/rules/github-issues.md"
-CLAUDE_MD="$SCRIPT_CHECKOUT_ROOT/CLAUDE.md"
 
 # Early-exit: if the implementation is missing, report cleanly and exit.
 if [[ ! -f "$TARGET" ]]; then
