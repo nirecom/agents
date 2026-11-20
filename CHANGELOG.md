@@ -272,3 +272,7 @@ Changes: Fixed workflow sentinels not being applied on Windows when the state fi
 ### FEATURE: PR #3117 (2026-11-20)
 Background: feat(#3068 #3069 #3070): add comparison side result parser, data-tabl...
 Changes: `bin/run-tests-baseline` now prints one extra stderr line per run, `run-tests-baseline: decide shadow: compared=N unrecorded=N no_comparison=N log=<path>`, from a shadow check of the upcoming classification table; it never changes the classification, exit code or recorded state, and `RUN_TESTS_BASELINE_DECIDE_SHADOW=off` turns it off.
+
+### FEATURE: PR #3120 (2026-11-21)
+Background: fix(#3063, #3073): keep split-dispatch failures from vanishing; fix o...
+Changes: run_tests no longer reports green when a split test run had a failing part: every dispatch is now counted, and a run whose test selection cannot be verified keeps the step pending until a full run passes.
