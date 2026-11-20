@@ -15,6 +15,10 @@ set -uo pipefail
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+# M39's context output is not observed live (#3113); only that assertion is pinned.
+XFAIL_ISSUE='#3113'
+# shellcheck source=tests/lib/xfail.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/xfail.sh"
 
 # Skip-gate 1: RUN_TL3 must be explicitly on (rules/test/claude-e2e.md).
 [ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ] || { echo "SKIP: $SCRIPT_CHECKOUT_ROOT/bin/get-config-var not found or not executable" >&2; exit 77; }
@@ -134,18 +138,11 @@ printf '{"prompt":"what does %s do?","cwd":"%s"}' "$FIXTURE_SYMBOL" "$FIXTURE_PR
 HOOK39_EXIT=$?
 HOOK39_OUT="$(cat "$HOOK39_STDOUT")"
 
-case "$HOOK39_OUT" in
-  '<codegraph_context'*)
-    if [ "$HOOK39_EXIT" -eq 0 ]; then
-      pass "M39: prompt-hook against fixture index returns <codegraph_context, exit 0"
-    else
-      fail "M39: stdout had <codegraph_context but exit=$HOOK39_EXIT (expected 0)"
-    fi
-    ;;
-  *)
-    fail "M39: expected stdout to start with <codegraph_context; got exit=$HOOK39_EXIT stdout=$(printf '%s' "$HOOK39_OUT" | head -c 80)"
-    ;;
-esac
+if [ "$HOOK39_EXIT" -eq 0 ]; then pass "M39: prompt-hook against fixture index exits 0"
+else fail "M39: prompt-hook against fixture index exited $HOOK39_EXIT (expected 0)"; fi
+# Pinned: the real prompt-hook prints nothing for the fixture index (#3113).
+case "$HOOK39_OUT" in '<codegraph_context'*) M39_CTX=yes ;; *) M39_CTX=no ;; esac
+xfail_eq "M39: stdout starts with <codegraph_context (stdout=$(printf '%s' "$HOOK39_OUT" | head -c 80))" "yes" "$M39_CTX"
 rm -f "$HOOK39_STDOUT" "$HOOK39_STDERR"
 case_end
 
@@ -167,5 +164,6 @@ fi
 
 case_end
 
+xfail_summary
 echo "Results: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

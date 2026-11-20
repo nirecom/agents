@@ -74,25 +74,50 @@ function latestDispatch({ sessionId, worker } = {}) {
 
 const reasonOf = (what, e) => `${what}: ${e && e.message ? e.message : "unknown error"}`;
 
-// The latest dispatch of each recording worker that has no .ingested beside it.
-// A scan failure is reported with a reason so callers treat it as unsettled.
-function listUnsettled({ sessionId } = {}) {
+// Every dispatch of the worker, oldest first.
+function dispatchedIn(names, worker, dir) {
+  const out = [];
+  for (const name of names) {
+    if (!name.endsWith(DISPATCHED_SUFFIX)) continue;
+    const stem = name.slice(0, -DISPATCHED_SUFFIX.length);
+    const parsed = parseStem(stem);
+    if (parsed === null || parsed.worker !== worker) continue;
+    out.push({ stem, seq: parsed.seq, mtime: markerMtime(dir, name) });
+  }
+  return out.sort((a, b) => (a.mtime - b.mtime) || compareSeq(a.seq, b.seq));
+}
+
+// -> { stems: [{ stem, seq, mtime, late }], reason? }: the worker's dispatches with no .ingested,
+// in dispatch order; late when a newer dispatch is already ingested. A scan failure carries a
+// reason and must be read as "unconsumed dispatches cannot be seen", never as none (#3063).
+function listUnconsumed({ sessionId, worker } = {}) {
   let dir;
   let names;
   try {
     dir = getSessionControlDir(sessionId);
-    if (!assertRealControlDir(dir)) return { unsettled: [] };
+    if (!assertRealControlDir(dir)) return { stems: [] };
     names = fs.readdirSync(dir);
   } catch (e) {
-    return { unsettled: [], reason: reasonOf("control dir scan failed", e) };
+    return { stems: [], reason: reasonOf("control dir scan failed", e) };
   }
   const present = new Set(names);
+  const ingested = (d) => present.has(ingestedMarkerName(d.stem));
+  const all = dispatchedIn(names, worker, dir);
+  const stems = [];
+  all.forEach((d, i) => {
+    if (!ingested(d)) stems.push(Object.assign({}, d, { late: all.slice(i + 1).some(ingested) }));
+  });
+  return { stems };
+}
+
+// Every unconsumed dispatch of each recording worker, in dispatch order.
+// A scan failure is reported with a reason so callers treat it as unsettled.
+function listUnsettled({ sessionId } = {}) {
   const unsettled = [];
   for (const worker of WORKER_NAMES.filter(recordsOutcome)) {
-    const latest = latestIn(names, worker, dir);
-    if (latest !== null && !present.has(ingestedMarkerName(latest.stem))) {
-      unsettled.push({ worker, stem: latest.stem, seq: latest.seq });
-    }
+    const r = listUnconsumed({ sessionId, worker });
+    if (r.reason) return { unsettled: [], reason: r.reason };
+    for (const d of r.stems) unsettled.push({ worker, stem: d.stem, seq: d.seq });
   }
   return { unsettled };
 }
@@ -121,4 +146,4 @@ function outcomeSourceStatus({ sessionId, source } = {}) {
   return fs.existsSync(path.join(dir, ingestedMarkerName(source.stem))) ? "match" : "mismatch";
 }
 
-module.exports = { compareSeq, parseStem, latestDispatch, listUnsettled, outcomeSourceStatus };
+module.exports = { compareSeq, parseStem, latestDispatch, listUnconsumed, listUnsettled, outcomeSourceStatus };

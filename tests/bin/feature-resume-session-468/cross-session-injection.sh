@@ -69,7 +69,8 @@ const problems = [];
 let d = null;
 try { d = JSON.parse(raw); } catch (e) { problems.push('stdout-is-not-one-json-record:' + e.message); }
 if (d) {
-  const ALLOWED = ['type','upstream_session_id','availability','reason','artifacts','inherit_result','handoff_rendered','transcript_tail','state_handoff_errors'];
+  // workflow_aborted (the upstream's abort record) and progress_file (a path pointer) are designed fields of the record.
+  const ALLOWED = ['type','upstream_session_id','availability','reason','artifacts','inherit_result','workflow_aborted','handoff_rendered','transcript_tail','state_handoff_errors','progress_file'];
   for (const k of Object.keys(d)) if (ALLOWED.indexOf(k) === -1) problems.push('injected-top-level-field:' + k);
   if (d.type !== 'upstream') problems.push('record-type-diverted:' + JSON.stringify(d.type));
   if ('skill' in d) problems.push('record-carries-a-skill-to-dispatch:' + JSON.stringify(d.skill));

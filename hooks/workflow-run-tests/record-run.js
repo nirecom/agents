@@ -151,15 +151,28 @@ function isGreen(input, contract) {
     && contract.fail === 0 && contract.unrunnable === 0 && !(contract.hits > 0);
 }
 
+// The merge could not run: the earlier failures stay on this record so none is dropped (#3063).
+function keepPreviousFailures(base) {
+  const state = readState(base.sessionId);
+  const prev = state && state.steps && state.steps.run_tests ? state.steps.run_tests : {};
+  const before = Array.isArray(prev.failing_tests) ? prev.failing_tests : [];
+  if (before.length === 0) return;
+  const own = Array.isArray(base.failingTests) ? base.failingTests : [];
+  base.failingTests = [...new Set(before.concat(own))].sort();
+  const exits = prev.failing_test_exits && typeof prev.failing_test_exits === "object" ? prev.failing_test_exits : {};
+  base.failingExits = Object.assign({}, exits, base.failingExits || {});
+}
+
 // Adds this run to run_parts and, when it merges with earlier parts, replaces the run's own
-// failing / hit / unrunnable values with the merged ones. -> true when the merge is not clean.
+// failing / hit / unrunnable values with the merged ones. -> true when the merge is not clean
+// or cannot be proven (an unknown part in the window, a merge that threw).
 function applyRunParts(base, part, input) {
   if (base.contract === null) return false;
   const c = base.contract;
   // A readable current-shape contract; a worker's failure word vetoes green, not the counts.
   const trusted = base.hitCount !== null && c.shape === "current" && input.workerStatus !== "timeout";
   try {
-    const { runParts, merged } = recordParts({
+    const { runParts, merged, selection } = recordParts({
       sessionId: base.sessionId,
       part,
       run: {
@@ -173,11 +186,22 @@ function applyRunParts(base, part, input) {
       },
     });
     base.runParts = runParts;
+    // Read back by dispatch-outcome.js: only a recorded full run supersedes older dispatches.
+    part.provenSelection = selection;
     if (merged === null) return false;
-    Object.assign(base, merged);
-    return merged.failingTests.length > 0 || merged.hitCount > 0 || merged.unrunnableCount > 0;
-  } catch {
-    return false; // fail-open: the run is recorded alone, run_parts untouched
+    const { open, ...values } = merged;
+    if (values.failingTests === undefined) return open === true;
+    Object.assign(base, values);
+    return open === true || values.failingTests.length > 0 || values.hitCount > 0 || values.unrunnableCount > 0;
+  } catch (e) {
+    // fail-closed: run_parts untouched, run_tests held open by run-parts-open
+    process.stderr.write(`[run_tests] run_parts merge failed, run held open: ${e && e.message ? e.message : e}\n`);
+    try {
+      keepPreviousFailures(base);
+    } catch {
+      // the open verdict alone still holds run_tests pending
+    }
+    return true;
   }
 }
 

@@ -34,3 +34,6 @@ tests/lib/precommit-check-runner.js	`${e.name}.js`	builds the require path of a 
 bin/lib/check-askuser-dialog-ids.js	file.endsWith(".sh") && path.basename	scans the .sh files under skills/**/scripts for AskUserQuestion dialog IDs; not a test-language or test-discovery decision
 bin/lib/check-askuser-dialog-ids.js	.filter((f) => f.endsWith(".js"))	scans the workflow-init phase modules (.js) to collect ASK_IDs; not a test-language or test-discovery decision
 bin/github-issues/migration/commit-migration-artifacts.sh	*.sh)	case arm that sets the executable bit on every staged shell script the pre-commit hook requires as 100755; not test discovery (the word tests is the migrate-tests skill name)
+tests/lib/mewg-groups.sh	grep '\.sh$'	follows the MEWG fragment file naming convention; not a test-language decision
+tests/lib/mewg-groups.sh	"$SCRIPT_CHECKOUT_ROOT"/tests/hooks/main-enforce-worktree-guard-*.sh	follows the MEWG fragment file naming convention; not a test-language decision
+tests/lib/mewg-groups.sh	g="${g%.sh}"	follows the MEWG fragment file naming convention; not a test-language decision

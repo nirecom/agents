@@ -168,13 +168,13 @@ run_c7() {
 }
 
 # --- #2475: --set-transcript-cursor ----------------------------------------
-CURSOR_JSON='{"transcript_path":"/t/a.jsonl","line":5,"last_uuid":"u5","updated_at":"2026-01-01T00:00:00Z"}'
+CURSOR_JSON='{"transcript_path":"/tr/a.jsonl","line":5,"last_uuid":"u5","updated_at":"2026-01-01T00:00:00Z"}'
 
 run_c8() {
     require_source "$CLI" "C8: --set-transcript-cursor alone writes alert.transcript_cursor" || return
     local tmp sid line audit rc
     tmp="$(mktemp -d)"; sid="c8-sid"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --session-id "$sid" --set-transcript-cursor "$CURSOR_JSON" >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --session-id "$sid" --set-transcript-cursor "$CURSOR_JSON" >/dev/null 2>&1
     rc=$?
     line=$(read_field "$tmp" "$sid" "alert.transcript_cursor.line")
     audit=$(read_field "$tmp" "$sid" "audit.transcript_cursor")
@@ -190,7 +190,7 @@ run_c9() {
     require_source "$CLI" "C9: --increment-alert-retry-count + --set-transcript-cursor rejected" || return
     local tmp sid err rc ok
     tmp="$(mktemp -d)"; sid="c9-sid"
-    err=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --session-id "$sid" --increment-alert-retry-count --set-transcript-cursor "$CURSOR_JSON" 2>&1 >/dev/null)
+    err=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --session-id "$sid" --increment-alert-retry-count --set-transcript-cursor "$CURSOR_JSON" 2>&1 >/dev/null)
     rc=$?
     rm -rf "$tmp"
     case "$err" in *"mutually exclusive"*) ok=1 ;; *) ok=0 ;; esac
@@ -205,9 +205,9 @@ run_c9() {
 c10_reject() {
     local label="$1" value="$2" tmp sid before after rc
     tmp="$(mktemp -d)"; sid="c10-sid"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --session-id "$sid" --set-transcript-cursor "$CURSOR_JSON" >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --session-id "$sid" --set-transcript-cursor "$CURSOR_JSON" >/dev/null 2>&1
     before=$(read_field "$tmp" "$sid" "alert.transcript_cursor")
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --session-id "$sid" --set-transcript-cursor "$value" >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --session-id "$sid" --set-transcript-cursor "$value" >/dev/null 2>&1
     rc=$?
     after=$(read_field "$tmp" "$sid" "alert.transcript_cursor")
     rm -rf "$tmp"
@@ -221,7 +221,7 @@ c10_reject() {
 run_c10() {
     require_source "$CLI" "C10: invalid --set-transcript-cursor values rejected" || return
     c10_reject "C10a: line -1 rejected, state unchanged" \
-        '{"transcript_path":"/t/a.jsonl","line":-1,"last_uuid":"u5","updated_at":"2026-01-01T00:00:00Z"}'
+        '{"transcript_path":"/tr/a.jsonl","line":-1,"last_uuid":"u5","updated_at":"2026-01-01T00:00:00Z"}'
     c10_reject "C10b: non-JSON value rejected, state unchanged" 'not-json'
     c10_reject "C10c: empty transcript_path rejected, state unchanged" \
         '{"transcript_path":"","line":1,"last_uuid":"u1","updated_at":"2026-01-01T00:00:00Z"}'
@@ -231,8 +231,8 @@ run_c11() {
     require_source "$CLI" "C11: --set-alert-phase done keeps alert.transcript_cursor" || return
     local tmp sid line rc
     tmp="$(mktemp -d)"; sid="c11-sid"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --session-id "$sid" --set-transcript-cursor "$CURSOR_JSON" >/dev/null 2>&1
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --session-id "$sid" --set-alert-phase done >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --session-id "$sid" --set-transcript-cursor "$CURSOR_JSON" >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --session-id "$sid" --set-alert-phase done >/dev/null 2>&1
     rc=$?
     line=$(read_field "$tmp" "$sid" "alert.transcript_cursor.line")
     rm -rf "$tmp"
@@ -247,8 +247,8 @@ run_c12() {
     require_source "$CLI" "C12: re-setting the cursor overwrites it (idempotent write)" || return
     local tmp sid line uuid rc
     tmp="$(mktemp -d)"; sid="c12-sid"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --session-id "$sid" --set-transcript-cursor "$CURSOR_JSON" >/dev/null 2>&1
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --session-id "$sid" --set-transcript-cursor '{"transcript_path":"/t/a.jsonl","line":9,"last_uuid":null,"updated_at":"2026-01-02T00:00:00Z"}' >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --session-id "$sid" --set-transcript-cursor "$CURSOR_JSON" >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --session-id "$sid" --set-transcript-cursor '{"transcript_path":"/tr/a.jsonl","line":9,"last_uuid":null,"updated_at":"2026-01-02T00:00:00Z"}' >/dev/null 2>&1
     rc=$?
     line=$(read_field "$tmp" "$sid" "alert.transcript_cursor.line")
     uuid=$(read_field "$tmp" "$sid" "alert.transcript_cursor.last_uuid")

@@ -46,7 +46,9 @@ function demotionMessage(reason, contract) {
   if (reason === "run-parts-open") {
     return { head, detail: lead + "This rerun passed, but merged with the earlier runs (run_tests.run_parts) " +
       "some failing test, HIT or UNRUNNABLE test is still open. Rerun the paths that " +
-      "`run-tests-baseline-evidence rerun-list` prints, or the full suite." };
+      "`run-tests-baseline-evidence rerun-list` prints, or the full suite. " +
+      "If a part's selection cannot be proven (a directory argument, `--deadline`, an unknown option), " +
+      "rerun the full suite with no arguments (`-j` and `--all` are allowed)." };
   }
   if (reason === "contract-legacy-shape") {
     return { head, detail: lead + "RUN_CONTRACT has the legacy 4-field form: the worktree's tests/run-all.sh predates this change, " +
