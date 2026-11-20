@@ -79,7 +79,7 @@ run_cli_decoy_hit_cases() {
   local out1="$RTB_CLI_OUT" sid2="dhit2-$$" logdir2 n2 l1 l2
   l1="$(printf '%s\n' "$out1" | grep -E '^BASELINE: ' | grep -E "tests/bin/test-decoy-exit" | sort)"
   seed_failing "$sid2" "${hits[@]}" "$t_pre"
-  ROOT_DECOY_DIR="$decoy" rtb_cli_run "$cache" "$repo" "$sid2"
+  ROOT_DECOY_DIR="$decoy" RTB_CLI_ZERO_COMPARED_OK=branch-result-reused-from-cache,outside-decide rtb_cli_run "$cache" "$repo" "$sid2"
   for t in "${hits[@]}"; do
     if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: undetermined[[:space:]]+$t[[:space:]]+root-decoy-hit-at-base\$"; then
       pass "C3-root-decoy-hit-rerun: $t classified undetermined root-decoy-hit-at-base again"

@@ -93,7 +93,7 @@ appendEvents(process.argv[2], [
   local t_slp="tests/bin/test-sleep.sh" c9_cache
   c9_cache="$(cli_case_cache c9)"
   seed_failing "c9-$$" "$t_slp"
-  rtb_cli_run "$c9_cache" "$repo" "c9-$$" --per-test-timeout 1
+  RTB_CLI_ZERO_COMPARED_OK=outside-decide rtb_cli_run "$c9_cache" "$repo" "c9-$$" --per-test-timeout 1
   if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: undetermined[[:space:]]+$t_slp.*budget-exhausted" \
     && [ "$RTB_CLI_RC" -eq 8 ]; then
     pass "C9: timeout under an explicit short limit → undetermined budget-exhausted, exit 8"
@@ -267,7 +267,7 @@ run_cli_undetermined_cases() {
 
   rm -f "$ran"
   seed_failing "hom-$$" "$t_home"
-  rtb_cli_run "$(cli_case_cache hom)" "$repo" "hom-$$"
+  RTB_CLI_ZERO_COMPARED_OK=outside-decide rtb_cli_run "$(cli_case_cache hom)" "$repo" "hom-$$"
   if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: undetermined[[:space:]]+$t_home.*home-claude-ref"; then
     pass "C3-home-claude-ref: \$HOME/.claude reference classified undetermined home-claude-ref"
   else
@@ -298,7 +298,7 @@ run_cli_exec_setup_failed_cases() {
   git -C "$repo" checkout -q feature
   git -C "$repo" merge -q --no-edit main
   seed_failing "nol-$$" "$t"
-  rtb_cli_run "$(cli_case_cache nol)" "$repo" "nol-$$"
+  RTB_CLI_ZERO_COMPARED_OK=outside-decide rtb_cli_run "$(cli_case_cache nol)" "$repo" "nol-$$"
   if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: undetermined[[:space:]]+$t[[:space:]]+exec-setup-failed"; then
     pass "C3-exec-setup-failed: unsourceable base launcher classified undetermined exec-setup-failed"
   else
@@ -345,13 +345,15 @@ run_cli_same_base_pass_cases() {
     return
   fi
   seed_failing "sbp-$$" "$t"
-  rtb_cli_run "$cache" "$repo" "sbp-$$"
+  RTB_CLI_ZERO_COMPARED_OK=outside-decide rtb_cli_run "$cache" "$repo" "sbp-$$"
   if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: broken[[:space:]]+$t[[:space:]]+ledger-same-base\$" \
     && printf '%s\n' "$RTB_CLI_OUT" | grep -qxF "$(baseline_summary 0 0 1 0 0 0)"; then
     pass "C3-same-base-pass: cached same-base pass classified broken ledger-same-base"
   else
     fail "C3-same-base-pass: expected broken ledger-same-base; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
   fi
+  # decide corpus (2): ledger-same-base is a detail only the reuse paths produce, so comparison step 1 makes it no_comparison.
+  adl_expect "decide-shadow (sbp-$$)" "$t" "no:outside-decide"
   [ "$RTB_CLI_RC" -eq 1 ] && pass "C3-same-base-pass: exit 1" \
     || fail "C3-same-base-pass: expected exit 1, got $RTB_CLI_RC"
   if [ ! -e "$ran" ] && ! printf '%s\n' "$RTB_CLI_OUT" | grep -q 'base-run logs:'; then
@@ -383,7 +385,7 @@ run_cli_head_cases() {
   mk_fixture_repo "$repo" >/dev/null
   head="$(git -C "$repo" rev-parse --verify HEAD)"
   seed_failing "hd-$$" "$t_slp"
-  rtb_cli_run "$(cli_case_cache hd)" "$repo" "hd-$$" --per-test-timeout 1
+  RTB_CLI_ZERO_COMPARED_OK=outside-decide rtb_cli_run "$(cli_case_cache hd)" "$repo" "hd-$$" --per-test-timeout 1
   bc="$(read_step_field "hd-$$" run_tests baseline_classification)"
   if [ "$RTB_CLI_RC" -eq 8 ] && printf '%s' "$bc" | grep -qF "\"head\":\"$head\""; then
     pass "C-head: baseline_classification.head is the fixture HEAD (exit 8)"

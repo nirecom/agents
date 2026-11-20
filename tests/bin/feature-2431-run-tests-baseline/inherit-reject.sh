@@ -163,7 +163,9 @@ run_ledger_inherit_glob_cases() {
     drop_branch_flag "$repo"
     b2="$(git -C "$repo" rev-parse main)"
     seed_failing "irg${variant}b-$$" "$t"
-    rtb_cli_run "$cache" "$repo" "irg${variant}b-$$"
+    # sibling inherits B1's ledger as is (outside decide), so there is no line to compare.
+    if [ "$variant" = sibling ]; then RTB_CLI_ZERO_COMPARED_OK=outside-decide rtb_cli_run "$cache" "$repo" "irg${variant}b-$$"
+    else rtb_cli_run "$cache" "$repo" "irg${variant}b-$$"; fi
     if [ "$variant" = sibling ]; then
       # Non-vacuity: a glob pathspec WOULD see test-a.sh as a change to test-[a].sh.
       if git -C "$repo" diff --quiet "$b1" "$b2" -- "$t"; then

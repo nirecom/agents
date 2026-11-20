@@ -9,6 +9,14 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
   Which answerer each level gets is set separately; today `low` may go to Jev and `high` always goes to the user.
 - **Related**: [architecture/jev.md](../architecture/jev.md)
 
+### comparison side
+- **Definition**: `bin/run-tests-baseline` は、失敗した test file を branch と merge base でそれぞれ単独に再実行し、2 つの結果を比べる。comparison side は、この比較の片方（branch side か merge base side）を指す。
+- **Related**: [architecture/claude-code/run-tests-baseline-decide-shadow.md](../architecture/claude-code/run-tests-baseline-decide-shadow.md)
+
+### comparison side result
+- **Definition**: 1 つの comparison side で test file 1 本を単独に再実行した結果の事実。verdict、termination、終了コード、hit の種別を持つ。comparison side ごとの読み方（中断、ambiguous など）は持たない。
+- **Related**: [architecture/claude-code/run-tests-baseline-decide-shadow.md](../architecture/claude-code/run-tests-baseline-decide-shadow.md)
+
 ### delivery operation
 
 - **Definition**: The hard-to-undo act of landing the change on the default branch — a PR merge or a direct commit and push — performed by `/merge-to-main` right after the USER_VERIFIED confirmation.

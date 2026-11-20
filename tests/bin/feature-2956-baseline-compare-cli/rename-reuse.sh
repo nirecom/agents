@@ -40,7 +40,7 @@ run_compare_cli_rename_reuse_cases() {
   cmp_expect "run 1: the detail names the old path" ".*-via-rename:tests/bin/old-t\.sh"
   rm -f "$RR_MARKS/old-at-base" "$RR_MARKS/new-on-branch"
   seed_failing "rr2-$$" "$t"
-  rtb_cli_run "$cache" "$repo" "rr2-$$" --per-test-timeout 20
+  RTB_CLI_ZERO_COMPARED_OK=branch-result-reused-from-cache rtb_cli_run "$cache" "$repo" "rr2-$$" --per-test-timeout 20
   if [ -f "$RR_MARKS/old-at-base" ]; then
     fail "run 2: the old path ran at base again despite its ledger row; ($(cli_baseline_lines))"
   else pass "run 2: the ledger row on the old path is reused (the base does not run again)"; fi

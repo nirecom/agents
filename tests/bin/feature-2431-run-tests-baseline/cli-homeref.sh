@@ -41,10 +41,11 @@ ch_mk_test() {
   chmod +x "$repo/$rel"
 }
 
-# ch_run <label> <repo> <test> — seed the failing list and run the CLI (cache and sid per label).
+# ch_run <label> <repo> <test> [<zero-compared-ok reasons>] — seed the failing list and run the CLI
+# (cache and sid per label). home-claude-ref is decided outside decide, so those runs pass outside-decide.
 ch_run() {
   seed_failing "$1-$$" "$3"
-  rtb_cli_run "$(cli_case_cache "$1")" "$2" "$1-$$"
+  RTB_CLI_ZERO_COMPARED_OK="${4:-}" rtb_cli_run "$(cli_case_cache "$1")" "$2" "$1-$$"
 }
 
 # cli_assert_completed <label> <sid> — the counterpart of cli_assert_not_completed: run_tests is
@@ -110,7 +111,7 @@ ch_lang_case() {
   mkdir -p "$repo/tests/bin/test-$id"
   printf '%s\n' "$@" > "$repo/tests/bin/test-$id/$rel"
   ch_repo_end "$repo" "$t"
-  ch_run "$id" "$repo" "$t"
+  if [ "$want" = ran-at-base ]; then ch_run "$id" "$repo" "$t"; else ch_run "$id" "$repo" "$t" outside-decide; fi
   if [ "$want" = ran-at-base ]; then
     ch_assert_ran_at_base "$id" "$t" "$ran" "$id-$$"
   else
@@ -143,7 +144,7 @@ run_cli_homeref_cases() {
   # shellcheck disable=SC2016
   ch_mk_test "$repo" "$t" "$ran" '# ~/.claude is only mentioned here' 'ls "$HOME/.claude" >/dev/null 2>&1'
   ch_repo_end "$repo" "$t"
-  ch_run ch3 "$repo" "$t"
+  ch_run ch3 "$repo" "$t" outside-decide
   ch_assert_undetermined "CH3" "$t" "$ran" "ch3-$$"
 
   # ---- CH4: end-of-line comment is not excluded (conservative) -> undetermined ----
@@ -151,7 +152,7 @@ run_cli_homeref_cases() {
   ch_repo_begin "$repo"
   ch_mk_test "$repo" "$t" "$ran" 'ls x >/dev/null 2>&1 # ~/.claude'
   ch_repo_end "$repo" "$t"
-  ch_run ch4 "$repo" "$t"
+  ch_run ch4 "$repo" "$t" outside-decide
   ch_assert_undetermined "CH4" "$t" "$ran" "ch4-$$"
 
   # ---- CH5: the reference sits in the data directory, comment-only (the feature-1733 shape) ----
@@ -198,7 +199,7 @@ run_cli_homeref_lang_cases() {
   ch_repo_begin "$repo"
   ch_mk_test "$repo" "$t" "$ran" '# ~/.claude is only mentioned here'
   ch_repo_end "$repo" "$t"
-  PATH="$d:$PATH" ch_run ch8 "$repo" "$t"
+  PATH="$d:$PATH" ch_run ch8 "$repo" "$t" outside-decide
   ch_assert_undetermined "CH8" "$t" "$ran" "ch8-$$"
   if [ -s "$d/awk.log" ]; then
     pass "CH8: the awk stub was reached by the classifier"
@@ -222,6 +223,6 @@ run_cli_homeref_lang_cases() {
   printf '%s\n' '# ~/.claude is only mentioned here' > "$repo/tests/bin/test-homefind/ok.sh"
   printf '%s\n' 'ls ~/.claude' > "$repo/tests/bin/test-homefind/bad.sh"
   ch_repo_end "$repo" "$t"
-  PATH="$d:$PATH" ch_run ch9 "$repo" "$t"
+  PATH="$d:$PATH" ch_run ch9 "$repo" "$t" outside-decide
   ch_assert_undetermined "CH9" "$t" "$ran" "ch9-$$"
 }

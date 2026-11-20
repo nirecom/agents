@@ -50,7 +50,7 @@ run_compare_cli_timeout_cache_cases() {
   rm -f "$TC_MARKS/base" "$TC_MARKS/branch"
   rm -rf "$cache/baseline"
   seed_failing "tmo2-$$" "$t"
-  rtb_cli_run "$cache" "$repo" "tmo2-$$" --per-test-timeout 20
+  RTB_CLI_ZERO_COMPARED_OK=branch-result-reused-from-cache rtb_cli_run "$cache" "$repo" "tmo2-$$" --per-test-timeout 20
   if [ ! -f "$TC_MARKS/branch" ]; then pass "a cached timeout-after-300s row is a hit: the branch copy did not run"
   else fail "the branch copy ran again despite a cached timeout-after-300s row"; fi
   if printf '%s\n' "$RTB_CLI_OUT" | grep -qF "run-tests-baseline: branch re-run: $t"; then
@@ -79,7 +79,7 @@ run_compare_cli_timeout_base_pass_cases() {
   rm -f "$TC_MARKS/base" "$TC_MARKS/branch"
   rm -rf "$cache/baseline"
   seed_failing "$sid" "$t"
-  rtb_cli_run "$cache" "$repo" "$sid" --per-test-timeout 20
+  RTB_CLI_ZERO_COMPARED_OK=branch-result-reused-from-cache rtb_cli_run "$cache" "$repo" "$sid" --per-test-timeout 20
   if [ ! -f "$TC_MARKS/branch" ]; then pass "base-pass: the cached timeout is a hit (the branch copy did not run)"
   else fail "base-pass: the branch copy ran again despite the cached timeout row"; fi
   if [ -f "$TC_MARKS/base" ]; then pass "base-pass: the base copy ran"
