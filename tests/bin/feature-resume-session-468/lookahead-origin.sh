@@ -18,16 +18,26 @@ echo "=== T22: research carrying the lookahead origin, before vs after workflow 
 # seed_lookahead_research <subdir> <sid> [settled-step...] — research in_progress
 # under the WI-10 lookahead origin, on top of whichever steps the caller settles.
 seed_lookahead_research() {
-    local root="$TMPDIR_BASE/$1" sid="$2"
+    local root="$TMPDIR_BASE/$1" sid="$2" repo
     shift 2
     mkdir -p "$root/state" "$root/plans/worktree-end"
+    # clarify_intent's completion is glossary-gated: the check is recorded from a throwaway repo.
+    repo="$root/glossary-repo"
+    git init -q "$repo"
+    git -C "$repo" config core.hooksPath /dev/null
+    if command -v cygpath >/dev/null 2>&1; then repo="$(cygpath -m "$repo")"; fi
     WORKFLOW_STATE_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" \
-        SID="$sid" SETTLED="$*" run_with_timeout node -e "
+        SID="$sid" SETTLED="$*" REPO="$repo" run_with_timeout node -e "
 const io = require('$SIO_NODE');
 const approval = require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture.js');
+const glossary = require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/glossary-check-record.js');
 for (const s of String(process.env.SETTLED).split(' ').filter(Boolean)) {
-  if (s === 'clarify_intent') approval.approveLive(process.env.SID, s); // #2277: gated complete needs approval
-  io.markStep(process.env.SID, s, 'complete');
+  if (s === 'clarify_intent') {
+    approval.approveLive(process.env.SID, s); // #2277: gated complete needs approval
+    glossary.completeWithRecord(process.env.SID, s, process.env.REPO, io.markStep);
+  } else {
+    io.markStep(process.env.SID, s, 'complete');
+  }
 }
 io.markStep(process.env.SID, 'research', 'in_progress', {}, { provenance: 'observed', origin: 'postuse-in-flight' });
 " >/dev/null 2>&1

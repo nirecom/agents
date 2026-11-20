@@ -9,7 +9,7 @@ const fs = require("fs");
 const path = require("path");
 const { readState } = require("../workflow-state");
 const { getSessionControlDir, assertRealControlDir } = require("../workflow-state/state-io/control-dir");
-const { latestDispatch } = require("../workflow-state/dispatch-settlement");
+const { listUnconsumed } = require("../workflow-state/dispatch-settlement");
 const {
   outcomeFileName,
   ingestedMarkerName,
@@ -23,8 +23,11 @@ const { workerVerdictVetoes } = require("./outcome");
 const { validateFailingNames, filterFailingExits } = require("./failing-list");
 const { recordRun, recordUnsettled } = require("./record-run");
 const { boundHits } = require("./hit-summary");
+const { withStateLock } = require("../workflow-state/state-io/state-lock");
 
 const WORKER = "test-runner";
+// Stands for "the control dir could not be scanned"; parseStem never takes it for a real stem.
+const SCAN_FAILED_STEM = "control-dir-scan-failed";
 
 const refuse = (reason) => ({ outcome: null, outcomeSha: null, payloadSha: null, reason });
 
@@ -102,7 +105,7 @@ function summaryRuntimes(summary) {
   return m === null ? null : runtimeLabels(m[1]);
 }
 
-function buildIngest(stem, trusted) {
+function buildIngest(stem, trusted, late) {
   const o = trusted.outcome;
   const contract = parsedContract(o.worker_result.run_contract);
   const failingTests = trustedFailingList(o, contract);
@@ -123,29 +126,31 @@ function buildIngest(stem, trusted) {
     failingTests,
     failingExits: filterFailingExits(o.worker_result.failing_exits, failingTests, o.cwd),
     // The selection comes from the payload the dispatcher ran, never from the outcome's words.
-    part: { args: args === undefined ? [] : args, root: o.cwd, cwd: o.cwd, results: null },
+    part: { args: args === undefined ? [] : args, root: o.cwd, cwd: o.cwd, results: null, late: late === true },
     hitSummary: boundHits(o.worker_result.hits || []),
     unrunnableRuntimes: summaryRuntimes(o.worker_result.summary),
     unrunnableMissingFiles: readSummaryToken(o.worker_result.summary),
   };
 }
 
-const controlFileExists = (sessionId, name) => {
-  const dir = getSessionControlDir(sessionId);
-  return assertRealControlDir(dir) && fs.existsSync(path.join(dir, name));
-};
-
-// -> { latestStem, ingest, unsettled, reason }. Only the latest dispatch counts.
+// -> { ingests, unsettled, unsettledStem, reason }, every unconsumed dispatch in dispatch order (#3063).
+// ingests: the trusted outcomes, each with the unusable stems older than it (olderUnsettled);
+// unsettled: the stems whose outcome is absent or untrusted, unsettledStem the oldest of them.
+// A scan failure is never "no dispatch": unsettledStem is SCAN_FAILED_STEM and reason says why.
 function settleDispatchOutcome(sessionId) {
-  const latest = latestDispatch({ sessionId, worker: WORKER });
-  if (latest === null) return { latestStem: null, ingest: null, unsettled: false };
-  const stem = latest.stem;
-  if (controlFileExists(sessionId, ingestedMarkerName(stem))) {
-    return { latestStem: stem, ingest: null, unsettled: false };
+  const u = listUnconsumed({ sessionId, worker: WORKER });
+  if (u.reason) return { ingests: [], unsettled: [], unsettledStem: SCAN_FAILED_STEM, reason: u.reason };
+  const ingests = [];
+  const unsettled = [];
+  for (const d of u.stems) {
+    const trusted = readTrustedOutcome({ sessionId, stem: d.stem });
+    if (trusted.outcome === null) {
+      unsettled.push(d.stem);
+      continue;
+    }
+    ingests.push(Object.assign(buildIngest(d.stem, trusted, d.late), { olderUnsettled: unsettled.slice() }));
   }
-  const trusted = readTrustedOutcome({ sessionId, stem });
-  if (trusted.outcome === null) return { latestStem: stem, ingest: null, unsettled: true, reason: trusted.reason };
-  return { latestStem: stem, ingest: buildIngest(stem, trusted), unsettled: false };
+  return { ingests, unsettled, unsettledStem: unsettled.length > 0 ? unsettled[0] : null, reason: null };
 }
 
 function markIngested(sessionId, stem) {
@@ -202,22 +207,49 @@ function recordIngest(sessionId, ingest) {
   return message;
 }
 
-// -> { ingested, unsettledStem, message }. A non-test call demotes a stale result
-// of an unsettled dispatch here; a test call leaves that to recordRun.
-function applyDispatchOutcome({ sessionId, triggerCommand, isTest }) {
+// A full green-or-red run recorded from this ingest settles every older unusable dispatch:
+// the only exit for a dispatch killed before it left an outcome (ARP-EXBG).
+function supersedeOlder(sessionId, ingest, superseded) {
+  if (ingest.part.late || ingest.part.provenSelection !== "full") return;
+  for (const stem of ingest.olderUnsettled) {
+    if (markIngested(sessionId, stem)) superseded.add(stem);
+  }
+}
+
+function withScanReason(message, reason) {
+  return message === null ? null : Object.assign({}, message, { detail: `${message.detail}\n${reason}` });
+}
+
+// -> { ingested, unsettledStem, message }. Every trusted outcome is recorded in dispatch order;
+// a stale result of a still-unsettled dispatch is then demoted here — by a test call too once
+// this call ingested something, since the stdout route stops there. Otherwise a test call leaves
+// it to recordRun.
+// One state lock spans scan -> record -> mark (#3063): a concurrent hook waits, then re-scans and
+// sees the .ingested markers. A lock timeout throws before the scan, so nothing is consumed.
+function applyDispatchOutcome(args) {
+  return withStateLock(args.sessionId, () => applyLocked(args));
+}
+
+function applyLocked({ sessionId, triggerCommand, isTest }) {
   const s = settleDispatchOutcome(sessionId);
-  if (s.ingest !== null) {
-    return { ingested: true, unsettledStem: null, message: recordIngest(sessionId, s.ingest) };
-  }
-  if (!s.unsettled) return { ingested: false, unsettledStem: null, message: null };
   let message = null;
-  if (!isTest && holdsStaleResult(runTestsEntry(sessionId))) {
-    message = recordUnsettled({ sessionId, stem: s.latestStem, triggerCommand });
+  const superseded = new Set();
+  for (const ingest of s.ingests) {
+    message = recordIngest(sessionId, ingest) || message;
+    supersedeOlder(sessionId, ingest, superseded);
   }
-  return { ingested: false, unsettledStem: s.latestStem, message };
+  const rest = s.unsettled.filter((stem) => !superseded.has(stem));
+  const unsettledStem = superseded.size > 0 ? (rest.length > 0 ? rest[0] : null) : s.unsettledStem;
+  const ingested = s.ingests.length > 0;
+  if (unsettledStem !== null && (!isTest || ingested) && holdsStaleResult(runTestsEntry(sessionId))) {
+    const m = recordUnsettled({ sessionId, stem: unsettledStem, triggerCommand });
+    message = (s.reason ? withScanReason(m, s.reason) : m) || message;
+  }
+  return { ingested, unsettledStem, message };
 }
 
 module.exports = {
+  SCAN_FAILED_STEM,
   readTrustedOutcome,
   settleDispatchOutcome,
   markIngested,

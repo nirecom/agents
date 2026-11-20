@@ -18,8 +18,10 @@ WD-BG. Background dispatch — `test-runner` only (no other worker writes an out
 
 - Emit `<<WORKFLOW_NEXT_STEP_PAUSE: {reason}>>`, then run the WD-3 command with `run_in_background`, wait for its completion notice, then emit `<<WORKFLOW_NEXT_STEP_RESUME: {reason}>>`.
 - Then run once, in the foreground: `bash "$AGENTS_MAIN_ROOT/skills/run-tests/scripts/show-dispatch-outcome.sh" --session <session-id>`.
-- `OUTCOME=present`: the YAML after `---` stands in for the WD-4 stdout; continue with the caller's result handling.
-- `OUTCOME=absent` or `OUTCOME=untrusted`: surface `OUTCOME_REASON` and treat the run as `status: runner-error`; a re-run publishes a new `--seq` payload.
+- The display prints one block per unconsumed dispatch, in dispatch order; read every block.
+- `OUTCOME=present`: the YAML after that block's `---` stands in for the WD-4 stdout; continue with the caller's result handling for each such block.
+- `OUTCOME=absent` or `OUTCOME=untrusted`: surface `OUTCOME_REASON` and treat that run as `status: runner-error`; a re-run publishes a new `--seq` payload.
+- `OUTCOME=scan-failed`: no result is readable; surface `OUTCOME_REASON` and treat the run as `status: runner-error`.
 - Never use the background task's output file as evidence of the result — only the display above counts.
 
 WD-CP. Background dispatch — the `commit-push` worker, always (its commit timeout limit is decided inside the worker and can exceed the 600 s foreground cap):

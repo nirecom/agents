@@ -21,6 +21,9 @@ GATE_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
 PASS=0; FAIL=0
 pass() { echo "  PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "  FAIL: $1"; FAIL=$((FAIL + 1)); }
+XFAIL_ISSUE='#3113'
+# shellcheck source=tests/lib/xfail.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/xfail.sh"
 
 run_with_timeout() {
     if command -v timeout >/dev/null 2>&1; then timeout 120 "$@"
@@ -142,15 +145,9 @@ with_cwd() {
 }
 
 assert_approve() {
-    local desc="$1" result="$2" red_note="${3:-}"
+    local desc="$1" result="$2"
     if echo "$result" | grep -q '"approve"'; then pass "$desc"
-    else
-        if [ -n "$red_note" ]; then
-            fail "$desc  $red_note — got: $result"
-        else
-            fail "$desc — expected approve, got: $result"
-        fi
-    fi
+    else fail "$desc — expected approve, got: $result"; fi
 }
 
 assert_block() {
@@ -236,7 +233,7 @@ assert_block "4. nonexistent target path + incomplete → block (fail-closed)" "
 # ---------------------------------------------------------------------------
 
 # Case 5: commit from linked-worktree context + cleanup=pending (all else complete)
-# → approve. RED until #1112: cleanup must be deferred to the /worktree-end
+# → approve. Pinned as xfail to #3113: cleanup must be deferred to the /worktree-end
 # boundary in worktree context (parallel to user_verification's exemption).
 AGENTS5=$(mk_repo "$TEST_ROOT/c5-agents")
 WT5=$(add_worktree "$AGENTS5" "$TEST_ROOT/c5-wt" "fix1112-c5")
@@ -244,8 +241,7 @@ WF5=$(new_wf "c5" "$(state_with cleanup pending)")
 # Provide cwd so the hook can confirm worktree context (mirrors real Claude Code).
 J5=$(printf '{"tool_name":"Bash","tool_input":{"command":"git -C %s commit -m x","cwd":"%s"},"session_id":"sess"}' "$WT5" "$WT5")
 R5=$(run_gate_win "$WF5" "$WT5" "$AGENTS5" "$J5")
-assert_approve "5. linked-worktree context + cleanup=pending → approve (isWorktreeContext exempts cleanup)" "$R5" \
-    "(expected RED until #1112 implemented)"
+xfail_contains "5. linked-worktree context + cleanup=pending → approve (isWorktreeContext exempts cleanup)" '"approve"' "$R5"
 
 # Case 6: commit from MAIN worktree context + cleanup=pending (all else complete)
 # → block. The cleanup exemption is worktree-scoped: in the main worktree the
@@ -262,4 +258,5 @@ assert_block "6. main worktree context + cleanup=pending → block (cleanup not 
 echo ""
 echo "=== Cross-repo bypass + cleanup exemption tests ==="
 echo "PASS: $PASS, FAIL: $FAIL"
+xfail_summary
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

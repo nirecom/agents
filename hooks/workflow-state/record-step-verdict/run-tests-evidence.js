@@ -20,7 +20,7 @@ const MESSAGES = {
 // Lazy: dispatch-outcome.js requires workflow-state, which this module's caller is part of.
 function hasPendingIngest(sessionId) {
   try {
-    return require("../../workflow-run-tests/dispatch-outcome").settleDispatchOutcome(sessionId).ingest !== null;
+    return require("../../workflow-run-tests/dispatch-outcome").settleDispatchOutcome(sessionId).ingests.length > 0;
   } catch (_) {
     return false;
   }

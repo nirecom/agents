@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // Tests: hooks/workflow-state/record-step-verdict/run-tests-evidence.js, hooks/workflow-state/record-step-verdict.js, hooks/workflow-mark/mark-step-handler.js, hooks/workflow-mark/not-needed-handlers.js, hooks/workflow-run-tests/dispatch-outcome.js, hooks/workflow-gate.js
-// Tags: TL2, hooks, run-tests, workflow-state, completion-evidence, dispatch-outcome, scope:issue-specific
+// Tags: TL2, hooks, run-tests, workflow-state, completion-evidence, dispatch-outcome, state-lock, concurrency, scope:issue-specific
 // #2472 T5: run_tests completes only on run evidence, on every gate. Refusal without evidence
 // (no-run-evidence), already on every recorded-complete shape, the ingest-pending refusal and
 // its show-dispatch-outcome.sh recovery, and the exits that stay open (skipped tombstone,
@@ -19,6 +19,8 @@ F.setup("f2472-evidence");
 const gates = require("./feature-2472-run-tests-evidence/gates");
 const ingest = require("./feature-2472-run-tests-evidence/ingest");
 const exits = require("./feature-2472-run-tests-evidence/exits");
+const lock = require("./feature-2472-run-tests-evidence/lock");
+const lockHook = require("./feature-2472-run-tests-evidence/lock-hook");
 
 const fails = () => F.totals.failed;
 after(() => process.stdout.write(`Total: ${F.totals.passed} passed, ${F.totals.failed} failed\n`));
@@ -69,4 +71,32 @@ caseEnd();
 
 caseBegin("fixture-run-launches-with-node-unless-node-false", "tests/lib/run-tests-outcome-fixture.js");
 test("fixture-run-launches-with-node-unless-node-false", () => noNewFailures(fails, ingest.launchInterpreterFlow));
+caseEnd();
+
+caseBegin("dispatch-ingest-waits-for-state-lock-before-scan", "hooks/workflow-run-tests/dispatch-outcome.js");
+test("dispatch-ingest-waits-for-state-lock-before-scan", () => noNewFailures(fails, lock.lockWaitDefersScan));
+caseEnd();
+
+caseBegin("dispatch-ingest-rescans-after-lock-wait", "hooks/workflow-run-tests/dispatch-outcome.js");
+test("dispatch-ingest-rescans-after-lock-wait", () => noNewFailures(fails, lock.waitedCallRescans));
+caseEnd();
+
+caseBegin("dispatch-ingest-old-green-keeps-new-failure", "hooks/workflow-run-tests/dispatch-outcome.js");
+test("dispatch-ingest-old-green-keeps-new-failure", () => noNewFailures(fails, lock.oldGreenKeepsNewFailure));
+caseEnd();
+
+caseBegin("dispatch-ingest-lock-timeout-records-nothing", "hooks/workflow-run-tests/dispatch-outcome.js");
+test("dispatch-ingest-lock-timeout-records-nothing", () => noNewFailures(fails, lock.lockTimeoutRecordsNothing));
+caseEnd();
+
+caseBegin("dispatch-ingest-lock-loss-leaves-no-partial-ingest", "hooks/workflow-run-tests/dispatch-outcome.js");
+test("dispatch-ingest-lock-loss-leaves-no-partial-ingest", () => noNewFailures(fails, lock.lockLossMidIngestLeavesNoPartial));
+caseEnd();
+
+caseBegin("dispatch-ingest-reenters-held-state-lock", "hooks/workflow-run-tests/dispatch-outcome.js");
+test("dispatch-ingest-reenters-held-state-lock", () => noNewFailures(fails, lock.reentrantCallCompletes));
+caseEnd();
+
+caseBegin("run-tests-hook-lock-timeout-fails-closed", "hooks/workflow-run-tests.js");
+test("run-tests-hook-lock-timeout-fails-closed", () => noNewFailures(fails, lockHook.hookLockTimeoutFailsClosed));
 caseEnd();

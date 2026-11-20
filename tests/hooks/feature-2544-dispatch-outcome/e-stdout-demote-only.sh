@@ -9,7 +9,7 @@
 # unsettled, the stdout route records exactly as before (outcome_source stays null).
 
 F2544_E_RUN_ALL="bash tests/run-all.sh tests/foo.sh"
-F2544_E_PASS_OUT="$(printf 'Results: PASS=2  FAIL=0  SKIP=1\nRUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3 UNRUNNABLE=0 TIMEOUT=0')"
+F2544_E_PASS_OUT="$(printf 'PASS: tests/foo.sh\nResults: PASS=1  FAIL=0  SKIP=0\nRUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0')"
 F2544_E_FAIL_OUT="$(printf 'FAIL: tests/foo.sh (exit 1)\nResults: PASS=1  FAIL=1  SKIP=0\nRUN_CONTRACT: PASS=1 FAIL=1 SKIP=0 EXECUTED=2 UNRUNNABLE=0 TIMEOUT=0')"
 
 f2544_e_stdout_route_unchanged() {

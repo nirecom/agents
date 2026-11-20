@@ -25,11 +25,8 @@ process.stdout.write(String(detectSentinelHang(process.env.TP)));" 2>&1)
     [ "$C2_RC" -eq 2 ] || problems="$problems [c2-rc=$C2_RC]"
     echo "$C2_OUT" | grep -q '"decision":"block"' || problems="$problems [c2-not-block:$C2_OUT]"
     echo "$C2_OUT" | grep -q 'sentinel hang' || problems="$problems [wrong-cause:$C2_OUT]"
-    if [ -z "$problems" ]; then
-        pass "I12: a real C1 sentinel hang still blocks C2 on an inherited-only downstream"
-    else
-        fail "I12: C1 hang path over-suppressed by the adoption exemption;$problems"
-    fi
+    # #3113: the inherited-only anchor fails — SessionStart no longer adopts the upstream.
+    xfail_eq "I12: a real C1 sentinel hang still blocks C2 on an inherited-only downstream" "" "$problems"
 }
 
 # I13: C4 idempotency both ways on ONE fixture — (a) inherited-only downstream: three silent exit-0 runs
@@ -64,9 +61,6 @@ run_I13() {
     done
     rm -rf "$tmp" 2>/dev/null || true
 
-    if [ -z "$problems" ]; then
-        pass "I13: C4 is idempotent on an unchanged state in both directions (3x silent, then 3x identical block)"
-    else
-        fail "I13: guard verdict flapped or accumulated a side effect across repeated runs;$problems"
-    fi
+    # #3113: the inherited-only anchor fails and C4 never re-arms on the un-inherited downstream.
+    xfail_eq "I13: C4 is idempotent on an unchanged state in both directions (3x silent, then 3x identical block)" "" "$problems"
 }

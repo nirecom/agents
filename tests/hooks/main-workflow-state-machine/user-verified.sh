@@ -28,7 +28,7 @@ run_user_verified_tests() {
         "$L4B_ESC" "$SID_4B")
     L4B_EXIT=0
     L4B_OUT=$(echo "$L4B_JSON" | CLAUDE_PROJECT_DIR="$REPO_4" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
-        node "$MARK_HOOK" 2>&1) || L4B_EXIT=$?
+        env -u CLAUDE_CODE_SESSION_ID node "$MARK_HOOK" 2>&1) || L4B_EXIT=$?
     if [ "$L4B_EXIT" = "2" ]; then
         pass "L4-b(exit). MARK_STEP_user_verification → exit 2 (UNAPPLIED)"
     else
@@ -42,19 +42,24 @@ run_user_verified_tests() {
         fail "L4-b(msg). MARK_STEP_user_verification → no rejection in output: $L4B_OUT"
     fi
 
-    # L4-c: session_id missing → user_verification unchanged, exit 0
+    # L4-c: session_id missing → user_verification unchanged, refused on the UNAPPLIED channel (#2824: exit 2)
     SID_4C="l4c-$(printf '%04x%04x' $RANDOM $RANDOM)"
     write_state "$SID_4C" "$(ALL_PENDING_JSON "$SID_4C")"
     L4C_CMD='echo "<<WORKFLOW_USER_VERIFIED: L4-c no session id>>"'
     L4C_ESC=${L4C_CMD//\"/\\\"}
     L4C_JSON=$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"exit_code":0,"stdout":"","stderr":""}}' "$L4C_ESC")
     L4C_EXIT=0
-    echo "$L4C_JSON" | CLAUDE_PROJECT_DIR="$REPO_4" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
-        env node "$MARK_HOOK" 2>/dev/null || L4C_EXIT=$?
-    if [ "$L4C_EXIT" = "0" ]; then
-        pass "L4-c(exit). no session_id + USER_VERIFIED → exit 0"
+    L4C_OUT=$(echo "$L4C_JSON" | CLAUDE_PROJECT_DIR="$REPO_4" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
+        env -u CLAUDE_CODE_SESSION_ID node "$MARK_HOOK" 2>&1) || L4C_EXIT=$?
+    if [[ "$L4C_EXIT" == "2" ]]; then
+        pass "L4-c(exit). no session_id + USER_VERIFIED → exit 2 (UNAPPLIED)"
     else
-        fail "L4-c(exit). no session_id + USER_VERIFIED → expected exit 0, got $L4C_EXIT"
+        fail "L4-c(exit). no session_id + USER_VERIFIED → expected exit 2, got $L4C_EXIT"
+    fi
+    if grep -q '\[NOT APPLIED\]\|could not resolve session_id' <<<"$L4C_OUT"; then
+        pass "L4-c(msg). no session_id + USER_VERIFIED → NOT APPLIED / session_id refusal in output"
+    else
+        fail "L4-c(msg). no session_id + USER_VERIFIED → no refusal in output: $L4C_OUT"
     fi
     expect_no_state_change "L4-c(state). no session_id → user_verification stays pending" \
         "$SID_4C" "user_verification" "pending"

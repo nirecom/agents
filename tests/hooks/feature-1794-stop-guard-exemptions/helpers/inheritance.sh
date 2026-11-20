@@ -87,7 +87,9 @@ S.markStep(sid, 'workflow_init', 'complete');
 if ('$mode' === 'complete') {
   // #2277: a gated complete needs the approval record (intent artifact written above).
   require('$PLAN_FIXTURE_NODE').approveLive(sid, 'clarify_intent');
-  S.markStep(sid, 'clarify_intent', 'complete');
+  // The clarify_intent completion is glossary-gated: record the check from the fixture repo first.
+  require('$_SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/glossary-check-record.js')
+    .completeWithRecord(sid, 'clarify_intent', process.cwd(), S.markStep);
 }
 " || return 1
     inh_node "$tmp" --hook "$downstream"

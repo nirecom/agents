@@ -71,12 +71,14 @@ function seedPrefix(sid) {
   }
 }
 
-// hook(sid, command, exitCode, stdout) — one PostToolUse call of the real hook, in a child.
+// hook(sid, command, exitCode, stdout) — one PostToolUse call of the real hook, in a child;
+// -> the hook's own stdout (its systemMessage carries the demotion reason).
 function hook(sid, command, exitCode, stdout) {
   const input = { tool_name: "Bash", session_id: sid, tool_input: { command, cwd: ROOT_FWD }, tool_response: { exit_code: exitCode, stdout } };
   const r = spawnSync(process.execPath, [HOOK], { input: JSON.stringify(input), encoding: "utf8", timeout: 30000, env: process.env, cwd: TMP });
   if (r.error) throw new Error(`hook did not run: ${r.error.message}`);
   if (r.status !== 0) throw new Error(`hook exit ${r.status}: ${r.stderr}`);
+  return r.stdout || "";
 }
 
 function runTests(sid) {
