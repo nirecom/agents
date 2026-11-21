@@ -135,3 +135,20 @@ test("guard-does-not-read-the-line-shape", () => {
   assert.notStrictEqual(r.decision, "block");
 });
 caseEnd();
+
+// #2019: a `<!-- disposed: <kind> -->` entry is settled in the PR, so the report omits it; a high entry
+// stays verbatim (body lines kept) whatever the new pr-scope / instance / loc markers beside it.
+caseBegin("disposed-hidden-high-verbatim-2019", "bin/render-final-report/notes.js");
+test("disposed-hidden-high-verbatim-2019", () => {
+  const notes = ["# Worktree Notes", "", "## BugsFound",
+    "- Disposed bug title <!-- severity: medium --> <!-- pr-scope: this-pr --> <!-- disposed: fixed -->",
+    "- High bug title <!-- severity: high --> <!-- instance: rename fails with EPERM --> <!-- loc: bin/x.js:4 --> <!-- pr-scope: other -->",
+    "  second body line of the high bug",
+    "- Plain medium bug <!-- severity: medium --> <!-- pr-scope: other -->", ""].join("\n");
+  const out = N.compressNotesSections(notes, { backupPath: "C:/bk/WORKTREE_NOTES.backup.md" }).BugsFound;
+  assert.ok(!out.includes("Disposed bug title"), `a disposed entry is hidden:\n${out}`);
+  assert.ok(out.includes("High bug title"), `the high entry is listed:\n${out}`);
+  assert.ok(out.includes("second body line of the high bug"), `the high entry keeps its body verbatim:\n${out}`);
+  assert.ok(out.includes("Plain medium bug"), `an undisposed medium entry is still listed:\n${out}`);
+});
+caseEnd();

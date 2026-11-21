@@ -66,7 +66,7 @@ Resolve the path with `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-triage.js" res
 
 ### WE-8 — Env collection + JSON persist
 Resolve `SID`: `awk '/^Session-ID:/{sub(/^Session-ID:[[:space:]]*/,""); sub(/\r/,""); print; exit}' "$WORKTREE_PATH/WORKTREE_NOTES.md"` → fallback `$CLAUDE_CODE_SESSION_ID`.
-Run as **one Bash call**: `bash "$AGENTS_MAIN_ROOT/skills/worktree-end/scripts/capture-env.sh" "<worktree>" "<owner>/<repo>" "<backup-dir>" "$SID"` (with `BOOTSTRAP_MODE` and `BOOTSTRAP_COMMIT_SHA` from WE-4 on a bootstrap delivery) → output: `<CONTROL_DIR>/final-report-env.json` (its last stdout line names the path).
+Run as **one Bash call**: `bash "$AGENTS_MAIN_ROOT/skills/worktree-end/scripts/capture-env.sh" "<worktree>" "<owner>/<repo>" "<backup-dir>" "$SID"` (with `BOOTSTRAP_MODE` and `BOOTSTRAP_COMMIT_SHA` from WE-4 on a bootstrap delivery) → output: `<CONTROL_DIR>/final-report-env.json` (its last stdout line names the path); on a non-zero exit, stop here and skip WE-9 onward: removing the worktree without a notes backup loses the notes.
 Run: `node "$AGENTS_MAIN_ROOT/bin/supervisor-write-alert" --session-id "$SID" --set-alert-eligible-phase post_final_report_window`.
 
 ### WE-9 — Switch CWD to main worktree

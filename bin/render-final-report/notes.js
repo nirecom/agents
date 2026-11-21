@@ -7,6 +7,7 @@
 // (#2904); one backup pointer line appears only when something was omitted.
 // Promoted non-high entries with an identical body share one `#N #M ` line
 // (#3013); COMPRESSED_LIST_MAX counts those output lines, not entries.
+// Entries carrying a `disposed:` terminal marker are not shown (#2019).
 //
 // Pure functions only (Stop hook critical path) — no file access, subprocess, network, or model calls.
 
@@ -76,21 +77,41 @@ function mergeEntries(entries) {
   }));
 }
 
+// The indented body lines right below the entry at lineNumber (1-indexed): a high entry keeps its
+// whole body verbatim (#2019), so these are shown rather than counted as omitted stray lines.
+function continuationLines(allLines, lineNumber) {
+  const out = [];
+  for (let i = lineNumber; i < allLines.length; i += 1) {
+    const l = allLines[i];
+    if (!/^\s+\S/.test(l)) break;
+    out.push(l);
+  }
+  return out;
+}
+
 // Returns { BugsFound, RelatedTasks, NextTasks }, each a ready-to-emit string
 // ("(none)" when the section yields nothing).
 function compressNotesSections(text, options) {
   const opts = options || {};
   const backupPath = opts.backupPath || "(none)";
   const result = {};
+  const allLines = String(text).split(/\r?\n/);
   for (const section of NOTES_SECTIONS) {
-    const { entries, strayCount, stoppedAtSubHeading, subHeading } =
-      scanSection(text, section);
+    const scan = scanSection(text, section);
+    const { stoppedAtSubHeading, subHeading } = scan;
+    let strayCount = scan.strayCount;
+    // A disposed entry was listed once by the notes-promotion pass that marked it (#2019);
+    // showing it again would repeat it on every Final Report rebuild.
+    const entries = scan.entries.filter((e) => e.disposed === null);
     const high = entries.filter((e) => e.severity === "high");
     const rest = mergeEntries(entries.filter((e) => e.severity !== "high"));
 
     const lines = [];
     for (const entry of high) {
       lines.push(`- ${entryHead(entry)}${sanitizeTokens(displayBody(entry))}`);
+      const more = continuationLines(allLines, entry.lineNumber);
+      strayCount -= more.length;
+      for (const l of more) lines.push(sanitizeTokens(l));
     }
     let truncatedCount = 0;
     for (const { head, body } of rest.slice(0, COMPRESSED_LIST_MAX)) {

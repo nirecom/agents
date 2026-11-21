@@ -272,3 +272,16 @@ caseBegin("pm-state-never-swept-2941", "hooks/workflow-state/state-io/zombie-cle
   for (const [name, , kept] of ROWS) check(`PM: ${name} 40 days idle is ${kept ? "kept" : "removed"}`, exists(name) === kept, `exists=${exists(name)}`);
 }
 caseEnd();
+
+caseBegin("finding-approval-marker-swept-2019", "hooks/workflow-state/state-io/zombie-cleanup.js");
+{
+  // #2019: `<sid>.finding-filing-approval` joins the session markers reaped by mtime past maxAgeDays (7).
+  const body = { version: 1, session_id: "x", pending: [], records: [] };
+  put("f2019-old.finding-filing-approval", body, 8);
+  put("f2019-new.finding-filing-approval", body, 6);
+  const threw = sweep();
+  check("F2019: the sweep does not throw", threw === null, threw);
+  check("F2019: an approval marker 8 days old is removed", !exists("f2019-old.finding-filing-approval"), "8-day marker kept");
+  check("F2019: an approval marker 6 days old is kept", exists("f2019-new.finding-filing-approval"), "6-day marker removed");
+}
+caseEnd();

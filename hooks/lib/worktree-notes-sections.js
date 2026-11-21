@@ -1,24 +1,30 @@
 "use strict";
 
-// Shared helpers for parsing and annotating WORKTREE_NOTES.md, consumed by
-// bin/worktree-notes-triage.js, bin/worktree-notes-append.js and
-// bin/render-final-report/notes.js.
-//
-// Marker convention on an entry line (canonical, fixed order):
-//   - <body> <!-- severity: high --> <!-- user-acknowledged: true|false --> <!-- promoted: #N -->
-// Recognition is strict (a malformed severity / user-acknowledged tag fails
-// safe to "compress" / false); stripping is lenient (any trailing comment, any
-// order), so no raw marker ever leaks into rendered output.
+// Parse and annotate WORKTREE_NOTES.md entries (triage, append and render-final-report consumers).
+// Canonical entry tail, fixed order (#2019): severity, instance?, loc?, test-failure?, pr-scope,
+// handoff-rejected?, then one terminal marker (promoted | disposed). composeEntryMarkers is the only
+// writer of that order. Recognition is strict: a non-canonical line reads as severity medium,
+// pr-scope other; legacy `none` reads as not-defect and a retired user-acknowledged marker is skipped.
+// Stripping is lenient, so no raw marker leaks into rendered output. Contract: skills/_shared/notes-promotion.md.
 
 const PROMOTED_MARKER_RE = / <!-- promoted: #(\d+) -->$/;
-const SEVERITY_MARKER_RE = /^- (?:(?!<!--).)*<!-- severity: (high) -->(?: <!-- user-acknowledged: (?:true|false) -->)?(?: <!-- promoted: #\d+ -->)?$/;
-const USER_ACK_MARKER_RE = / <!-- user-acknowledged: (true|false) -->(?: <!-- promoted: #\d+ -->)?$/;
+const SEVERITY_MARKER_RE = /^- ((?:(?!<!--).)*?) <!-- severity: (high|medium|low|not-defect|none) -->(.*)$/;
+// The retired #2903 marker; a legacy line carrying it is read with the marker stripped.
+const USER_ACK_MARKER_RE = /^ <!-- user-acknowledged: (?:true|false) -->/;
+const TERMINAL_MARKER_RE = / <!-- (?:promoted: #(\d+)|disposed: (fixed|known-limits|discard|handed-off)) -->$/;
+const TAIL_MARKERS_RE = /^(?: <!-- instance: ((?:(?!-->|<!--).)+?) -->)?(?: <!-- loc: ((?:(?!-->|<!--).)+?) -->)?( <!-- test-failure -->)?(?: <!-- pr-scope: (this-pr|other) -->)?( <!-- handoff-rejected -->)?$/;
 const TRAILING_MARKER_RE = / <!--[^<>]*-->$/;
 
-// Owns the canonical order severity -> user-acknowledged for a Mode B line tail.
-function composeEntryMarkers({ severity, userAcknowledged }) {
-  const sev = severity === "high" ? " <!-- severity: high -->" : "";
-  return `${sev} <!-- user-acknowledged: ${userAcknowledged === true} -->`;
+const SEVERITIES = Object.freeze(["high", "medium", "low", "not-defect"]);
+const PR_SCOPES = Object.freeze(["this-pr", "other"]);
+const DISPOSED_KINDS = Object.freeze(["fixed", "known-limits", "discard", "handed-off"]);
+
+function composeEntryMarkers({ severity, instance, loc, testFailure, prScope }) {
+  let out = ` <!-- severity: ${severity} -->`;
+  if (instance) out += ` <!-- instance: ${instance} -->`;
+  if (loc) out += ` <!-- loc: ${loc} -->`;
+  if (testFailure) out += " <!-- test-failure -->";
+  return `${out} <!-- pr-scope: ${prScope} -->`;
 }
 
 function extractSection(text, heading) {
@@ -46,15 +52,44 @@ function entryBody(rawLine) {
   return body.trim();
 }
 
-// Single-pass section scan. Returns exactly:
-//   { entries, strayCount, stoppedAtSubHeading, subHeading }
-// entries: Array<{raw, lineNumber, hasMarker, severity, userAcknowledged,
-//   promotedNumber, body}> — lineNumber is
-//   1-indexed against the full document; "- (none)" placeholders are skipped.
-// strayCount: non-blank lines inside the section that are not "- " bullets.
-// stoppedAtSubHeading / subHeading: a "### " line cut the scan short, so the
-//   remaining entries were never seen (they are lost, not merely compressed).
-// A duplicate "## <heading>" re-enters the same section rather than ending it.
+// The canonical fields of one entry line; null when the line is not canonical.
+function parseCanonical(line) {
+  const m = SEVERITY_MARKER_RE.exec(line);
+  if (m === null) return null;
+  let tail = m[3];
+  const terminal = TERMINAL_MARKER_RE.exec(tail);
+  if (terminal !== null) tail = tail.slice(0, terminal.index);
+  const t = TAIL_MARKERS_RE.exec(tail.replace(USER_ACK_MARKER_RE, ""));
+  if (t === null) return null;
+  return {
+    body: m[1].trim(),
+    severity: m[2] === "none" ? "not-defect" : m[2],
+    instance: t[1] === undefined ? null : t[1],
+    loc: t[2] === undefined ? null : t[2],
+    testFailure: t[3] !== undefined,
+    prScope: t[4] === undefined ? "other" : t[4],
+    handoffRejected: t[5] !== undefined,
+  };
+}
+
+function parseEntryLine(line) {
+  const promoted = PROMOTED_MARKER_RE.exec(line);
+  const terminal = TERMINAL_MARKER_RE.exec(line);
+  const c = parseCanonical(line) || {
+    body: entryBody(line), severity: "medium", instance: null, loc: null,
+    testFailure: false, prScope: "other", handoffRejected: false,
+  };
+  return Object.assign(c, {
+    hasMarker: promoted !== null,
+    promotedNumber: promoted ? parseInt(promoted[1], 10) : null,
+    disposed: terminal !== null && terminal[2] !== undefined ? terminal[2] : null,
+  });
+}
+
+// Single-pass section scan -> { entries, strayCount, stoppedAtSubHeading, subHeading }.
+// entries: {raw, lineNumber (1-indexed), ...parseEntryLine}; "- (none)" placeholders are skipped.
+// strayCount: non-blank non-bullet lines. A "### " line cuts the scan short (later entries are
+// lost, not compressed). A duplicate "## <heading>" re-enters the same section.
 function scanSection(text, heading) {
   const target = `## ${heading}`;
   const lines = text.split(/\r?\n/);
@@ -78,17 +113,7 @@ function scanSection(text, heading) {
       continue;
     }
     if (line === "- (none)") continue;
-    const promoted = PROMOTED_MARKER_RE.exec(line);
-    const ack = USER_ACK_MARKER_RE.exec(line);
-    entries.push({
-      raw: line,
-      lineNumber: i + 1,
-      hasMarker: promoted !== null,
-      severity: SEVERITY_MARKER_RE.test(line) ? "high" : null,
-      userAcknowledged: ack !== null && ack[1] === "true",
-      promotedNumber: promoted ? parseInt(promoted[1], 10) : null,
-      body: entryBody(line),
-    });
+    entries.push(Object.assign({ raw: line, lineNumber: i + 1 }, parseEntryLine(line)));
   }
   return { entries, strayCount, stoppedAtSubHeading, subHeading };
 }
@@ -98,33 +123,53 @@ function parseSectionEntries(text, heading) {
   return scanSection(text, heading).entries;
 }
 
-// Append ` <!-- promoted: #<issueNumber> -->` to the line at lineNumber (1-indexed).
-// Preserves CRLF if the original line used it. Out-of-range → unchanged.
-// The unconditional end-of-line append is what keeps the canonical marker order
-// (severity first, promoted last) intact.
-function markEntryPromoted(text, lineNumber, issueNumber) {
+// Rewrite the line at lineNumber (1-indexed) with edit(line), preserving every line
+// terminator (CRLF included). Out-of-range → unchanged.
+function editLine(text, lineNumber, edit) {
   if (!Number.isInteger(lineNumber) || lineNumber < 1) return text;
-  // Split preserving line endings: capture each line's original terminator.
   const parts = text.split(/(\r\n|\n)/);
-  // parts alternates: [content, sep, content, sep, ..., trailingContent]
-  // Line N (1-indexed) is at parts[(N - 1) * 2].
   const idx = (lineNumber - 1) * 2;
-  if (idx >= parts.length) return text;
-  const original = parts[idx];
-  if (typeof original !== "string") return text;
-  parts[idx] = `${original} <!-- promoted: #${issueNumber} -->`;
+  if (idx >= parts.length || typeof parts[idx] !== "string") return text;
+  parts[idx] = edit(parts[idx]);
   return parts.join("");
+}
+
+// The terminal marker is always last, so an end-of-line append keeps the canonical order.
+function markEntryPromoted(text, lineNumber, issueNumber) {
+  return editLine(text, lineNumber, (l) => `${l} <!-- promoted: #${issueNumber} -->`);
+}
+
+function markEntryDisposed(text, lineNumber, kind) {
+  if (!DISPOSED_KINDS.includes(kind)) return text;
+  return editLine(text, lineNumber, (l) => `${l} <!-- disposed: ${kind} -->`);
+}
+
+// handoff-rejected sits before any terminal marker; a line already carrying it is unchanged.
+function markEntryHandoffRejected(text, lineNumber) {
+  return editLine(text, lineNumber, (l) => {
+    if (parseEntryLine(l).handoffRejected) return l;
+    const terminal = TERMINAL_MARKER_RE.exec(l);
+    if (terminal === null) return `${l} <!-- handoff-rejected -->`;
+    return `${l.slice(0, terminal.index)} <!-- handoff-rejected -->${l.slice(terminal.index)}`;
+  });
 }
 
 module.exports = {
   PROMOTED_MARKER_RE,
   SEVERITY_MARKER_RE,
   USER_ACK_MARKER_RE,
+  TERMINAL_MARKER_RE,
   TRAILING_MARKER_RE,
+  SEVERITIES,
+  PR_SCOPES,
+  DISPOSED_KINDS,
   composeEntryMarkers,
   extractSection,
   entryBody,
+  parseEntryLine,
   scanSection,
   parseSectionEntries,
   markEntryPromoted,
+  markEntryDisposed,
+  markEntryHandoffRejected,
 };
