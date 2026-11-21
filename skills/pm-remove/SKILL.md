@@ -8,6 +8,8 @@ The UserPromptSubmit hook is the only writer of the PM state; this skill never w
 
 ## Procedure
 
+Follow the assignment rules in `skills/_shared/pm-supervisor-duties.md` `## PM session`.
+
 ### PMR-1 — Read the hook result
 
 Read the `[pm-session] op=remove tag=<tag>` context the hook added to this prompt; its `issues=` line is the updated assigned list and `ended=` tells whether the PM session ended.

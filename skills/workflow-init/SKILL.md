@@ -35,7 +35,7 @@ Read all `KEY=VALUE` output lines. Dispatch on `ACTION=`:
 | ACTION | Meaning | What to do |
 |---|---|---|
 | `invoke` | Next skill ready | Run `NEXT_SKILL` via Skill tool |
-| `done` | Driver complete | Proceed to WI-10; follow `PATH_DECISION=` at WI-12 (Path C still runs WI-10 onward — no jump) |
+| `done` | Driver complete | Run WI-2a, then WI-10; follow `PATH_DECISION=` at WI-12 (Path C still runs WI-10 onward — no jump) |
 | `blocked` | Unrecoverable | Show `REASON=` + `NEXT_HINT=` and stop |
 | `ask_user` | User decision needed | Percent-decode `OPTIONS_DISPLAY=` (encoded like `QUESTION=`), present via `AskUserQuestion` with `metadata.source=workflow-init.<ASK_ID>` (`ASK_ID=` without a trailing `_<N>`); re-invoke with `--resume <CHECKPOINT> --answer '<token>'` |
 | `emit_sentinel` | Driver requests sentinel | Emit `SENTINEL=` via separate Bash call |
@@ -55,6 +55,12 @@ Read all `KEY=VALUE` output lines. Dispatch on `ACTION=`:
 - `B` — any N lacks `intent:clarified` OR WIP was freshly claimed for all N (`FORCE_PATH_B=true`). ALL_NONE path: `none` + for each N in `ISSUES`, `wip-state set <N>` (from fresh claim), then set `FORCE_PATH_B=1` — even when `intent:clarified` is present, FORCE_PATH_B routes to B. ISSUES[0] becomes closes_issues[0]; all entries become closes_issues in insertion order. ISSUES[@] are processed symmetrically.
 - `C` — zero issues (`ISSUES=()`) OR `NON_GITHUB=1`.
 - `META` — all issues carry `meta` label and have no open sub-issues.
+
+### WI-2a — PM instructions
+
+Run `node "$AGENTS_MAIN_ROOT/bin/pm-instructions" --timing session-start --checkpoint '<CHECKPOINT>'` (escape each `'` in the path as `'\''`).
+Non-empty stdout → follow it for this session.
+Non-zero exit → show its stderr line to the user and continue to WI-10.
 
 ### WI-10 — Parallel survey launch (all Paths)
 

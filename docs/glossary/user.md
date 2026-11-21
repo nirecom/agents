@@ -32,6 +32,11 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Definition**: The workflow step that turns the approved approach into a file-level implementation plan; produced by `/make-detail-plan` after outline.
 - **Related**: [skills/make-detail-plan/SKILL.md](../../skills/make-detail-plan/SKILL.md)
 
+### fixed assignment
+
+- **Definition**: An issue the user assigns to a PM session as a fixed part of its charge.
+- **Related**: [architecture/cross-session-messaging.md](../architecture/cross-session-messaging.md)
+
 ### implementation step
 - **Definition**: A workflow step after detail, where the approved plan is implemented, tested, and released.
 - **Related**: [workflow.md](../architecture/claude-code/workflow.md)
@@ -106,6 +111,16 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
   Chosen in intent and never switched mid-session; orthogonal to the deliverable type, and unrelated to a PM session.
 - **Related**: [architecture/claude-code/workflow.md](../architecture/claude-code/workflow.md#the-step-table-deliverable-type-x-pm-type)
 
+### PML1
+
+- **Definition**: PM level 1, the default level of a PM session.
+- **Related**: [architecture/cross-session-messaging.md](../architecture/cross-session-messaging.md)
+
+### PML2
+
+- **Definition**: PM level 2, the one PM session per host that ranks above every PML1.
+- **Related**: [architecture/cross-session-messaging.md](../architecture/cross-session-messaging.md)
+
 ### pre-implementation step
 - **Definition**: A workflow step from `workflow_init` through detail, where what to build and how is decided.
 - **Related**: [workflow.md](../architecture/claude-code/workflow.md)
@@ -139,6 +154,11 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Definition**: An event that hooks and skill procedures append to the workflow state for session hand-over — a compaction, a gate block, a supervisor verdict, or a procedure result; `/resume-session` and the supervisor codex engine read it.
   The main conversation's own facts go to session-progress.md instead.
 - **Related**: [architecture/claude-code/state-handoff-record.md](../architecture/claude-code/state-handoff-record.md)
+
+### temporary assignment
+
+- **Definition**: An issue a PM session takes into its own charge provisionally.
+- **Related**: [architecture/cross-session-messaging.md](../architecture/cross-session-messaging.md)
 
 ### test-lang-exception
 - **Definition**: A value in a test file's `# Tags:` line (`text-only`, `symmetry`, or `e2e`) that lets the whole file be written in a language other than the code it tests.

@@ -39,6 +39,7 @@ When `state_handoff_errors` is non-empty, tell the user the prior session's stat
 When `progress_file` is present, show its `path` and tell the user to read its `section` (`Current state`) first.
 When the session-upstream is a PM session (`node "$AGENTS_MAIN_ROOT/bin/pm-state" show --session <session-id>` returns a PM) and this run came through `--list` or Bash, tell the user to type `/resume-session --from <full session id>`: only the typed command carries the PM state over. For a PM session-upstream, hand over with [`skills/_shared/pm-handoff-template.md`](../_shared/pm-handoff-template.md).
 On a `[pm-session] op=inherit` context, report its `sequence=` value (`copied`, `copied-unverified`, `not-copied` or `none`), its `sequence_reason=` and its `Exit:` line to the user.
+After the `--from` inherit, run `node "$AGENTS_MAIN_ROOT/bin/pm-instructions" --timing session-start` for a PM and a workflow session-upstream alike (the CLI resolves the role) and follow non-empty stdout; on a non-zero exit show its stderr line and continue.
 When `transcript_tail.available` is `true`, launch a subagent per `skills/resume-session/scripts/summarize-transcript-tail.md`; never read that file into this conversation yourself.
 This route ends the skill at RSM-5 — never fall through to local detection.
 

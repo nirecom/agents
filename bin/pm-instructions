@@ -1,0 +1,7 @@
+#!/usr/bin/env node
+"use strict";
+// bin/pm-instructions — the PM duties block for a session and timing (#3019). Dispatch only; usage and logic: bin/lib/pm-instructions/cli.js.
+
+const { main } = require("./lib/pm-instructions/cli");
+
+process.exitCode = main(process.argv.slice(2));
