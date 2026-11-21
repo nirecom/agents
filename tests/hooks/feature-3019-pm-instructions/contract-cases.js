@@ -36,9 +36,20 @@ function realMd(S) {
     const { pairs } = headingPairs(readMd());
     for (const c of CONTRACT) assert.strictEqual(pairs.get(`${c.h2}/${c.h3}`), 1, `${c.h2} / ${c.h3}: ${pairs.get(`${c.h2}/${c.h3}`) || 0}`);
   });
-  test("contract-md: [interim: #NNNN] markers name exactly the six follow-up issues", () => {
+  test("contract-md: [interim: #NNNN] markers name exactly the seven follow-up issues", () => {
     const found = new Set([...readMd().matchAll(/\[interim: #(\d+)\]/g)].map((m) => Number(m[1])));
     assert.deepStrictEqual([...found].sort((a, b) => a - b), INTERIM_ISSUES);
+  });
+  test("contract-md: [interim: #3118] sits once, on the companion-consult line of Before companion presentation", () => {
+    const md = readMd();
+    const wf = section(md, /^## Workflow session\s*$/);
+    assert.ok(wf, "no ## Workflow session section");
+    const body = section(wf, /^### Before companion presentation\s*$/);
+    assert.ok(body, "no ### Before companion presentation section");
+    const line = body.split(/\r?\n/).find((l) => l.includes("Consult the assigned PM on the companion issues"));
+    assert.ok(line, `no companion-consult line: ${body}`);
+    assert.ok(line.includes("[interim: #3118]"), `marker not on the companion-consult line: ${line}`);
+    assert.strictEqual(md.split("[interim: #3118]").length - 1, 1, "[interim: #3118] must appear exactly once");
   });
   test("contract-md: the glossary and the PM contact procedure are referenced, not restated", () => {
     const md = readMd();
