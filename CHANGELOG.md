@@ -280,3 +280,7 @@ Changes: run_tests no longer reports green when a split test run had a failing p
 ### FEATURE: PR #3122 (2026-11-21)
 Background: feat(#3019): PM duties SSOT injected by role x timing
 Changes: PM sessions and the workflow sessions they oversee now receive their PM duties automatically at session start, after compaction, on resume and at each workflow checkpoint, from a single duties file (#3019).
+
+### FEATURE: PR #3128 (2026-11-22)
+Background: fix(#3127): hide console window for gh/git/bash spawns built by spawn...
+Changes: Fixed a black console window that flashed on Windows each time a PM hook ran.
