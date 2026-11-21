@@ -37,6 +37,25 @@ fi
 
 LIB_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Copy WORKTREE_NOTES.md (if present) to the backup dir, or the plans fallback, and verify it
+# byte-for-byte: the backup is the only copy that survives worktree removal (#2019).
+backup_notes() {
+  local src="$WORKTREE/WORKTREE_NOTES.md" dest_dir dest
+  NOTES_BACKUP_PATH=""
+  [[ -f "$src" ]] || return 0
+  if [[ "$BACKUP_DIR_VALID" == "1" ]]; then
+    dest_dir="$BACKUP_DIR"
+  else
+    dest_dir="$PLANS_DIR/${SESSION_ID}-notes-backup"
+  fi
+  dest="$dest_dir/WORKTREE_NOTES.md"
+  if ! mkdir -p "$dest_dir" || [[ -d "$dest" ]] || ! cp -p "$src" "$dest" || ! cmp -s "$src" "$dest"; then
+    printf "ERROR: WORKTREE_NOTES.md backup to '%s' failed or differs from the source; aborting before final-report-env.json\n" "$dest" >&2
+    exit 1
+  fi
+  NOTES_BACKUP_PATH="$dest"
+}
+
 # Bootstrap mode (issue #772): when the session was a new-repo first commit,
 # /merge-to-main MM-3b pushed branch:main directly. There is no PR to query,
 # so skip the gh pr view / mergeCommit retry block entirely and synthesize
@@ -98,18 +117,7 @@ if [[ "$BOOTSTRAP_MODE" == "1" ]]; then
         BACKUP_MANIFEST_PATH="(none)"
     fi
 
-    NOTES_BACKUP_PATH=""
-    if [[ -f "$WORKTREE/WORKTREE_NOTES.md" ]]; then
-        if [[ "$BACKUP_DIR_VALID" == "1" ]]; then
-            cp -p "$WORKTREE/WORKTREE_NOTES.md" "$BACKUP_DIR/WORKTREE_NOTES.md"
-            NOTES_BACKUP_PATH="$BACKUP_DIR/WORKTREE_NOTES.md"
-        else
-            NOTES_BACKUP_DIR="$PLANS_DIR/${SESSION_ID}-notes-backup"
-            mkdir -p "$NOTES_BACKUP_DIR"
-            cp -p "$WORKTREE/WORKTREE_NOTES.md" "$NOTES_BACKUP_DIR/WORKTREE_NOTES.md"
-            NOTES_BACKUP_PATH="$NOTES_BACKUP_DIR/WORKTREE_NOTES.md"
-        fi
-    fi
+    backup_notes
 
     ENV_FILE="$CONTROL_DIR/final-report-env.json"
 
@@ -257,18 +265,7 @@ else
 fi
 
 # Phase 5: Copy WORKTREE_NOTES.md to backup dir (if present).
-NOTES_BACKUP_PATH=""
-if [[ -f "$WORKTREE/WORKTREE_NOTES.md" ]]; then
-  if [[ "$BACKUP_DIR_VALID" == "1" ]]; then
-    cp -p "$WORKTREE/WORKTREE_NOTES.md" "$BACKUP_DIR/WORKTREE_NOTES.md"
-    NOTES_BACKUP_PATH="$BACKUP_DIR/WORKTREE_NOTES.md"
-  else
-    NOTES_BACKUP_DIR="$PLANS_DIR/${SESSION_ID}-notes-backup"
-    mkdir -p "$NOTES_BACKUP_DIR"
-    cp -p "$WORKTREE/WORKTREE_NOTES.md" "$NOTES_BACKUP_DIR/WORKTREE_NOTES.md"
-    NOTES_BACKUP_PATH="$NOTES_BACKUP_DIR/WORKTREE_NOTES.md"
-  fi
-fi
+backup_notes
 
 # Phase 6: Persist env JSON (BRANCH_DELETED intentionally omitted).
 ENV_FILE="$CONTROL_DIR/final-report-env.json"

@@ -1,29 +1,13 @@
 #!/usr/bin/env bash
-# Dispatch wrapper for /issue-create skill — executes the mechanical branch
-# selected by Claude's survey verdict (none / reopen / sub-of / make-parent / sibling).
-#
-# Usage:
-#   issue-create-dispatch.sh --verdict <kind> [verdict-specific flags] -- <issue-create.sh args...>
-#
-# Verdicts:
-#   none         (no extra flags)            New issue with no relation
-#   reopen       --target N [--note TEXT]    Reopen #N; no new issue created
-#   sub-of       --parent N                  New issue, attached as sub-issue of #N
-#   make-parent  --children N,M,...          New META parent + the proposal as its child
-#   sibling      --related N,M,...           New issue with "Related to #N" appended to body
-#   bulk-sub-of  --parent N --manifest FILE   Create N new sub-issues under #N from manifest
-#
-# sub-of / bulk-sub-of verify that #N is a real meta parent (lib/require-meta-parent.sh)
-# BEFORE the first create, because an issue attached to an unusable parent cannot be
-# un-created. Ineligible parent → exit 2; indeterminate lookup → exit 1 (fail CLOSED).
-#
-# Stdout: final issue URL(s).
-#   none/reopen/sub-of/sibling: one URL (last line of stdout).
-#   make-parent: TWO lines — the meta parent first, the proposal (the child) LAST, so
-#                callers piping through `tail -n 1` still receive the proposal's URL.
-#   bulk-sub-of: N URLs in manifest order (one per line, end of stdout; progress on stderr only).
-#   reopen: URL of the reopened issue; all other verdicts: URL of the new issue.
-# Exit: 0 on success; 2 on usage error; 1 on structural failure.
+# issue-create-dispatch.sh --verdict <kind> [flags] -- <issue-create.sh args...> (contract: skills/issue-create/SKILL.md)
+#   none | reopen --target N [--note TEXT] [--merged-finding-file F] | sub-of --parent N
+#   make-parent --children N,M | sibling --related N,M | bulk-sub-of --parent N --manifest FILE
+# reopen + --merged-finding-file posts F as one comment after a successful reopen; a failed
+#   comment exits 3 with stdout empty, stderr `merge_comment: failed` + `reopened: <URL>`;
+#   the reopen stands (#2019).
+# sub-of / bulk-sub-of check the meta parent before any create: ineligible → 2, indeterminate → 1.
+# Stdout: the URL last (make-parent: parent, then the proposal; bulk-sub-of: one per child).
+# Exit: 0 success; 2 usage error; 1 structural failure; 3 reopened but merged-finding comment failed.
 
 set -euo pipefail
 
@@ -37,10 +21,11 @@ MANIFEST=""
 # coming back. It is deliberately NOT forwarded to any create branch — an explanation
 # for a decision that was never made has no place on a freshly created issue.
 NOTE=""
+MERGED_FINDING_FILE=""
 PASSTHROUGH=()
 
 usage() {
-    sed -n '2,26p' "$0" >&2
+    sed -n '2,10p' "$0" >&2
     exit 2
 }
 
@@ -81,6 +66,7 @@ while [ $# -gt 0 ]; do
         --note)
             [ $# -ge 2 ] || { echo "Error: --note requires value" >&2; exit 2; }
             NOTE="$2"; shift 2 ;;
+        --merged-finding-file) MERGED_FINDING_FILE="${2:?--merged-finding-file requires value}"; shift 2 ;;
         --)          shift; PASSTHROUGH=("$@"); break ;;
         -h|--help)   usage ;;
         *) echo "Error: unknown argument before --: $1" >&2; exit 2 ;;
@@ -238,7 +224,16 @@ case "$VERDICT" in
         else
             bash "$(dirname "${BASH_SOURCE[0]}")/reopen-with-update.sh" "$TARGET"
         fi
+        # The merged finding rides on a comment only once the reopen has succeeded (set -e
+        # above); its failure never undoes the reopen. Its stdout goes to stderr: URL contract.
         slug="$(get_repo_slug)"
+        if [ -n "$MERGED_FINDING_FILE" ]; then
+            if ! bash "$SCRIPT_DIR/merge-finding-comment.sh" "$TARGET" "$MERGED_FINDING_FILE" >&2; then
+                echo "merge_comment: failed" >&2
+                echo "reopened: https://github.com/${slug}/issues/${TARGET}" >&2
+                exit 3
+            fi
+        fi
         echo "https://github.com/${slug}/issues/${TARGET}"
         ;;
 

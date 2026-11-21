@@ -30,6 +30,7 @@ const OFF_CLEARANCE_TOKEN_SUFFIXES = [
 // file grants full clearance; kept in sync with hooks/lib/session-markers.js
 // and hooks/workflow-state/state-io/zombie-cleanup.js.
 const EMERGENCY_PROVENANCE_MARKER_KIND = "off-emergency-invoked";
+const { FINDING_APPROVAL_MARKER_KIND } = require("./finding-approval");
 
 const SESSION_MARKER_KINDS = [
   "workflow-off",
@@ -38,6 +39,7 @@ const SESSION_MARKER_KINDS = [
   "next-step-paused",
   "stall-reported", // authorizes suppressing a mechanism-failure report (#1997)
   EMERGENCY_PROVENANCE_MARKER_KIND,
+  FINDING_APPROVAL_MARKER_KIND, // authorizes filing a finding without a confirm dialog (#2019)
 ];
 
 // #2053: session state the forge-target-ownership guard trusts to stay

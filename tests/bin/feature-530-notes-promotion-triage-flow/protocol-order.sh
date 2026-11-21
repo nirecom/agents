@@ -2,39 +2,13 @@
 # tests/bin/feature-530-notes-promotion-triage-flow/protocol-order.sh
 # Tests: bin/worktree-notes-triage.js, skills/_shared/notes-promotion.md
 # Tags: notes-promotion, worktree-notes, triage, issue-create, call-order, prefilter, TL2, scope:issue-specific
-#
-# O — the ORDER of the protocol's side effects, observed at the process
-#     boundary rather than re-simulated: every `worktree-notes-triage.js`
-#     invocation and every `/issue-create` invocation is recorded, in real time,
-#     into one shared trace by executable wrappers on PATH. The assertions are
-#     made against that trace, so a driver that annotated before creating, or
-#     that announced after filing, is caught even though it "did all the steps".
-#
-#     Sibling promotion-loop.sh asserts the CONTENT the loop leaves behind
-#     (markers pair with the numbers the stub returned). This file asserts the
-#     SEQUENCE the protocol prescribes:
-#         NP-4 prefilter → NP-5 list → NP-6 notice → (NP-7 create → NP-8 annotate)*
-#
-# N — NP-4 says an all-`- (none)` notes file must cost no `worktree-notes-triage.js`
-#     call at all. Only a trace taken at the process boundary can show the CLI
-#     was never spawned; a test that inspects the CLI's output cannot, because
-#     it has already paid for the call it is trying to prove absent.
-#
-# The driver below (`protocol_pass`) is a reference implementation of
-# skills/_shared/notes-promotion.md NP-4..NP-8 — the protocol is prompt text
-# executed by the model, so no repo code can be invoked here. Its prefilter reads
-# the notes file directly with awk, exactly as NP-4 requires the reader to do
-# BEFORE reaching for the CLI. Case O2 is the control that keeps N1 honest: the
-# same driver, on notes that do hold findings, does spawn the CLI.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the real model-driven callsites (worktree-end WE-11, session-close
-#   SC-8, issue-close-finalize residual) issue the calls in this order in a live
-#   session, or skip the NP-4 prefilter and call `list` on a clean session.
-# - Whether the notice actually reaches the user's chat transcript before the
-#   first issue appears on GitHub.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# O: the ORDER of side effects, traced at the process boundary by PATH wrappers:
+#    NP-4 prefilter → list → handoff → notice → autoHigh → ask → picked → dispose (discard, then declined) (#2019).
+# N: an all-`- (none)` notes file spawns no triage CLI at all (NP-4); O2 is its control.
+# `protocol_pass` is a reference driver of skills/_shared/notes-promotion.md NP-4..NP-8.
+# TL3 gap: whether live callsites (WE-11, SC-8, issue-close-finalize) keep this order and
+# whether the notice reaches the user first; checked at WORKFLOW_USER_VERIFIED preflight
+# (bin/check-verification-gate.sh category: skill-orchestration).
 
 . "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 
@@ -93,27 +67,38 @@ all_sections_none() {
     ' "$1"
 }
 
-# protocol_pass <os-path-to-notes> <node-path-to-notes>
-# Reference driver for NP-4..NP-8. Every observable step goes through PATH.
+# file_rows <notes> <rows-file> — /issue-create then annotate, one "line<TAB>body" row at a time.
+file_rows() {
+    local line b num
+    while IFS=$'\t' read -r line b; do
+        num="$(issue-create --title "$b" 2>/dev/null)"; run_with_timeout 30 wnt annotate "$1" "$line" "$num" >/dev/null 2>&1
+    done < "$2"
+}
+# protocol_pass <os-path-to-notes> <node-path-to-notes> [picks]
+# Reference driver of the #2019 pass; every observable step goes through PATH. Order: list →
+# handoff (testFailureHandoff) → notice → autoHigh filed → ask (final list) → the first [picks]
+# finalList entries filed (the user's selection, default 1) → discard disposed → the unselected
+# finalList entries disposed as discard (declined). LOW / not-defect never reach create.
 protocol_pass() {
-    local file="$1" notes="$2" out n i raw line num
+    local file="$1" notes="$2" picks="${3:-1}" out n line b
     if all_sections_none "$file"; then
         return 0                                    # NP-4: nothing further runs
     fi
-    out="$(run_with_timeout 30 wnt list "$notes" 2>/dev/null)"   # NP-5
+    out="$(FINDING_HANDOFF_BIN="$HANDOFF_OK" run_with_timeout 30 wnt list "$notes" 2>/dev/null)"
     n="$(json_len "$out")"
     [ "$n" != "ERR" ] && [ "$n" -gt 0 ] 2>/dev/null || return 0
-    # NP-6: one line, before anything is created.
-    printf 'notice|%s findings will be filed as issues now — the notes are about to become unreachable\n' \
-        "$n" >> "$TRACE"
-    i=0
-    while [ "$i" -lt "$n" ]; do                     # NP-7 / NP-8
-        raw="$(json_at "$out" "$i" raw)"
-        line="$(json_at "$out" "$i" lineNumber)"
-        num="$(issue-create --title "$raw" 2>/dev/null)"
-        run_with_timeout 30 wnt annotate "$notes" "$line" "$num" >/dev/null 2>&1
-        i=$((i + 1))
-    done
+    group_rows "$out" testFailureHandoff | while IFS=$'\t' read -r line b; do
+        FINDING_HANDOFF_BIN="$HANDOFF_OK" run_with_timeout 30 wnt handoff "$notes" "$line" >/dev/null 2>&1; done
+    group_rows "$out" autoHigh > "$TMPD/pp.auto"; group_rows "$out" finalList > "$TMPD/pp.final"
+    printf 'notice|%s findings will be filed by rule now, %s offered in the final list — the notes are about to become unreachable\n' \
+        "$(grep -c '' "$TMPD/pp.auto")" "$(grep -c '' "$TMPD/pp.final")" >> "$TRACE"
+    file_rows "$notes" "$TMPD/pp.auto"
+    if [ -s "$TMPD/pp.final" ]; then
+        printf 'ask|%s\n' "$(grep -c '' "$TMPD/pp.final")" >> "$TRACE"
+        head -n "$picks" "$TMPD/pp.final" > "$TMPD/pp.pick"; file_rows "$notes" "$TMPD/pp.pick"
+    fi
+    { group_rows "$out" discard; tail -n +"$((picks + 1))" "$TMPD/pp.final"; } | while IFS=$'\t' read -r line b; do
+        run_with_timeout 30 wnt dispose "$notes" "$line" discard >/dev/null 2>&1; done
     return 0
 }
 
@@ -125,14 +110,21 @@ trace_ops() { cut -d'|' -f1 < "$TRACE" 2>/dev/null | tr '\n' ' ' | sed 's/ *$//'
 o1_call_sequence() {
     local dir="$TMPD/o1" notes missing="" ops
     : > "$TRACE"; : > "$ISSUE_SEQ_FILE"
-    notes="$(write_notes "$dir" "sess-o1")"          # 6 entries
+    notes="$(write_triage_notes "$dir" "sess-o1")"   # one entry per rule-table class
 
-    protocol_pass "$dir/WORKTREE_NOTES.md" "$notes"
+    protocol_pass "$dir/WORKTREE_NOTES.md" "$notes" 1
 
     ops="$(trace_ops)"
-    # list first, notice second, then six create/annotate pairs.
-    local want="list notice create annotate create annotate create annotate create annotate create annotate create annotate"
+    # list, the hand-off, the notice, the HIGH pair, the final-list ask, the one picked pair, two discards,
+    # then the declined finalList entry.
+    local want="list handoff notice create annotate ask create annotate dispose dispose dispose"
     [ "$ops" = "$want" ] || missing="$missing sequence=[$ops]"
+    # Only the HIGH entry and the user's pick reach /issue-create; LOW / not-defect / this-pr never do.
+    [ "$(grep '^create|' "$TRACE" | sed 's/^create|[0-9]*|--title //' | tr '\n' ';')" = 'crash on save;slow index rebuild;' ] \
+        || missing="$missing created=[$(grep '^create|' "$TRACE" | tr '\n' ';')]"
+    grep -q '^ask|2$' "$TRACE" || missing="$missing finalList-prompt-missing-both-entries"
+    grep 'maybe cache lookups' "$dir/WORKTREE_NOTES.md" | grep -q '<!-- disposed: discard -->' \
+        || missing="$missing declined-entry-unmarked"
 
     # Exactly one list: re-listing between entries would mean the queue was
     # re-derived mid-pass, which NP-7 ("walk the listed entries in list order")
@@ -159,7 +151,7 @@ o1_call_sequence() {
     fi
 
     if [ -z "$missing" ]; then
-        pass "O1: the traced pass runs list → notice → (create → annotate)×6, each annotate carrying the number its own create returned"
+        pass "O1: the traced pass runs list → handoff → notice → HIGH create/annotate → ask → picked create/annotate → dispose×3 (discard + declined), filing no LOW / not-defect entry"
     else
         fail "O1: protocol call order wrong" "$missing (trace=$(tr '\n' ';' < "$TRACE"))"
     fi
@@ -170,7 +162,8 @@ o1_call_sequence() {
 # ===========================================================================
 # The static suite checks that the notice is DOCUMENTED before the /issue-create
 # step. This checks the notice is EMITTED before any issue is actually created,
-# and that it states the count it is about to file.
+# and that it states the counts. The six legacy entries read as MEDIUM / other (#2019), so none is
+# filed by rule: all six are offered and only the one the user picks is created.
 o2_notice_before_first_create() {
     local dir="$TMPD/o2" notes missing="" notice_ln create_ln notice_text
     : > "$TRACE"; : > "$ISSUE_SEQ_FILE"
@@ -187,9 +180,10 @@ o2_notice_before_first_create() {
     fi
     notice_text="$(grep '^notice|' "$TRACE" | head -1 | cut -d'|' -f2-)"
     case "$notice_text" in
-        6*) ;;                                       # the count it is about to file
+        "0 findings will be filed by rule now, 6 offered"*) ;;   # the counts
         *) missing="$missing notice-omits-count=[$notice_text]" ;;
     esac
+    [ "$(grep -c '^create|' "$TRACE")" = "1" ] || missing="$missing creates=$(grep -c '^create|' "$TRACE")(want 1: the pick)"
     case "$notice_text" in
         *unreachable*) ;;                            # and why, now
         *) missing="$missing notice-omits-reason" ;;
@@ -263,11 +257,11 @@ EOF
     protocol_pass "$dir/WORKTREE_NOTES.md" "$notes"
 
     ops="$(trace_ops)"
-    [ "$ops" = "list notice create annotate" ] || missing="$missing sequence=[$ops]"
+    [ "$ops" = "list notice ask create annotate" ] || missing="$missing sequence=[$ops]"
     grep -q '<!-- promoted: #' "$dir/WORKTREE_NOTES.md" 2>/dev/null || missing="$missing entry-not-marked"
 
     if [ -z "$missing" ]; then
-        pass "N2: control — a single real entry among '- (none)' placeholders puts the pass back on list → notice → create → annotate"
+        pass "N2: control — a single real entry among '- (none)' placeholders puts the pass back on list → notice → ask → create → annotate"
     else
         fail "N2: prefilter over-suppressed a real finding" "$missing (trace=$(tr '\n' ';' < "$TRACE"))"
     fi

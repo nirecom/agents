@@ -2,31 +2,12 @@
 # tests/bin/unit-worktree-notes-append.sh
 # Tests: bin/worktree-notes-append.js, bin/worktree-notes-append/args.js, bin/worktree-notes-triage.js
 # Tags: worktree, workflow, bin, append-cli, severity, TL2, scope:common
-#
-# Unit tests for bin/worktree-notes-append.js (issue #622).
-#
-# CLI signature:
-#   node bin/worktree-notes-append.js \
-#     --notes-path <absolute-path-to-WORKTREE_NOTES.md> \
-#     --issue-number <N> \
-#     --title "<short title>" \
-#     [--label <label> [--label ...]] \
-#     [--skip-if-main]
-#
-# Test-first: the helper does not yet exist. Tests are SKIP-graceful — they
-# emit SKIP (not FAIL) when the helper is absent so the workflow can land
-# tests before implementation without showing red.
-#
-# TL3 gap (what this test does NOT catch):
-# - A real /worktree-end or /issue-create run choosing the section and the
-#   --severity value: the CLI contract is exercised here, but the classification
-#   itself is model behavior driven by rules/mid-workflow-findings.md.
-# - Concurrent appends from two live sessions racing on the same
-#   WORKTREE_NOTES.md (the tmp+rename atomicity is checked single-process only).
-# - The real enforce-worktree / pre-commit hooks around --skip-if-main; the
-#   fixture repo here pins core.hooksPath to /dev/null.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# Mode A (#622): --notes-path <abs> --issue-number <N> --title <t> [--label <l>...] [--skip-if-main].
+# SKIP-graceful when the helper is absent. Mode B cases: unit-worktree-notes-append/mode-b-tests.sh.
+# TL3 gap: the model's section/--severity choice (rules/mid-workflow-findings.md), concurrent
+# appends from two live sessions, and the real hooks around --skip-if-main (fixture pins
+# core.hooksPath); checked at WORKFLOW_USER_VERIFIED preflight
+# (bin/check-verification-gate.sh category: skill-orchestration).
 
 set -u
 
@@ -226,10 +207,10 @@ test_A5_triage_list_filters_promoted() {
     triage_out="$(run_with_timeout 30 node "$TRIAGE_JS" list "$notes" 2>/dev/null)"
     # Trim whitespace
     triage_out="$(printf '%s' "$triage_out" | tr -d '[:space:]')"
-    if [ "$triage_out" = "[]" ]; then
-        pass "A5: triage list returns [] (promoted entry filtered out)"
+    if [ "$(node -e 'try{const g=JSON.parse(process.argv[1]);process.stdout.write(String(!Array.isArray(g)&&Object.values(g).flat().length===0))}catch(e){}' -- "$triage_out" 2>/dev/null)" = "true" ]; then
+        pass "A5: triage list returns only empty groups (promoted entry filtered out, #2019 shape)"
     else
-        fail "A5: expected '[]', got: '$triage_out'"
+        fail "A5: expected empty groups, got: '$triage_out'"
     fi
     cleanup_tmp
 }

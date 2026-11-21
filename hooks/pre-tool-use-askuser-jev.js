@@ -10,6 +10,22 @@
 // Taken before anything loads load-env, as every Jev entrypoint does (test-overrides.js).
 const JEV_OVERRIDES = require("./lib/jev/test-overrides").captureTestOverrides(process.env);
 
+// #2019 S1-3: for a finding-approval dialog, leave a pending entry the PostToolUse writer pairs by
+// tool_use_id. A failed write changes nothing about the dialog; it only means no approval.
+function recordApprovalPending(input, toolInput, route) {
+  try {
+    const fa = require("./lib/finding-approval");
+    const meta = toolInput.metadata && typeof toolInput.metadata === "object" ? toolInput.metadata : {};
+    const sid = typeof input.session_id === "string" ? input.session_id : "";
+    if (!fa.isApprovalDialog(meta.source) || !/^[A-Za-z0-9_-]+$/.test(sid)) return;
+    if (typeof input.tool_use_id !== "string" || !input.tool_use_id) return;
+    fa.addPending(sid, {
+      tool_use_id: input.tool_use_id, dialog_id: meta.source, route: String(route),
+      input_had_answers: toolInput.answers != null, at: new Date().toISOString(),
+    });
+  } catch (_e) { /* fail-closed for approval, fail-open for the tool */ }
+}
+
 async function main() {
   const r = require("./lib/read-stdin").readHookInput();
   if (r.kind !== "ok" || !r.input || r.input.tool_name !== "AskUserQuestion") return;
@@ -33,6 +49,7 @@ async function main() {
   require("./lib/askuser-route-log").recordRoute({
     sessionId: sid, dialogId: d.dialogId, route: d.route, step: d.step, jevCalled: d.jevCalled,
   });
+  recordApprovalPending(input, toolInput, d.route);
   if (d.route !== "answered" || !d.answers) return;
   process.stdout.write(JSON.stringify({
     hookSpecificOutput: {

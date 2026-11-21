@@ -8,33 +8,35 @@ paths:
 
 When you discover a bug unrelated to the current task, a related follow-up, or a next-task candidate while running the workflow:
 
-**Primary path** — invoke `/issue-create` immediately from the linked worktree. Mid-workflow issues are NOT added to the current session's `closes_issues` (1 session = 1 issue). Address them in a separate session via `/workflow-init <N>`. The `/issue-create` Mid-workflow gate surfaces this notice before Phase 1.
+Capture the finding at once in `<worktree>/WORKTREE_NOTES.md`; a finding that exists only in this session's context is lost when the session ends.
+Whether it is filed is decided by the triage rules (`skills/_shared/notes-promotion.md`), not by you at capture time.
 
-Defer the implementation to a separate session; never defer the filing itself. A finding that exists only in this session's context is lost when the session ends.
+Give every finding exactly one of three dispositions:
+- fix in this PR — after the fixing commit, record `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-triage.js" dispose "<worktree>/WORKTREE_NOTES.md" <lineNumber> fixed`;
+- Known limits — an unfixed `this-pr` finding goes to the PR body's `## Known limits` at promotion;
+- file — an `other` finding is filed by the promotion rules; implement it in a separate session via `/workflow-init <N>`.
 
-Do not write agents-repo improvements or findings to `~/.claude/projects/<project-slug>/memory/` — file them via this rule's path (`/issue-create`) instead.
+Mid-workflow issues are NOT added to the current session's `closes_issues` (1 session = 1 issue).
+A finding that blocks the current work: ask the user with AskUserQuestion, dialog `mid-workflow-findings.blocking-file`, then run `/issue-create` from the linked worktree on approval.
+A `/issue-create` the user types is approved by its own record; the `/issue-create` Mid-workflow gate surfaces this notice before Phase 1.
 
-**Fallback path** — use `<worktree>/WORKTREE_NOTES.md` only when:
-- Non-interactive session (`claude -p`, subagent, `/loop`), OR
-- Non-GitHub remote (`bin/is-github-dotcom-remote` returns non-zero), OR
-- User explicitly defers.
+Do not write agents-repo improvements or findings to `~/.claude/projects/<project-slug>/memory/` — capture them via this rule's path instead.
 
-Fallback recovery: `/worktree-end` Step WE-7 promotes unconverted `WORKTREE_NOTES.md` entries to issues, per `skills/_shared/notes-promotion.md`. **Cutoff: Step WE-6** — findings after that go directly to `/issue-create`.
+Promotion: `/worktree-end` Step WE-7 promotes unconverted `WORKTREE_NOTES.md` entries per `skills/_shared/notes-promotion.md`. **Cutoff: Step WE-6** — findings after that go directly to `/issue-create`.
 
-**Append via the CLI** (primary path for every `WORKTREE_NOTES.md` write): `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-append.js" --notes-path "<worktree>/WORKTREE_NOTES.md" --section <Section> --title "<one-line finding>" [--severity high|low|none] [--user-acknowledged true|false]`.
+**Append via the CLI** (the path for every `WORKTREE_NOTES.md` write): `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-append.js" --notes-path "<worktree>/WORKTREE_NOTES.md" --section <Section> --title "<one-line finding>" --severity high|medium|low|not-defect --pr-scope this-pr|other [--instance "<observed instance>"] [--loc "<path:line>"] [--test-failure]`.
 
-User-acknowledged: every section but `ManualReminders` requires `--user-acknowledged`; pass `true` when the user requested the follow-up or knowingly accepted your proposal of it, `false` when you found it alone.
-An entry without the user-acknowledged marker (hand-written or older) counts as `false`: ask the user before filing it.
+Triage flags: `BugsFound`, `RelatedTasks` and `NextTasks` require `--severity` and `--pr-scope`; `ManualReminders` rejects them. `--test-failure` requires `--instance`.
+Judge severity by `skills/_shared/severity.md` (SSOT); a HIGH claim states its reason there.
+Legacy markers `high|low|none` from the old CLI still parse: `none` reads as `not-defect`, and an entry with no marker reads as `medium`.
 
 The CLI owns section routing, `- (none)` replacement, idempotency, and marker generation — do not hand-assemble an entry line.
 
-Severity: `--section BugsFound` requires `--severity`; every other section rejects it. Only `high` survives verbatim in the Final Report; `low` and `none` compress to a title line and produce identical output. Judge `high` by HIGH in `skills/_shared/severity.md` (SSOT).
-
-Manual editing of `WORKTREE_NOTES.md` (gitignored; not subject to `enforce-worktree`) is the fallback when the CLI is unusable — a hand-written entry carries no severity tag, so it always compresses to a title line in the Final Report.
+Manual editing of `WORKTREE_NOTES.md` (gitignored; not subject to `enforce-worktree`) is the fallback when the CLI is unusable — a hand-written entry carries no markers, so it reads as `medium` / `other`.
 
 Sections (the `--section` values):
 
 - `## BugsFound` — defects observed during the workflow
-- `## RelatedTasks` — adjacent work implemented in a separate session; filed in this one
+- `## RelatedTasks` — adjacent work implemented in a separate session
 - `## NextTasks` — follow-ups specific to the current change
 - `## ManualReminders` — actions only the user can perform by hand; surfaced in chat at close, never promoted to an issue

@@ -38,7 +38,7 @@ const TOKEN_BLOCK_MSG = [
 // the only sanctioned route, and they are human-gated by settings.json `ask`.
 const MARKER_BLOCK_MSG = [
   "Direct write to a session-override marker blocked.",
-  "Markers (.workflow-off / .worktree-off / .issue-close-verified / .next-step-paused / .off-emergency-invoked)",
+  "Markers (.workflow-off / .worktree-off / .issue-close-verified / .next-step-paused / .off-emergency-invoked / .finding-filing-approval)",
   "grant clearance by their mere existence, so they are never written by hand.",
   "Use the sentinel instead — it is human-gated and audited:",
   "  echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: {reason}>>\"   (requires a clearance token)",

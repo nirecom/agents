@@ -12,6 +12,7 @@ HIGH is the same criterion as the `severity:high` label.
 - Progress stops with no workaround, or the change cannot be released.
 
 An issue label needs a confirmed instance, not a theoretical or deferred risk; in a review, a concern that meets the Reporting minimum of the review criteria counts as confirmed.
+Claiming HIGH for a finding or issue proposal: state the reason in its body as a `## Severity` section whose first line is `HIGH — <reason>`.
 
 ## MEDIUM
 
