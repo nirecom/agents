@@ -276,3 +276,7 @@ Changes: `bin/run-tests-baseline` now prints one extra stderr line per run, `run
 ### FEATURE: PR #3120 (2026-11-21)
 Background: fix(#3063, #3073): keep split-dispatch failures from vanishing; fix o...
 Changes: run_tests no longer reports green when a split test run had a failing part: every dispatch is now counted, and a run whose test selection cannot be verified keeps the step pending until a full run passes.
+
+### FEATURE: PR #3122 (2026-11-21)
+Background: feat(#3019): PM duties SSOT injected by role x timing
+Changes: PM sessions and the workflow sessions they oversee now receive their PM duties automatically at session start, after compaction, on resume and at each workflow checkpoint, from a single duties file (#3019).
