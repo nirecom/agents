@@ -67,4 +67,4 @@ function note(op, pm, extra) {
   ]).join("\n");
 }
 
-module.exports = { WRITER_FORGE_BUDGET_MS, Refusal, refuse, rawOf, workflowBegun, homeRepoOf, resolved, ancestryOf, labels, note };
+module.exports = { WRITER_FORGE_BUDGET_MS, ORIGIN_TIMEOUT_MS, Refusal, refuse, rawOf, workflowBegun, homeRepoOf, resolved, ancestryOf, labels, note };

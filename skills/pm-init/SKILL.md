@@ -19,6 +19,7 @@ When no `[pm-session]` context is present, tell the user the PM session was not 
 ### PMI-2 — Report
 
 Report the PM tag and the assigned list to the user in CONV_LANG.
+Run `node "$AGENTS_MAIN_ROOT/bin/pm-instructions" --timing session-start` and follow non-empty stdout; on a non-zero exit show its stderr line to the user.
 With `reason=unstated`, run `node "$AGENTS_MAIN_ROOT/bin/pm-state" set-reason --text "<reason>"` once only when the user's last message states the reason plainly; never guess one.
 The hook names the session; never copy a ListAgents ref into a title.
 Only when the hook's name does not show on screen, ask the user to `/rename` the session with the output of `node "$AGENTS_MAIN_ROOT/bin/session-name" --kind pm`.
