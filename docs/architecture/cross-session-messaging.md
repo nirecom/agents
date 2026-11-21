@@ -146,6 +146,8 @@ characters change roughly every 65 seconds, so the full-id ack is what confirms 
 
 ## 7. PM contact before PR creation
 
+The duties a PM gives its workflow sessions have one master: `## Workflow session` in [`skills/_shared/pm-supervisor-duties.md`](../../skills/_shared/pm-supervisor-duties.md).
+
 The only path that creates a PR is `/commit-push` CP-2 (`/merge-to-main` MM-4 pushes directly and
 creates none), so the contact runs there as CP-1b, a skill step rather than a hook or gate. The
 procedure is [skills/_shared/pm-pre-pr-contact.md](../../skills/_shared/pm-pre-pr-contact.md).

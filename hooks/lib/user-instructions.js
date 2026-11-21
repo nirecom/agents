@@ -10,9 +10,9 @@ const USER_INSTRUCTIONS_FILE = path.join(__dirname, "..", "..", "user-instructio
 const MAX_BYTES = 4096;
 const HEADER = "[user-instructions]";
 
-// Cut at MAX_BYTES, backing off over UTF-8 continuation bytes so no character is split.
-function cutUtf8(buf) {
-  let end = MAX_BYTES;
+// Cut at maxBytes, backing off over UTF-8 continuation bytes so no character is split.
+function cutUtf8(buf, maxBytes) {
+  let end = maxBytes;
   while (end > 0 && (buf[end] & 0xc0) === 0x80) end -= 1;
   return buf.subarray(0, end).toString("utf8");
 }
@@ -33,14 +33,19 @@ function readInstructionFile(file, header) {
   }
   const stripped = stripComments(text);
   if (stripped.trim().length === 0) return null;
-  const buf = Buffer.from(stripped, "utf8");
-  const truncated = buf.length > MAX_BYTES;
-  const body = (truncated ? cutUtf8(buf) : stripped).trimEnd();
-  return [header, body].concat(truncated ? [`${header.slice(0, -1)} truncated at ${MAX_BYTES} bytes]`] : []).join("\n");
+  return capWithHeader(stripped, header, MAX_BYTES);
+}
+
+// The header line plus text cut at maxBytes; a cut adds a header-derived truncation marker as the last line.
+function capWithHeader(text, header, maxBytes) {
+  const buf = Buffer.from(text, "utf8");
+  const truncated = buf.length > maxBytes;
+  const body = (truncated ? cutUtf8(buf, maxBytes) : text).trimEnd();
+  return [header, body].concat(truncated ? [`${header.slice(0, -1)} truncated at ${maxBytes} bytes]`] : []).join("\n");
 }
 
 function getUserInstructionsInjection() {
   return readInstructionFile(USER_INSTRUCTIONS_FILE, HEADER);
 }
 
-module.exports = { USER_INSTRUCTIONS_FILE, MAX_BYTES, getUserInstructionsInjection, readInstructionFile };
+module.exports = { USER_INSTRUCTIONS_FILE, MAX_BYTES, getUserInstructionsInjection, readInstructionFile, capWithHeader, stripComments };
