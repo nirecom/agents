@@ -17,10 +17,12 @@ const WORKFLOW_STEPS = VALID_STEPS.filter((s) => !POST_COMPACT_HIDDEN_STEPS.has(
 const { readHookInput } = require("./lib/read-stdin");
 
 let sessionId = null;
+let hookCwd = null;
 const hookInput = readHookInput();
 if (hookInput.kind === "ok") {
   try {
     sessionId = hookInput.input.session_id || null;
+    hookCwd = typeof hookInput.input.cwd === "string" ? hookInput.input.cwd : null;
   } catch (e) {}
 }
 
@@ -114,6 +116,12 @@ try {
     const { getVerbosePromptInjection } = require("./lib/verbose-prompt");
     const verbosePrompt = getVerbosePromptInjection(sessionId);
     if (verbosePrompt) lines.push(verbosePrompt);
+  } catch (_e) { /* fail-open */ }
+
+  try {
+    const { createDeadline } = require("./lib/hook-deadline");
+    const pmInstructions = require("./lib/pm-instructions").getPmInstructionsInjection(sessionId, { deadline: createDeadline({ hookTimeoutMs: 5000 }), cwd: hookCwd });
+    if (pmInstructions) lines.push(pmInstructions);
   } catch (_e) { /* fail-open */ }
 
   try {

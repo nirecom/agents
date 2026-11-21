@@ -306,3 +306,25 @@ test("session-title-mechanism-removed", verdict(() => {
   check("R2: skills/workflow-init/SKILL.md has no A1b step", () => eq(fs.readFileSync(path.join(ROOT, "skills", "workflow-init", "SKILL.md"), "utf8").includes("A1" + "b"), false, "A1b present"));
 }));
 caseEnd();
+
+// #3019: capWithHeader / stripComments are exported for hooks/lib/pm-instructions; the 4096 cap stays.
+caseBegin("capwithheader-and-stripcomments-exported", "hooks/lib/user-instructions.js");
+test("capwithheader-and-stripcomments-exported", verdict(() => {
+  delete require.cache[require.resolve(UI_LIB)];
+  const L = require(UI_LIB);
+  check("E1: capWithHeader and stripComments are exported functions; MAX_BYTES stays 4096", () => eq([typeof L.capWithHeader, typeof L.stripComments, L.MAX_BYTES], ["function", "function", 4096], "[capWithHeader, stripComments, MAX_BYTES]"));
+  if (typeof L.capWithHeader !== "function" || typeof L.stripComments !== "function") return;
+  check("E2: under the limit -> header line + text, no marker", () => eq(L.capWithHeader("abc", "[h]", 10), "[h]\nabc", "capped"));
+  check("E3: over the limit (ASCII) -> 10 bytes kept and a header-derived marker as the last line", () => {
+    const s = L.capWithHeader("a".repeat(25), "[h]", 10);
+    const lines = String(s).split("\n");
+    eq([lines[0], count(lines.slice(1, -1).join("\n"), "a"), /^\[h.*truncated at 10 bytes\]$/.test(lines[lines.length - 1])], ["[h]", 10, true], `[header, body a count, marker] in ${show(s)}`);
+  });
+  check("E4: over the limit (multi-byte) -> cut on a character boundary, no U+FFFD", () => {
+    // lang-check: ignore -- 10 is not a multiple of the 3-byte character.
+    const s = L.capWithHeader("あ".repeat(10), "[h]", 10);
+    eq([count(s, "あ"), String(s).includes("�"), /truncated at 10 bytes\]$/.test(String(s).trimEnd())], [3, false, true], `[chars, U+FFFD, marker] in ${show(s)}`);
+  });
+  check("E5: stripComments removes an inline <!-- --> comment", () => eq(L.stripComments("x<!-- y -->z"), "xz", "stripped"));
+}));
+caseEnd();

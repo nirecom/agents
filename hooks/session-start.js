@@ -38,9 +38,11 @@ let modelHint = null;
 let sessionSource = null;
 let transcriptPath = null;
 let agentId = null;
+let hookCwd = null;
 try {
   const input = hookInput.input;
   sessionId = input.session_id;
+  hookCwd = typeof input.cwd === "string" ? input.cwd : null;
   // Layer① of model identification — kept as a bare value, not the whole input,
   // so nothing else in this hook can start depending on the payload shape.
   modelHint = input.model ?? null;
@@ -319,6 +321,10 @@ try {
   const { getVerbosePromptInjection } = require("./lib/verbose-prompt");
   const verbosePrompt = getVerbosePromptInjection(sessionId);
   if (verbosePrompt) lines.push(verbosePrompt);
+} catch (_e) { /* fail-open */ }
+try {
+  const pmInstructions = require("./lib/pm-instructions").getPmInstructionsInjection(sessionId, { deadline: dl, reserveMs: TAIL_RESERVE_MS, cwd: hookCwd });
+  if (pmInstructions) lines.push(pmInstructions);
 } catch (_e) { /* fail-open */ }
 try {
   const userInstructions = require("./lib/user-instructions").getUserInstructionsInjection();
