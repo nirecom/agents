@@ -74,6 +74,7 @@ test("classify-rule-table: every row of the intent's rule table", () => {
     ["test-failure HIGH + receiver", { severity: "high", instance: "i", testFailure: true, prScope: "other" }, true, "test-failure-handoff"],
     ["test-failure, no receiver", { severity: "medium", instance: "i", testFailure: true, prScope: "other" }, false, "final-list"],
     ["test-failure + receiver but rejected", { severity: "low", instance: "i", testFailure: true, handoffRejected: true, prScope: "other" }, true, "discard"],
+    ["test-failure HIGH + receiver but rejected", { severity: "high", instance: "i", testFailure: true, handoffRejected: true, prScope: "other" }, true, "auto-high"],
   ];
   for (const [name, entry, handoffAvailable, want] of ROWS) {
     assert.strictEqual(RULES.classify(entry, { handoffAvailable }), want, name);
