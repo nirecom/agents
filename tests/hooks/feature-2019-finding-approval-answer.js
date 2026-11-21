@@ -142,3 +142,13 @@ test("pre-then-post-end-to-end: a high approval dialog answered by the human", (
   assert.deepStrictEqual(recordedKeys(), ["33334444"], "the chosen label's key is recorded");
 });
 caseEnd();
+
+caseBegin("hooks-registered-in-real-settings", "settings.json");
+test("hooks-registered-in-real-settings: the pending hook and the answer hook are wired to AskUserQuestion", () => {
+  const hooks = JSON.parse(fs.readFileSync(path.join(ROOT, "settings.json"), "utf8")).hooks || {};
+  const registered = (event, script) => (hooks[event] || []).some((g) => g.matcher === "AskUserQuestion"
+    && (g.hooks || []).some((h) => typeof h.command === "string" && h.command.includes(`hooks/${script}`)));
+  assert.ok(registered("PreToolUse", "pre-tool-use-askuser-jev.js"), "PreToolUse(AskUserQuestion) runs pre-tool-use-askuser-jev.js");
+  assert.ok(registered("PostToolUse", "record-finding-approval-answer.js"), "PostToolUse(AskUserQuestion) runs record-finding-approval-answer.js");
+});
+caseEnd();

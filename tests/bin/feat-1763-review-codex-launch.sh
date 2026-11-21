@@ -263,7 +263,7 @@ dispute_case() { REVIEW_OUT="$2" run_review "$1"
         || fail "$1-disputed-survey-kept" "want last|status|verdict|target = review_result: disputed|disputed|none|null (got: $got)"; }
 if [ "$RS_PRESENT" != "yes" ]; then
     red "D1-disputed-survey-kept"; red "D2-disputed-survey-kept"; red "D3-upheld-unchanged"; red "D4-no-review-nulls"; red "S1-severity-and-sha-recorded"; red "S2-out-of-vocabulary-severity-absent"
-    red "S3-MEDIUM-severity-recorded"; red "S3-LOW-severity-recorded"; red "S3-NOT-DEFECT-severity-recorded"
+    red "S3-MEDIUM-severity-recorded"; red "S3-LOW-severity-recorded"; red "S3-NOT-DEFECT-severity-recorded"; red "S4-prompt-requests-independent-severity"
 else
     dispute_case D1 '{"verdict":"make-parent","target":null,"children":[10,11],"related":[],"reason":"umbrella","worth_filing":true,"same_fix":false}'
     got="$(review_field "$FINAL" verdict)|$(review_field "$FINAL" children)|$(review_field "$FINAL" related)|$(top_field "$FINAL" children)"
@@ -293,6 +293,12 @@ else
         [ "$got" = "review_result: upheld|$S3_SEV" ] && pass "S3-$S3_SEV-severity-recorded" \
             || fail "S3-$S3_SEV-severity-recorded" "want review_result: upheld|$S3_SEV (got: $got)"
     done
+    # S4: the review prompt itself asks for an independent severity judgement and its output shape.
+    if [ -s "$PROMPT" ] && grep -qF "judge the proposal's severity yourself" "$PROMPT" && grep -qF '"severity":"HIGH|MEDIUM|LOW|not-a-defect"' "$PROMPT"; then
+        pass "S4-prompt-requests-independent-severity"
+    else
+        fail "S4-prompt-requests-independent-severity" "the review prompt must ask the reviewer to judge severity and show the severity field in the output shape"
+    fi
 fi
 
 echo ""; echo "Results: $PASS passed, $FAIL failed"
