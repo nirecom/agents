@@ -1,35 +1,26 @@
 #!/bin/bash
 # tests/skills/feature-capture-env.sh
 # Tests: skills/worktree-end/scripts/capture-env.sh, skills/worktree-end/scripts/write-env-json.js
-# Tags: worktree, end, cleanup, skill, bin, scope:common
+# Tags: worktree, end, cleanup, skill, bin, scope:common, worktree-notes, notes-backup, fail-closed
 # Multi-repo worktree: ## SiblingWorktrees awk parsing in capture-env.sh and the
 # SIBLING_REPOS_JSON passthrough in write-env-json.js (CE4, CE1, CE-parse*).
+# #2019 NB*: the WORKTREE_NOTES.md backup must be byte-identical, or capture-env.sh aborts
+# before final-report-env.json (the backup is the only copy that survives worktree removal).
 
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 WRITE_ENV_JS="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/write-env-json.js"
 CAPTURE_ENV_SH="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/capture-env.sh"
 
-PASS=0
-FAIL=0
-
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-
-TMPDIR_BASE="$(mktemp -d)"
+TMPDIR_BASE="$(make_tmp)"
+readonly TMPDIR_BASE
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
-
-run_with_timeout() {
-    local secs="$1"; shift
-    if command -v timeout >/dev/null 2>&1; then
-        timeout "$secs" "$@"
-    elif command -v perl >/dev/null 2>&1; then
-        perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
-    else
-        "$@"
-    fi
-}
+harness_isolate "$TMPDIR_BASE/iso"
+unset CLAUDE_CODE_SESSION_ID PLANS_DIR
+export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPDIR_BASE/transcripts"
+mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
 
 # ---- CE4: write-env-json.js passes SIBLING_REPOS_JSON env var through to output ----
 test_CE4_write_env_json_sibling_repos_field() {
@@ -315,19 +306,146 @@ test_CEparse7_awk_no_sibling_section() {
     fi
 }
 
+# ---- NB*: notes backup verification (#2019) ----
+# Sandbox: LIB_DIR holds the real JSON writers and a fake detect-restart; gh/git are fakes.
+# The cp shim truncates a copy to WORKTREE_NOTES.md (exit 0) and hands every other copy to the real cp.
+NB="$TMPDIR_BASE/nb"
+nb_setup() {
+    mkdir -p "$NB/fakebin" "$NB/shimbin" "$NB/lib"
+    cat > "$NB/fakebin/gh" << 'GHEOF'
+#!/bin/bash
+if [[ "$*" == *"pr list"* ]]; then echo "42"
+elif [[ "$*" == *"mergeCommit"* ]]; then echo "abc1234567890"
+elif [[ "$*" == *"pr view"* ]]; then printf '{"title":"t","url":"https://github.com/example-owner/example-repo/pull/42","state":"MERGED"}'
+fi
+GHEOF
+    printf '#!/bin/bash\necho "fix/2019-test"\n' > "$NB/fakebin/git"
+    printf '#!/bin/bash\nprintf "cc_restart=not_required|\\nvscode_reload=not_required|\\ninstaller_rerun=not_required|\\nos_reboot=not_required|\\n"\n' > "$NB/lib/detect-restart.sh"
+    cat > "$NB/shimbin/cp" << CPEOF
+#!/bin/bash
+dst="\${@: -1}"; src="\${@: -2:1}"
+if [[ "\$dst" == *WORKTREE_NOTES.md ]]; then head -c 10 "\$src" > "\$dst"; exit 0; fi
+exec "$(command -v cp)" "\$@"
+CPEOF
+    chmod +x "$NB/fakebin/gh" "$NB/fakebin/git" "$NB/lib/detect-restart.sh" "$NB/shimbin/cp"
+    local f
+    for f in write-env-json.js extract-pr-fields.js sibling-repos-json.js; do
+        cp "$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/$f" "$NB/lib/$f"
+    done
+    sed -e "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$NB/lib\"|" \
+        -e "s|^SCRIPT_CHECKOUT_ROOT=.*|SCRIPT_CHECKOUT_ROOT=\"$SCRIPT_CHECKOUT_ROOT\"|" \
+        "$CAPTURE_ENV_SH" > "$NB/capture-env.sh"
+    grep -q "^LIB_DIR=\"$NB/lib\"" "$NB/capture-env.sh" || fail "NB setup: LIB_DIR rewrite did not apply"
+}
+
+# nb_run <tag> <bootstrap|normal> <backupdir|plans> <ok|notfile|truncated|nonotes> — sets NB_RC,
+# NB_ERR, NB_ENV (env JSON path), NB_BACKUP (expected backup file), NB_NOTES (source notes).
+nb_run() {
+    local tag="$1" branch="$2" dest="$3" mode="$4" sid="nb-$1"
+    local wt="$NB/$tag-wt" bdir="$NB/$tag-backup" bootstrap=0 extra_path="$NB/fakebin"
+    mkdir -p "$wt" "$bdir"
+    NB_NOTES="$wt/WORKTREE_NOTES.md"
+    [[ "$mode" != "nonotes" ]] && printf 'Session-ID: %s\nBranch: fix/test\n\n## BugsFound\n- unpromoted entry\n' "$sid" > "$NB_NOTES"
+    local backup_arg="$bdir"
+    NB_BACKUP="$bdir/WORKTREE_NOTES.md"
+    if [[ "$dest" == "plans" ]]; then backup_arg="(none)"; NB_BACKUP="$WORKFLOW_PLANS_DIR/$sid-notes-backup/WORKTREE_NOTES.md"; fi
+    [[ "$mode" == "notfile" ]] && mkdir -p "$NB_BACKUP"
+    [[ "$mode" == "truncated" ]] && extra_path="$NB/shimbin:$NB/fakebin"
+    [[ "$branch" == "bootstrap" ]] && bootstrap=1
+    NB_RC=0
+    (cd "$NB" && PATH="$extra_path:$PATH" BOOTSTRAP_MODE="$bootstrap" BOOTSTRAP_COMMIT_SHA=abc \
+        run_with_timeout 60 bash "$NB/capture-env.sh" "$wt" "example-owner/example-repo" "$backup_arg" "$sid") \
+        > "$NB/out.txt" 2> "$NB/err.txt" || NB_RC=$?
+    NB_ERR="$(cat "$NB/err.txt")"
+    NB_ENV="$WORKFLOW_STATE_DIR/$sid.control/final-report-env.json"
+}
+nb_env_state() { [[ -f "$NB_ENV" ]] && echo yes || echo no; }
+nb_expect_ok() {
+    if [[ "$NB_RC" == "0" && -f "$NB_ENV" ]] && cmp -s "$NB_NOTES" "$NB_BACKUP"; then
+        pass "$1: exit 0, env JSON written, backup byte-identical"
+    else
+        fail "$1: exit 0 + env JSON + identical backup" "rc=$NB_RC env=$(nb_env_state) err=$NB_ERR"
+    fi
+}
+nb_expect_abort() {
+    if [[ "$NB_RC" != "0" && ! -f "$NB_ENV" ]] && grep -q "WORKTREE_NOTES.md" <<< "$NB_ERR"; then
+        pass "$1: exit non-zero, no env JSON, stderr names WORKTREE_NOTES.md"
+    else
+        fail "$1: exit non-zero + no env JSON + stderr naming WORKTREE_NOTES.md" "rc=$NB_RC env=$(nb_env_state) err=$NB_ERR"
+    fi
+}
+
+test_NB1_happy_path() {
+    local b d
+    for b in normal bootstrap; do for d in backupdir plans; do
+        nb_run "ok-$b-$d" "$b" "$d" ok; nb_expect_ok "NB1 ok $b/$d"
+    done; done
+}
+test_NB2_backup_path_not_a_file() {
+    local b d
+    for b in normal bootstrap; do for d in backupdir plans; do
+        nb_run "nf-$b-$d" "$b" "$d" notfile; nb_expect_abort "NB2 directory at backup path $b/$d"
+    done; done
+}
+test_NB3_truncated_copy() {
+    local b d
+    for b in normal bootstrap; do for d in backupdir plans; do
+        nb_run "tr-$b-$d" "$b" "$d" truncated
+        if [[ -f "$NB_BACKUP" ]] && ! cmp -s "$NB_NOTES" "$NB_BACKUP"; then pass "NB3 shim left a differing backup $b/$d"; else fail "NB3 shim left a differing backup $b/$d"; fi
+        nb_expect_abort "NB3 truncated backup $b/$d"
+    done; done
+}
+test_NB4_no_notes_skips_verify() {
+    local b
+    for b in normal bootstrap; do
+        nb_run "nn-$b" "$b" plans nonotes
+        if [[ "$NB_RC" == "0" && -f "$NB_ENV" && ! -e "$(dirname "$NB_BACKUP")" ]] && grep -q '"NOTES_BACKUP_PATH": ""' "$NB_ENV"; then
+            pass "NB4 no notes $b: exit 0, env JSON with empty NOTES_BACKUP_PATH, no backup dir"
+        else
+            fail "NB4 no notes $b: exit 0 + empty NOTES_BACKUP_PATH" "rc=$NB_RC env=$(nb_env_state) err=$NB_ERR"
+        fi
+    done
+}
+
 # ============ Run all ============
 
+case_begin "write-env-json-sibling-repos-field" "skills/worktree-end/scripts/write-env-json.js"
 test_CE4_write_env_json_sibling_repos_field
+case_end
+
+case_begin "sibling-worktrees-awk-parse" "skills/worktree-end/scripts/capture-env.sh"
 test_CEparse1_awk_parses_none_entry
 test_CEparse2_awk_parses_one_entry
 test_CEparse3_awk_parses_two_entries
 test_CEparse4_awk_empty_body_after_header
 test_CEparse5_awk_last_section_no_trailing_header
 test_CEparse7_awk_no_sibling_section
+case_end
+
+case_begin "bootstrap-sibling-repos-empty" "skills/worktree-end/scripts/capture-env.sh"
 test_CE1_capture_env_bootstrap_sibling_repos_empty
+case_end
+
+nb_setup
+
+case_begin "notes-backup-happy-path-byte-identical" "skills/worktree-end/scripts/capture-env.sh"
+test_NB1_happy_path
+case_end
+
+case_begin "notes-backup-path-not-a-file-aborts" "skills/worktree-end/scripts/capture-env.sh"
+test_NB2_backup_path_not_a_file
+case_end
+
+case_begin "notes-backup-truncated-copy-aborts" "skills/worktree-end/scripts/capture-env.sh"
+test_NB3_truncated_copy
+case_end
+
+case_begin "no-notes-skips-backup-verify" "skills/worktree-end/scripts/capture-env.sh"
+test_NB4_no_notes_skips_verify
+case_end
 
 echo ""
-echo "Results: $PASS passed, $FAIL failed"
+echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 echo "Total: PASS=$PASS FAIL=$FAIL"
 
-exit $FAIL
+[ "$FAIL" -eq 0 ]

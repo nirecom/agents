@@ -2,29 +2,26 @@
 "use strict";
 
 // CLI for triaging WORKTREE_NOTES.md entries before worktree cleanup.
-// Usage: node bin/worktree-notes-triage.js <list|annotate|resolve> ...
-//   list <absolute-path> — JSON array of unpromoted BugsFound / RelatedTasks / NextTasks
-//     entries (no `<!-- promoted: #N -->` marker); [] when nothing is pending.
-//   annotate <absolute-path> <lineNumber> <issueNumber> — appends
-//     ` <!-- promoted: #<issueNumber> -->` to that line atomically (tmp + rename).
-//   resolve --caller <callsite> [...] — decides which WORKTREE_NOTES.md (if any) the
-//     promotion protocol acts on; see bin/worktree-notes-triage/resolve.js.
+// Usage: node bin/worktree-notes-triage.js <list|annotate|handoff|dispose|resolve> ...
+//   list <absolute-path> — the pending entries grouped by rule-table class (#2019); see
+//     bin/worktree-notes-triage/groups.js. `{}` when nothing is pending.
+//   annotate <absolute-path> <lineNumber> <issueNumber> — appends ` <!-- promoted: #<issueNumber> -->`.
+//   handoff <absolute-path> <lineNumber> — runs the #2488 receiver (bin/lib/finding-rules.js):
+//     accepted → `disposed: handed-off`; otherwise `handoff-rejected` plus `handoff:`/`class:` lines.
+//   dispose <absolute-path> <lineNumber> fixed|known-limits|discard — writes the terminal marker once.
+//   resolve --caller <callsite> [...] — see bin/worktree-notes-triage/resolve.js.
+// Every write is atomic (tmp + rename).
 
 const fs = require("fs");
 const path = require("path");
 const {
-  parseSectionEntries,
-  markEntryPromoted,
-  PROMOTED_MARKER_RE,
+  markEntryPromoted, markEntryDisposed, markEntryHandoffRejected, PROMOTED_MARKER_RE,
 } = require("../hooks/lib/worktree-notes-sections");
+const rules = require("./lib/finding-rules");
+const { triageEntries, isTerminal, groupEntries } = require("./worktree-notes-triage/groups");
 const { runResolve } = require("./worktree-notes-triage/resolve");
 
-// Triage sections only. `## ManualReminders` is deliberately absent: a reminder
-// is addressed to the person closing the session, not to a future implementer,
-// so promoting one into a GitHub issue is the wrong outcome (#530).
-// Not shared with notes.js's output list or args.js's input allowlist —
-// same names, three different scopes.
-const SECTIONS = ["BugsFound", "RelatedTasks", "NextTasks"];
+const DISPOSE_KINDS = ["fixed", "known-limits", "discard"];
 
 function err(msg) {
   process.stderr.write(`[worktree-notes-triage] ${msg}\n`);
@@ -35,6 +32,8 @@ function usage() {
     "Usage:\n" +
       "  worktree-notes-triage.js list <absolute-path>\n" +
       "  worktree-notes-triage.js annotate <absolute-path> <lineNumber> <issueNumber>\n" +
+      "  worktree-notes-triage.js handoff <absolute-path> <lineNumber>\n" +
+      "  worktree-notes-triage.js dispose <absolute-path> <lineNumber> fixed|known-limits|discard\n" +
       "  worktree-notes-triage.js resolve --caller <worktree-end|session-close|issue-close-finalize> [...]\n"
   );
 }
@@ -72,84 +71,74 @@ function validatePath(rawPath) {
   return resolved;
 }
 
-function cmdList(rawPath) {
+// { resolved, text } or null after the reason went to stderr.
+function readNotes(rawPath) {
   const resolved = validatePath(rawPath);
-  if (!resolved) return 1;
+  if (!resolved) return null;
   if (!fs.existsSync(resolved)) {
     err(`file not found: ${resolved}`);
-    return 1;
+    return null;
   }
-  let text;
   try {
-    text = fs.readFileSync(resolved, "utf8");
+    return { resolved, text: fs.readFileSync(resolved, "utf8") };
   } catch (e) {
     err(`cannot read ${resolved}: ${e.message}`);
-    return 1;
+    return null;
   }
-  const out = [];
-  for (const section of SECTIONS) {
-    const entries = parseSectionEntries(text, section);
-    for (const entry of entries) {
-      // Filter out already-promoted entries — they are no longer triage
-      // candidates. The marker is appended by `annotate` (worktree-end Step
-      // WE-7) or pre-applied by `bin/worktree-notes-append.js` (issue #622).
-      if (entry.hasMarker) continue;
-      out.push({
-        section,
-        raw: entry.raw,
-        lineNumber: entry.lineNumber,
-        hasMarker: entry.hasMarker,
-        userAcknowledged: entry.userAcknowledged,
-      });
-    }
+}
+
+function writeAtomic(resolved, text) {
+  const tmp = `${resolved}.tmp`;
+  try {
+    fs.writeFileSync(tmp, text, "utf8");
+    fs.renameSync(tmp, resolved);
+    return true;
+  } catch (e) {
+    try { fs.unlinkSync(tmp); } catch { /* ignore cleanup error */ }
+    err(`atomic write failed: ${e.message}`);
+    return false;
   }
-  process.stdout.write(JSON.stringify(out));
+}
+
+function parseLineNumber(arg) {
+  if (!/^\d+$/.test(String(arg || "")) || parseInt(arg, 10) < 1) {
+    err(`lineNumber must be a positive integer, got: ${arg}`);
+    return null;
+  }
+  return parseInt(arg, 10);
+}
+
+// The triage entry at lineNumber, or null after the reason went to stderr.
+function entryAt(text, lineNumber) {
+  const entry = triageEntries(text).find((e) => e.lineNumber === lineNumber);
+  if (!entry) err(`line ${lineNumber} is not a triage entry`);
+  return entry || null;
+}
+
+function cmdList(rawPath) {
+  const notes = readNotes(rawPath);
+  if (!notes) return 1;
+  process.stdout.write(JSON.stringify(groupEntries(notes.text, rules.handoffAvailable())));
   return 0;
 }
 
 function cmdAnnotate(rawPath, lineNumberArg, issueNumberArg) {
-  if (!/^\d+$/.test(String(lineNumberArg || ""))) {
-    err(`lineNumber must be a positive integer, got: ${lineNumberArg}`);
-    return 1;
-  }
-  if (!/^\d+$/.test(String(issueNumberArg || ""))) {
+  const lineNumber = parseLineNumber(lineNumberArg);
+  if (lineNumber === null) return 1;
+  if (!/^\d+$/.test(String(issueNumberArg || "")) || parseInt(issueNumberArg, 10) < 1) {
     err(`issueNumber must be a positive integer, got: ${issueNumberArg}`);
     return 1;
   }
-  const lineNumber = parseInt(lineNumberArg, 10);
   const issueNumber = parseInt(issueNumberArg, 10);
-  if (lineNumber < 1) {
-    err(`lineNumber must be >= 1, got: ${lineNumber}`);
-    return 1;
-  }
-  if (issueNumber < 1) {
-    err(`issueNumber must be >= 1, got: ${issueNumber}`);
-    return 1;
-  }
+  const notes = readNotes(rawPath);
+  if (!notes) return 1;
 
-  const resolved = validatePath(rawPath);
-  if (!resolved) return 1;
-  if (!fs.existsSync(resolved)) {
-    err(`file not found: ${resolved}`);
-    return 1;
-  }
-
-  let text;
-  try {
-    text = fs.readFileSync(resolved, "utf8");
-  } catch (e) {
-    err(`cannot read ${resolved}: ${e.message}`);
-    return 1;
-  }
-
-  // Locate the target line with the same split contract markEntryPromoted uses,
-  // so an out-of-range or non-entry line is refused BEFORE any write happens.
-  // markEntryPromoted returns the text unchanged in those cases, which would
-  // otherwise look like success.
-  const parts = text.split(/(\r\n|\n)/);
+  // Refuse an out-of-range or non-entry line BEFORE any write: markEntryPromoted returns the
+  // text unchanged in those cases, which would otherwise look like success.
+  const parts = notes.text.split(/(\r\n|\n)/);
   const idx = (lineNumber - 1) * 2;
   if (idx >= parts.length || typeof parts[idx] !== "string") {
-    err(`lineNumber ${lineNumber} is past the end of ${resolved}`);
+    err(`lineNumber ${lineNumber} is past the end of ${notes.resolved}`);
     return 1;
   }
   const original = parts[idx];
@@ -159,25 +148,51 @@ function cmdAnnotate(rawPath, lineNumberArg, issueNumberArg) {
   }
   const existing = PROMOTED_MARKER_RE.exec(original);
   if (existing !== null) {
-    // Idempotent retry: the same annotation is already recorded, so the file is
-    // left byte-identical rather than growing a second marker.
+    // Idempotent retry: the same annotation leaves the file byte-identical.
     if (existing[1] === String(issueNumber)) return 0;
     err(`line ${lineNumber} is already promoted as #${existing[1]}`);
     return 1;
   }
+  return writeAtomic(notes.resolved, markEntryPromoted(notes.text, lineNumber, issueNumber)) ? 0 : 1;
+}
 
-  const updated = markEntryPromoted(text, lineNumber, issueNumber);
+function cmdHandoff(rawPath, lineNumberArg) {
+  const lineNumber = parseLineNumber(lineNumberArg);
+  if (lineNumber === null) return 1;
+  const notes = readNotes(rawPath);
+  if (!notes) return 1;
+  const entry = entryAt(notes.text, lineNumber);
+  if (!entry) return 1;
+  if (isTerminal(entry)) {
+    process.stdout.write("handoff: skipped (entry already promoted or disposed)\n");
+    return 0;
+  }
+  const result = rules.runHandoff(entry);
+  if (result === "accepted") {
+    if (!writeAtomic(notes.resolved, markEntryDisposed(notes.text, lineNumber, "handed-off"))) return 1;
+    process.stdout.write("handoff: accepted\n");
+    return 0;
+  }
+  if (!writeAtomic(notes.resolved, markEntryHandoffRejected(notes.text, lineNumber))) return 1;
+  const cls = rules.classify(Object.assign({}, entry, { handoffRejected: true }), { handoffAvailable: false });
+  process.stdout.write(`handoff: ${result}\nclass: ${cls}\n`);
+  return 0;
+}
 
-  const tmp = `${resolved}.tmp`;
-  try {
-    fs.writeFileSync(tmp, updated, "utf8");
-    fs.renameSync(tmp, resolved);
-  } catch (e) {
-    try { fs.unlinkSync(tmp); } catch { /* ignore cleanup error */ }
-    err(`atomic write failed: ${e.message}`);
+function cmdDispose(rawPath, lineNumberArg, kind) {
+  if (!DISPOSE_KINDS.includes(kind)) {
+    err(`dispose kind must be one of ${DISPOSE_KINDS.join("|")}, got: ${kind}`);
     return 1;
   }
-  return 0;
+  const lineNumber = parseLineNumber(lineNumberArg);
+  if (lineNumber === null) return 1;
+  const notes = readNotes(rawPath);
+  if (!notes) return 1;
+  const entry = entryAt(notes.text, lineNumber);
+  if (!entry) return 1;
+  // Re-run safe: a promoted or disposed entry already has its terminal marker.
+  if (isTerminal(entry)) return 0;
+  return writeAtomic(notes.resolved, markEntryDisposed(notes.text, lineNumber, kind)) ? 0 : 1;
 }
 
 function main() {
@@ -186,15 +201,11 @@ function main() {
     usage();
     return 1;
   }
-  if (cmd === "list") {
-    return cmdList(filePath);
-  }
-  if (cmd === "annotate") {
-    return cmdAnnotate(filePath, rest[0], rest[1]);
-  }
-  if (cmd === "resolve") {
-    return runResolve(process.argv.slice(3));
-  }
+  if (cmd === "list") return cmdList(filePath);
+  if (cmd === "annotate") return cmdAnnotate(filePath, rest[0], rest[1]);
+  if (cmd === "handoff") return cmdHandoff(filePath, rest[0]);
+  if (cmd === "dispose") return cmdDispose(filePath, rest[0], rest[1]);
+  if (cmd === "resolve") return runResolve(process.argv.slice(3));
   err(`unknown subcommand: ${cmd}`);
   usage();
   return 1;

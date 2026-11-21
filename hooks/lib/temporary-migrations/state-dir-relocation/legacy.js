@@ -25,7 +25,7 @@ const SID_DASH_SUFFIXES = Object.freeze([]);
 const SID_DOT_SUFFIXES = Object.freeze([
   "json", "control", "instructions-loaded",
   "workflow-off", "worktree-off", "issue-close-verified", "next-step-paused",
-  "stall-reported", "off-emergency-invoked",
+  "stall-reported", "off-emergency-invoked", "finding-filing-approval",
   "gh-login", "gh-env", "gh-auth-dirty",
   "off-clearance", "off-clearance.claimed", "off-clearance.mint", "off-clearance.mint.claimed",
 ]);

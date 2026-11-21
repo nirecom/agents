@@ -4,7 +4,7 @@
 # Tags: notes-promotion, worktree-notes, triage, manual-reminders, bin, TL2, scope:issue-specific
 # #530: `## ManualReminders` is not a triage section (a reminder is for the session closer, not an issue).
 # M1 a reminder is invisible to `list`; M2 a pre-section notes file still parses; M3 the list/annotate
-# contract WE-11 depends on does not drift (list keys gain userAcknowledged in #2903). TL2: real CLI.
+# contract WE-11 depends on does not drift (#2019: list returns groups of {section,body,key,...}). TL2.
 # TL3 gap: whether the live protocol surfaces reminders (NP-11) or files them anyway; checked at
 # WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh category: skill-orchestration).
 
@@ -144,11 +144,11 @@ test_M1_manual_reminders_excluded_from_list() {
     local summary
     summary="$(node -e "
         try {
-            const j = JSON.parse(process.argv[1]);
+            const j = Object.values(JSON.parse(process.argv[1])).flat();
             const sections = [...new Set(j.map(e => e.section))].sort().join('+');
             const leaked = j.some(e =>
                 e.section === 'ManualReminders' ||
-                String(e.raw || '').includes('rotate the staging credential'));
+                String(e.body || '').includes('rotate the staging credential'));
             process.stdout.write(j.length + '|' + sections + '|' + leaked);
         } catch (e) { process.stdout.write('ERR|ERR|ERR'); }
     " -- "$out" 2>/dev/null)"
@@ -177,7 +177,7 @@ test_M2_legacy_notes_without_manual_reminders() {
     local summary
     summary="$(node -e "
         try {
-            const j = JSON.parse(process.argv[1]);
+            const j = Object.values(JSON.parse(process.argv[1])).flat();
             const sections = [...new Set(j.map(e => e.section))].sort().join('+');
             process.stdout.write(j.length + '|' + sections);
         } catch (e) { process.stdout.write('ERR|ERR'); }
@@ -203,24 +203,24 @@ test_M3_list_annotate_contract_unchanged() {
     local notes; notes="$(make_notes_with_manual_reminders "m3")"
     local failures=""
 
-    # (a) `list <path>` — exit 0, JSON array, exact per-entry key set.
+    # (a) `list <path>` — exit 0, a group object (#2019), exact per-entry key set.
     local out rc keys
     out="$(run_with_timeout 30 node "$TRIAGE_BIN" list "$notes" 2>/dev/null)"
     rc=$?
     [ "$rc" = "0" ] || failures="$failures list-exit=$rc"
     keys="$(node -e "
         try {
-            const j = JSON.parse(process.argv[1]);
-            if (!Array.isArray(j) || j.length === 0) { process.stdout.write('NOT_ARRAY'); }
+            const g = JSON.parse(process.argv[1]); const j = Array.isArray(g) ? [] : Object.values(g).flat();
+            if (j.length === 0) { process.stdout.write('NOT_GROUPED'); }
             else { process.stdout.write(Object.keys(j[0]).sort().join(',')); }
         } catch (e) { process.stdout.write('ERR'); }
     " -- "$out" 2>/dev/null)"
-    [ "$keys" = "hasMarker,lineNumber,raw,section,userAcknowledged" ] || failures="$failures keys=$keys"
+    [ "$keys" = "body,instance,key,lineNumber,loc,section,severity" ] || failures="$failures keys=$keys"
 
     # (b) `annotate <path> <line> <issue>` — 3 positional args, exit 0.
     local target_line
     target_line="$(node -e "
-        try { const j = JSON.parse(process.argv[1]); process.stdout.write(String(j[0].lineNumber)); }
+        try { const j = Object.values(JSON.parse(process.argv[1])).flat(); process.stdout.write(String(j[0].lineNumber)); }
         catch (e) { process.stdout.write('ERR'); }
     " -- "$out" 2>/dev/null)"
     if [ "$target_line" = "ERR" ] || [ -z "$target_line" ]; then
