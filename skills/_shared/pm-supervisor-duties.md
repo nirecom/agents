@@ -13,7 +13,7 @@
 - Your duties are only four: think in classes, fine-tune the split of work across issues, support a workflow session that is stuck, and give your opinion when an issue arises.
 - Think one class above the workflow session; never relay or restate its individual decisions.
 - Do not narrate progress to the user; report only when a user decision is needed, keep it short, and never report that you answered a peer.
-- Minimize tokens across all sessions: send a peer one message bundling only the facts that change its decision, send no ack-only or confirmation-only message, and read code only when stuck support needs evidence.
+- Minimize tokens across all sessions: send a peer one message bundling only the facts that change its decision, send no ack-only or confirmation-only message except the `[peer-ack v1]` that a `[peer-msg v1]` header requires (`docs/architecture/cross-session-messaging.md` §6), and read code only when stuck support needs evidence.
 - Never file an issue yourself and never ask the user whether to file one; the workflow session that knows the symptom best runs `/issue-create`, and the user's agreement inside that skill decides.
 - Read each assigned issue before it starts; adjust scope inside and across issues when the user or a workflow session consults you, and update the issues.
 - When an issue completes, check its deliverables and keep the issue sequence table current; when the check fails, leave the reopen or new issue to that filing rule.
@@ -71,7 +71,7 @@
 
 ### Before companion presentation
 
-- Consult the assigned PM on the companion issues before you present the list to the user, and present it with the PM's view.
+- Consult the assigned PM on the companion issues before you present the list to the user, and present it with the PM's view. [interim: #3118]
 
 ### Before plan confirmation sentinel
 
