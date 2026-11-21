@@ -1,6 +1,6 @@
 # Notes Promotion Protocol
 
-SSOT for turning `WORKTREE_NOTES.md` findings into GitHub issues. Referenced by `/worktree-end` (WE-7), `/session-close` (SC-8), and `/issue-close-finalize` (residual pass). Each callsite owns its own trigger condition; the pass itself is identical at all three, and no callsite may restate or re-order the steps below.
+SSOT for turning `WORKTREE_NOTES.md` findings into GitHub issues, Known-limits lines, or dispositions. Referenced by `/worktree-end` (WE-7), `/session-close` (SC-8), and `/issue-close-finalize` (residual pass). Each callsite owns its own trigger condition; the pass itself is identical at all three, and no callsite may restate or re-order the steps below.
 
 **Resolve the notes path first, NP-1.** `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-triage.js" resolve <caller-arguments>`; never hand-build the path.
 
@@ -14,22 +14,26 @@ SSOT for turning `WORKTREE_NOTES.md` findings into GitHub issues. Referenced by 
 
 **Prefilter before any further call, NP-4.** When `## BugsFound`, `## RelatedTasks` and `## NextTasks` all hold nothing but `- (none)`, skip the rest of this protocol and stay quiet, so a clean session pays for no `worktree-notes-triage.js` call and no user-visible ceremony.
 
-**List the work, NP-5.** `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-triage.js" list "<notesPath>"` — the output already excludes entries that carry a promotion marker.
+`T` below is `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-triage.js"`; every subcommand takes `"<notesPath>"` and the entry's `<lineNumber>`.
 
-**Emit a one-line notice before creating anything, NP-6.** Give two counts — entries filed without asking (`userAcknowledged: true`) and entries confirmed with the user first (`userAcknowledged: false`) — and the reason they are handled at this moment (the notes are about to become unreachable).
+**List the work and hand off test failures, NP-5.** `T list "<notesPath>"` groups the pending entries; run `T handoff "<notesPath>" <lineNumber>` for each `testFailureHandoff` entry, and treat a `rejected`, `failed` or `missing` result as the group its `class:` line names.
 
-**Walk the listed entries in list order, branching on `userAcknowledged`, NP-7.**
+**Emit a one-line notice before creating anything, NP-6.** Give the count per group (auto-filed HIGH, Known limits, final list, discard) and the reason they are handled at this moment (the notes are about to become unreachable).
 
-- `true`: invoke `/issue-create` with the entry text without asking, and keep the issue number it returns; when `review.worth_filing` is `true`, say so in the filing notice.
-- `false`: explain in 1–2 sentences how the finding arose, including `review.worth_filing` when known, then AskUserQuestion (`metadata.source=notes-promotion.file-issue`) whether to file it; on approval, invoke `/issue-create` as for `true`.
-- Use severity only to order and display entries, never to decide whether to ask.
+**Walk the groups in this order, NP-7.**
 
-**Annotate each entry as soon as its number is known, NP-8.** `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-triage.js" annotate "<notesPath>" <lineNumber> <issueNumber>`; repeating an annotation is a byte-identical no-op, so an interrupted pass is safe to re-run.
+- `autoHigh`: invoke `/issue-create` with each entry text, one at a time; G0 re-checks the auto condition. G0 `defer` → add the entry to this pass's `finalList` (counted against its cap; past the cap it joins `overflow`); G0 `confirm` → the confirm dialog of `/issue-create` Phase 3.
+- `disposeInPr`: run `bash "$AGENTS_MAIN_ROOT/bin/github-issues/pr-known-limits-append.sh" --branch "<branch>" --file <entry-file>`; on success `T dispose "<notesPath>" <lineNumber> known-limits` and print the entry as `[known-limits] <title>`; on any failure (branch unknown, not exactly one PR, edit failed) write no marker, never file it, and print `[known-limits-failed] <title>`.
+- `finalList`: ask once with one AskUserQuestion call, `metadata.source=notes-promotion.final-list`; split the entries (file-position order, at most 16) in order into groups of 4, each group one multiSelect question (at most 4 options; at most 4 questions per call), each option label ending in `[k:<key>]` (the key `list` returns); file each selected entry with `/issue-create --finding-key <key>`, one at a time.
+- `discard`: print every entry as `[discarded] <title>`, then `T dispose "<notesPath>" <lineNumber> discard`.
+- every unselected `finalList` entry: print it as `[declined] <title>`, then `T dispose "<notesPath>" <lineNumber> discard`.
+- `overflow`: print the entries and write no marker (they were never shown; they stay `[issue-TBD]`); tell the user the exit is a `/issue-create` they type.
 
-**Never defer the filing itself, NP-9.** For an acknowledged (`true`) entry or one the user approved, the implementation of a finding is the only part that moves to a separate session.
-When the user declines an entry, leave it unannotated; the Final Report shows it as `[issue-TBD]`.
+**Annotate each entry as soon as its number is known, NP-8.** `T annotate "<notesPath>" <lineNumber> <issueNumber>`; repeating an annotation is a byte-identical no-op, so an interrupted pass is safe to re-run.
 
-**Report failures without annotating, NP-10.** When a create fails, leave the entry unannotated and report the failure — an unmarked entry is picked up by the next callsite, a wrongly-marked one is lost.
+**File in this pass what the rules decide to file, NP-9.** The implementation of a filed finding is the only part that moves to a separate session.
+
+**Report failures without annotating, NP-10.** When a create or dispose fails, leave the entry unmarked and report the failure — an unmarked entry is picked up by the next callsite, a wrongly-marked one is lost.
 
 **Read `## ManualReminders` aloud to the user in chat as the pass ends, NP-11.** Surface those entries verbatim, leave the section untouched, and never turn one into an issue, because each is addressed to the person closing the session rather than to a future implementer.
 

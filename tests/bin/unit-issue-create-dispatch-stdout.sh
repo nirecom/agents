@@ -2,27 +2,14 @@
 # tests/bin/unit-issue-create-dispatch-stdout.sh
 # Tests: bin/github-issues/issue-create-dispatch.sh
 # Tags: issue-create, github, issues, bin, shell, scope:common
-#
-# L3 gap (what this test does NOT catch):
-# - Real GitHub API: actual sub_issues POST acceptance, GraphQL databaseId availability
-# - MSYS_NO_PATHCONV interaction on live Windows Git Bash sessions
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration
-#
-# Unit tests for the stdout-URL extraction pipeline used by callers of
-# bin/github-issues/issue-create-dispatch.sh.
-#
-# The dispatch script writes the final issue URL as the last line of stdout.
-# Callers extract the issue number with:
-#
-#     URL=$(echo "$OUTPUT" | tail -n 1 | tr -d '\r')
-#     N=$(echo "$URL" | grep -oE '[0-9]+$')
-#
-# These tests verify the extraction pipeline as a pure shell computation by
-# stubbing the inputs — the dispatch script itself is not invoked. The
-# dispatch script already exists, so no SKIP gating is required.
+# The stdout-URL contract of the dispatcher: N/C/BK pin the caller's extraction pipeline
+# (last line, strip \r, trailing digits) on stubbed text; R runs the reopen branch for real.
+# L3 gap: real GitHub API (sub_issues POST, GraphQL databaseId), live MSYS_NO_PATHCONV;
+# checked at WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh skill-orchestration).
 
 set -u
+
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 PASS=0; FAIL=0; SKIP=0
 
@@ -184,6 +171,89 @@ test_BK3_tail_backward_compat() {
     fi
 }
 
+# ---- R*: reopen branch run for real (#2019) — a copy of the dispatcher beside fake siblings ----
+# stdout carries the URL only on full success; a failed merged-finding comment exits 3 with stdout
+# empty, so a caller that annotates from the URL never marks a lost finding as promoted.
+R_BASE="$(mktemp -d)"
+trap 'rm -rf "$R_BASE"' EXIT
+mkdir -p "$R_BASE/gi" "$R_BASE/fakebin" "$R_BASE/cwd"
+cp "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-dispatch.sh" "$R_BASE/gi/issue-create-dispatch.sh"
+printf '#!/usr/bin/env bash\nif [[ "$1 $2" == "repo view" ]]; then echo example-owner/example-repo; fi\n' >"$R_BASE/fakebin/gh"
+chmod +x "$R_BASE/fakebin/gh"
+printf '#!/usr/bin/env bash\necho "reopen $*" >>"%s"\nexit "${R_REOPEN_RC:-0}"\n' "$R_BASE/calls.log" >"$R_BASE/gi/reopen-with-update.sh"
+printf '#!/usr/bin/env bash\necho "merge $*" >>"%s"\necho "${R_MERGE_STDOUT:-}"\nexit "${R_MERGE_RC:-0}"\n' "$R_BASE/calls.log" >"$R_BASE/gi/merge-finding-comment.sh"
+printf 'merged finding\n' >"$R_BASE/finding.md"
+R_URL="https://github.com/example-owner/example-repo/issues/41"
+
+r_timeout() {
+    local secs="$1"; shift
+    if command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"
+    elif command -v perl >/dev/null 2>&1; then perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
+    else "$@"; fi
+}
+
+# r_dispatch <reopen_rc> <merge_rc> <dispatcher args...> — sets R_RC, R_OUT, R_ERR.
+r_dispatch() {
+    local reopen_rc="$1" merge_rc="$2"; shift 2
+    rm -f "$R_BASE/calls.log"
+    R_RC=0
+    (cd "$R_BASE/cwd" && export PATH="$R_BASE/fakebin:$PATH" R_REOPEN_RC="$reopen_rc" R_MERGE_RC="$merge_rc" \
+        R_MERGE_STDOUT="${R_MERGE_STDOUT:-}" && r_timeout 60 bash "$R_BASE/gi/issue-create-dispatch.sh" "$@") >"$R_BASE/out.txt" 2>"$R_BASE/err.txt" || R_RC=$?
+    R_OUT="$(tr -d '\r' <"$R_BASE/out.txt")"
+    R_ERR="$(tr -d '\r' <"$R_BASE/err.txt")"
+}
+r_logged() { grep -qE "$1" "$R_BASE/calls.log" 2>/dev/null; }
+
+test_R1_merge_comment_fails_exit3_stdout_empty() {
+    r_dispatch 0 1 --verdict reopen --target 41 --merged-finding-file "$R_BASE/finding.md" --
+    if [[ "$R_RC" == "3" && -z "$R_OUT" ]] \
+        && grep -qx 'merge_comment: failed' <<<"$R_ERR" \
+        && grep -qxF "reopened: $R_URL" <<<"$R_ERR" \
+        && r_logged '^reopen 41' && r_logged '^merge 41 '; then
+        pass "R1: reopen ok + merged-finding comment fails → exit 3, stdout empty, stderr names failure and reopened URL"
+    else
+        fail "R1: rc='$R_RC' out='$R_OUT' err='$R_ERR' calls='$(cat "$R_BASE/calls.log" 2>/dev/null)'"
+    fi
+}
+
+test_R2_merge_comment_ok_url_only() {
+    r_dispatch 0 0 --verdict reopen --target 41 --merged-finding-file "$R_BASE/finding.md" --
+    if [[ "$R_RC" == "0" && "$R_OUT" == "$R_URL" ]] \
+        && ! grep -q 'merge_comment:' <<<"$R_OUT$R_ERR" && r_logged '^merge 41 '; then
+        pass "R2: reopen + merged-finding comment ok → exit 0, stdout exactly the URL, no merge_comment line"
+    else
+        fail "R2: rc='$R_RC' out='$R_OUT' err='$R_ERR'"
+    fi
+}
+
+test_R3_no_merged_file_no_comment() {
+    r_dispatch 0 1 --verdict reopen --target 41 --
+    if [[ "$R_RC" == "0" && "$R_OUT" == "$R_URL" ]] && ! r_logged '^merge'; then
+        pass "R3: reopen without --merged-finding-file → comment not attempted, exit 0, URL on stdout"
+    else
+        fail "R3: rc='$R_RC' out='$R_OUT' calls='$(cat "$R_BASE/calls.log" 2>/dev/null)'"
+    fi
+}
+
+test_R4_reopen_fails_no_comment() {
+    r_dispatch 1 0 --verdict reopen --target 41 --merged-finding-file "$R_BASE/finding.md" --
+    if [[ "$R_RC" != "0" && -z "$R_OUT" ]] && ! r_logged '^merge'; then
+        pass "R4: reopen fails → non-zero, no URL, comment not attempted"
+    else
+        fail "R4: rc='$R_RC' out='$R_OUT' calls='$(cat "$R_BASE/calls.log" 2>/dev/null)'"
+    fi
+}
+
+test_R5_comment_stdout_kept_off_stdout() {
+    local comment_url="$R_URL#issuecomment-1"
+    R_MERGE_STDOUT="$comment_url" r_dispatch 0 0 --verdict reopen --target 41 --merged-finding-file "$R_BASE/finding.md" --
+    if [[ "$R_RC" == "0" && "$R_OUT" == "$R_URL" ]] && grep -qxF "$comment_url" <<<"$R_ERR"; then
+        pass "R5: comment script's stdout goes to stderr → dispatcher stdout is the issue URL line only"
+    else
+        fail "R5: rc='$R_RC' out='$R_OUT' err='$R_ERR'"
+    fi
+}
+
 # ============ Run all ============
 
 test_N1_single_line_url
@@ -194,6 +264,11 @@ test_C4_url_no_trailing_number
 test_BK1_two_urls_in_order
 test_BK2_progress_prefix_filtered
 test_BK3_tail_backward_compat
+test_R1_merge_comment_fails_exit3_stdout_empty
+test_R2_merge_comment_ok_url_only
+test_R3_no_merged_file_no_comment
+test_R4_reopen_fails_no_comment
+test_R5_comment_stdout_kept_off_stdout
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

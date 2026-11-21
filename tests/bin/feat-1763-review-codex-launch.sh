@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/feat-1763-review-codex-launch.sh
 # Tests: bin/github-issues/review-survey-verdict-codex.sh
-# Tags: issue-create, verdict, review, codex, web-search, toggle-removal, prompt-contract, scope:issue-specific, pwsh-not-required, TL2, input-size-guard, exit-127, verdict-disputed, issue-2225
+# Tags: issue-create, verdict, review, codex, web-search, toggle-removal, prompt-contract, scope:issue-specific, pwsh-not-required, TL2, input-size-guard, exit-127, verdict-disputed, issue-2225, severity, proposal-sha256, issue-2019
 # TL3 gap: real `codex exec` + `-c tools.web_search=true` reaching the network (codex is a
 #   recording mock); whether real search queries obey the leak-prevention instruction.
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
@@ -17,8 +17,7 @@ RS="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/review-survey-verdict-codex.sh"
 RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1 — $2"; FAIL=$((FAIL + 1)); }
+pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }; fail() { echo "FAIL: $1 — $2"; FAIL=$((FAIL + 1)); }
 red()  { fail "$1" "RED-EXPECTED: bin/github-issues/review-survey-verdict-codex.sh not found"; }
 
 RS_PRESENT=no; [ -f "$RS" ] && RS_PRESENT=yes
@@ -263,7 +262,8 @@ dispute_case() { REVIEW_OUT="$2" run_review "$1"
     [ "$got" = "review_result: disputed|disputed|none|null" ] && pass "$1-disputed-survey-kept" \
         || fail "$1-disputed-survey-kept" "want last|status|verdict|target = review_result: disputed|disputed|none|null (got: $got)"; }
 if [ "$RS_PRESENT" != "yes" ]; then
-    red "D1-disputed-survey-kept"; red "D2-disputed-survey-kept"; red "D3-upheld-unchanged"; red "D4-no-review-nulls"
+    red "D1-disputed-survey-kept"; red "D2-disputed-survey-kept"; red "D3-upheld-unchanged"; red "D4-no-review-nulls"; red "S1-severity-and-sha-recorded"; red "S2-out-of-vocabulary-severity-absent"
+    red "S3-MEDIUM-severity-recorded"; red "S3-LOW-severity-recorded"; red "S3-NOT-DEFECT-severity-recorded"
 else
     dispute_case D1 '{"verdict":"make-parent","target":null,"children":[10,11],"related":[],"reason":"umbrella","worth_filing":true,"same_fix":false}'
     got="$(review_field "$FINAL" verdict)|$(review_field "$FINAL" children)|$(review_field "$FINAL" related)|$(top_field "$FINAL" children)"
@@ -281,8 +281,19 @@ else
     got="$(review_field "$FINAL" children)|$(review_field "$FINAL" related)"
     [ "$got" = "null|null" ] && pass "D4-no-review-nulls" \
         || fail "D4-no-review-nulls" "a failed review leaves review.children/related null (got: $got, status=$(review_field "$FINAL" status))"
+    # S1/S2 (#2019 S4-3): the reviewer's HIGH|MEDIUM|LOW|NOT-DEFECT lands in review.severity, and
+    # review.proposal_sha256 is the sha256 of the artifact bytes judged (a later claim edit no longer
+    # matches, so G0 stops treating it as HIGH). An out-of-vocabulary value keeps the status, drops the field.
+    REVIEW_OUT="${REVIEW_OK%?},\"severity\":\"HIGH\"}" run_review S1; SHA="$(node -e 'process.stdout.write(require("crypto").createHash("sha256").update(require("fs").readFileSync(process.argv[1])).digest("hex"))' "$(node_path "$ART")")"; got="$LAST|$(review_field "$FINAL" severity)|$(review_field "$FINAL" proposal_sha256)"; [ "$got" = "review_result: upheld|HIGH|$SHA" ] && pass "S1-severity-and-sha-recorded" || fail "S1-severity-and-sha-recorded" "want review_result: upheld|HIGH|<artifact sha256> (got: $got)"
+    REVIEW_OUT="${REVIEW_OK%?},\"severity\":\"SEVERE\"}" run_review S2; got="$LAST|$(review_field "$FINAL" severity)"; [ "$got" = "review_result: upheld|undefined" ] && pass "S2-out-of-vocabulary-severity-absent" || fail "S2-out-of-vocabulary-severity-absent" "want review_result: upheld with review.severity absent (got: $got)"
+    # S3: every non-HIGH level of the vocabulary lands in review.severity as the reviewer wrote it.
+    for S3_SEV in MEDIUM LOW NOT-DEFECT; do
+        REVIEW_OUT="${REVIEW_OK%?},\"severity\":\"$S3_SEV\"}" run_review "S3-$S3_SEV"
+        got="$LAST|$(review_field "$FINAL" severity)"
+        [ "$got" = "review_result: upheld|$S3_SEV" ] && pass "S3-$S3_SEV-severity-recorded" \
+            || fail "S3-$S3_SEV-severity-recorded" "want review_result: upheld|$S3_SEV (got: $got)"
+    done
 fi
 
-echo ""
-echo "Results: $PASS passed, $FAIL failed"
+echo ""; echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

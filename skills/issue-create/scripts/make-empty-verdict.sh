@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # make-empty-verdict.sh <out-path> <verdict> --title T --background B --changes C [--target N] [--parent N]
+#                       [--severity S --body BODY]   (the G0 claim, #2019; kept out of the reviewer prompt)
 #
 # Emit a schema-v3 survey artifact for the three routes that never reach the
 # survey worker: zero candidates, a non-GitHub remote, and --skip-survey
@@ -34,6 +35,8 @@ TITLE=""
 BACKGROUND=""
 CHANGES=""
 TARGET=""
+SEVERITY=""
+BODY=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -42,6 +45,8 @@ while [[ $# -gt 0 ]]; do
         --changes)    CHANGES="${2:?--changes requires value}";   shift 2 ;;
         --target)     TARGET="${2:?--target requires value}";     shift 2 ;;
         --parent)     TARGET="${2:?--parent requires value}";     shift 2 ;;
+        --severity)   SEVERITY="${2:?--severity requires value}"; shift 2 ;;
+        --body)       BODY="${2:?--body requires value}";         shift 2 ;;
         -h|--help)    usage ;;
         *) echo "Error: unknown argument: $1" >&2; exit 2 ;;
     esac
@@ -75,7 +80,7 @@ if command -v cygpath >/dev/null 2>&1; then
     MEV_VALIDATOR_DIR="$(cygpath -m "$MEV_VALIDATOR_DIR")"
 fi
 
-MEV_TITLE="$TITLE" MEV_BACKGROUND="$BACKGROUND" MEV_CHANGES="$CHANGES" \
+MEV_TITLE="$TITLE" MEV_BACKGROUND="$BACKGROUND" MEV_CHANGES="$CHANGES" MEV_SEVERITY="$SEVERITY" MEV_BODY="$BODY" \
 MEV_VERDICT="$VERDICT" MEV_TARGET="$TARGET" MEV_VALIDATOR_DIR="$MEV_VALIDATOR_DIR" \
 node -e '
 "use strict";
@@ -99,6 +104,8 @@ const artifact = {
   relation_errors: [],
   candidates: []
 };
+if (process.env.MEV_SEVERITY) artifact.proposal.severity = process.env.MEV_SEVERITY;
+if (process.env.MEV_BODY) artifact.proposal.body = process.env.MEV_BODY;
 fs.writeFileSync(process.argv[1], JSON.stringify(artifact, null, 2) + "\n");
 ' "$TMP_NODE"
 

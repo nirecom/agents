@@ -1,10 +1,11 @@
 #!/bin/bash
 # tests/bin/unit-worktree-notes-append/mode-b-tests.sh
 # Tests: bin/worktree-notes-append.js, bin/worktree-notes-append/args.js
-# Tags: worktree-notes, append-cli, mode-b, severity, TL2, scope:common
+# Tags: worktree-notes, append-cli, mode-b, severity, pr-scope, TL2, scope:common
 # Sourced by tests/bin/unit-worktree-notes-append.sh (parent helpers: pass/fail, setup_tmp, HELPER_JS).
-# Mode B (#1886): explicit --section, --severity only for BugsFound, --user-acknowledged for the
-# three finding sections (#2903). Mode A must not shift by a byte — B0 pins it first.
+# Mode B (#1886): explicit --section. #2019: --severity high|medium|low|not-defect and --pr-scope
+# this-pr|other are required in all three finding sections and written as markers (low included);
+# --user-acknowledged is retired. Mode A must not shift by a byte — B0 pins it first.
 
 # ---- B0: Mode A output is byte-identical to the pre-#1886 contract ----
 test_B0_mode_a_byte_identical() {
@@ -76,65 +77,65 @@ test_B2_mode_conflict() {
     cleanup_tmp
 }
 
-# ---- B3: Mode B happy path — severity:high marker, byte-exact file ----
+# ---- B3: Mode B happy path — severity then pr-scope marker, byte-exact file ----
 test_B3_mode_b_high() {
     require_helper "B3: Mode B --severity high" || return
     setup_tmp
     local notes="$TMP/WORKTREE_NOTES.md" want="$TMP/want.md"
-    printf '# Worktree Notes\n\n## BugsFound\n- X <!-- severity: high --> <!-- user-acknowledged: true -->\n' > "$want"
+    printf '# Worktree Notes\n\n## BugsFound\n- X <!-- severity: high --> <!-- pr-scope: other -->\n' > "$want"
     run_with_timeout 30 node "$HELPER_JS" \
         --notes-path "$notes" --section BugsFound --severity high \
-        --title "X" --user-acknowledged true >/dev/null 2>&1
+        --title "X" --pr-scope other >/dev/null 2>&1
     local rc=$?
     if [ "$rc" -eq 0 ] && cmp -s "$notes" "$want"; then
-        pass "B3: Mode B high+ack → severity then user-acknowledged marker in ## BugsFound"
+        pass "B3: Mode B high/other → severity then pr-scope marker in ## BugsFound"
     else
         fail "B3: rc=$rc content=$(cat "$notes" 2>/dev/null)"
     fi
     cleanup_tmp
 }
 
-# ---- B4: low and none are input-side semantics only — identical output ----
-# C7 pin: `<!-- severity: low -->` is never written. Both values must produce a
-# plain untagged entry, byte-for-byte the same file.
+# ---- B4: #2019 — low is written as a marker; the legacy `none` is rejected ----
+# Replaces the pre-#2019 C7 pin (low and none both wrote an untagged entry).
+# `none` reads back as not-defect only from legacy lines; the CLI no longer accepts it.
 test_B4_low_none_equivalence() {
-    require_helper "B4: low/none equivalence" || return
+    require_helper "B4: low written, none rejected" || return
     setup_tmp
     local a="$TMP/a" b="$TMP/b" want="$TMP/want.md" rc1 rc2
     mkdir -p "$a" "$b"
-    printf '# Worktree Notes\n\n## BugsFound\n- X <!-- user-acknowledged: false -->\n' > "$want"
+    printf '# Worktree Notes\n\n## BugsFound\n- X <!-- severity: low --> <!-- pr-scope: this-pr -->\n' > "$want"
     run_with_timeout 30 node "$HELPER_JS" --notes-path "$a/WORKTREE_NOTES.md" \
-        --section BugsFound --severity low --title "X" --user-acknowledged false >/dev/null 2>&1
+        --section BugsFound --severity low --title "X" --pr-scope this-pr >/dev/null 2>&1
     rc1=$?
     run_with_timeout 30 node "$HELPER_JS" --notes-path "$b/WORKTREE_NOTES.md" \
-        --section BugsFound --severity none --title "X" --user-acknowledged false >/dev/null 2>&1
+        --section BugsFound --severity none --title "X" --pr-scope this-pr >/dev/null 2>&1
     rc2=$?
-    if [ "$rc1" -eq 0 ] && [ "$rc2" -eq 0 ] \
-       && cmp -s "$a/WORKTREE_NOTES.md" "$b/WORKTREE_NOTES.md" \
+    if [ "$rc1" -eq 0 ] && [ "$rc2" -eq 2 ] \
+       && [ ! -f "$b/WORKTREE_NOTES.md" ] \
        && cmp -s "$a/WORKTREE_NOTES.md" "$want"; then
-        pass "B4: --severity low and none produce byte-identical untagged entries"
+        pass "B4: --severity low writes a low marker; --severity none → exit 2, no write"
     else
         fail "B4: rc1=$rc1 rc2=$rc2 low=[$(cat "$a/WORKTREE_NOTES.md" 2>/dev/null)] none=[$(cat "$b/WORKTREE_NOTES.md" 2>/dev/null)]"
     fi
     cleanup_tmp
 }
 
-# ---- B5: severity vocabulary is exactly high|low|none, lowercase ----
+# ---- B5: severity vocabulary is exactly high|medium|low|not-defect, lowercase ----
 test_B5_severity_strict_values() {
     require_helper "B5: strict severity values" || return
     local bad="" v rc notes
-    for v in HIGH High medium "" critical; do
+    for v in HIGH High none "" critical; do
         setup_tmp
         notes="$TMP/WORKTREE_NOTES.md"
         run_with_timeout 30 node "$HELPER_JS" --notes-path "$notes" \
-            --section BugsFound --severity "$v" --title "X" --user-acknowledged true >/dev/null 2>&1
+            --section BugsFound --severity "$v" --title "X" --pr-scope other >/dev/null 2>&1
         rc=$?
         [ "$rc" -eq 2 ] || bad="$bad [$v]rc=$rc"
         [ -f "$notes" ] && bad="$bad [$v]wrote-file"
         cleanup_tmp
     done
     if [ -z "$bad" ]; then
-        pass "B5: non-{high,low,none} --severity values → exit 2, no write"
+        pass "B5: non-{high,medium,low,not-defect} --severity values → exit 2, no write"
     else
         fail "B5:$bad"
     fi
@@ -146,7 +147,7 @@ test_B6_bugsfound_requires_severity() {
     setup_tmp
     local notes="$TMP/WORKTREE_NOTES.md"
     run_with_timeout 30 node "$HELPER_JS" --notes-path "$notes" \
-        --section BugsFound --title "X" --user-acknowledged true >/dev/null 2>&1
+        --section BugsFound --title "X" --pr-scope other >/dev/null 2>&1
     local rc=$?
     if [ "$rc" -eq 2 ] && [ ! -f "$notes" ]; then
         pass "B6: Mode B BugsFound without --severity → exit 2, no write"
@@ -156,21 +157,21 @@ test_B6_bugsfound_requires_severity() {
     cleanup_tmp
 }
 
-# ---- B7: --severity outside BugsFound is rejected outright ----
+# ---- B7: #2019 — RelatedTasks/NextTasks need --pr-scope too; ManualReminders takes no triage flag ----
 test_B7_severity_only_for_bugsfound() {
-    require_helper "B7: severity coupled to BugsFound" || return
-    local bad="" s rc notes
+    require_helper "B7: triage flags per section" || return
+    local bad="" s rc notes extra
     for s in RelatedTasks NextTasks ManualReminders; do
         setup_tmp
-        notes="$TMP/WORKTREE_NOTES.md"
+        notes="$TMP/WORKTREE_NOTES.md"; extra=(); [ "$s" = ManualReminders ] && extra=(--pr-scope other)
         run_with_timeout 30 node "$HELPER_JS" --notes-path "$notes" \
-            --section "$s" --severity low --title "X" --user-acknowledged true >/dev/null 2>&1
+            --section "$s" --severity low --title "X" "${extra[@]}" >/dev/null 2>&1
         rc=$?
         [ "$rc" -eq 2 ] || bad="$bad [$s]rc=$rc"
         cleanup_tmp
     done
     if [ -z "$bad" ]; then
-        pass "B7: --severity outside ## BugsFound → exit 2"
+        pass "B7: Related/NextTasks without --pr-scope and ManualReminders with triage flags → exit 2"
     else
         fail "B7:$bad"
     fi
@@ -181,16 +182,16 @@ test_B7_severity_only_for_bugsfound() {
 # because manual edits of ## ManualReminders need a CLI replacement too.
 test_B8_section_allowlist() {
     require_helper "B8: --section allowlist" || return
-    local bad="" s rc notes ack
+    local bad="" s rc notes tri
     for s in RelatedTasks NextTasks ManualReminders; do
         setup_tmp
-        notes="$TMP/WORKTREE_NOTES.md"; ack=(--user-acknowledged true); [ "$s" = ManualReminders ] && ack=()
+        notes="$TMP/WORKTREE_NOTES.md"; tri=(--severity medium --pr-scope other); [ "$s" = ManualReminders ] && tri=()
         run_with_timeout 30 node "$HELPER_JS" --notes-path "$notes" \
-            --section "$s" --title "X" "${ack[@]}" >/dev/null 2>&1
+            --section "$s" --title "X" "${tri[@]}" >/dev/null 2>&1
         rc=$?
         [ "$rc" -eq 0 ] || bad="$bad [$s]rc=$rc"
         grep -q "## $s" "$notes" 2>/dev/null || bad="$bad [$s]no-heading"
-        grep -qE -- '^- X( <!-- user-acknowledged: true -->)?$' "$notes" 2>/dev/null || bad="$bad [$s]no-entry"
+        grep -qE -- '^- X( <!-- severity: medium --> <!-- pr-scope: other -->)?$' "$notes" 2>/dev/null || bad="$bad [$s]no-entry"
         cleanup_tmp
     done
     setup_tmp
@@ -214,7 +215,7 @@ test_B9_mode_b_rejects_label() {
     setup_tmp
     local notes="$TMP/WORKTREE_NOTES.md"
     run_with_timeout 30 node "$HELPER_JS" --notes-path "$notes" \
-        --section BugsFound --severity high --title "X" --user-acknowledged true \
+        --section BugsFound --severity high --title "X" --pr-scope other \
         --label "type:task" >/dev/null 2>&1
     local rc=$?
     if [ "$rc" -eq 2 ] && [ ! -f "$notes" ]; then
@@ -231,24 +232,24 @@ test_B10_mode_b_idempotent() {
     setup_tmp
     local notes="$TMP/WORKTREE_NOTES.md" bad="" h1 h2 h3 rc
     run_with_timeout 30 node "$HELPER_JS" --notes-path "$notes" \
-        --section BugsFound --severity high --title "Dup me" --user-acknowledged true >/dev/null 2>&1
+        --section BugsFound --severity high --title "Dup me" --pr-scope other >/dev/null 2>&1
     rc=$?
     [ "$rc" -eq 0 ] || bad="$bad first-rc=$rc"
     h1="$(sha256sum "$notes" 2>/dev/null | awk '{print $1}')"
 
     run_with_timeout 30 node "$HELPER_JS" --notes-path "$notes" \
-        --section BugsFound --severity high --title "Dup me" --user-acknowledged true >/dev/null 2>&1
+        --section BugsFound --severity high --title "Dup me" --pr-scope other >/dev/null 2>&1
     [ $? -eq 0 ] || bad="$bad second-nonzero"
     h2="$(sha256sum "$notes" 2>/dev/null | awk '{print $1}')"
     [ "$h1" = "$h2" ] || bad="$bad same-severity-rewrote"
 
-    # Same title, different severity and ack (#2903): the body already matches, so this is
-    # a no-op — it must not append a duplicate nor rewrite the existing markers.
+    # Same title, different severity and pr-scope (#2019): the body already matches, so this
+    # is a no-op — it must not append a duplicate nor rewrite the existing markers.
     run_with_timeout 30 node "$HELPER_JS" --notes-path "$notes" \
-        --section BugsFound --severity none --title "Dup me" --user-acknowledged false >/dev/null 2>&1
+        --section BugsFound --severity not-defect --title "Dup me" --pr-scope this-pr >/dev/null 2>&1
     [ $? -eq 0 ] || bad="$bad third-nonzero"
     h3="$(sha256sum "$notes" 2>/dev/null | awk '{print $1}')"
-    [ "$h1" = "$h3" ] || bad="$bad none-after-high-rewrote"
+    [ "$h1" = "$h3" ] || bad="$bad not-defect-after-high-rewrote"
     [ "$(grep -cF 'Dup me' "$notes" 2>/dev/null)" = "1" ] || bad="$bad duplicate-line"
 
     if [ -z "$bad" ]; then
@@ -267,7 +268,7 @@ test_B11_title_injection() {
         setup_tmp
         notes="$TMP/WORKTREE_NOTES.md"
         run_with_timeout 30 node "$HELPER_JS" --notes-path "$notes" \
-            --section BugsFound --severity none --title "$t" --user-acknowledged true >/dev/null 2>&1
+            --section BugsFound --severity low --title "$t" --pr-scope other >/dev/null 2>&1
         rc=$?
         [ "$rc" -eq 2 ] || bad="$bad [$t]rc=$rc"
         [ -f "$notes" ] && bad="$bad [$t]wrote-file"
@@ -287,16 +288,16 @@ test_B12_placeholder_and_missing_section() {
     local notes="$TMP/WORKTREE_NOTES.md" bad=""
     printf '# Worktree Notes\n\n## BugsFound\n- (none)\n' > "$notes"
     run_with_timeout 30 node "$HELPER_JS" --notes-path "$notes" \
-        --section BugsFound --severity high --title "First" --user-acknowledged true >/dev/null 2>&1
+        --section BugsFound --severity high --title "First" --pr-scope other >/dev/null 2>&1
     [ $? -eq 0 ] || bad="$bad replace-rc"
     grep -qF -- "- (none)" "$notes" 2>/dev/null && bad="$bad placeholder-kept"
-    grep -qxF -- "- First <!-- severity: high --> <!-- user-acknowledged: true -->" "$notes" 2>/dev/null || bad="$bad entry-missing"
+    grep -qxF -- "- First <!-- severity: high --> <!-- pr-scope: other -->" "$notes" 2>/dev/null || bad="$bad entry-missing"
 
     run_with_timeout 30 node "$HELPER_JS" --notes-path "$notes" \
-        --section NextTasks --title "Later" --user-acknowledged false >/dev/null 2>&1
+        --section NextTasks --severity low --title "Later" --pr-scope this-pr >/dev/null 2>&1
     [ $? -eq 0 ] || bad="$bad append-rc"
     [ "$(grep -c '^## NextTasks$' "$notes" 2>/dev/null)" = "1" ] || bad="$bad nexttasks-heading"
-    grep -qxF -- "- Later <!-- user-acknowledged: false -->" "$notes" 2>/dev/null || bad="$bad later-missing"
+    grep -qxF -- "- Later <!-- severity: low --> <!-- pr-scope: this-pr -->" "$notes" 2>/dev/null || bad="$bad later-missing"
 
     if [ -z "$bad" ]; then
         pass "B12: Mode B replaces '- (none)' and appends an absent section"
@@ -313,7 +314,7 @@ test_B13_crlf_preserved() {
     local notes="$TMP/WORKTREE_NOTES.md" crlf lf
     printf '# Worktree Notes\r\n\r\n## BugsFound\r\n- (none)\r\n' > "$notes"
     run_with_timeout 30 node "$HELPER_JS" --notes-path "$notes" \
-        --section BugsFound --severity high --title "CR" --user-acknowledged true >/dev/null 2>&1
+        --section BugsFound --severity high --title "CR" --pr-scope other >/dev/null 2>&1
     local rc=$?
     crlf="$(grep -c $'\r$' "$notes" 2>/dev/null)"
     lf="$(wc -l < "$notes" 2>/dev/null | tr -d '[:space:]')"
@@ -335,7 +336,7 @@ test_B14_skip_if_main() {
     git -C "$repo" config core.hooksPath /dev/null 2>/dev/null
     notes="$repo/WORKTREE_NOTES.md"
     run_with_timeout 30 node "$HELPER_JS" --notes-path "$notes" \
-        --section BugsFound --severity high --title "Main" --user-acknowledged true \
+        --section BugsFound --severity high --title "Main" --pr-scope other \
         --skip-if-main >/dev/null 2>&1
     local rc=$?
     if [ "$rc" -eq 0 ] && [ ! -f "$notes" ]; then
@@ -352,7 +353,7 @@ test_B15_no_tmp_left() {
     setup_tmp
     local notes="$TMP/WORKTREE_NOTES.md" leftovers
     run_with_timeout 30 node "$HELPER_JS" --notes-path "$notes" \
-        --section BugsFound --severity high --title "Atomic B" --user-acknowledged true >/dev/null 2>&1
+        --section BugsFound --severity high --title "Atomic B" --pr-scope other >/dev/null 2>&1
     local rc=$?
     leftovers="$(find "$TMP" -maxdepth 1 -name 'WORKTREE_NOTES.md.tmp*' 2>/dev/null | wc -l | tr -d '[:space:]')"
     if [ "$rc" -eq 0 ] && [ "$leftovers" = "0" ]; then
