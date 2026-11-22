@@ -249,7 +249,7 @@ function buildWorkflowStatus(sessionId) {
     if (t > 0 && fs.existsSync(detectBin)) {
       const r = spawnSync(
         process.execPath, [detectBin],
-        { encoding: "utf8", timeout: t, stdio: ["ignore", "pipe", "ignore"] }
+        { encoding: "utf8", timeout: t, stdio: ["ignore", "pipe", "ignore"], windowsHide: true }
       );
       if (r.status === 0 && r.stdout) {
         let parsed = null;

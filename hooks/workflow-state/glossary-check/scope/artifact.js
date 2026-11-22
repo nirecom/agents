@@ -70,7 +70,7 @@ function artifactRA(sid, step) {
 function git(repoDir, args, input) {
   // No `encoding`: stdout stays a Buffer, and a string `input` would be encoded with it.
   const r = spawnSync("git", ["-C", toWindowsPath(repoDir)].concat(args), {
-    input: input === undefined ? undefined : Buffer.from(input, "utf8"), timeout: 15000, maxBuffer: 256 * 1024 * 1024,
+    input: input === undefined ? undefined : Buffer.from(input, "utf8"), timeout: 15000, maxBuffer: 256 * 1024 * 1024, windowsHide: true,
   });
   if (r.error || r.status !== 0) {
     throw new Error(`git ${args[0]} failed: ${r.error ? r.error.message : String(r.stderr || "").trim()}`);

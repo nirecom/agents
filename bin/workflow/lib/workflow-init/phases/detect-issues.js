@@ -23,7 +23,7 @@ function detectIssues(state, tokens) {
   const parseScript = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "parse-issue-tokens");
   const result = spawnSync(process.execPath, [parseScript, ...tokens], {
     encoding: "utf8",
-    env: process.env,
+    env: process.env, windowsHide: true,
   });
 
   let parsed = [];

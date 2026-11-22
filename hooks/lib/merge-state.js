@@ -16,7 +16,7 @@ const OID_RE = /^[0-9a-f]{40}$|^[0-9a-f]{64}$/i;
 const undecidable = (reason) => ({ state: MERGE_STATE.UNDECIDABLE, reason });
 
 function runGit(repoDir, args) {
-  const r = spawnSync("git", ["-C", toWindowsPath(repoDir)].concat(args), { timeout: 15000, maxBuffer: 256 * 1024 * 1024 });
+  const r = spawnSync("git", ["-C", toWindowsPath(repoDir)].concat(args), { timeout: 15000, maxBuffer: 256 * 1024 * 1024, windowsHide: true });
   return { ok: !r.error && r.status === 0, stdout: r.stdout ? r.stdout.toString("utf8") : "" };
 }
 

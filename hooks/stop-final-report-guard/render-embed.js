@@ -12,7 +12,7 @@ function renderFinalReportForReason(sid) {
     const r = spawnSync(process.execPath, [RENDERER, "--session", sid], {
       timeout: 5000,
       stdio: ["ignore", "pipe", "ignore"],
-      encoding: "utf8",
+      encoding: "utf8", windowsHide: true,
     });
     if (!r || r.error || r.status !== 0 || typeof r.stdout !== "string" || !r.stdout.trim()) return null;
     return r.stdout;

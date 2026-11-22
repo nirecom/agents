@@ -73,7 +73,7 @@ function resolveTargetCheckoutRoot(targetCheckoutRoot) {
     return path.resolve(process.env.AGENTS_MAIN_ROOT).replace(/\\/g, "/");
   }
   try {
-    const root = execSync("git rev-parse --show-toplevel", { encoding: "utf8" })
+    const root = execSync("git rev-parse --show-toplevel", { encoding: "utf8", windowsHide: true })
       .trim()
       .replace(/\\/g, "/");
     process.stderr.write(

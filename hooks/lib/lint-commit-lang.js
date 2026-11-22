@@ -17,7 +17,7 @@ const MAX_LINE = 80;
 const GIT_MAX_BUFFER = 64 * 1024 * 1024;
 
 function git(args) {
-  return spawnSync("git", args, { encoding: "buffer", maxBuffer: GIT_MAX_BUFFER });
+  return spawnSync("git", args, { encoding: "buffer", maxBuffer: GIT_MAX_BUFFER, windowsHide: true });
 }
 
 // Absolute repository root, or null when it cannot be determined.

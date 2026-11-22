@@ -89,8 +89,8 @@ function selfImpl(file, cases, helper) {
 function syntaxCheck(file) {
   const cp = require("node:child_process");
   const r = S.isMem(file)
-    ? cp.spawnSync("bash", ["-n"], { input: file.text, encoding: "utf8", timeout: 60000 })
-    : cp.spawnSync("bash", ["-n", file], { encoding: "utf8", timeout: 60000 });
+    ? cp.spawnSync("bash", ["-n"], { input: file.text, encoding: "utf8", timeout: 60000, windowsHide: true })
+    : cp.spawnSync("bash", ["-n", file], { encoding: "utf8", timeout: 60000, windowsHide: true });
   return { rc: r.error || r.status !== 0 ? 1 : 0, stdout: "", stderr: r.stderr || "" };
 }
 

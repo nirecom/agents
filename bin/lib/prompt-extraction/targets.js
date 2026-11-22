@@ -39,7 +39,7 @@ function git(root, args, opts) {
     cwd: root,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
-    ...(opts || {}),
+    ...(opts || {}), windowsHide: true,
   });
 }
 
@@ -47,7 +47,7 @@ function git(root, args, opts) {
 function resolveRepoRoot(cwd) {
   const r = spawnSync("git", ["rev-parse", "--show-toplevel"], {
     cwd,
-    encoding: "utf8",
+    encoding: "utf8", windowsHide: true,
   });
   if (r.error || r.status !== 0) return null;
   const out = (r.stdout || "").trim();
@@ -89,8 +89,7 @@ function readIndex(root, rel) {
 
 /**
  * Read many index blobs in ONE `git cat-file --batch` process.
- * Spawning one `git show` per file costs ~100 files x process-startup, which on
- * Windows alone exceeds the gate's spawn budget.
+ * One `git show` per file (~100 process startups) alone exceeds the gate's spawn budget on Windows.
  * An empty result and a failed result must never collapse into the same value:
  * returning [] on spawn failure would make the caller report "no violations" and
  * the gate would fail open on a broken git. Every failure returns null.
@@ -103,7 +102,7 @@ function readIndexBatch(root, items) {
   const r = spawnSync("git", ["cat-file", "--batch"], {
     cwd: root,
     input: items.map((i) => i.oid).join("\n") + "\n",
-    maxBuffer: 256 * 1024 * 1024,
+    maxBuffer: 256 * 1024 * 1024, windowsHide: true,
   });
   if (r.error || r.status !== 0 || !r.stdout) return null;
 

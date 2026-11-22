@@ -139,7 +139,7 @@ if (mergeResult.hit) {
           command, input, stateCwd: state && state.cwd,
         });
         const sha = execSync("git rev-parse HEAD", {
-          cwd: repoCwd, encoding: "utf8", timeout: 2000,
+          cwd: repoCwd, encoding: "utf8", timeout: 2000, windowsHide: true,
         }).trim();
         if (/^[0-9a-f]{40}$/.test(sha)) {
           setLastPushedSha(sessionId, sha);
