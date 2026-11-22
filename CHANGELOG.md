@@ -284,3 +284,7 @@ Changes: PM sessions and the workflow sessions they oversee now receive their PM
 ### FEATURE: PR #3128 (2026-11-22)
 Background: fix(#3127): hide console window for gh/git/bash spawns built by spawn...
 Changes: Fixed a black console window that flashed on Windows each time a PM hook ran.
+
+### FEATURE: PR #3129 (2026-11-22)
+Background: fix(#2168): end extract_field capture only at known labels
+Changes: Issue-to-history entries no longer lose most of an issue body when the Background or Changes section contains `###` sub-headings; only known section labels end a field now (#2168).
