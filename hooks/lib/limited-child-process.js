@@ -1,6 +1,6 @@
 "use strict";
 // hooks/lib/limited-child-process.js — spawnSync / execSync / execFileSync whose child timeout is
-// the decision time left (#2676). Unarmed, the call reaches child_process untouched.
+// the decision time left (#2676). Unarmed, only windowsHide: true is added, fixed (#3127).
 // Armed, the time left replaces the caller's timeout, so a hung child always ends in ask at the
 // limit: a caller's own short-timeout fallback could otherwise decide allow without asking (N1).
 // Only a caller declaring failOpenOnTimeout keeps its shorter timeout (#2781, code-size-gate).
@@ -42,8 +42,7 @@ function withoutWrapperKeys(rest) {
   const given = rest.options;
   if (!given || !WRAPPER_KEYS.some((key) => key in given)) return { ...rest, declared: false, message: undefined };
   const { failOpenOnTimeout, limitMessage, ...options } = given;
-  const values = rest.values.map((value) => (value === given ? options : value));
-  return { ...rest, options, values, declared: failOpenOnTimeout === true, message: limitMessage };
+  return { ...rest, options, declared: failOpenOnTimeout === true, message: limitMessage };
 }
 
 // A declared caller timeout shorter than the time left is kept and owned by the caller (its own
@@ -57,17 +56,21 @@ function childTimeout(rest, cap) {
 // run(fnName, command, rest, checkName, returnsResult) — the shared body of the three wrappers.
 function run(fnName, command, rawRest, checkName, returnsResult) {
   const rest = withoutWrapperKeys(rawRest);
-  if (!limit.isDecisionTimeLimitArmed()) return childProcess[fnName](command, ...rest.values);
+  const options = { ...(rest.options || {}), windowsHide: true };
+  if (!limit.isDecisionTimeLimitArmed()) {
+    return rest.args === undefined
+      ? childProcess[fnName](command, options)
+      : childProcess[fnName](command, rest.args, options);
+  }
   const askNow = () => limit.askAndExit(checkName, rest.message);
   const cap = Math.floor(limit.remainingDecisionMs());
   if (cap < MIN_SLICE_MS) return askNow();
   const { timeout, callerOwns } = childTimeout(rest, cap);
-  const options = { ...(rest.options || {}), timeout };
   const limitTimedOut = (error) => isTimedOut(error) && !callerOwns;
   // File stdio, not pipes: a grandchild holding a pipe would keep the call from returning at the cap.
   // A failed stdio setup asks too: a hook that crashed here would let the call through undecided.
   try {
-    const result = fileStdio[fnName](command, rest.args, options);
+    const result = fileStdio[fnName](command, rest.args, { ...options, timeout });
     if (returnsResult && result && limitTimedOut(result.error)) return askNow();
     if (isOverLimit()) return askNow();
     return result;
@@ -82,13 +85,13 @@ function run(fnName, command, rawRest, checkName, returnsResult) {
 function withArgs(fnName, returnsResult) {
   return (command, ...rest) => {
     const { args, options } = splitArgs(rest);
-    return run(fnName, command, { args, options, values: rest }, checkNameOf(command, args), returnsResult);
+    return run(fnName, command, { args, options }, checkNameOf(command, args), returnsResult);
   };
 }
 
 const spawnSync = withArgs("spawnSync", true);
 const execFileSync = withArgs("execFileSync", false);
 const execSync = (command, options) =>
-  run("execSync", command, { args: undefined, options, values: options === undefined ? [] : [options] }, checkNameOf(command), false);
+  run("execSync", command, { args: undefined, options }, checkNameOf(command), false);
 
 module.exports = { spawnSync, execSync, execFileSync, checkNameOf };

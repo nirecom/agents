@@ -19,7 +19,7 @@ function runChecker({ cli, rel, tmpFile, headCopy, top }) {
   const args = [shellPath(cli), "--rel", rel];
   if (headCopy) args.push("--head", shellPath(headCopy));
   args.push(shellPath(tmpFile));
-  const r = spawnSync("bash", args, { cwd: top, encoding: "utf8", timeout: CHECK_TIMEOUT_MS });
+  const r = spawnSync("bash", args, { cwd: top, encoding: "utf8", timeout: CHECK_TIMEOUT_MS, windowsHide: true });
   if (r.error || typeof r.stdout !== "string") return { high: [], warn: [] };
   const temps = [tmpFile, headCopy].filter(Boolean);
   const lines = r.stdout.split(/\r?\n/).map((l) => temps.reduce((s, t) => s.split(shellPath(t)).join(rel).split(t).join(rel), l));

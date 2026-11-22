@@ -62,7 +62,7 @@ function isMainWorktree(notesDir) {
   // worktree of its git repo. False when not in a git repo or in a linked
   // worktree. Errors are swallowed (best-effort skip).
   const result = spawnSync("git", ["-C", notesDir, "rev-parse", "--git-common-dir"], {
-    encoding: "utf8",
+    encoding: "utf8", windowsHide: true,
   });
   if (result.status !== 0) return false;
   const raw = (result.stdout || "").trim();

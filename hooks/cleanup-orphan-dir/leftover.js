@@ -31,7 +31,7 @@ function leftoverRefusal(dir, expectMainRoot) {
 function registrationRefusal(dir, repoRoot) {
   let out;
   try {
-    out = execFileSync("git", ["-C", repoRoot, "worktree", "list", "--porcelain"], { encoding: "utf8", timeout: 10000 });
+    out = execFileSync("git", ["-C", repoRoot, "worktree", "list", "--porcelain"], { encoding: "utf8", timeout: 10000, windowsHide: true });
   } catch (e) {
     return `cannot list worktrees of ${repoRoot}(${e.code || e.message}): ${dir}`;
   }

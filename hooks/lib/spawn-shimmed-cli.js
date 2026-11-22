@@ -182,21 +182,23 @@ function enoentResult(command) {
 // spawnShimmedCli(command, args, options) — spawnSync with win32 shim
 // resolution. `options` is forwarded untouched on every path, so a caller's
 // timeout, cwd, env, encoding and stdio reach the real call unchanged and no
-// option this module did not receive is ever introduced.
+// option this module did not receive is ever introduced — except windowsHide:
+// true, always added and fixed so no console window opens (#3127).
 function spawnShimmedCli(command, args, options) {
-  if (process.platform !== "win32") return spawnSync(command, args, options);
+  const spawnOptions = { ...options, windowsHide: true };
+  if (process.platform !== "win32") return spawnSync(command, args, spawnOptions);
 
   const candidate = resolveOnPath(command);
   if (!candidate) return enoentResult(command);
 
   if (DIRECT_EXTENSIONS.includes(candidate.ext)) {
-    return spawnSync(candidate.fullPath, args, options);
+    return spawnSync(candidate.fullPath, args, spawnOptions);
   }
   if (!DELEGATED_EXTENSIONS.includes(candidate.ext)) return enoentResult(command);
 
   const target = verifiedShimTarget(candidate);
   if (!target) return enoentResult(command);
-  return spawnSync(process.execPath, [target].concat(args || []), options);
+  return spawnSync(process.execPath, [target].concat(args || []), spawnOptions);
 }
 
 module.exports = { spawnShimmedCli };

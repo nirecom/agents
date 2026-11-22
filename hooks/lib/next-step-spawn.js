@@ -17,7 +17,7 @@ function spawnNextStep(args, opts = {}) {
   return require("child_process").spawnSync(process.execPath, [NEXT_STEP_PATH, ...args, CACHE_ONLY_FLAG], {
     timeout: opts.timeout,
     encoding: "utf8",
-    stdio: ["ignore", "pipe", opts.stderr === "pipe" ? "pipe" : "ignore"],
+    stdio: ["ignore", "pipe", opts.stderr === "pipe" ? "pipe" : "ignore"], windowsHide: true,
   });
 }
 
