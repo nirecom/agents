@@ -24,7 +24,7 @@ const {
   markStep,
   readState,
 } = require("../workflow-state");
-const { CLEAR_OUTCOME } = require("../workflow-state/state-io/review-tests");
+const { CLEAR_OUTCOME, reviewRecoveryEvidence } = require("../workflow-state/state-io/review-tests");
 const { hasCompletionEvidence } = require("../workflow-state/evidence-resolver");
 const {
   computeReviewScopeManifest,
@@ -90,7 +90,7 @@ const NOTHING_TO_ACCEPT_MSG =
   "nothing to accept — review_tests has no warnings and is not in a recoverable reopened (pending) or in_progress state " +
   "(terminal / continuing / fallback / unreviewed evidence); state unchanged.";
 
-function acceptedMessage(outcome, manifest) {
+function acceptedMessage(outcome, manifest, refusalReason) {
   switch (outcome) {
     case CLEAR_OUTCOME.RECOVERED:
       return "reopen accepted — review_tests restored to complete (current review scope recorded).";
@@ -99,7 +99,11 @@ function acceptedMessage(outcome, manifest) {
     case CLEAR_OUTCOME.RECOVERED_CONTINUING:
       return "continuing review (exit 1/5) accepted — review_tests restored to complete (current review scope recorded).";
     case CLEAR_OUTCOME.RECOVERED_FALLBACK:
-      return "fallback review (exit 3, NEEDS_REVISION) accepted — review_tests restored to complete (current review scope recorded).";
+      return "fallback review (exit 3, fallback ended without a recorded round) accepted — review_tests restored to complete " +
+        "(current review scope recorded).";
+    case CLEAR_OUTCOME.EVIDENCE_REFUSED:
+      return `review_tests state unchanged — the recovery evidence was refused (${refusalReason || "unknown"}); ` +
+        "re-run /review-tests on the current scope.";
     case CLEAR_OUTCOME.RECOVERED_UNREVIEWED:
       return "unreviewed scope accepted — no review completed on this scope; review_tests restored to complete without a review " +
         "(current review scope recorded).";
@@ -135,7 +139,17 @@ function backfillWriteTests(sessionId, repoCwd, pushMessage) {
 }
 
 // Outcomes that leave review_tests unchanged: the sentinel was not applied.
-const UNCHANGED_OUTCOMES = [CLEAR_OUTCOME.STALE_EVIDENCE, CLEAR_OUTCOME.MANIFEST_UNAVAILABLE, CLEAR_OUTCOME.NOTHING_TO_CLEAR];
+const UNCHANGED_OUTCOMES = [CLEAR_OUTCOME.STALE_EVIDENCE, CLEAR_OUTCOME.MANIFEST_UNAVAILABLE,
+  CLEAR_OUTCOME.NOTHING_TO_CLEAR, CLEAR_OUTCOME.EVIDENCE_REFUSED];
+
+// The reason of an EVIDENCE_REFUSED outcome, judged again on the same fingerprint (read-only).
+function refusalReasonOf(sessionId, fingerprint) {
+  try {
+    return reviewRecoveryEvidence(sessionId, { fingerprint }).reason;
+  } catch (_) {
+    return null;
+  }
+}
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage, pushUnapplied, repoCwd } = ctx;
@@ -215,7 +229,8 @@ function handle(ctx) {
       // or the next review can re-judge.
       const unchanged = UNCHANGED_OUTCOMES.includes(outcome);
       if (!unchanged) clearReviewTestsTerminalMarker(sessionId);
-      (unchanged ? pushUnapplied : pushMessage)(`[workflow] REVIEW_TESTS_WARNINGS_ACCEPTED: ${acceptedMessage(outcome, manifest)}`);
+      const refusal = outcome === CLEAR_OUTCOME.EVIDENCE_REFUSED ? refusalReasonOf(sessionId, fingerprint) : null;
+      (unchanged ? pushUnapplied : pushMessage)(`[workflow] REVIEW_TESTS_WARNINGS_ACCEPTED: ${acceptedMessage(outcome, manifest, refusal)}`);
     } catch (e) {
       pushUnapplied(
         `workflow-mark: failed to write state — ${e.message}. warnings NOT cleared.`

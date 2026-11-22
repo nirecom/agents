@@ -55,6 +55,8 @@ vs_emit() {
   fi
   # shellcheck disable=SC2034  # read by the loop's EXIT trap (settle_round_counter)
   FINAL_RC="$rc"
+  # A path-kind fallback round left unrecorded (PP_ROUND_RECORDED != 1) is undone by the
+  # EXIT trap (pp_round_restore), so this branch only reports and exits 4 (#2478 S1-4).
   if ! rr_record_round "$rc"; then
     [[ -n "${TMP_OUT:-}" && -f "$TMP_OUT" ]] && cat "$TMP_OUT"
     [[ -n "$VS_DIAG" ]] && printf '%s\n' "$VS_DIAG"

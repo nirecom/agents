@@ -3,7 +3,7 @@
 // Tags: TL2, workflow, review-tests, warnings-accepted, recovery, fallback-raw, scope:issue-specific, unreviewed
 // #2664 item 2 — WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED recovers an in_progress review_tests not
 // only after a terminal exit (rc 2/6) but also after exit 1/5 (continuing marker) and after an
-// exit 3 fallback that ended NEEDS_REVISION — each only while the review scope still matches the
+// exit 3 fallback (any verdict since #3123 D3) — each only while the review scope still matches the
 // fingerprint the marker pinned (T-RT1..T-RT9). #2842 (UA-*): also with no review result — the RT-2
 // unreviewed marker and rc 3 with a missing / older fallback-raw; wsid markers via owner or pointer.
 // TL3 gap (what this test does NOT catch):
@@ -88,8 +88,7 @@ function put(sid, name, body) {
 const marker = (sid, kind, rc, line2) => put(sid, `test-review-${kind}.txt`, `${rc}\n${line2 == null ? "" : line2}\n`);
 // fallbackRaw(sid, firstLine, markerPath, offsetSec) — the exit-3 fallback output, its mtime set
 // offsetSec relative to the marker's; firstLine "" writes a file with no non-empty line at all.
-// The fallback reviewer's NEEDS_REVISION is the RT-5 WARNINGS outcome (SKILL.md exit 3 row), so
-// NEEDS_REVISION is the one first line that makes rc 3 recoverable (detail.md 5-2).
+// #3123 D3: the raw's verdict is no longer judged — any owned raw newer than the marker is fallback-3.
 function fallbackRaw(sid, firstLine, markerPath, offsetSec = 2) {
   const p = path.join(PLANS, `${sid}-test-review-fallback-raw.md`);
   fs.writeFileSync(p, firstLine === "" ? "\n  \n" : `\n${firstLine}\n- tests/x.sh misses the error path\n`);
@@ -195,21 +194,18 @@ test("T-RT8: no wsid resolves -> the fallback-raw under the CC session id is use
 });
 caseEnd();
 
-caseBegin("rt-fallback-invalid-stays-in-progress", "hooks/workflow-state/state-io/review-tests.js");
-test("T-RT4: rc 3 with a fallback-raw that ran but is not NEEDS_REVISION (APPROVED / INPUT_ERROR / empty / garbage) stays in_progress", () => {
-  const scenes = [["approved", "APPROVED", 2], ["inputerror", "INPUT_ERROR tests/x.sh", 2],
-    ["empty", "", 2], ["garbage", "LGTM ship it", 2]];
-  for (const [label, first, offset] of scenes) {
+caseBegin("rt-fallback-any-verdict-recovers", "hooks/workflow-state/state-io/review-tests.js");
+test("T-RT4 (#3123 D3): rc 3 pinned with a newer fallback-raw of any content (APPROVED / INPUT_ERROR / empty / garbage) -> complete (source fallback-3)", () => {
+  const scenes = [["approved", "APPROVED"], ["inputerror", "INPUT_ERROR tests/x.sh"], ["empty", ""], ["garbage", "LGTM ship it"]];
+  for (const [label, first] of scenes) {
     const d = repo();
     const sid = sidOf(`f4${label}`);
     seed(sid);
-    const m = marker(sid, "terminal", "3", fp(d));
-    if (first !== null) fallbackRaw(sid, first, m, offset);
-    const out = send(sid, d);
-    assert.strictEqual(status(sid), "in_progress", `${label}: not recovered (${out})`);
+    fallbackRaw(sid, first, marker(sid, "terminal", "3", fp(d)));
+    assertRecovered(sid, send(sid, d), "fallback-3", label);
   }
 });
-test("T-RT9: the first fallback-raw found (wsid, APPROVED) is the only one judged; the CC-id NEEDS_REVISION is ignored", () => {
+test("T-RT9 (#3123 D3): the first fallback-raw found (owned wsid, APPROVED) is the one used -> complete (source fallback-3)", () => {
   const wsid = `${sidOf("w9")}wf`;
   const d = repo(wsid);
   const sid = sidOf("f9");
@@ -218,8 +214,7 @@ test("T-RT9: the first fallback-raw found (wsid, APPROVED) is the only one judge
   const m = marker(sid, "terminal", "3", fp(d));
   fallbackRaw(wsid, "APPROVED", m);
   fallbackRaw(sid, "NEEDS_REVISION", m);
-  const out = send(sid, d, wsid);
-  assert.strictEqual(status(sid), "in_progress", `not recovered (${out})`);
+  assertRecovered(sid, send(sid, d, wsid), "fallback-3", "wsid APPROVED");
 });
 test("T-RT10: a wsid whose context does not record this CC session is another session's — its fallback-raw is not used", () => {
   const wsid = `${sidOf("w10")}wf`;
@@ -315,19 +310,16 @@ test("T-RT11 (C2): re-sending the ACCEPTED sentinel after a recovery changes nei
 caseEnd();
 
 caseBegin("rt-refusal-writes-nothing", "hooks/workflow-state/state-io/review-tests.js");
-test("T-RT12 (C3): an invalid fallback-raw or a stale marker writes no approval reason and no recovery event", () => {
-  const scenes = [
-    ["approved", "APPROVED", 2, false], ["inputerror", "INPUT_ERROR tests/x.sh", 2, false],
-    ["empty", "", 2, false], ["garbage", "LGTM ship it", 2, false],
-    ["stale", "NEEDS_REVISION", 2, true],
-  ];
-  for (const [label, first, offset, moved] of scenes) {
+// #3123 D3: the raw's verdict refuses nothing any more; a moved scope (with or without a raw) still does.
+test("T-RT12 (C3): a stale rc 3 marker writes no approval reason and no recovery event", () => {
+  const scenes = [["stale-with-raw", "NEEDS_REVISION"], ["stale-approved-raw", "APPROVED"], ["stale-no-raw", null]];
+  for (const [label, first] of scenes) {
     const d = repo();
-    const sid = sidOf(`x12${label}`);
+    const sid = sidOf(`x12${label.replace(/\W/g, "")}`);
     seed(sid);
     const m = marker(sid, "terminal", "3", fp(d));
-    if (first !== null) fallbackRaw(sid, first, m, offset);
-    if (moved) stage(d, "tests/x.sh", "echo x changed after the review");
+    if (first !== null) fallbackRaw(sid, first, m);
+    stage(d, "tests/x.sh", "echo x changed after the review");
     const before = approvalTrace(sid);
     const out = send(sid, d);
     assert.strictEqual(status(sid), "in_progress", `${label}: not recovered (${out})`);
@@ -425,7 +417,7 @@ test("UA-e: an accepted COMPLETE sentinel removes the unreviewed marker", () => 
 caseEnd();
 
 caseBegin("ua-terminal-3-without-fallback", "hooks/workflow-state/state-io/review-tests.js");
-// APPROVED / INPUT_ERROR (T-RT4) and NEEDS_REVISION (T-RT3, T-RT8) keep their outcome; only a fallback that never ran is new.
+// A newer raw is fallback-3 (T-RT3, T-RT4, T-RT8); a fallback that never ran is unreviewed-terminal-3.
 test("UA-g: rc 3 pinned with the fallback-raw missing or older than the marker -> complete (source unreviewed-terminal-3)", () => {
   for (const [label, offset] of [["missing", null], ["older", -60]]) {
     const d = repo();

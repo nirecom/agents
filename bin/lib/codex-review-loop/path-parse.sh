@@ -169,8 +169,9 @@ path_build_args() {
 }
 
 # path_verdict — extract the reviewer's verdict from its begin/end-codex-output
-# block and validate it against the per-format non-APPROVED keyword. Exits 3
-# (codex unusable) on an empty or malformed verdict. Sets VERDICT.
+# block and validate it against the per-format non-APPROVED keyword. Exits
+# PATH_VERDICT_FAIL_RC (default 3, codex unusable; the CC fallback sets 4) on an
+# empty or malformed verdict. Sets VERDICT.
 # Caller globals: TMP_OUT FORMAT HEADER VERDICT.
 path_verdict() {
   VERDICT=$(awk '
@@ -181,20 +182,20 @@ path_verdict() {
 
   if [[ -z "$VERDICT" ]]; then
     echo "run-codex-review-loop: codex unavailable or verdict malformed (empty verdict block)" >&2
-    exit 3
+    exit "${PATH_VERDICT_FAIL_RC:-3}"
   fi
 
   [[ "$VERDICT" =~ ^APPROVED($|[[:space:]].+$) ]] && return 0
   case "$FORMAT" in
     detail-plan|security-plan|test-review)
       [[ "$VERDICT" == "NEEDS_REVISION" ]] || {
-        echo "run-codex-review-loop: codex unavailable or verdict malformed (header=$HEADER, verdict=$VERDICT)" >&2
-        exit 3
+        echo "run-codex-review-loop: codex unavailable or verdict malformed (header=${HEADER:-}, verdict=$VERDICT)" >&2
+        exit "${PATH_VERDICT_FAIL_RC:-3}"
       } ;;
     outline-plan)
       [[ "$VERDICT" =~ ^MISSING_ALTERNATIVE: ]] || {
-        echo "run-codex-review-loop: codex unavailable or verdict malformed (header=$HEADER, verdict=$VERDICT)" >&2
-        exit 3
+        echo "run-codex-review-loop: codex unavailable or verdict malformed (header=${HEADER:-}, verdict=$VERDICT)" >&2
+        exit "${PATH_VERDICT_FAIL_RC:-3}"
       } ;;
   esac
 }

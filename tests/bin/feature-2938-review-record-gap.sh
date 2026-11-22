@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/run-codex-review-loop, bin/lib/codex-review-loop/review-record.sh
-# Tags: feature-2938, review-record, codex-review-loop, unrecorded, accept-gap, extensions, scope:issue-specific, TL2, dup-group-keep:time-hard-limit
+# Tags: feature-2938, feature-2478, review-record, codex-review-loop, unrecorded, accept-gap, extensions, scope:issue-specific, TL2, dup-group-keep:time-hard-limit
 #
 # #2938 T5-10, T5-11: a failed append is exit 4 with no sentinel, parks the row in
 # -unrecorded.jsonl and commits the counter; a later run or hand-over replays it, or
@@ -15,6 +15,8 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=tests/bin/feature-2937-review-loop/fixture.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2937-review-loop/fixture.sh"
+# shellcheck source=tests/bin/feature-2478-fallback/helpers.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2478-fallback/helpers.sh"
 
 F=detail-plan
 LOOP_ARGS=(--cap 3 --max-extensions 0 --extensions-used 0)
@@ -145,16 +147,17 @@ assert_eq "a caller that forgot the extension still ends at 6, not 5" "6" "$L_RC
 assert_contains "the override is named" "EXTENSIONS_USED from the caller (0) differs from the review record (1); using 1" "$L_ERR"
 case_end
 
+# #2478: the CC fallback of r3 is a prestaged round of the loop; its exit 6 row is no extension.
 case_begin "t5-7-cc-fallback-row-does-not-change-the-count" "bin/lib/codex-review-loop/review-record.sh"
 to_cap e7c
 export FX_RV=1
 go e7c 1
-unset FX_RV
 assert_eq "r3 codex failure is exit 3 (precondition)" "3" "$L_RC"
-rr record-fallback --session e7c --format "$F" --verdict NEEDS_REVISION
-assert_eq "record-fallback succeeds" "0" "$R_RC"
-go e7c 1
-assert_eq "the codex retry of r3 is terminal" "6" "$L_RC"
+report "$FX_TMP/e7c-r3.md" NEEDS_REVISION "C1: unresolved — still reaches the shell"
+fb e7c "$F" "$FX_TMP/e7c-r3.md" --cap 2 --max-extensions 1 --extensions-used 1
+unset FX_RV
+assert_eq "the fallback r3 is terminal" "6" "$L_RC"
+assert_eq "its row is the fallback's" "cc-fallback" "$(row e7c "$F" -1 source)"
 assert_not_contains "the cc-fallback row is not counted as an extension" "$MISMATCH" "$L_ERR"
 case_end
 

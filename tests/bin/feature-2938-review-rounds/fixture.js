@@ -2,8 +2,9 @@
 // Private fixture of tests/bin/feature-2938-review-rounds*.js (#2938 T4). The caller runs
 // isolate() from tests/lib/harness.js before the first helper call; the state, control-dir and
 // supervisor-state modules are required lazily so they resolve the pinned WORKFLOW_STATE_DIR.
-// Rows are written only through bin/review-rounds (append / stage-fallback / record-fallback);
-// the record file is read here directly to check what appendRow wrote.
+// Rows are written only through bin/review-rounds append (a CC-fallback round is a prestaged loop
+// round, so it is an append with --source cc-fallback, #2478); the record file is read here
+// directly to check what appendRow wrote.
 const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -82,13 +83,10 @@ function append(sid, fmt, cr, exit, verdict, o = {}) {
   assert.strictEqual(r.status, 0, `append ${sid} ${fmt} r${cr}: ${r.err}`);
   return r;
 }
-// fallback(sid, fmt, verdict) — a CC fallback outside the wrapper: stage-fallback, then record-fallback.
-function fallback(sid, fmt, verdict) {
-  const s = rr(["stage-fallback", "--session", sid, "--format", fmt]);
-  assert.strictEqual(s.status, 0, `stage-fallback ${sid} ${fmt}: ${s.err}`);
-  const r = rr(["record-fallback", "--session", sid, "--format", fmt, "--verdict", verdict]);
-  assert.strictEqual(r.status, 0, `record-fallback ${sid} ${fmt} ${verdict}: ${r.err}`);
-}
+// fallback(sid, fmt, counterRound, verdict) — the row a prestaged CC-fallback loop round appends:
+// source cc-fallback, exit 0 on APPROVED and 1 otherwise.
+const fallback = (sid, fmt, cr, verdict, o = {}) =>
+  append(sid, fmt, cr, verdict === "APPROVED" ? 0 : 1, verdict, Object.assign({}, o, { source: "cc-fallback" }));
 
 // rows(sid, fmt) — the parsed rows of the record in the first sid's control dir (bad lines skipped).
 function rows(sid, fmt) {

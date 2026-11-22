@@ -50,6 +50,7 @@ const CLEAR_OUTCOME = Object.freeze({
   NOTHING_TO_CLEAR: "nothing-to-clear",
   MANIFEST_UNAVAILABLE: "manifest-unavailable",
   STALE_EVIDENCE: "stale-evidence",
+  EVIDENCE_REFUSED: "evidence-refused",
   NO_STATE: "no-state",
 });
 
@@ -78,13 +79,12 @@ function unownedFallbackRawExists(ccSid) {
   }
 }
 
-// The fallback reviewer's NEEDS_REVISION is the RT-5 WARNINGS outcome; APPROVED / INPUT_ERROR /
-// anything else, or a file older than the terminal marker, is no evidence of a non-block end.
-function fallbackRawRefusal(rawPath, markerMtimeMs) {
+// Whether the fallback ran after the terminal marker: null = a raw at least as new as the marker;
+// "fallback-raw-stale" / "fallback-raw-missing" otherwise. The raw's verdict is never read: a
+// recorded fallback round replaces the rc 3 marker, so a surviving marker means none was (#3123).
+function fallbackRawState(rawPath, markerMtimeMs) {
   try {
-    if (fs.statSync(rawPath).mtimeMs < markerMtimeMs) return "fallback-raw-stale";
-    const first = fs.readFileSync(rawPath, "utf8").split("\n").map((l) => l.trim()).find((l) => l.length > 0);
-    return first === "NEEDS_REVISION" ? null : "fallback-raw-not-warnings";
+    return fs.statSync(rawPath).mtimeMs < markerMtimeMs ? "fallback-raw-stale" : null;
   } catch (e) {
     return "fallback-raw-missing";
   }
@@ -93,8 +93,8 @@ function fallbackRawRefusal(rawPath, markerMtimeMs) {
 // Evidence that the last review ended non-block or never ran, for the in_progress recovery
 // (#2491, #2664, #2842). -> { ok, source, reason }. Order: (a) terminal-2 / terminal-6 on line 1
 // only (the wrapper writes an empty line 2 when the fingerprint fails); (b) RT-2's unreviewed
-// marker; (c) terminal rc 3 — NEEDS_REVISION fallback-raw, or none / an older one (the fallback
-// never ran: unreviewed-terminal-3); (d) continuing-1/5. (b)-(d) must be pinned to the current
+// marker; (c) terminal rc 3 — fallback-3 with a newer owned raw, else unreviewed-terminal-3
+// (#3123: any verdict); (d) continuing-1/5. (b)-(d) must be pinned to the current
 // review-scope fingerprint, else reason "stale-evidence".
 function reviewRecoveryEvidence(sessionId, opts = {}) {
   const fingerprint = typeof opts.fingerprint === "string" ? opts.fingerprint : "";
@@ -109,9 +109,8 @@ function reviewRecoveryEvidence(sessionId, opts = {}) {
     if (!pinned(term)) return stale;
     const raw = resolveFallbackRawPath(sessionId);
     if (!raw && unownedFallbackRawExists(sessionId)) return { ok: false, source: null, reason: "fallback-raw-unowned" };
-    const refusal = raw ? fallbackRawRefusal(raw, term.mtimeMs) : "fallback-raw-absent";
-    if (refusal === "fallback-raw-absent" || refusal === "fallback-raw-stale") return okWith("unreviewed-terminal-3");
-    return refusal ? { ok: false, source: null, reason: refusal } : okWith("fallback-3");
+    const state = raw ? fallbackRawState(raw, term.mtimeMs) : "fallback-raw-absent";
+    return okWith(state === null ? "fallback-3" : "unreviewed-terminal-3");
   }
   const cont = markers.readControlMarker(sessionId, markers.CONTINUING_MARKER);
   if (cont && (cont.rc === "1" || cont.rc === "5")) {
@@ -175,6 +174,12 @@ function clearReviewTestsWarnings(sessionId, reason, manifest, opts = {}) {
     const evidence = existing.status === "in_progress"
       ? reviewRecoveryEvidence(sessionId, { fingerprint: opts && opts.fingerprint })
       : null;
+    // A refusal that names its reason (e.g. fallback-raw-unowned) is reported as such, never as
+    // "nothing to clear"; the handler asks reviewRecoveryEvidence again for the reason.
+    if (evidence && !evidence.ok && evidence.reason !== "no-evidence" && evidence.reason !== "stale-evidence") {
+      outcome = CLEAR_OUTCOME.EVIDENCE_REFUSED;
+      return [];
+    }
     if (evidence && (evidence.ok || evidence.reason === "stale-evidence")) {
       if (!files) {
         outcome = CLEAR_OUTCOME.MANIFEST_UNAVAILABLE;

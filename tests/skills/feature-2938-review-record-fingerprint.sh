@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Tests: skills/make-outline-plan/scripts/run-codex-review-loop.sh, skills/make-detail-plan/scripts/run-codex-review-loop.sh, skills/review-plan-security/scripts/run-codex-review-loop.sh, skills/review-code-security/scripts/run-codex-review-loop.sh, skills/review-tests/scripts/run-codex-review-loop.sh
-# Tags: feature-2938, review-record, codex-review-loop, fingerprint, scope:issue-specific, TL2, dup-group-keep:time-hard-limit
+# Tags: feature-2938, review-record, codex-review-loop, fingerprint, scope:issue-specific, TL2, dup-group-keep:time-hard-limit, feature-2478, cc-fallback
 #
 # #2938 T5-12: every stage wrapper hands the loop the reviewed-input fingerprint, so the
 # first row of a fresh session (no terminal file yet) carries one in all five formats,
 # security-code's prestaged ADVANCE row too; when git cannot hash the input the row
 # carries fingerprint=null and the wrapper says so on stderr.
+# #2478: the three plan wrappers forward --fallback-brief and --prestaged-* to the loop, so a
+# CC-fallback round of outline-plan / detail-plan / security-plan is one counted cc-fallback row.
 # TL3 gap: a real codex CLI round is not run; the reviewer is the stub of tests/bin/feature-2937-review-loop/fixture.sh.
 set -uo pipefail
 
@@ -14,6 +16,8 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=tests/bin/feature-2937-review-loop/fixture.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2937-review-loop/fixture.sh"
+# shellcheck source=tests/bin/feature-2478-fallback/helpers.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2478-fallback/helpers.sh"
 
 NULL_WARN="warning: reviewed-input fingerprint unavailable; the review record row will carry fingerprint=null"
 # A git whose hash-object always fails; every other subcommand is the real git.
@@ -85,6 +89,41 @@ PATH="$SHIM:$PATH" wrap review-plan-security fp-null
 assert_ne "review-plan-security runs without a hash (precondition, not HALT)" "4" "$W_RC"
 assert_eq "the row carries fingerprint=null" "null" "$(row fp-null security-plan -1 fingerprint)"
 assert_contains "and the wrapper warns" "$NULL_WARN" "$W_ERR"
+case_end
+
+# plan_wrapper_fallback <skill> <fmt> — through the real stage wrapper: --fallback-brief on a fresh
+# state names round 1, and one prestaged fallback report becomes exactly one counted cc-fallback row.
+plan_wrapper_fallback() {
+    local skill="$1" F="$2" sid="fb-$1" bsid="fbb-$1" rep
+    seed_sid "$bsid"
+    st seed "$bsid"
+    wrapa "$skill" "$bsid" --fallback-brief
+    assert_eq "$skill --fallback-brief on a fresh state: exit 0" "0" "$W_RC"
+    assert_eq "$skill --fallback-brief: the first line names round 1" "FALLBACK_ROUND=1" "$(printf '%s\n' "$W_OUT" | tr -d '\r' | sed -n '1p')"
+    assert_eq "$skill --fallback-brief persists no round" "absent" "$(clf_read "$(round_file "$bsid" "$F")")"
+    assert_eq "$skill --fallback-brief adds no row" "0" "$(rows "$bsid" "$F")"
+    seed_sid "$sid"
+    st seed "$sid"
+    rep="$FX_TMP/$sid-r1.md"
+    report "$rep" "$(verdict_of "$F")" "C1. [HIGH] the fallback round bypasses the wrapper"
+    FX_RV=1 wrapa "$skill" "$sid" --prestaged-report "$rep" --prestaged-producer "$(producer_of "$F")" --prestaged-exec PERFORMED
+    assert_eq "$skill prestaged fallback round 1: exit 1 (continue)" "1" "$W_RC"
+    assert_not_contains "$skill: the wrapper forwards the prestaged report" "not permitted" "$W_ERR"
+    assert_eq "$skill: exactly one row" "1" "$(rows "$sid" "$F")"
+    assert_eq "$skill: the row is the fallback's" "cc-fallback" "$(row "$sid" "$F" 1 source)"
+    assert_eq "$skill: ROUND_FILE is 1" "1" "$(clf_read "$(round_file "$sid" "$F")")"
+}
+
+case_begin "outline-wrapper-forwards-fallback-brief-and-prestaged-round" "skills/make-outline-plan/scripts/run-codex-review-loop.sh"
+plan_wrapper_fallback make-outline-plan outline-plan
+case_end
+
+case_begin "detail-wrapper-forwards-fallback-brief-and-prestaged-round" "skills/make-detail-plan/scripts/run-codex-review-loop.sh"
+plan_wrapper_fallback make-detail-plan detail-plan
+case_end
+
+case_begin "security-plan-wrapper-forwards-fallback-brief-and-prestaged-round" "skills/review-plan-security/scripts/run-codex-review-loop.sh"
+plan_wrapper_fallback review-plan-security security-plan
 case_end
 
 finish

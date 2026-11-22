@@ -1,7 +1,7 @@
 #!/bin/bash
 # SSOT for the test-reviewer input-contract violation (#1455): a line-start
-# `INPUT_ERROR <path>` in the reviewer output. Used by run-codex-review-loop.sh
-# and by the CC fallback in skills/review-tests/SKILL.md RT-3 (symmetric).
+# `INPUT_ERROR <path>` in the reviewer output. Used by the review-tests wrapper on the
+# codex output and by bin/run-codex-review-loop on a CC-fallback report (#2478, symmetric).
 # Usage: detect-input-error.sh <reviewer-output-file>
 # Exit: 4 = INPUT_ERROR line found (printed on stderr), 0 = none, 2 = unreadable/usage.
 set -euo pipefail

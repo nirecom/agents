@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-mark/review-tests-handler.js, hooks/workflow-state/state-io/review-tests.js
-# Tags: tl2, workflow, review-tests, warnings-accepted, scope:issue-specific, pwsh-not-required
+# Tags: tl2, feature-3123, workflow, review-tests, warnings-accepted, scope:issue-specific, pwsh-not-required
 
 # TL3 gap (what this test does NOT catch):
 # - a real claude -p session firing the PostToolUse hook for the ACCEPTED sentinel
@@ -93,18 +93,19 @@ for TI_RC in 7 "" abc; do
   send_cmd "$TI_SID" "$T6_N" "$(accept_cmd "$REASON")" >/dev/null
   check "TI6/7/11: rc=[$TI_RC] stays in_progress (fail-closed)" "in_progress" "$(sv "$TI_SID" status)"
 done
-# #2664: rc 3 (fallback review) branches on the fallback output. Line 2 carries the current
-# review-scope fingerprint, so the fallback-raw file is the only variable here.
+# #3123 (S5-b): rc 3 pinned to the current scope is accepted whatever the fallback raw says,
+# and with no raw at all. Line 2 carries the current review-scope fingerprint.
 T6_FP="$(run_with_timeout 60 node -e 'process.stdout.write(String(require(process.env.EVIDENCE_N).computeReviewScopeFingerprint(process.argv[1]).fingerprint))' "$T6_N")"
-seed_state ti6rc3nofbsid '{"status":"in_progress"}' complete
-write_terminal_marker ti6rc3nofbsid 3 "$T6_FP"
-send_cmd ti6rc3nofbsid "$T6_N" "$(accept_cmd "$REASON")" >/dev/null
-check "TI6: rc=[3] without a fallback-raw stays in_progress (fail-closed)" "in_progress" "$(sv ti6rc3nofbsid status)"
-seed_state ti6rc3fbsid '{"status":"in_progress"}' complete
-write_terminal_marker ti6rc3fbsid 3 "$T6_FP"
-printf 'NEEDS_REVISION\n- tests/x.sh misses the error path\n' > "$WORKFLOW_PLANS_DIR/ti6rc3fbsid-test-review-fallback-raw.md"
-send_cmd_glossary ti6rc3fbsid "$T6_N" "$(accept_cmd "$REASON")" >/dev/null
-check "TI6: rc=[3] with a NEEDS_REVISION fallback-raw for the current scope completes" "complete" "$(sv ti6rc3fbsid status)"
+for TI_FB in none NEEDS_REVISION APPROVED; do
+  TI_SID="ti6rc3fb$(printf '%s' "$TI_FB" | tr 'A-Z_' 'a-z-')sid"
+  seed_state "$TI_SID" '{"status":"in_progress"}' complete
+  write_terminal_marker "$TI_SID" 3 "$T6_FP"
+  if [ "$TI_FB" != none ]; then
+    printf '<!-- begin-codex-output -->\n%s\n<!-- end-codex-output -->\n' "$TI_FB" > "$WORKFLOW_PLANS_DIR/$TI_SID-test-review-fallback-raw.md"
+  fi
+  send_cmd_glossary "$TI_SID" "$T6_N" "$(accept_cmd "$REASON")" >/dev/null
+  check "TI6: rc=[3] for the current scope with fallback-raw=[$TI_FB] completes" "complete" "$(sv "$TI_SID" status)"
+done
 case_end
 
 case_begin "ti8-terminal-marker-manifest-unavailable-fail-closed" "hooks/workflow-mark/review-tests-handler.js"
