@@ -126,6 +126,31 @@ rwc_input_fp_args() {
   fi
 }
 
+# rwc_parse_fallback_args <label> [args...] — #2478 S3: the CC-fallback options a wrapper
+# forwards to the loop unchanged. Sets RWC_FWD_ARGS and RWC_FALLBACK_BRIEF (1 for
+# --fallback-brief); any other argument is a usage error (exit 4, HALT).
+# shellcheck disable=SC2034  # both are read by the sourcing wrapper
+rwc_parse_fallback_args() {
+  local label="$1"
+  shift
+  RWC_FWD_ARGS=()
+  RWC_FALLBACK_BRIEF=0
+  while (( $# > 0 )); do
+    case "$1" in
+      --prestaged-report|--prestaged-producer|--prestaged-exec)
+        if (( $# < 2 )); then
+          echo "[$label] ERROR: $1 needs a value (HALT, exit 4)." >&2
+          exit 4
+        fi
+        RWC_FWD_ARGS+=("$1" "$2")
+        shift 2
+        ;;
+      --fallback-brief) RWC_FWD_ARGS+=("$1"); RWC_FALLBACK_BRIEF=1; shift ;;
+      *) echo "[$label] ERROR: unknown argument: $1 (HALT, exit 4)." >&2; exit 4 ;;
+    esac
+  done
+}
+
 # rwc_arm_continuing <rc> <fingerprint> — #2664: evidence that the review ended on a
 # continuing exit (1/5), read by the WARNINGS_ACCEPTED recovery. Never a re-invoke guard.
 rwc_arm_continuing() {
@@ -150,14 +175,6 @@ rwc_clear_unreviewed() {
     [[ ! -e "$cc_file" ]] || return 1
   fi
   return 0
-}
-
-# rwc_stage_fallback <loop-format> — #2938 D2: a wrapper-own exit 3 (the review never reached
-# the loop) stages the CC-fallback pending first; rc non-zero when it cannot (the caller halts).
-rwc_stage_fallback() {
-  local root
-  root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)" || return 1
-  node "$root/bin/review-rounds" stage-fallback --session "$SESSION_ID" --format "$1" >/dev/null
 }
 
 # rwc_record_wsid_pointer <cc-sid> — #2842: tell the CC-sid handler which wsid holds this

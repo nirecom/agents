@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Tests: bin/run-codex-review-loop, bin/lib/codex-review-loop/review-record.sh, bin/lib/codex-review-loop/round-counter.sh
-# Tags: feature-2938, review-record, codex-review-loop, preflight, scope:issue-specific, TL2, round-rollback
+# Tags: feature-2938, feature-2478, review-record, codex-review-loop, preflight, scope:issue-specific, TL2, round-rollback
 #
 # #2938 T5-1, T5-4, T5-6, T5-9: the loop writes one record row per committed round; the row
 # outlives the counter, the terminal guard and a reset; a non-committing exit leaves no row
-# and no inflight; preflight halts (exit 4, reviewer not run) on an unconsumed fallback
-# pending or an unwritable record.
+# and no inflight; preflight halts (exit 4, reviewer not run) on an unwritable record.
+# #2478: exit 3 stages nothing, so the next round runs the reviewer without a halt.
 # TL3 gap: a real codex CLI round is not run; the reviewer is the stub of tests/bin/feature-2937-review-loop/fixture.sh.
 set -uo pipefail
 
@@ -57,27 +57,21 @@ assert_eq "and the verdict FINALIZE_FAILED" "FINALIZE_FAILED" "$(row "$sid" "$F"
 assert_eq "no inflight survives a committed exit" "0" "$(inflights "$sid" "$F")"
 case_end
 
-case_begin "t5-4-unconsumed-pending-halts-before-the-reviewer" "bin/lib/codex-review-loop/review-record.sh"
+# #2478: exit 3 leaves nothing to consume, so the next round runs the reviewer straight away.
+case_begin "t5-4-exit3-leaves-nothing-that-halts-the-next-round" "bin/lib/codex-review-loop/review-record.sh"
 sid="r4"; F=detail-plan
 export FX_RV=1
 loop "$sid" "$F" "${LOOP_ARGS[@]}"
 unset FX_RV
 assert_eq "precondition: a failing reviewer is exit 3" "3" "$L_RC"
-assert_eq "exit 3 stages a fallback pending" "present" "$(clf_file_state "$(side "$sid" "$F" -fallback-pending.json)")"
+assert_eq "exit 3 stages no fallback pending" "missing" "$(clf_file_state "$(side "$sid" "$F" -fallback-pending.json)")"
 export FX_ROUND_LOG="$FX_TMP/r4-rounds.log"
 : > "$FX_ROUND_LOG"
 loop "$sid" "$F" "${LOOP_ARGS[@]}"
-assert_eq "an unconsumed pending is exit 4" "4" "$L_RC"
-assert_eq "the reviewer does not run" "" "$(cat "$FX_ROUND_LOG")"
-assert_contains "exit 1 of 2: record the fallback verdict" "record-fallback" "$L_ERR"
-assert_contains "exit 2 of 2: discard with a reason" "discard-fallback" "$L_ERR"
-rr discard-fallback --session "$sid" --format "$F" --reason "fallback did not run"
-assert_eq "discard-fallback succeeds" "0" "$R_RC"
-assert_eq "the pending is gone" "missing" "$(clf_file_state "$(side "$sid" "$F" -fallback-pending.json)")"
-assert_contains "it is kept as discarded with the reason" "fallback did not run" "$(cat "$(side "$sid" "$F" -fallback-discarded.json)" 2>/dev/null)"
-loop "$sid" "$F" "${LOOP_ARGS[@]}"
 unset FX_ROUND_LOG
-assert_eq "the loop runs again (exit 1)" "1" "$L_RC"
+assert_eq "the next run is not halted (exit 1)" "1" "$L_RC"
+assert_eq "the reviewer runs at round 1" "$F 1" "$(tr -d '\r' < "$FX_TMP/r4-rounds.log")"
+assert_not_contains "no retired fallback route is named" "record-fallback" "$L_ERR"
 assert_eq "and writes its row" "1" "$(rows "$sid" "$F")"
 case_end
 

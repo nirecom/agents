@@ -7,6 +7,54 @@
 # dispatch_prestaged_verdict (all loaded before the first call). `exit` here ends
 # the process, as at the original call site.
 
+# prestaged_next_round — the round an ADVANCE would allocate (ROUND_PREV + 1), read only.
+# Sets ROUND_PREV / ROUND_FILE_EXISTED and prints the round; non-zero on a corrupt counter.
+prestaged_next_round() {
+  ROUND_FILE_EXISTED=0
+  ROUND_PREV=0
+  if [[ -f "$ROUND_FILE" ]]; then
+    ROUND_FILE_EXISTED=1
+    if ! ROUND_PREV="$(read_round_file)"; then
+      echo "run-codex-review-loop: round counter is corrupt: ${ROUND_FILE} (content is not a bare integer 1-999); inspect it and re-run with --force-round <N> once the correct round is known" >&2
+      return 1
+    fi
+  fi
+  printf '%s\n' "$(( ROUND_PREV + 1 ))"
+}
+
+# prestaged_advance_round — allocate and PERSIST the next round under the round lock
+# (PRESTAGED_ADVANCED=1). A fresh cycle archives the prior cycle's ledger first;
+# PP_ARCHIVE_PATH names where it went. Any failure exits 4 (#2256 C16 archive-or-halt).
+prestaged_advance_round() {
+  local own_lock=0
+  # The path-kind round already holds the lock until its EXIT trap (#2478 C2).
+  if (( ${ROUND_LOCK_HELD:-0} != 1 )); then
+    acquire_round_lock
+    own_lock=1
+  fi
+  # Called in this shell (not $(...)) so ROUND_PREV / ROUND_FILE_EXISTED survive.
+  prestaged_next_round > /dev/null || exit 4
+  ROUND=$(( ROUND_PREV + 1 ))
+  write_round_file "$ROUND"
+  PRESTAGED_ADVANCED=1
+  if (( ROUND == 1 && ROUND_FILE_EXISTED == 0 )) && [[ -f "${LEDGER:-}" ]]; then
+    local _arch
+    if ! _arch="$(mktemp "${CONTROL_DIR}/.prev-XXXXXX" 2>/dev/null)"; then
+      echo "run-codex-review-loop: cannot create archive temp; halting to avoid reducing into stale terminal ledger" >&2
+      exit 4
+    fi
+    if ! mv -f "${LEDGER}" "$_arch"; then
+      rm -f "$_arch"
+      echo "run-codex-review-loop: cannot archive prior cycle ledger; halting to avoid reducing into stale terminal ledger" >&2
+      exit 4
+    fi
+    # shellcheck disable=SC2034  # read by prestaged-path-pass.sh (pp_round_restore)
+    PP_ARCHIVE_PATH="$_arch"
+  fi
+  (( own_lock == 1 )) && release_round_lock
+  return 0
+}
+
 # Joins the current round, no reviewer run, no counter advance. stage ->
 # per-round completeness -> reduce -> verdict -> per-round terminal artifact
 # when unconverged (#2276 S8-d).
@@ -23,37 +71,7 @@ run_prestaged_pass() {
   if (( ROUND_EXPLICIT == 1 )); then
     [[ -z "${ROUND:-}" && -n "${FORCE_ROUND:-}" ]] && ROUND="$FORCE_ROUND"
   else
-    acquire_round_lock
-    ROUND_FILE_EXISTED=0
-    ROUND_PREV=0
-    if [[ -f "$ROUND_FILE" ]]; then
-      ROUND_FILE_EXISTED=1
-      if ! ROUND_PREV="$(read_round_file)"; then
-        echo "run-codex-review-loop: round counter is corrupt: ${ROUND_FILE} (content is not a bare integer 1-999); inspect it and re-run with --force-round <N> once the correct round is known" >&2
-        exit 4
-      fi
-    fi
-    ROUND=$(( ROUND_PREV + 1 ))
-    write_round_file "$ROUND"
-    # Fresh cycle: no prior round counter existed, so any ledger left on disk
-    # belongs to a prior terminated cycle. Archive it before staging so new
-    # concerns do not reduce into stale terminal entries. Halt (exit 4) on
-    # any failure: proceeding into an old terminal ledger corrupts the round
-    # history more than stopping (#2256 C16 archive-or-halt).
-    if (( ROUND == 1 && ROUND_FILE_EXISTED == 0 )) && [[ -f "${LEDGER:-}" ]]; then
-      local _arch
-      if ! _arch="$(mktemp "${CONTROL_DIR}/.prev-XXXXXX" 2>/dev/null)"; then
-        echo "run-codex-review-loop: cannot create archive temp; halting to avoid reducing into stale terminal ledger" >&2
-        exit 4
-      fi
-      if ! mv -f "${LEDGER}" "$_arch"; then
-        rm -f "$_arch"
-        echo "run-codex-review-loop: cannot archive prior cycle ledger; halting to avoid reducing into stale terminal ledger" >&2
-        exit 4
-      fi
-    fi
-    PRESTAGED_ADVANCED=1
-    release_round_lock
+    prestaged_advance_round
   fi
   rr_apply_extensions_used "$ROUND"
 

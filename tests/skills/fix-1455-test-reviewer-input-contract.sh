@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # tests/skills/fix-1455-test-reviewer-input-contract.sh
-# Tests: skills/_shared/test-review-input-contract.md, bin/review-plan-codex, agents/test-reviewer.md, skills/review-tests/scripts/run-codex-review-loop.sh, skills/review-tests/SKILL.md, skills/review-tests/scripts/detect-input-error.sh
-# Tags: review-tests, input-contract, test-reviewer, scope:issue-specific
+# Tests: skills/_shared/test-review-input-contract.md, bin/review-plan-codex, agents/test-reviewer.md, skills/review-tests/scripts/run-codex-review-loop.sh, skills/review-tests/SKILL.md, bin/lib/codex-review-loop/detect-input-error.sh
+# Tags: review-tests, input-contract, test-reviewer, feature-2478, scope:issue-specific
 # #1455: test-reviewer input contract — contract file, prompt injection, INPUT_ERROR exit 4.
+# #2478: the detector moved to bin/lib (the loop checks the fallback raw); RT-3 exit 3 runs it via the loop.
 set -uo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -19,7 +20,7 @@ TEST_REVIEWER_MD="$SCRIPT_CHECKOUT_ROOT/agents/test-reviewer.md"
 LOOP_REL="skills/review-tests/scripts/run-codex-review-loop.sh"
 LOOP_SH="$SCRIPT_CHECKOUT_ROOT/$LOOP_REL"
 SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/review-tests/SKILL.md"
-DETECT_SH="$SCRIPT_CHECKOUT_ROOT/skills/review-tests/scripts/detect-input-error.sh"
+DETECT_SH="$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-review-loop/detect-input-error.sh"
 RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 _TMPROOT=""
@@ -375,10 +376,11 @@ fi
 if [ -f "$SKILL_MD" ]; then
   RT3_BLOCK=$(awk '/^RT-3\./{f=1} f && /^RT-[0-9]/ && !/^RT-3/{exit} f{print}' "$SKILL_MD")
   EXIT3_TEXT=$(echo "$RT3_BLOCK" | awk '/^- exit 3/{f=1} f && /^- exit 4/{exit} f{print}')
-  if echo "$EXIT3_TEXT" | grep -qF "detect-input-error.sh"; then
-    pass "SK-4 RT-3 exit 3 fallback runs detect-input-error.sh"
+  # #2478: the INPUT_ERROR check of the fallback raw is the loop's (via run-fallback-review.sh).
+  if echo "$EXIT3_TEXT" | grep -qF "run-fallback-review.sh" && ! echo "$EXIT3_TEXT" | grep -qF "record-fallback"; then
+    pass "SK-4 RT-3 exit 3 fallback goes through run-fallback-review.sh (loop-side INPUT_ERROR check)"
   else
-    fail "SK-4 RT-3 exit 3 fallback does not reference detect-input-error.sh"
+    fail "SK-4 RT-3 exit 3 fallback does not go through run-fallback-review.sh, or still names record-fallback"
   fi
   if echo "$EXIT3_TEXT" | grep -qF -- "-test-review-fallback-raw.md"; then
     pass "SK-4a RT-3 exit 3 fallback saves output to -test-review-fallback-raw.md"
@@ -395,7 +397,7 @@ fi
 case_end
 
 # ─────────────────────────────────────────────────────────
-case_begin "detect-input-error-runner" "skills/review-tests/scripts/detect-input-error.sh"
+case_begin "detect-input-error-runner" "bin/lib/codex-review-loop/detect-input-error.sh"
 
 # Runs detect-input-error.sh on <file> (or no arg when $1 is empty); echoes rc, stderr to $2.
 _run_detect() {

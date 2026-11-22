@@ -18,19 +18,33 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/bin/lib/codex-rev
 # so a containment refusal is never read as ESCALATE or as codex-unavailable.
 ACCEPTED_TRADEOFFS_FILE="$("$SCRIPT_CHECKOUT_ROOT/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" detail outline intent)" || exit 4
 rwc_resolve test-review review-tests
+# #2478: the CC-fallback round (run-fallback-review.sh) goes through this same wrapper.
+rwc_parse_fallback_args review-tests "$@"
 EXIT_REINVOKE_AFTER_TERMINAL=8
 # #2636: the exit 8 stderr names the sentinel that leaves the loop.
 EXIT8_HINT_ACCEPT='Exit: emit echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>" — it restores review_tests to complete (exit-codes.md "Accepted-warning recovery"), or change the reviewed input and re-run.'
 EXIT8_HINT_REVISE='Exit: change the reviewed input and re-run; WARNINGS_ACCEPTED does not clear this terminal state (exit-codes.md "Accepted-warning recovery").'
-# Only a terminal rc 2/3/6 is recoverable by WARNINGS_ACCEPTED (reviewRecoveryEvidence); any other rc
-# (7) or an unreadable marker gets the re-run hint, so the hint never names a sentinel that is refused.
+# Only a terminal rc 2/6 reaches exit 8 and is recoverable by WARNINGS_ACCEPTED (reviewRecoveryEvidence);
+# any other rc (7) or an unreadable marker gets the re-run hint, so the hint never names a refused sentinel.
 exit8_hint() {
   local term_rc
   term_rc="$(sed -n '1p' "$TERMINAL_FILE" 2>/dev/null || true)"
   case "$term_rc" in
-    2|3|6) printf '%s' "$EXIT8_HINT_ACCEPT" ;;
+    2|6) printf '%s' "$EXIT8_HINT_ACCEPT" ;;
     *) printf '%s' "$EXIT8_HINT_REVISE" ;;
   esac
+}
+
+# rt_rc3_evidence_marker — #3123 D2, an exception private to review-tests: a terminal rc 3
+# marker is WARNINGS_ACCEPTED evidence, not a re-invoke guard (the fallback round and a codex
+# retry both run on the same input). The shared rwc_check_terminal is left unchanged.
+rt_rc3_evidence_marker() {
+  [[ "$(sed -n '1p' "$TERMINAL_FILE" 2>/dev/null | tr -d '\r')" == "3" ]]
+}
+
+# rt_clear_rc3_marker — a round that ended 0/1/5 replaces the rc 3 evidence.
+rt_clear_rc3_marker() {
+  if rt_rc3_evidence_marker; then rm -f "$TERMINAL_FILE"; fi
 }
 
 # Exits 4, 7 and 8 leave this script without reaching the completion sentinel
@@ -83,7 +97,7 @@ COMMIT_TARGET="$("$SCRIPT_CHECKOUT_ROOT/bin/resolve-worktree-path" ${CC_SID:+--s
 if [[ "$COMMIT_TARGET" == "NOSTATE" || -z "$COMMIT_TARGET" ]]; then
   COMMIT_TARGET="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
   if [[ -z "$COMMIT_TARGET" ]]; then
-    if [[ -f "$TERMINAL_FILE" ]]; then
+    if [[ -f "$TERMINAL_FILE" ]] && ! rt_rc3_evidence_marker; then
       # fail-CLOSED: cannot compare fingerprints, so the guard must stay armed.
       echo "[review-tests] ERROR: terminal marker present but commit-target is unresolvable; keeping the re-invoke guard." >&2
       echo "[review-tests] $EXIT8_HINT_REVISE" >&2
@@ -91,7 +105,6 @@ if [[ "$COMMIT_TARGET" == "NOSTATE" || -z "$COMMIT_TARGET" ]]; then
       exit "$EXIT_REINVOKE_AFTER_TERMINAL"
     fi
     echo "[review-tests] WARNING: no session state and not in a git repo; skipping test review." >&2
-    rwc_stage_fallback test-review || { echo "[review-tests] ERROR: the CC fallback could not be staged in the review record (HALT, exit 4)." >&2; record_codex_exit 4 "HALT"; exit 4; }
     exit 3
   fi
 fi
@@ -102,8 +115,8 @@ CUR_FP=""
 FP_RC=0
 CUR_FP="$(compute_review_scope_fingerprint "$REPO_ROOT_VAL")" || FP_RC=$?
 
-# --- #1361 re-invoke guard ---
-if [[ -f "$TERMINAL_FILE" ]]; then
+# --- #1361 re-invoke guard (an rc 3 marker is evidence, not a guard: rt_rc3_evidence_marker) ---
+if [[ -f "$TERMINAL_FILE" ]] && ! rt_rc3_evidence_marker; then
   # fail-CLOSED: a compare failure is not evidence that the review scope changed;
   # only a git error (rc 4) HALTs instead of arming exit 8.
   if (( FP_RC == 4 )); then
@@ -121,22 +134,22 @@ if [[ -f "$TERMINAL_FILE" ]]; then
        exit "$TG_RC" ;;
   esac
 fi
-rwc_clear_continuing
-
 arm_terminal_guard() {
   local rc=$1 fp
   case "$rc" in
     # Terminal exits (2=ESCALATE, 3=codex-unavailable, 6=HIGH_UNRESOLVED, 7=FINALIZE_FAILED)
     # retire the round counter; arm guard so unchanged-input re-invocation is blocked.
-    # exit 1 (round-continuing) must NOT arm (#2276 S9-c). exit 4 is config error, no guard.
+    # exit 4 is config error / unrecorded round: no change, an rc 3 marker stays (#3123).
     2|3|6|7)
       fp="$(compute_review_scope_fingerprint "$REPO_ROOT_VAL")" || fp=""
       rwc_arm_terminal "$rc" "$fp"
       ;;
+    0) rt_clear_rc3_marker ;;
     # #2664: exit 1/5 leave recovery evidence instead (not a guard).
     1|5)
       fp="$(compute_review_scope_fingerprint "$REPO_ROOT_VAL")" || fp=""
       rwc_arm_continuing "$rc" "$fp"
+      rt_clear_rc3_marker
       ;;
   esac
   return "$rc"
@@ -156,6 +169,11 @@ args=(
   --repo-root "$REPO_ROOT_VAL"
 )
 if [[ -n "$INTENT_FILE" ]]; then args+=(--class-members "$INTENT_FILE"); fi
+# --fallback-brief only reads the round counter and ledger: no marker or context file is touched.
+if (( RWC_FALLBACK_BRIEF == 1 )); then
+  exec "$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" "${RWC_FWD_ARGS[@]}"
+fi
+rwc_clear_continuing
 
 # Soft scope (#1371): scope the review to files changed in this PR diff.
 CHANGED_FILES_CTX=""
@@ -197,7 +215,6 @@ if [[ -n "$CHANGED_FILES_CTX" ]]; then args+=(--context "$CHANGED_FILES_CTX"); f
 RC=0
 # #1455: the reviewer output is captured (and still streamed) so a line-start
 # INPUT_ERROR <path> can HALT via the same detector the CC fallback uses.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REVIEW_OUT="$(mktemp "${PLANS_DIR}/.rt-out-XXXXXX")" || exit 4
 # #2842 invariant U: a review never launches while the unreviewed marker survives.
 if ! rwc_clear_unreviewed "$CC_SID"; then
@@ -207,9 +224,10 @@ if ! rwc_clear_unreviewed "$CC_SID"; then
   exit 4
 fi
 rwc_input_fp_args "$CUR_FP"
-"$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" ${RWC_FP_ARGS[@]+"${RWC_FP_ARGS[@]}"} | tee "$REVIEW_OUT" || RC=${PIPESTATUS[0]}
+"$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" ${RWC_FP_ARGS[@]+"${RWC_FP_ARGS[@]}"} \
+  ${RWC_FWD_ARGS[@]+"${RWC_FWD_ARGS[@]}"} | tee "$REVIEW_OUT" || RC=${PIPESTATUS[0]}
 DETECT_RC=0
-bash "$SCRIPT_DIR/detect-input-error.sh" "$REVIEW_OUT" || DETECT_RC=$?
+bash "$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-review-loop/detect-input-error.sh" "$REVIEW_OUT" || DETECT_RC=$?
 rm -f "$REVIEW_OUT"
 if (( DETECT_RC != 0 )); then
   # Input contract violated (or output unreadable): HALT without arming the terminal guard.
