@@ -288,3 +288,7 @@ Changes: Fixed a black console window that flashed on Windows each time a PM hoo
 ### FEATURE: PR #3129 (2026-11-22)
 Background: fix(#2168): end extract_field capture only at known labels
 Changes: Issue-to-history entries no longer lose most of an issue body when the Background or Changes section contains `###` sub-headings; only known section labels end a field now (#2168).
+
+### FEATURE: PR #3130 (2026-11-22)
+Background: feat(#2942): link issues to a PM and notify the PM from workflow sess...
+Changes: Workflow sessions now find the PM that owns their issues and notify it automatically; PM sessions see pending notifications at start, and `/pm-rename` renames a PM tag across its issues (#2942).
