@@ -3,12 +3,12 @@
 # Tests: hooks/lib/worktree-notes-sections.js
 # Tags: worktree-notes, parser, marker-regex, severity-marker, scan-section, table-driven, mutation-probe, user-acknowledged, TL1, scope:common
 #
-# hooks/lib/worktree-notes-sections.js: a section scanner plus FOUR regex
+# hooks/lib/worktree-notes-sections.js: a section scanner plus the regex
 # constants, each guarding a silent downstream failure mode: PROMOTED_MARKER_RE
-# (already filed?), SEVERITY_MARKER_RE (strict, fail-safe to compress),
-# USER_ACK_MARKER_RE (strict, fail-safe to false), TRAILING_MARKER_RE (lenient
-# body stripping). bin/mutation-probe.sh breaks each constant in turn and
-# requires this table to fail for every one. TL1: pure in-process parsing.
+# (already filed?), SEVERITY_MARKER_RE (strict; anything else reads as the
+# #2019 default `medium`), TRAILING_MARKER_RE (lenient body stripping),
+# USER_ACK_MARKER_RE (a retired #2903 ack marker is stripped, not fatal).
+# bin/mutation-probe.sh breaks each constant in turn. TL1: in-process parsing.
 
 set -u
 
@@ -89,8 +89,6 @@ function scanOf(s) {
 const S = (body) => `# Worktree Notes\nBranch: t\n\n${body}\n`;
 const B = (body) => S(`## BugsFound\n${body}`);
 const sev = (line) => sevOf(parseSectionEntries(B(line), "BugsFound"));
-const ackOf = (entries) => (entries.length === 0 ? "0" : String(entries[0].userAcknowledged));
-const ack = (line) => ackOf(parseSectionEntries(B(line), "BugsFound"));
 
 const CASES = {
   // --- section boundaries ------------------------------------------------
@@ -203,33 +201,21 @@ const CASES = {
   "sev-no-space-after-colon": () => sev("- body <!-- severity:high -->"),
   "sev-uppercase-value": () => sev("- body <!-- severity: HIGH -->"),
   "sev-mid-line": () => sev("- a <!-- severity: high --> b"),
-  "sev-unknown-value-medium": () => sev("- body <!-- severity: medium -->"),
-  // `low` is an accepted CLI input value but is never written as a marker, so
-  // the read side must treat it as an unknown value, not as a severity.
-  "sev-unknown-value-low": () => sev("- body <!-- severity: low -->"),
+  // #2019: every non-canonical or absent marker reads as the default `medium`;
+  // `low` is a real level and the legacy `none` reads as `not-defect`.
+  "sev-value-medium": () => sev("- body <!-- severity: medium -->"),
+  "sev-value-low": () => sev("- body <!-- severity: low -->"),
+  "sev-legacy-none": () => sev("- body <!-- severity: none -->"),
   // The leading `(?:(?!<!--).)*` guard: any earlier HTML comment kills the match.
   "sev-preceded-by-comment": () =>
     sev("- a <!-- x --> b <!-- severity: high -->"),
   "sev-absent": () => sev("- body"),
   "sev-canonical-crlf": () =>
     sevOf(parseSectionEntries(CRLF(B("- body <!-- severity: high -->")), "BugsFound")),
-
-  // --- USER_ACK_MARKER_RE (strict: anything non-canonical reads as false) --
-  "ack-true": () => ack("- body <!-- user-acknowledged: true -->"),
-  "ack-false": () => ack("- body <!-- user-acknowledged: false -->"),
-  "ack-absent": () => ack("- body"),
-  "ack-true-with-promoted": () =>
-    ack("- body <!-- user-acknowledged: true --> <!-- promoted: #5 -->"),
-  "ack-true-crlf": () =>
-    ackOf(parseSectionEntries(CRLF(B("- body <!-- user-acknowledged: true -->")), "BugsFound")),
-  "ack-uppercase-value": () => ack("- body <!-- user-acknowledged: TRUE -->"),
-  "ack-no-leading-space": () => ack("- body<!-- user-acknowledged: true -->"),
-  "ack-mid-line": () => ack("- a <!-- user-acknowledged: true --> b"),
-  "ack-unknown-value": () => ack("- body <!-- user-acknowledged: yes -->"),
-  "ack-compose-roundtrip-true": () =>
-    ack("- body" + composeEntryMarkers({ severity: "high", userAcknowledged: true })),
-  "ack-compose-roundtrip-false": () =>
-    ack("- body" + composeEntryMarkers({ severity: null, userAcknowledged: false })),
+  // Retired #2903 ack marker (the form f5421647 wrote): stripped, the line still reads canonical.
+  "sev-legacy-ack-true": () => sev("- body <!-- severity: high --> <!-- user-acknowledged: true -->"),
+  "sev-legacy-ack-false-promoted": () =>
+    sev("- body <!-- severity: low --> <!-- user-acknowledged: false --> <!-- promoted: #12 -->"),
 
   // --- PROMOTED_MARKER_RE capture group ----------------------------------
   "promoted-capture": () => {
@@ -369,28 +355,20 @@ marker-no-leading-space|1:- one<!-- promoted: #12 -->:5:F
 marker-trailing-space|1:- one <!-- promoted: #12 --> :5:F
 sev-canonical|high:F:body
 sev-with-promoted|high:T:body
-sev-reversed|null:F:body
-sev-no-inner-spaces|null:F:body
-sev-capitalized|null:F:body
-sev-no-space-after-colon|null:F:body
-sev-uppercase-value|null:F:body
-sev-mid-line|null:F:a <!-- severity: high --> b
-sev-unknown-value-medium|null:F:body
-sev-unknown-value-low|null:F:body
-sev-preceded-by-comment|null:F:a <!-- x --> b
-sev-absent|null:F:body
+sev-reversed|medium:F:body
+sev-no-inner-spaces|medium:F:body
+sev-capitalized|medium:F:body
+sev-no-space-after-colon|medium:F:body
+sev-uppercase-value|medium:F:body
+sev-mid-line|medium:F:a <!-- severity: high --> b
+sev-value-medium|medium:F:body
+sev-value-low|low:F:body
+sev-legacy-none|not-defect:F:body
+sev-preceded-by-comment|medium:F:a <!-- x --> b
+sev-absent|medium:F:body
 sev-canonical-crlf|high:F:body
-ack-true|true
-ack-false|false
-ack-absent|false
-ack-true-with-promoted|true
-ack-true-crlf|true
-ack-uppercase-value|false
-ack-no-leading-space|false
-ack-mid-line|false
-ack-unknown-value|false
-ack-compose-roundtrip-true|true
-ack-compose-roundtrip-false|false
+sev-legacy-ack-true|high:F:body
+sev-legacy-ack-false-promoted|low:T:body
 promoted-capture|77
 eb-both-markers|x
 eb-promoted-only|x

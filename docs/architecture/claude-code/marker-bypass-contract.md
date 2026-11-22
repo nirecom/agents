@@ -63,6 +63,8 @@ answering "which hooks does my marker bypass?" links here rather than restating 
 | `hooks/stop-l2-findings-display.js` | Stop | Yes | No |
 | `hooks/supervisor-guard.js` | Stop | Yes | No |
 | `hooks/supervisor-trigger.js` | PostToolUse | Yes | No |
+| `hooks/record-finding-approval-prompt.js` | UserPromptSubmit | **No** | **No** |
+| `hooks/record-finding-approval-answer.js` | PostToolUse | **No** | **No** |
 | `hooks/pre-commit` (worktree-isolation gate + prompt-extraction backstop) | git pre-commit | Yes | Yes |
 | `hooks/enforce-system-ops.js` | PreToolUse | **No** | **No** |
 | `hooks/block-post-edit-size.js` (per check: `file-size` honors WORKFLOW_OFF only; `comment-block` honors neither) | PreToolUse | Partial (`file-size` only) | **No** |
@@ -112,6 +114,11 @@ bypass: see `hooks/lib/protected-basenames.js`.
 `hooks/jev-shadow-pre.js` and `hooks/jev-shadow-post.js` (#2460) are **No/No** for the same
 reason: they record a shadow comparison and never block, so a session override has nothing
 to suspend. Their only switch is `JEV` — see [jev.md](../jev.md).
+
+`hooks/record-finding-approval-prompt.js` and `hooks/record-finding-approval-answer.js` (#2019) are **No/No**:
+they only write the `<sid>.finding-filing-approval` record that G0 of `/issue-create` consumes, and never block.
+That record is protected state, not a bypass marker (`hooks/lib/protected-basenames.js`); a session override
+neither creates it nor lets CC write it.
 
 `hooks/subagent-dispatch-prompt.js` (#2263) is **No/No** as well: it only rewrites a dispatch
 prompt through `updatedInput` and never blocks, so there is no marker for it to read.

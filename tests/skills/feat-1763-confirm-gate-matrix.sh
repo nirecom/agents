@@ -6,9 +6,7 @@
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 set -u
 
-# Gate = OR of G1 (verdict touches existing issues), G2 (review disputed or survey != final),
-# G3 (artifact missing/unparseable), G4 (status not upheld|disputed). #1926 retired G5 and
-# moved worth_filing to an info line; the contract lives in SKILL.md "Phase 3" (SSOT).
+# Gate = OR of G0..G4 (SSOT: SKILL.md "Phase 3"); run_gate holds G0 (#2019) at pass with a fresh approval record so the rows isolate G1..G4.
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 GATE="$SCRIPT_CHECKOUT_ROOT/skills/issue-create/scripts/eval-confirm-gate.sh"
@@ -21,11 +19,11 @@ fail() { echo "FAIL: $1 — $2"; FAIL=$((FAIL + 1)); }
 
 GATE_PRESENT=no; [ -f "$GATE" ] && GATE_PRESENT=yes
 
-WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+WORK="$(mktemp -d)"; export WORKFLOW_STATE_DIR="$WORK/state" WORKFLOW_PLANS_DIR="$WORK/plans"; mkdir -p "$WORK/state" "$WORK/plans"; G0_SID="1763a0c0-2019-4e01-8a9b-0c1d2e3f4e01"
+trap 'rm -rf "$WORK"' EXIT; approve() { node -e 'require("fs").writeFileSync(process.argv[1],JSON.stringify({version:1,session_id:process.argv[2],pending:[],records:[{type:"typed-command",at:new Date().toISOString()}]}))' "$WORKFLOW_STATE_DIR/$G0_SID.finding-filing-approval" "$G0_SID"; }
 
 # mk_json <file> <final-verdict> <survey-verdict> <review-status> <worth-filing-json|__OMIT__>
-# Shape is the review `--out` artifact; no proposal and no candidate bodies — the gate needs neither.
+# Shape is the review `--out` artifact plus a MEDIUM proposal for G0 (#2019); no candidate bodies.
 mk_json() {
     V="$2" SV="$3" RST="$4" WF="$5" node -e "
 const fs=require('fs');
@@ -36,7 +34,7 @@ const review = { status: process.env.RST, verdict: process.env.V, target: null,
                  same_fix: SF(process.env.V) };
 if (process.env.WF !== '__OMIT__') review.worth_filing = JSON.parse(process.env.WF);
 fs.writeFileSync(process.argv[1], JSON.stringify({
-  schema_version: 3,
+  schema_version: 3, proposal: { title: 't', severity: 'MEDIUM', body: 'b' },
   verdict: process.env.V, same_fix: SF(process.env.V), target: null, children: [], related: [], reason: 'r',
   survey: { verdict: process.env.SV, same_fix: SF(process.env.SV), target: null, children: [], related: [], reason: 's' },
   review,
@@ -48,7 +46,7 @@ fs.writeFileSync(process.argv[1], JSON.stringify({
 run_gate() {
     if [ "$GATE_PRESENT" != "yes" ]; then CONFIRM="<missing>"; REASONS="<missing>"; WORTH=""; RC=127; return; fi
     local out
-    out=$("$RWT" 20 bash "$GATE" "$1" 2>"$WORK/gate-stderr.txt")
+    approve; out=$(CLAUDE_CODE_SESSION_ID="$G0_SID" "$RWT" 20 bash "$GATE" "$1" 2>"$WORK/gate-stderr.txt")
     RC=$?
     CONFIRM=$(printf '%s\n' "$out" | sed -n '1s/^confirm: *//p' | tr -d '[:space:]')
     REASONS=$(printf '%s\n' "$out" | sed -n '2s/^reasons: *//p' | tr -d '[:space:]')
@@ -235,14 +233,14 @@ if [ "$GATE_PRESENT" != "yes" ]; then
 else
     printf '%s' '{ broken' > "$WORK/broken.json"
     run_gate "$WORK/broken.json"
-    if [ "$RC" -eq 0 ] && [ "$CONFIRM|$REASONS" = "yes|G3" ]; then
+    if [ "$RC" -eq 0 ] && [ "$CONFIRM" = "yes" ] && printf '%s' "$REASONS" | grep -q 'G3'; then
         pass "A5-unreadable-json-confirms"
     else
         fail "A5-unreadable-json-confirms" "an unparseable verdict file must fail-safe to confirm via G3 (rc=$RC, confirm=$CONFIRM, reasons=$REASONS)"
     fi
 
     run_gate "$WORK/definitely-not-here.json"
-    if [ "$RC" -eq 0 ] && [ "$CONFIRM|$REASONS" = "yes|G3" ]; then
+    if [ "$RC" -eq 0 ] && [ "$CONFIRM" = "yes" ] && printf '%s' "$REASONS" | grep -q 'G3'; then
         pass "A6-missing-json-confirms"
     else
         fail "A6-missing-json-confirms" "a missing verdict file must fail-safe to confirm via G3 (rc=$RC, confirm=$CONFIRM, reasons=$REASONS)"

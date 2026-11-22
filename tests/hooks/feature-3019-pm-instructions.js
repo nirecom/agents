@@ -99,6 +99,10 @@ caseBegin("cli-failures-exit-1", "bin/lib/pm-instructions/cli.js");
 L.failures(S);
 caseEnd();
 
+caseBegin("cli-issue-bare-number", "bin/lib/pm-instructions/cli.js");
+L.bareIssue(S);
+caseEnd();
+
 caseBegin("cli-single-timing", "bin/pm-instructions");
 L.timings(S);
 caseEnd();

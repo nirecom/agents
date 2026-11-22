@@ -118,10 +118,10 @@ function freshRead(nodes) {
 const cardsOf = (n, pms, o = {}) => ({ number: n, repository: { nameWithOwner: "o/r" }, parent: o.parent || null,
   projectItems: { nodes: pms.map((pm, i) => ({ id: `I${n}-${i}`, pm: pm ? { text: pm } : null, project: { id: `P${i}`, field: o.noField ? null : { id: `F${i}` } } })) } });
 caseBegin("pm-field-ambiguous-read", "bin/lib/pm-field/read.js");
-test("M1 two Projects naming different PMs -> pmReadOf/readPmFields pm-field-ambiguous; pmOf null", () => {
+test("M1 two Projects naming different PMs -> pmReadOf/readPmFields pm-field-ambiguous; pmOf not exported", () => {
   const node = cardsOf(9701, ["PM-a", "PM-b"]);
   assert.deepStrictEqual(R.pmReadOf(node), { ok: false, reason: "pm-field-ambiguous" });
-  assert.strictEqual(R.pmOf(node), null);
+  assert.strictEqual(R.pmOf, undefined, "pmOf must not be exported");
   const r = freshRead({ "o/r#9701": node }).readPmFields([ref(9701)]);
   assert.deepStrictEqual(r, { ok: false, reason: "pm-field-ambiguous" });
 });
@@ -134,7 +134,6 @@ test("M2 an ancestor with differing values fails the chain read; two pm-field bo
   const M = freshRead(nodes);
   assert.deepStrictEqual(M.readPmChains([ref(9711)]).results["o/r#9711"], { ok: false, reason: "pm-field-ambiguous" });
   assert.deepStrictEqual(M.readCards([ref(9713)]).results["o/r#9713"], { ok: false, reason: "pm-field-ambiguous" });
-  assert.strictEqual(freshRead({ "o/r#9714": cardsOf(9714, [null, null], { noField: true }) }).readCards([ref(9714)]).results["o/r#9714"].ok, true);
 });
 caseEnd();
 caseBegin("pm-field-ambiguous-write", "bin/lib/pm-field/write.js");
@@ -240,5 +239,136 @@ test("U4 a failed write refuses without touching the PM state", () => {
   assert.ok(calls.length >= 1, `the PM field was never written: ${JSON.stringify(r)}`);
   assert.ok(typeof r.block === "string" && r.block.length > 0, JSON.stringify(r));
   assert.deepStrictEqual(P.readPm(s), before);
+});
+caseEnd();
+
+// #2942: a projectItems page with more cards than fetched cannot be read whole -> pm-field-truncated (fail-closed).
+function blockEnd(s, open) {
+  let depth = 0;
+  for (let i = open; i < s.length; i++) {
+    if (s[i] === "{") depth++;
+    if (s[i] === "}" && --depth === 0) return i;
+  }
+  return s.length;
+}
+// itemsTopLevel(sel) -> the projectItems(...){ } body with its nodes{...} block cut out (pageInfo must sit beside nodes).
+function itemsTopLevel(sel) {
+  const m = /projectItems\([^)]*\)\{/.exec(sel);
+  if (!m) return "";
+  const open = m.index + m[0].length - 1;
+  const body = sel.slice(open + 1, blockEnd(sel, open));
+  const n = body.indexOf("nodes{");
+  return n < 0 ? body : body.slice(0, n) + body.slice(blockEnd(body, n + 5) + 1);
+}
+const truncated = (n, pms, o) => Object.assign(cardsOf(n, pms, o), { projectItems: Object.assign(cardsOf(n, pms, o).projectItems, { pageInfo: { hasNextPage: true } }) });
+const TRUNC = { ok: false, reason: "pm-field-truncated" };
+caseBegin("pm-field-truncated-read", "bin/lib/pm-field/read.js");
+test("T1 ITEMS asks projectItems for pageInfo{hasNextPage}", () => {
+  assert.match(itemsTopLevel(R.ITEMS), /pageInfo\s*\{\s*hasNextPage\s*\}/, R.ITEMS);
+});
+test("T2 pmReadOf: hasNextPage true is pm-field-truncated even with one value; false reads the value", () => {
+  assert.deepStrictEqual(R.pmReadOf(truncated(9901, ["PM-a"])), TRUNC);
+  assert.deepStrictEqual(R.pmReadOf(truncated(9902, ["PM-a", "PM-b"])), TRUNC);
+  const notMore = cardsOf(9903, ["PM-a"]);
+  assert.deepStrictEqual(R.pmReadOf(Object.assign(notMore, { projectItems: Object.assign(notMore.projectItems, { pageInfo: { hasNextPage: false } }) })), { ok: true, pm: "PM-a" });
+});
+test("T3 cardOf (via readCards): a truncated card page is pm-field-truncated, a whole one a card", () => {
+  const M = freshRead({ "o/r#9911": truncated(9911, [null]), "o/r#9912": cardsOf(9912, [null]) });
+  assert.deepStrictEqual(M.readCards([ref(9911)]).results["o/r#9911"], TRUNC);
+  assert.strictEqual(M.readCards([ref(9912)]).results["o/r#9912"].ok, true);
+});
+test("T4 fake gh: readPmFields, readCards and readPmChains fail closed on a truncated page", () => {
+  G.setPmStore({});
+  G.setMap({ "o/r#9921": { pm: "PM-a", itemsMore: true }, "o/r#9922": { pm: "PM-a", itemsMore: false }, "o/r#9923": { parent: { number: 9924 } }, "o/r#9924": { pm: "PM-p", itemsMore: true } });
+  assert.deepStrictEqual(R.readPmFields([ref(9921)], { timeoutMs: 5000 }), TRUNC);
+  assert.deepStrictEqual(R.readPmFields([ref(9922)], { timeoutMs: 5000 }), { ok: true, values: { "o/r#9922": "PM-a" } });
+  const cards = R.readCards([ref(9921), ref(9922)], { timeoutMs: 5000 });
+  assert.deepStrictEqual(cards.results["o/r#9921"], TRUNC, JSON.stringify(cards));
+  assert.strictEqual(cards.results["o/r#9922"].ok, true, JSON.stringify(cards));
+  const chains = R.readPmChains([ref(9923)], { timeoutMs: 5000 });
+  assert.deepStrictEqual(chains.results["o/r#9923"], TRUNC, JSON.stringify(chains));
+});
+test("T5 fake gh: an error inside the issue node makes readPmFields gh_exec_failed, never a null value", () => {
+  G.setPmStore({});
+  for (const type of ["FORBIDDEN", "NOT_FOUND"]) {
+    G.setMap({ "o/r#9931": { pm: "PM-a", innerError: type }, "o/r#9932": { pm: "PM-b" } });
+    const r = R.readPmFields([ref(9931), ref(9932)], { timeoutMs: 5000 });
+    assert.deepStrictEqual(r, { ok: false, reason: "gh_exec_failed" }, `${type}: ${JSON.stringify(r)}`);
+  }
+});
+caseEnd();
+caseBegin("pm-field-truncated-write", "bin/lib/pm-field/write.js");
+test("T6 a truncated card page makes the write fail with pm-field-truncated (not no-card) and runs no edit", () => {
+  const orig = R.readCards;
+  R.readCards = (refs) => ({ ok: true, results: Object.fromEntries(refs.map((x) => [`${x.repo}#${x.number}`, TRUNC])) });
+  const before = G.calls();
+  let r;
+  try {
+    const io = W.createPmField({ budgetMs: 3000 });
+    io.prepare([ref(9961)]);
+    r = io.write(ref(9961), "PM-x");
+  } finally { R.readCards = orig; }
+  assert.deepStrictEqual(r, { result: "failed", reason: "pm-field-truncated" });
+  assert.strictEqual(G.calls() - before, 0);
+});
+caseEnd();
+caseBegin("pm-field-reread-fail-closed", "bin/lib/pm-field/write.js");
+test("T7 no-card on the first read, a fail-closed re-read after ensure-board-card.sh: the write keeps that reason (table-driven)", () => {
+  const rows = [{ n: 9971, re: TRUNC }, { n: 9972, re: { ok: false, reason: "pm-field-ambiguous" } }];
+  for (const { n, re } of rows) {
+    G.setMap({ [`o/r#${n}`]: { noCard: true } });
+    G.setPmStore({});
+    const orig = R.readCards;
+    let reads = 0;
+    R.readCards = (refs) => { reads++; const v = reads === 1 ? { ok: false, reason: "no-card" } : re; return { ok: true, results: Object.fromEntries(refs.map((x) => [`${x.repo}#${x.number}`, v])) }; };
+    const k = G.calls();
+    let r;
+    try {
+      const io = W.createPmField({ budgetMs: 15000 });
+      io.prepare([ref(n)]);
+      r = io.write(ref(n), "PM-x");
+    } finally { R.readCards = orig; }
+    const qs = since(k);
+    assert.strictEqual(reads, 2, `${re.reason}: prepare did not re-read`);
+    assert.strictEqual(ensured(qs), 1, `${re.reason}: ensure-board-card.sh did not run:\n${qs.join("\n")}`);
+    assert.deepStrictEqual(r, { result: "failed", reason: re.reason }, re.reason);
+    assert.strictEqual(qs.filter((q) => q.startsWith("project item-edit")).length, 0, qs.join("\n"));
+  }
+});
+caseEnd();
+
+// #2942: a card counts only on a Project with the `pm` field; a card elsewhere is no card (never a blind write).
+const mixed = (n, fields) => ({ number: n, repository: { nameWithOwner: "o/r" }, parent: null,
+  projectItems: { nodes: fields.map((f, i) => ({ id: `I${n}-${i}`, pm: null, project: { id: `P${i}`, field: f ? { id: `F${i}` } : null } })) } });
+caseBegin("pm-field-card-needs-pm-field", "bin/lib/pm-field/read.js");
+test("C16 cardOf: a card counts only on a Project with the pm field (table-driven)", () => {
+  const NO_CARD = { ok: false, reason: "no-card" };
+  const cases = [
+    { name: "one card, no pm-field board -> no-card", n: 9941, node: mixed(9941, [false]), want: NO_CARD },
+    { name: "two cards, no pm-field board -> no-card", n: 9942, node: mixed(9942, [false, false]), want: NO_CARD },
+    { name: "one pm-field board among others -> that card", n: 9943, node: mixed(9943, [false, true, false]), want: { ok: true, itemId: "I9943-1", projectId: "P1", fieldId: "F1" } },
+    { name: "two pm-field boards -> pm-field-ambiguous", n: 9944, node: mixed(9944, [true, false, true]), want: { ok: false, reason: "pm-field-ambiguous" } },
+    { name: "no cards -> no-card", n: 9945, node: mixed(9945, []), want: NO_CARD },
+    { name: "truncated page -> pm-field-truncated", n: 9946, node: truncated(9946, [null]), want: TRUNC },
+  ];
+  const M = freshRead(Object.fromEntries(cases.map((c) => [`o/r#${c.n}`, c.node])));
+  const got = M.readCards(cases.map((c) => ref(c.n))).results;
+  for (const { name, n, want } of cases) assert.deepStrictEqual(got[`o/r#${n}`], want, name);
+});
+caseEnd();
+caseBegin("pm-field-prepare-card-without-pm-field", "bin/lib/pm-field/write.js");
+test("C16 prepare: the only card is on a Project without the pm field -> ensure-board-card.sh runs; the write fails with no item-edit", () => {
+  G.setMap({ "o/r#9951": { noPmField: true } });
+  G.setPmStore({});
+  const k = G.calls();
+  const io = W.createPmField({ budgetMs: 15000 });
+  assert.deepStrictEqual(io.prepare([ref(9951)]), { ok: true });
+  const qs = since(k);
+  assert.strictEqual(ensured(qs), 1, `ensure-board-card.sh did not run for a card off the pm-field board:\n${qs.join("\n")}`);
+  assert.ok(qs.filter((q) => q.startsWith("api graphql") && q.includes("9951")).length >= 2, `no re-read:\n${qs.join("\n")}`);
+  const r = io.write(ref(9951), "PM-c16");
+  assert.strictEqual(r.result, "failed", JSON.stringify(r));
+  assert.strictEqual(since(k).filter((q) => q.startsWith("project item-edit")).length, 0, since(k).join("\n"));
+  assert.deepStrictEqual(G.pmStore(), {});
 });
 caseEnd();

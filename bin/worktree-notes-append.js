@@ -6,7 +6,7 @@
 // Mode A (--issue-number given): promotion pointer for an existing issue (#622)
 //   — routes to BugsFound for a type:incident label, else RelatedTasks; idempotent on (#N).
 // Mode B (--issue-number omitted): finding authoring (#1886) via --section/--title,
-//   [--severity] and [--user-acknowledged]; markers come from composeEntryMarkers;
+//   --severity/--pr-scope [--instance --loc --test-failure] (#2019); markers come from composeEntryMarkers;
 //   idempotent on the entry body.
 // Both modes: atomic write via tmp + rename, `- (none)` placeholder replacement,
 // missing-section append at EOF.
@@ -196,7 +196,7 @@ function main() {
   const args = resolveArgs(process.argv.slice(2));
   if (!args) return 2;
 
-  const { mode, title, issueNumber, severity, userAcknowledged, skipIfMain } = args;
+  const { mode, title, issueNumber, triage, skipIfMain } = args;
 
   const resolved = validatePath(args.notesPath);
   if (!resolved) return 2;
@@ -238,7 +238,7 @@ function main() {
   const eol = detectEol(text);
   const newLine = mode === "A"
     ? `- ${title} (#${issueNumber}) <!-- promoted: #${issueNumber} -->`
-    : `- ${title}${userAcknowledged === null ? "" : composeEntryMarkers({ severity, userAcknowledged })}`;
+    : `- ${title}${triage === null ? "" : composeEntryMarkers(triage)}`;
 
   let updated;
   if (text.length === 0) {

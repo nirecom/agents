@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Dispatch wrapper for /issue-create skill — executes the mechanical branch selected by
-# Claude's survey verdict. Verdicts, stdout contract and exit codes: the usage text in usage().
+# Claude's survey verdict. Verdicts, stdout contract and exit codes: the usage text in usage()
+# (contract: skills/issue-create/SKILL.md).
+# reopen + --merged-finding-file posts F as one comment after a successful reopen; a failed
+#   comment exits 3 with stdout empty, stderr `merge_comment: failed` + `reopened: <URL>`;
+#   the reopen stands (#2019).
 # Notification points for the issues' PM (#2942, bin/pm-notify): reopen, split (bulk-sub-of),
 # and the owner records around make-parent --children (detach before/after); all fail-open.
 
@@ -15,7 +19,8 @@ Usage:
 
 Verdicts:
   none         (no extra flags)            New issue with no relation
-  reopen       --target N [--note TEXT]    Reopen #N; no new issue created
+  reopen       --target N [--note TEXT] [--merged-finding-file F]
+                                           Reopen #N; no new issue created
   sub-of       --parent N                  New issue, attached as sub-issue of #N
   make-parent  --children N,M,...          New META parent + the proposal as its child
   sibling      --related N,M,...           New issue with "Related to #N" appended to body
@@ -31,7 +36,8 @@ Stdout: final issue URL(s).
                callers piping through `tail -n 1` still receive the proposal'"'"'s URL.
   bulk-sub-of: N URLs in manifest order (one per line, end of stdout; progress on stderr only).
   reopen: URL of the reopened issue; all other verdicts: URL of the new issue.
-Exit: 0 on success; 2 on usage error; 1 on structural failure.'
+Exit: 0 on success; 2 on usage error; 1 on structural failure;
+      3 when reopened but the merged-finding comment failed.'
 
 VERDICT=""
 TARGET=""
@@ -43,6 +49,7 @@ MANIFEST=""
 # coming back. It is deliberately NOT forwarded to any create branch — an explanation
 # for a decision that was never made has no place on a freshly created issue.
 NOTE=""
+MERGED_FINDING_FILE=""
 PASSTHROUGH=()
 
 usage() {
@@ -87,6 +94,7 @@ while [ $# -gt 0 ]; do
         --note)
             [ $# -ge 2 ] || { echo "Error: --note requires value" >&2; exit 2; }
             NOTE="$2"; shift 2 ;;
+        --merged-finding-file) MERGED_FINDING_FILE="${2:?--merged-finding-file requires value}"; shift 2 ;;
         --)          shift; PASSTHROUGH=("$@"); break ;;
         -h|--help)   usage ;;
         *) echo "Error: unknown argument before --: $1" >&2; exit 2 ;;
@@ -258,7 +266,16 @@ case "$VERDICT" in
             bash "$(dirname "${BASH_SOURCE[0]}")/reopen-with-update.sh" "$TARGET"
         fi
         pm_notify record --point reopen --issue "#${TARGET}"
+        # The merged finding rides on a comment only once the reopen has succeeded (set -e
+        # above); its failure never undoes the reopen. Its stdout goes to stderr: URL contract.
         slug="$(get_repo_slug)"
+        if [ -n "$MERGED_FINDING_FILE" ]; then
+            if ! bash "$SCRIPT_DIR/merge-finding-comment.sh" "$TARGET" "$MERGED_FINDING_FILE" >&2; then
+                echo "merge_comment: failed" >&2
+                echo "reopened: https://github.com/${slug}/issues/${TARGET}" >&2
+                exit 3
+            fi
+        fi
         echo "https://github.com/${slug}/issues/${TARGET}"
         ;;
 

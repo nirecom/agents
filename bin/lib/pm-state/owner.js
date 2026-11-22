@@ -11,13 +11,7 @@ const { refKey } = require("../forge-issue-links");
 
 const DEFAULT_TIMEOUT_MS = 15000;
 
-// resolveOwner(ref, ctx) — ctx: {scan, entries, timeoutMs?, readPmChains?}; ref is repo-resolved.
-function resolveOwner(ref, ctx) {
-  const read = ctx.readPmChains || readPmChains;
-  const timeoutMs = Number.isFinite(ctx.timeoutMs) ? ctx.timeoutMs : DEFAULT_TIMEOUT_MS;
-  const r = read([ref], { deadlineAt: Date.now() + timeoutMs });
-  if (!r.ok) return { ok: false, reason: r.reason };
-  const c = r.results[refKey(ref.repo, ref.number)];
+function ownerOfChain(c, ctx) {
   if (!c || !c.ok) return { ok: false, reason: c ? c.reason : "parse_failed" };
   const hit = c.chain.find((n) => n.pm !== null);
   if (!hit) return { ok: true, owner: null };
@@ -27,4 +21,16 @@ function resolveOwner(ref, ctx) {
   return { ok: true, owner: { tag: g.pm.tag, session_id: g.session_id } };
 }
 
-module.exports = { resolveOwner };
+// resolveOwners(refs, ctx) -> [resolveOwner's answer per ref, in input order], from one batched chain read.
+function resolveOwners(refs, ctx) {
+  const read = ctx.readPmChains || readPmChains;
+  const timeoutMs = Number.isFinite(ctx.timeoutMs) ? ctx.timeoutMs : DEFAULT_TIMEOUT_MS;
+  const r = read(refs, { deadlineAt: Date.now() + timeoutMs });
+  if (!r.ok) return refs.map(() => ({ ok: false, reason: r.reason }));
+  return refs.map((ref) => ownerOfChain(r.results[refKey(ref.repo, ref.number)], ctx));
+}
+
+// resolveOwner(ref, ctx) — ctx: {scan, entries, timeoutMs?, readPmChains?}; ref is repo-resolved.
+const resolveOwner = (ref, ctx) => resolveOwners([ref], ctx)[0];
+
+module.exports = { resolveOwner, resolveOwners };

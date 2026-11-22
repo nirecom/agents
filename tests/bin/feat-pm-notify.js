@@ -365,3 +365,24 @@ for (const [label, point, state, sends, num] of [
   });
 }
 caseEnd();
+
+// #2942: `record --issue N` (no `#`, which a shell reads as a comment) is the same ref as `--issue #N`.
+caseBegin("record-issue-bare-number", "bin/lib/pm-notify/record.js");
+test("N13 record --issue N keeps the same notification as --issue #N (one note, same ID)", () => {
+  const s = wf();
+  const r = X.notify(["record", "--point", "start", "--issue", "10971"], { sid: s });
+  assert.strictEqual(r.code, 0, brief(r));
+  assert.ok(r.kv.ID, brief(r));
+  assert.strictEqual(recorded(s, "start", "#10971"), r.kv.ID, JSON.stringify(X.notes(s)));
+  assert.strictEqual(X.notes(s).length, 1, JSON.stringify(X.notes(s)));
+  assert.match(String(noteOf(s, r.kv.ID).issue), /^o\/r#10971$/);
+});
+for (const v of ["3.2", "0", "-1", "12abc"]) {
+  test(`N14 record --issue ${v} -> exit 2 REASON=usage, nothing recorded`, () => {
+    const s = wf();
+    const r = X.notify(["record", "--point", "start", "--issue", v], { sid: s });
+    assert.deepStrictEqual([r.code, r.kv.REASON], [2, "usage"], brief(r));
+    assert.deepStrictEqual(X.notes(s), [], JSON.stringify(X.notes(s)));
+  });
+}
+caseEnd();

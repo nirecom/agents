@@ -25,19 +25,14 @@ const EMERGENCY_PROVENANCE_MAX_AGE_MS = 10 * 60 * 1000;
 // marker dated further into the future than this is not evidence of anything.
 const EMERGENCY_PROVENANCE_FUTURE_TOLERANCE_MS = 60 * 1000;
 
-// Matches the <command-name>-wrapped form (real skill invocation on any line).
-const OFF_SKILL_INVOCATION_WRAPPED_RE = /^[ \t]*<command-name>\/(?:[A-Za-z0-9_-]+:)?enforce-workflow-off(?![\w-])/m;
-
-// Matches the bare slash-command form on the FIRST LINE ONLY (m-flag omitted).
-// Later lines are not attributed: the <command-name> wrapper is absent, so any
-// line could be model-generated prose or embedded in a fenced block.
-const OFF_SKILL_INVOCATION_BARE_RE = /^[ \t]*\/(?:[A-Za-z0-9_-]+:)?enforce-workflow-off(?![\w-])/;
+// Wrapped form on any line, bare form on the first line only: lib/prompt-invokes-skill.js.
+const { skillInvocationRes, promptInvokesSkill } = require("./prompt-invokes-skill");
+const OFF_SKILL_RES = skillInvocationRes(OFF_EMERGENCY_SKILL);
+const OFF_SKILL_INVOCATION_WRAPPED_RE = OFF_SKILL_RES.wrapped;
+const OFF_SKILL_INVOCATION_BARE_RE = OFF_SKILL_RES.bare;
 
 function promptInvokesOffSkill(prompt) {
-  return typeof prompt === "string" && (
-    OFF_SKILL_INVOCATION_WRAPPED_RE.test(prompt) ||
-    OFF_SKILL_INVOCATION_BARE_RE.test(prompt)
-  );
+  return promptInvokesSkill(prompt, OFF_EMERGENCY_SKILL);
 }
 
 // buildProvenanceMarker(): the payload record-off-skill-invocation.js writes.

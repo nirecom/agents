@@ -165,3 +165,134 @@ test("a remove with duplicate refs is idempotent: a second run gives the same ta
   assert.strictEqual(twice.unverified && twice.unverified.reason, "removed", JSON.stringify(twice.unverified));
 });
 caseEnd();
+
+// #2942: after a set-* write the PM's inbox runs with drift on. cli.js requires pm-notify/inbox inside inboxAfter,
+// so a require-cache entry stands in for runInbox and records its opts.
+const INBOX = path.join(P.ROOT, "bin", "lib", "pm-notify", "inbox.js");
+function cliWithInbox(runInbox, argv, sid, extra, cli) {
+  const saved = require.cache[INBOX];
+  require.cache[INBOX] = { id: INBOX, filename: INBOX, loaded: true, exports: { runInbox } };
+  let out = "";
+  let err = "";
+  let code;
+  try {
+    code = (cli || P.load("bin/lib/pm-state/cli.js")).main(argv, Object.assign({ callerSessionId: sid, resolveOwnerRepoFromOrigin: () => ({ ok: true, ownerRepo: HOME }),
+      fetchAncestorChains: noParents, out: (s) => { out += s; }, err: (s) => { err += s; } }, extra || {}));
+  } finally { if (saved) require.cache[INBOX] = saved; else delete require.cache[INBOX]; }
+  return { code, out, err };
+}
+const UNSTATED = require(path.join(P.ROOT, "hooks", "pm-session", "schema")).REASON_UNSTATED;
+let c18 = 0;
+function pmFor(cmd) {
+  const sid = P.uuid(0x29424100 + (++c18));
+  const n = 4100 + c18;
+  P.seedPm(sid, P.pm({ tag: `PM-c18-${c18}`, issues: [{ number: n, repo: HOME }], assignment_log: [{ at: "2026-11-01T00:00:00.000Z", op: "init", issues: [{ number: n, repo: HOME }], reason: UNSTATED }] }));
+  const seq = path.join(tmp, `seq-${c18}.json`);
+  fs.writeFileSync(seq, JSON.stringify({ tables: [{ title: "T", waves: [{ issues: [{ number: n, repo: HOME, reason: "r", blocked_by: [], conflicts: [] }] }] }] }));
+  return { sid, argv: cmd === "set-sequence" ? ["set-sequence", "--file", seq] : ["set-reason", "--text", "late reason"] };
+}
+caseBegin("cli-inbox-after-write-drift", "bin/lib/pm-state/cli.js");
+for (const cmd of ["set-sequence", "set-reason"]) {
+  test(`C18 ${cmd} runs the inbox with drift on`, () => {
+    const { sid, argv } = pmFor(cmd);
+    const calls = [];
+    const r = cliWithInbox((s, opts) => { calls.push([s, opts]); return ""; }, argv, sid);
+    assert.strictEqual(r.code, 0, r.out);
+    assert.strictEqual(calls.length, 1, JSON.stringify(calls));
+    assert.strictEqual(calls[0][0], sid);
+    assert.strictEqual(calls[0][1] && calls[0][1].drift, true, `inbox opts: ${JSON.stringify(calls[0][1])}`);
+  });
+  test(`C18 ${cmd}: a throwing inbox stays fail-open (exit 0, the JSON written)`, () => {
+    const { sid, argv } = pmFor(cmd);
+    const r = cliWithInbox(() => { throw new Error("inbox broke"); }, argv, sid);
+    assert.strictEqual(r.code, 0, r.out);
+    assert.strictEqual(JSON.parse(r.out.trim()).session_id, sid, r.out);
+  });
+}
+caseEnd();
+
+caseBegin("cli-inbox-drift-text-to-stderr", "bin/lib/pm-state/cli.js");
+for (const cmd of ["set-sequence", "set-reason"]) {
+  test(`${cmd}: non-empty inbox drift text reaches stderr; stdout JSON and exit 0 unchanged`, () => {
+    const { sid, argv } = pmFor(cmd);
+    const DRIFT = `PM inbox: drift on ${HOME}#4199 (field PM-other)`;
+    const r = cliWithInbox(() => DRIFT, argv, sid);
+    assert.strictEqual(r.code, 0, r.err);
+    assert.ok(r.err.includes(DRIFT), `stderr: ${JSON.stringify(r.err)}`);
+    assert.ok(!r.out.includes(DRIFT), `drift text leaked into stdout: ${r.out}`);
+    const res = JSON.parse(r.out.trim());
+    assert.strictEqual(res.ok, true, r.out);
+    assert.strictEqual(res.session_id, sid, r.out);
+  });
+}
+caseEnd();
+
+// owner.js binds readPmChains at load, so the owner case reloads cli.js + owner.js over a stubbed pm-field/read.
+const MOD = (...p) => path.join(P.ROOT, "bin", "lib", ...p);
+function cliWithPmField(tag) {
+  const keys = [MOD("pm-state", "cli.js"), MOD("pm-state", "owner.js"), MOD("pm-field", "read.js")];
+  const saved = keys.map((k) => require.cache[k]);
+  const readPmChains = (refs) => ({ ok: true, results: Object.fromEntries(refs.map((r) => [`${String(r.repo).toLowerCase()}#${r.number}`, { ok: true, chain: [{ pm: tag }] }])) });
+  try {
+    delete require.cache[keys[0]];
+    delete require.cache[keys[1]];
+    require.cache[keys[2]] = { id: keys[2], filename: keys[2], loaded: true, exports: { readPmChains } };
+    return require(keys[0]);
+  } finally { keys.forEach((k, i) => { if (saved[i]) require.cache[k] = saved[i]; else delete require.cache[k]; }); }
+}
+caseBegin("cli-inbox-not-run-for-reads-or-refusals", "bin/lib/pm-state/cli.js");
+test("show / list / owner (owner resolved to a session) never run the inbox", () => {
+  const { sid } = pmFor("set-reason");
+  const tag = P.readPm(sid).tag;
+  const fresh = cliWithPmField(tag);
+  for (const [name, argv, extra, cli] of [
+    ["show", ["show", "--session", sid], {}, null],
+    ["list", ["list"], {}, null],
+    ["owner", ["owner", "--issue", `${HOME}#4101`], { forgeKindOf: () => "github" }, fresh],
+  ]) {
+    const calls = [];
+    const r = cliWithInbox((s) => { calls.push(s); return "DRIFT"; }, argv, sid, extra, cli);
+    assert.strictEqual(r.code, 0, `${name}: ${r.err}`);
+    assert.strictEqual(calls.length, 0, `${name} ran the inbox: ${JSON.stringify(calls)}`);
+    if (name === "owner") assert.deepStrictEqual(JSON.parse(r.out.trim()), { tag, session_id: sid }, `${name}: ${r.out}`);
+  }
+});
+test("a refused set-sequence (invalid payload) and set-reason (not a PM) exit 1 without running the inbox", () => {
+  const { sid } = pmFor("set-sequence");
+  const bad = path.join(tmp, "seq-invalid.json");
+  fs.writeFileSync(bad, JSON.stringify({ tables: "not-an-array" }));
+  const notPm = P.uuid(0x29424199);
+  P.seedState(notPm);
+  for (const [name, argv, caller] of [["set-sequence", ["set-sequence", "--file", bad], sid], ["set-reason", ["set-reason", "--text", "why"], notPm]]) {
+    const calls = [];
+    const r = cliWithInbox((s) => { calls.push(s); return "DRIFT"; }, argv, caller);
+    assert.strictEqual(r.code, 1, `${name}: ${r.err}`);
+    assert.match(r.err, /refused/, `${name}: ${r.err}`);
+    assert.strictEqual(r.out, "", `${name}: ${r.out}`);
+    assert.strictEqual(calls.length, 0, `${name} ran the inbox: ${JSON.stringify(calls)}`);
+  }
+});
+caseEnd();
+
+// #2942: `owner --issue N` (no `#`, which a shell reads as a comment) is the same request as `--issue #N`.
+caseBegin("cli-owner-issue-bare-number", "bin/lib/pm-state/cli.js");
+const ownerRun = (sid, value) => cliWithInbox(() => "", ["owner", "--issue", value], sid, { forgeKindOf: () => "github" }, cliWithPmField(P.readPm(sid).tag));
+test("owner --issue N answers exactly like --issue #N (exit 0, same owner JSON)", () => {
+  const { sid } = pmFor("set-reason");
+  const n = P.readPm(sid).issues[0].number;
+  const hashed = ownerRun(sid, `#${n}`);
+  const bare = ownerRun(sid, String(n));
+  assert.strictEqual(hashed.code, 0, hashed.err);
+  assert.strictEqual(bare.code, 0, `bare ${n}: ${bare.err}`);
+  assert.deepStrictEqual(JSON.parse(bare.out.trim()), JSON.parse(hashed.out.trim()));
+  assert.deepStrictEqual(JSON.parse(bare.out.trim()), { tag: P.readPm(sid).tag, session_id: sid }, bare.out);
+});
+for (const v of ["0", "3.2", "-1"]) {
+  test(`owner --issue ${v} -> exit 2, nothing on stdout`, () => {
+    const { sid } = pmFor("set-reason");
+    const r = ownerRun(sid, v);
+    assert.strictEqual(r.code, 2, r.err);
+    assert.strictEqual(r.out, "", r.out);
+  });
+}
+caseEnd();

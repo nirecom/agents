@@ -154,4 +154,27 @@ function timings(S) {
   }
 }
 
-module.exports = { argErrors, inputs, failures, timings };
+// bareIssue (#2942): `--issue N` is the same request as `--issue #N`; a non-issue number stays exit 2.
+function bareIssue(S) {
+  const { w, md, sid, own } = setup(S, "bare");
+  for (const [label, bare, hashed] of [["one issue", ["4601"], ["#4601"]], ["repeated issues", ["4601", "4603"], ["#4601", "#4603"]]]) {
+    test(`cli-issue-bare: ${label} as bare N -> same exit 0 and stdout as #N`, () => {
+      const args = (refs) => ["--timing", "before-companions", "--session", sid.bare].concat(...refs.map((x) => ["--issue", x]));
+      const a = w.cli(args(bare), md);
+      const b = w.cli(args(hashed), md);
+      code(b, 0);
+      code(a, 0);
+      assert.ok(b.out.includes("PM-ck1") && b.out.includes(own.c1), brief(b));
+      assert.strictEqual(a.out, b.out, `bare ${brief(a)} vs hashed ${brief(b)}`);
+    });
+  }
+  for (const v of ["0", "3.2", "007", "-1"]) {
+    test(`cli-issue-bare: --issue ${v} -> exit 2, nothing printed`, () => {
+      const r = w.cli(["--timing", "before-companions", "--session", sid.bare, "--issue", v], md);
+      code(r, 2);
+      assert.strictEqual(r.out, "", brief(r));
+    });
+  }
+}
+
+module.exports = { argErrors, inputs, failures, timings, bareIssue };

@@ -81,8 +81,16 @@ function pmNames(F) {
     inFreshDirs(() => {
       const sid = crypto.randomUUID();
       F.seed(sid);
-      const r = F.call(sid, F.wrapped("pm-init", "PM-name5 example/repo#55 theme"), F.deps());
+      // A non-GitHub origin lets the ownership check resolve the origin (no fail-closed refusal)
+      // while skipping the PM field write, so no gh call is made.
+      const d = F.deps();
+      d.spawnSync = (cmd, args, opts) => {
+        d.spawnCalls.push({ cmd, args, opts });
+        return cmd === "git" ? { status: 0, stdout: "https://gitlab.example.com/example/repo.git\n", stderr: "" } : { status: 1, stdout: "", stderr: "stub" };
+      };
+      const r = F.call(sid, F.wrapped("pm-init", "PM-name5 example/repo#55 theme"), d);
       assert.strictEqual(nameOf(r), `[PM] PM-name5: example/repo#55 Title55${sfx(sid)}`, JSON.stringify(r));
+      assert.strictEqual(F.spawned(d, "gh").length, 0, F.cmds(d));
     });
   });
   test("P5b a /pm-init whose bare #N has no resolvable repo is refused and names nothing", () => {

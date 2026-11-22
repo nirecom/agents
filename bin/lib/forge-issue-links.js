@@ -13,8 +13,8 @@ const OWNER_REPO_RE = /^([A-Za-z0-9._-]+)\/([A-Za-z0-9._-]+)$/;
 
 // Identity comes from the origin remote alone — no fallback (#1899).
 function resolveOwnerRepoFromOrigin() {
-  const [cmd, args, opts] = buildGitSpawn(["remote", "get-url", "origin"]);
-  const result = spawnSync(cmd, args, Object.assign({}, opts, { windowsHide: true }));
+  const [cmd, args, spawnOpts] = buildGitSpawn(["remote", "get-url", "origin"]);
+  const result = spawnSync(cmd, args, spawnOpts);
   if (result.status !== 0 || !result.stdout) {
     return { ok: false, message: "no 'origin' remote is configured" };
   }
@@ -98,12 +98,15 @@ function chainOf(node, selfKey) {
 const nodeAt = (data, p) => p.reduce((o, k) => (o && typeof o === "object" ? o[k] : null), data);
 const covers = (errPath, slotPath) => Array.isArray(errPath) && errPath.length > 0 && errPath.length <= slotPath.length
   && errPath.every((k, i) => k === slotPath[i]);
+const inside = (errPath, slotPath) => Array.isArray(errPath) && errPath.length > slotPath.length
+  && slotPath.every((k, i) => errPath[i] === k);
 
 // classifyGraphqlResult(spawnResult, slots, readNode) -> {ok:true, results: {[key]: readNode(node, key) |
 // {ok:false, reason}}} | {ok:false, reason: "timeout"|"gh_exec_failed"|"parse_failed"} (#2942).
 // gh exits 1 when one aliased node of a batch is missing yet still prints `data`; only a slot an
 // errors[].type NOT_FOUND covers is issue_not_found, a slot another error covers is gh_exec_failed, and
 // every other slot is read. No data on a non-zero exit is a whole-call gh_exec_failed (network, auth).
+// A slot with any error inside its node (a partial node) is gh_exec_failed, never read.
 function classifyGraphqlResult(r, slots, readNode) {
   if (r.error || r.signal) return { ok: false, reason: "timeout" };
   let body;
@@ -114,7 +117,10 @@ function classifyGraphqlResult(r, slots, readNode) {
   const results = {};
   for (const s of slots) {
     const node = nodeAt(data, s.path);
-    if (node && typeof node === "object") { results[s.key] = readNode(node, s.key); continue; }
+    if (node && typeof node === "object") {
+      results[s.key] = errors.some((e) => inside(e.path, s.path)) ? { ok: false, reason: "gh_exec_failed" } : readNode(node, s.key);
+      continue;
+    }
     const errs = errors.filter((e) => covers(e.path, s.path));
     const notFound = errs.length > 0 ? errs.every((e) => e.type === "NOT_FOUND") : r.status === 0;
     results[s.key] = { ok: false, reason: notFound ? "issue_not_found" : "gh_exec_failed" };
@@ -146,7 +152,7 @@ function batchedGraphql(refs, spec, opts) {
     if (timeoutMs <= 0) return { ok: false, reason: "timeout" };
     const { query, slots } = buildQuery(list.slice(i, i + CHUNK_SIZE), spec.fields);
     const [cmd, args, spawnOpts] = buildGhSpawn(["api", "graphql", "--input", "-"]);
-    const r = spawnSync(cmd, args, Object.assign({}, spawnOpts, { input: JSON.stringify({ query }), timeout: timeoutMs, windowsHide: true }));
+    const r = spawnSync(cmd, args, Object.assign({}, spawnOpts, { input: JSON.stringify({ query }), timeout: timeoutMs }));
     const c = classifyGraphqlResult(r, slots, spec.readNode);
     if (!c.ok) return c;
     Object.assign(results, c.results);

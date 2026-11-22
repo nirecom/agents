@@ -140,6 +140,7 @@ function cleanupRoot(workflowDir, maxAgeDays) {
       file.endsWith(".next-step-paused") ||
       file.endsWith(".stall-reported") ||
       file.endsWith(".off-emergency-invoked") ||
+      file.endsWith(".finding-filing-approval") ||
       file.endsWith(".off-clearance") ||
       file.endsWith(".off-clearance.claimed")
     ) {

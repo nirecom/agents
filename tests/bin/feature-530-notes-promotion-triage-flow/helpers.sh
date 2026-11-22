@@ -86,30 +86,25 @@ Session-ID: SIDPLACEHOLDER
 - (none)'
 
 # All three triage sections empty — the NP-4 prefilter fixture.
-NOTES_BODY_EMPTY='# Worktree Notes
-Branch: feature/np-empty
-Created: 2026-08-01
-Path: /tmp/np
-WORKTREE_BASE_DIR: (default)
-Session-ID: SIDPLACEHOLDER
+NOTES_BODY_EMPTY=$'# Worktree Notes\nBranch: feature/np-empty\nCreated: 2026-08-01\nPath: /tmp/np\nWORKTREE_BASE_DIR: (default)\nSession-ID: SIDPLACEHOLDER\n\n## Gitignored files copied from main\n- (none)\n\n## BugsFound\n- (none)\n\n## RelatedTasks\n- (none)\n\n## NextTasks\n- (none)\n\n## ManualReminders\n- (none)\n\n## History Notes\n- (none)'
 
-## Gitignored files copied from main
-- (none)
-
-## BugsFound
-- (none)
-
-## RelatedTasks
-- (none)
-
-## NextTasks
-- (none)
-
-## ManualReminders
-- (none)
-
-## History Notes
-- (none)'
+# write_triage_notes <dir> [session-id] -> node path. #2019: one entry per rule-table class —
+# HIGH (auto-high), MEDIUM+instance and MEDIUM/other (final-list), test-failure (handoff),
+# LOW / MEDIUM / not-defect on this-pr (dispose-in-pr), LOW / not-defect on other (discard).
+write_triage_notes() {
+    local o='<!-- pr-scope: other -->' t='<!-- pr-scope: this-pr -->'; mkdir -p "$1"
+    printf '%s\n' '# Worktree Notes' 'Branch: feature/np' 'Created: 2026-08-01' "Session-ID: ${2:-sess-np}" '' '## BugsFound' \
+        "- crash on save <!-- severity: high --> <!-- instance: saving a CRLF file drops its last line --> <!-- loc: a.js:3 --> $o" \
+        "- slow index rebuild <!-- severity: medium --> <!-- instance: rebuild of 2k files takes 40s --> <!-- loc: b.js:9 --> $o" \
+        "- flaky parser test <!-- severity: medium --> <!-- instance: parser.test fails 1 run in 5 --> <!-- test-failure --> $o" \
+        '' '## RelatedTasks' "- tidy log wording <!-- severity: low --> $t" "- rename helper <!-- severity: medium --> $t" \
+        "- maybe cache lookups <!-- severity: medium --> $o" '' '## NextTasks' "- typo in comment <!-- severity: low --> $o" \
+        "- style preference <!-- severity: not-defect --> $o" "- intended behaviour <!-- severity: not-defect --> $t" \
+        '' '## ManualReminders' '- rotate the staging credential by hand' '' '## History Notes' '- (none)' > "$1/WORKTREE_NOTES.md"
+    nodepath "$1/WORKTREE_NOTES.md"
+}
+# A receiver that accepts every hand-off (finding-rules-triage.js runs FINDING_HANDOFF_BIN as `node <bin> <json>`).
+HANDOFF_OK="$(nodepath "$TMPD/handoff-ok.js")"; printf '%s\n' 'process.stdout.write("handoff: accepted\n")' > "$TMPD/handoff-ok.js"
 
 # write_notes <dir> [session-id] -> echoes the node-friendly notes path
 write_notes() {
@@ -177,7 +172,7 @@ tmp_residue() {
 
 # json_len <json> -> array length, or ERR
 json_len() {
-    node -e 'try{process.stdout.write(String(JSON.parse(process.argv[1]).length))}catch(e){process.stdout.write("ERR")}' \
+    node -e 'try{process.stdout.write(String(Object.values(JSON.parse(process.argv[1])).flat().length))}catch(e){process.stdout.write("ERR")}' \
         -- "$1" 2>/dev/null
 }
 
@@ -185,8 +180,18 @@ json_len() {
 json_at() {
     node -e '
       try {
-        const v = JSON.parse(process.argv[1])[Number(process.argv[2])][process.argv[3]];
+        const v = Object.values(JSON.parse(process.argv[1])).flat()[Number(process.argv[2])][process.argv[3]];
         process.stdout.write(String(v));
       } catch (e) { process.stdout.write("ERR"); }
     ' -- "$1" "$2" "$3" 2>/dev/null
+}
+
+# json_groups <json> -> "autoHigh=b|b;finalList=...;..." in contract order. finalList/overflow keep list
+# order (loc-sorted); the other groups are sorted by body, since their order is not part of the contract.
+json_groups() {
+    node -e 'try{const g=JSON.parse(process.argv[1]);process.stdout.write(["autoHigh","finalList","overflow","disposeInPr","discard","testFailureHandoff"].map(k=>{const b=(Array.isArray(g[k])?g[k]:[]).map(e=>e.body);return k+"="+(/List|overflow/.test(k)?b:b.sort()).join("|")}).join(";"))}catch(e){process.stdout.write("ERR")}' -- "$1" 2>/dev/null
+}
+# group_rows <json> <group> -> one "lineNumber<TAB>body" line per entry of that group, in list order
+group_rows() {
+    node -e 'try{for(const e of JSON.parse(process.argv[1])[process.argv[2]]||[])console.log(e.lineNumber+"\t"+e.body)}catch(e){}' -- "$1" "$2" 2>/dev/null
 }

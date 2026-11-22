@@ -1,0 +1,92 @@
+#!/usr/bin/env node
+"use strict";
+
+// finding-filing-gate --session <sid> --review <final.json> [--claim <proposal.json>] [--finding-key <k>]
+// G0 of the /issue-create confirm gate (#2019). Prints `g0: pass|confirm|defer` and one `reason:` line.
+//   pass    — the HIGH auto condition holds (no approval consumed), or one approval record was consumed.
+//   defer   — a HIGH claim the reviewer could not judge, with no approval to consume: back to the notes.
+//   confirm — everything else, every bad input included (fail-closed). Always exit 0.
+// The rule table and reviewer agreement live in bin/lib/finding-rules.js; the approval record in
+// hooks/lib/finding-approval.js. Contract: skills/issue-create/SKILL.md Phase 3.
+
+const fs = require("fs");
+const crypto = require("crypto");
+const { reviewerAgrees } = require("./lib/finding-rules");
+const { consumeApproval, titleKey } = require("../hooks/lib/finding-approval");
+
+const FLAGS = ["--session", "--review", "--claim", "--finding-key"];
+// `## Severity` followed (blank lines allowed) by `HIGH — <reason>`; `-` and `–` count as the dash.
+const HIGH_EVIDENCE_RE = /^## Severity[ \t]*\r?\n(?:[ \t]*\r?\n)*HIGH[ \t]+[—–-][ \t]*\S/m;
+
+function emit(verdict, reason) {
+  process.stdout.write(`g0: ${verdict}\nreason: ${String(reason).replace(/[\r\n]+/g, " ")}\n`);
+  return 0;
+}
+
+function parseArgs(argv) {
+  const out = {};
+  for (let i = 0; i < argv.length; i += 2) {
+    const flag = argv[i];
+    const value = argv[i + 1];
+    if (!FLAGS.includes(flag) || value === undefined || value === "" || out[flag] !== undefined) return null;
+    out[flag] = value;
+  }
+  return out;
+}
+
+function readJson(file) {
+  const raw = fs.readFileSync(file);
+  return { raw, json: JSON.parse(raw.toString("utf8")) };
+}
+
+// The claim's severity / body / title: top level first, then under `proposal`.
+function claimField(claim, name) {
+  if (claim[name] !== undefined) return claim[name];
+  const p = claim.proposal;
+  return p && typeof p === "object" ? p[name] : undefined;
+}
+
+function consume(sid, key, onMiss) {
+  const r = consumeApproval(sid, key);
+  if (r.approved) return emit("pass", `approval consumed (${r.reason})`);
+  return onMiss(r.reason);
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (args === null) return emit("confirm", "bad arguments");
+  const sid = args["--session"];
+  if (!sid) return emit("confirm", "no --session");
+  if (!args["--review"]) return emit("confirm", "no --review");
+  let review;
+  let claim = null;
+  try {
+    const doc = readJson(args["--review"]).json;
+    review = doc && typeof doc.review === "object" && doc.review !== null ? doc.review : null;
+    if (args["--claim"]) claim = readJson(args["--claim"]);
+  } catch (e) {
+    return emit("confirm", `input unreadable: ${e.message}`);
+  }
+  if (claim !== null && (claim.json === null || typeof claim.json !== "object")) {
+    return emit("confirm", "claim is not a JSON object");
+  }
+  const claimed = claim === null ? "" : String(claimField(claim.json, "severity") || "").toUpperCase();
+  const title = claim === null ? "" : String(claimField(claim.json, "title") || "");
+  const key = args["--finding-key"] || (title ? titleKey(title) : "");
+
+  if (claimed === "HIGH") {
+    const agreement = reviewerAgrees(review, "HIGH");
+    if (agreement === "unavailable") {
+      return consume(sid, key, () => emit("defer", "HIGH claim and the reviewer severity is unavailable"));
+    }
+    const body = String(claimField(claim.json, "body") || "");
+    const sha = crypto.createHash("sha256").update(claim.raw).digest("hex");
+    const sameReview = review && review.proposal_sha256 === sha;
+    if (agreement === "agree" && HIGH_EVIDENCE_RE.test(body) && sameReview) {
+      return emit("pass", "HIGH auto condition: claim, ## Severity evidence and reviewer agree on this proposal");
+    }
+  }
+  return consume(sid, key, (why) => emit("confirm", why));
+}
+
+process.exit(main());

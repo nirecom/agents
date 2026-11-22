@@ -3,20 +3,19 @@
 /**
  * spawn-env.js
  *
- * Helpers for spawning `gh` (PATH-based) and bash scripts (absolute-path).
- *
- * On Windows/MSYS2 with Git Bash: Node on Windows receives PATH as a
- * semicolon-separated Windows-format string. When Node spawns bash with
- * {env: process.env}, bash (MSYS2) correctly resolves Windows-format PATH
- * entries to POSIX paths, so `exec "$0" "$@"` gh lookup finds the mock gh
- * in tests. No special env manipulation is needed.
- *
- * For absolute-path bash scripts (wip-state.sh etc.): convert the Windows
- * drive-letter prefix to its POSIX MSYS2 form so bash can exec the script
- * directly.
+ * Helpers for spawning gh/git (PATH lookup) and bash scripts (absolute path).
+ * Opts: utf8, live process.env (bash/MSYS2 resolves the Windows PATH itself),
+ * windowsHide. Absolute script paths are converted to MSYS2 POSIX form.
  */
 
 const path = require("path");
+
+// windowsHide: bash is a console app; spawned from a console-less detached
+// node parent (pm-state hook) on Windows it opens a black console window.
+// Built per call so env is the live process.env.
+function spawnOpts() {
+  return { encoding: "utf8", env: process.env, windowsHide: true };
+}
 
 /**
  * Convert a Windows drive-letter path to its MSYS2 POSIX form (the drive
@@ -42,7 +41,7 @@ function buildGhSpawn(ghArgs) {
   return [
     "bash",
     ["-c", 'exec "$0" "$@"', "gh", ...ghArgs],
-    { encoding: "utf8", env: process.env },
+    spawnOpts(),
   ];
 }
 
@@ -57,7 +56,7 @@ function buildGitSpawn(gitArgs) {
   return [
     "bash",
     ["-c", 'exec "$0" "$@"', "git", ...gitArgs],
-    { encoding: "utf8", env: process.env },
+    spawnOpts(),
   ];
 }
 
@@ -74,7 +73,7 @@ function buildBashScriptSpawn(scriptPath, scriptArgs) {
   return [
     "bash",
     [posixPath, ...scriptArgs],
-    { encoding: "utf8", env: process.env },
+    spawnOpts(),
   ];
 }
 

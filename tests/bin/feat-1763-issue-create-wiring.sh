@@ -25,7 +25,7 @@ for p in "$RS" "$GATE"; do [ -f "$p" ] || MISSING_PARTS="$MISSING_PARTS $(basena
 CHAIN_READY=no; [ -z "$MISSING_PARTS" ] && CHAIN_READY=yes
 redchain() { fail "$1" "RED-EXPECTED: chain component(s) not yet created:$MISSING_PARTS"; }
 
-WORK="$(mktemp -d)"
+WORK="$(mktemp -d)"; export WORKFLOW_STATE_DIR="$WORK/state" WORKFLOW_PLANS_DIR="$WORK/plans"; mkdir -p "$WORK/state" "$WORK/plans"; G0_SID="1763b0c0-2019-4e01-8a9b-0c1d2e3f4e01"
 trap 'rm -rf "$WORK"' EXIT
 MOCKDIR="$WORK/bin"; mkdir -p "$MOCKDIR"
 
@@ -105,8 +105,8 @@ run_chain() {
             >"$B/review-stdout.txt" 2>&1
     fi
     local out
-    # One argument, no session environment (#1926): everything the gate needs lives in the artifact.
-    out=$("$RWT" 20 bash "$GATE" "$FINAL" 2>/dev/null)
+    # One argument (#1926); #2019 G0 is held at pass by a fresh approval record for the fixture session.
+    node -e 'require("fs").writeFileSync(process.argv[1],JSON.stringify({version:1,session_id:process.argv[2],pending:[],records:[{type:"typed-command",at:new Date().toISOString()}]}))' "$(node_path "$WORKFLOW_STATE_DIR/$G0_SID.finding-filing-approval")" "$G0_SID"; out=$(CLAUDE_CODE_SESSION_ID="$G0_SID" "$RWT" 20 bash "$GATE" "$FINAL" 2>/dev/null)
     GATE_RC=$?
     CONFIRM=$(printf '%s\n' "$out" | sed -n 's/^confirm: *//p' | head -n 1 | tr -d '[:space:]')
     REASONS=$(printf '%s\n' "$out" | sed -n 's/^reasons: *//p' | head -n 1 | tr -d '[:space:]')

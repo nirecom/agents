@@ -12,7 +12,7 @@ const io = require(path.join(HOOKS, "workflow-state", "state-io"));
 const S = require(path.join(HOOKS, "pm-session", "schema"));
 const scan = require(path.join(HOOKS, "pm-session", "scan"));
 const W = require(path.join(HOOKS, "pm-session", "writer-common"));
-const { parseIssueToken } = require(path.join(HOOKS, "lib", "parse-closes-issues"));
+const { parseIssueToken, parseIssueFlagValue } = require(path.join(HOOKS, "lib", "parse-closes-issues"));
 const links = require("../forge-issue-links");
 const { resolveOwner } = require("../pm-state/owner");
 
@@ -56,7 +56,7 @@ function homeRepo() {
 
 // refOf(token) -> {number, repo:"owner/repo"} of a ref given on the command line (W.normalizeRef).
 function refOf(token) {
-  const ref = parseIssueToken(String(token || ""));
+  const ref = parseIssueFlagValue(String(token || ""));
   if (!ref) fail(2, `not an issue ref: ${token}`, ["REASON=usage"]);
   try { return W.normalizeRef(ref, homeRepo()); } catch (e) {
     if (e instanceof W.Refusal) fail(1, e.message, ["REASON=repo-unresolved"]);

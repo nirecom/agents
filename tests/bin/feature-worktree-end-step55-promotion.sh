@@ -2,29 +2,13 @@
 # tests/bin/feature-worktree-end-step55-promotion.sh
 # Tests: bin/worktree-notes-triage.js
 # Tags: worktree, end, cleanup, hook, bin, TL2, scope:common
-#
-# Worktree-end Step WE-11 promotion feature (historically labelled "Step 5.5"
-# before the WE-<N> renumbering; the filename keeps the old token for git blame
-# continuity, the assertions do not).
-#
-# F1–F7 SKIP-gracefully when bin/worktree-notes-triage.js is absent. R1 has been
-# replaced post-#771: the renderer (bin/worktree-final-report.js) is abolished,
-# so R1 now asserts its absence rather than golden output.
-#
-# The `## ManualReminders` section added by #530 is covered separately in
-# tests/bin/feature-530-manual-reminders-triage-exclusion.sh — split out when this
-# file crossed the 500-line HARD limit.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether WE-11 in a live /worktree-end run actually calls this CLI at all,
-#   and calls it before the worktree is removed — after removal the notes file
-#   is gone and the findings are lost silently.
-# - Whether the numbers passed to `annotate` are the issue numbers /issue-create
-#   really created, rather than numbers invented by the model.
-# - Whether the Bash-tool hooks (enforce-worktree) permit these invocations as
-#   written from the worktree being torn down.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# Worktree-end WE-11 promotion (the filename keeps the old "Step 5.5" token for git blame).
+# F1–F7 SKIP when bin/worktree-notes-triage.js is absent; R1 asserts the #771 renderer is gone.
+# #2019: `list` returns groups; the cases flatten them. ManualReminders (#530):
+# tests/bin/feature-530-manual-reminders-triage-exclusion.sh.
+# TL3 gap: whether a live WE-11 calls this CLI before removal, annotates with real issue
+# numbers, and passes enforce-worktree; checked at WORKFLOW_USER_VERIFIED preflight
+# (bin/check-verification-gate.sh category: skill-orchestration).
 
 set -u
 
@@ -148,13 +132,13 @@ test_F1_triage_list_basic() {
     # Expect 3 entries (BugsFound, RelatedTasks, NextTasks — 1 each), all hasMarker=false.
     local len
     len="$(node -e "
-        try { const j = JSON.parse(process.argv[1]); process.stdout.write(String(j.length)); }
+        try { const j = Object.values(JSON.parse(process.argv[1])).flat(); process.stdout.write(String(j.length)); }
         catch (e) { process.stdout.write('ERR'); }
     " -- "$out" 2>/dev/null)"
     local any_marker
     any_marker="$(node -e "
         try {
-            const j = JSON.parse(process.argv[1]);
+            const j = Object.values(JSON.parse(process.argv[1])).flat();
             process.stdout.write(String(j.some(e => e.hasMarker === true)));
         } catch (e) { process.stdout.write('ERR'); }
     " -- "$out" 2>/dev/null)"
@@ -166,7 +150,7 @@ test_F1_triage_list_basic() {
     fi
 }
 
-# ---- F2: triage list on all-none sections → [] ----
+# ---- F2: triage list on all-none sections → every group empty (#2019) ----
 test_F2_triage_list_all_none() {
     require_bin "F2: triage list all-none" || return
 
@@ -174,10 +158,10 @@ test_F2_triage_list_all_none() {
     local out
     out="$(run_with_timeout 30 node "$TRIAGE_BIN" list "$notes" 2>/dev/null)"
 
-    if [ "$out" = "[]" ]; then
-        pass "F2: triage list with all '- (none)' sections returns []"
+    if [ "$(node -e 'try{const g=JSON.parse(process.argv[1]);process.stdout.write(String(!Array.isArray(g)&&Object.values(g).flat().length===0))}catch(e){}' -- "$out" 2>/dev/null)" = "true" ]; then
+        pass "F2: triage list with all '- (none)' sections returns only empty groups"
     else
-        fail "F2: expected '[]', got: $out"
+        fail "F2: expected a group object with empty groups, got: $out"
     fi
 }
 
@@ -193,7 +177,7 @@ test_F3_triage_annotate_then_list() {
     local target_line
     target_line="$(node -e "
         try {
-            const j = JSON.parse(process.argv[1]);
+            const j = Object.values(JSON.parse(process.argv[1])).flat();
             // Pick the first entry — annotate it.
             process.stdout.write(String(j[0].lineNumber));
         } catch (e) { process.stdout.write('ERR'); }
@@ -226,7 +210,7 @@ test_F3_triage_annotate_then_list() {
     local found
     found="$(node -e "
         try {
-            const j = JSON.parse(process.argv[1]);
+            const j = Object.values(JSON.parse(process.argv[1])).flat();
             const target = parseInt(process.argv[2], 10);
             const e = j.find(x => x.lineNumber === target);
             process.stdout.write(e ? 'FOUND' : 'NOT_FOUND');
@@ -251,12 +235,12 @@ test_F4_list_excludes_marked() {
     list_before="$(run_with_timeout 30 node "$TRIAGE_BIN" list "$notes" 2>/dev/null)"
     local target_line
     target_line="$(node -e "
-        try { const j = JSON.parse(process.argv[1]); process.stdout.write(String(j[0].lineNumber)); }
+        try { const j = Object.values(JSON.parse(process.argv[1])).flat(); process.stdout.write(String(j[0].lineNumber)); }
         catch (e) { process.stdout.write('ERR'); }
     " -- "$list_before" 2>/dev/null)"
     local len_before
     len_before="$(node -e "
-        try { const j = JSON.parse(process.argv[1]); process.stdout.write(String(j.length)); }
+        try { const j = Object.values(JSON.parse(process.argv[1])).flat(); process.stdout.write(String(j.length)); }
         catch (e) { process.stdout.write('ERR'); }
     " -- "$list_before" 2>/dev/null)"
 
@@ -266,7 +250,7 @@ test_F4_list_excludes_marked() {
     list_after="$(run_with_timeout 30 node "$TRIAGE_BIN" list "$notes" 2>/dev/null)"
     local len_after
     len_after="$(node -e "
-        try { const j = JSON.parse(process.argv[1]); process.stdout.write(String(j.length)); }
+        try { const j = Object.values(JSON.parse(process.argv[1])).flat(); process.stdout.write(String(j.length)); }
         catch (e) { process.stdout.write('ERR'); }
     " -- "$list_after" 2>/dev/null)"
     # list returns only unpromoted entries; annotated entry must be gone (count drops by 1).
@@ -295,18 +279,9 @@ test_F5_triage_annotate_invalid_line() {
 }
 
 # ---- F6 (security): path traversal cannot reach a REAL outside notes file ----
-# The protected resource must exist and hold recognisable content: pointing the
-# CLI at a path that does not exist proves nothing, because "rejected" and "file
-# not found" are the same nonzero exit.
-#
-# Note on path shape: the current guard tests `path.normalize(p)`, and normalize
-# collapses `..` inside an ABSOLUTE path — so `<tmp>/a/../protected/...` arrives
-# indistinguishable from a direct path and sails through. Only the RELATIVE form
-# keeps its leading `..` and is caught. Both are exercised, and the contract is
-# the same for both: a path whose raw string contains `..` must be refused
-# before normalization, and the protected file must be neither disclosed nor
-# modified. Case (b) is the RED half — it fails today by writing to the
-# protected file.
+# The protected file exists with recognisable content (a missing file proves nothing).
+# path.normalize collapses `..` in an ABSOLUTE path, so only the RELATIVE form is caught
+# by the guard; both are exercised: the protected file is neither disclosed nor modified.
 file_md5_of() {
     node -e "
         const c = require('crypto'), fs = require('fs');

@@ -17,7 +17,9 @@ const R = require("./read");
 const DEFAULT_TIMEOUT_MS = 5000;
 // One gh edit's share of the writer's 5 s write budget; the rest is the re-read of an unknown write.
 const WRITE_TIMEOUT_MS = 3500;
-const ENSURE_CARD = path.join(__dirname, "..", "..", "github-issues", "ensure-board-card.sh");
+// readCards reasons that refuse the write with their own reason instead of "no-card".
+const FAIL_CLOSED = new Set(["pm-field-ambiguous", "pm-field-truncated"]);
+const ENSURE_CARD =path.join(__dirname, "..", "..", "github-issues", "ensure-board-card.sh");
 
 function writePmField(ref, value, opts) {
   const o = opts || {};
@@ -33,7 +35,7 @@ function writePmField(ref, value, opts) {
   else args.push("--text", String(value));
   const [cmd, argv, spawnOpts] = buildGhSpawn(args);
   // stdio is ignored: a pipe held open by a grandchild would keep spawnSync waiting past the kill.
-  const r = spawnSync(cmd, argv, Object.assign({}, spawnOpts, { stdio: "ignore", timeout: timeoutMs, killSignal: "SIGKILL", windowsHide: true }));
+  const r = spawnSync(cmd, argv, Object.assign({}, spawnOpts, { stdio: "ignore", timeout: timeoutMs, killSignal: "SIGKILL" }));
   if (r.error && r.error.code === "ETIMEDOUT") return { result: "unknown", reason: "timeout" };
   if (r.signal) return { result: "unknown", reason: `killed by ${r.signal}` };
   if (r.error) return { result: "failed", reason: r.error.message };
@@ -60,16 +62,17 @@ function createPmField(opts) {
       const c = r.results[refKey(ref.repo, ref.number)];
       if (c && c.ok) cards.set(refKey(ref.repo, ref.number), c);
       else if (c && c.reason === "no-card") missing.push(ref);
-      else if (c && c.reason === "pm-field-ambiguous") cards.set(refKey(ref.repo, ref.number), c);
+      // A fail-closed read (ambiguous / truncated) is kept so its reason reaches the refuse message.
+      else if (c && FAIL_CLOSED.has(c.reason)) cards.set(refKey(ref.repo, ref.number), c);
     }
     if (missing.length === 0) return { ok: true };
     for (const ref of missing) {
       if (left(deadlineAt) <= 0) break;
       const [cmd, argv, spawnOpts] = buildBashScriptSpawn(ENSURE_CARD, ["--repo", ref.repo, String(ref.number)]);
-      spawnSync(cmd, argv, Object.assign({}, spawnOpts, { stdio: "ignore", timeout: left(deadlineAt), killSignal: "SIGKILL", windowsHide: true }));
+      spawnSync(cmd, argv, Object.assign({}, spawnOpts, { stdio: "ignore", timeout: left(deadlineAt), killSignal: "SIGKILL" }));
     }
     const again = R.readCards(missing, { deadlineAt });
-    if (again.ok) for (const ref of missing) { const c = again.results[refKey(ref.repo, ref.number)]; if (c && c.ok) cards.set(refKey(ref.repo, ref.number), c); }
+    if (again.ok) for (const ref of missing) { const c = again.results[refKey(ref.repo, ref.number)]; if (c && (c.ok || FAIL_CLOSED.has(c.reason))) cards.set(refKey(ref.repo, ref.number), c); }
     return { ok: true };
   }
   const resolveCard = (ref) => cards.get(refKey(ref.repo, ref.number)) || { ok: false, reason: "no-card" };

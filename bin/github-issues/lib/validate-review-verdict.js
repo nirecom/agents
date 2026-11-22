@@ -1,25 +1,13 @@
 #!/usr/bin/env node
-// bin/github-issues/lib/validate-review-verdict.js — decide whether a reviewer's
-// verdict may replace the survey's, and format the single-line note that records it.
-//
-// The reviewer is an LLM reading untrusted issue text. Its answer is therefore treated
-// as a PROPOSAL that must survive a structural check against the survey artifact before
-// it is allowed to change anything: every issue number it names must be one the survey
-// actually saw, and the shape must match the verdict it claims. Anything else folds to
+// bin/github-issues/lib/validate-review-verdict.js — decide whether a reviewer's verdict may
+// replace the survey's, and format the single-line note that records it. The reviewer is an LLM
+// reading untrusted text, so its answer must survive a structural check against the survey
+// artifact (every number one the survey saw, the shape its verdict claims); anything else folds to
 // `invalid`, which upholds the survey verdict and forces the confirm gate (G4).
-//
-// CLI (both modes always exit 0 — this is a classifier, not a gate):
-//   --artifact <survey.json> --review-raw <raw.txt>
-//       line 1  valid | invalid
-//       line 2  reason (empty when valid)
-//       line 3  the canonical review object as JSON (valid only)
-//   --format-note --from <final.json>
-//       one single-line note, safe to paste into a GitHub comment body, built from the
-//       artifact the review stage wrote. Preferred form: the note ends up on a public
-//       issue, so its four fields are read from the record rather than retyped by the
-//       model that is about to act on them.
-//   --format-note --survey-verdict A --review-verdict B --status S --reason "<text>"
-//       the same note from explicit fields. Kept for callers that have no artifact.
+// CLI (always exit 0 — a classifier, not a gate):
+//   --artifact <survey.json> --review-raw <raw.txt> → `valid|invalid`, reason, canonical review JSON
+//   --format-note --from <final.json> → one comment-safe note read from the artifact (preferred)
+//   --format-note --survey-verdict A --review-verdict B --status S --reason "<text>" → same, explicit
 "use strict";
 
 const fs = require("fs");
@@ -35,19 +23,16 @@ const VERDICTS = ["none", "reopen", "sub-of", "make-parent", "sibling"];
 const ARTIFACT_VERDICTS = VERDICTS.concat(["bulk-sub-of"]);
 const RELATION_STATUSES = ["resolved", "unresolved"];
 const ISSUE_STATES = ["open", "closed"];
+// The reviewer's severity vocabulary (#2019), matched case-insensitively; skills/_shared/severity.md
+// defines the levels and bin/lib/finding-rules.js (REVIEW_SEVERITIES) maps them to the notes vocabulary.
+const REVIEW_SEVERITIES = ["HIGH", "MEDIUM", "LOW", "NOT-DEFECT", "NOT-A-DEFECT"];
 const SCHEMA_VERSION = 3;
-// SSOT for `same_fix`: does ONE fix resolve both the proposal and the existing issue
-// the verdict names? It is a pure function of the verdict, so both producers copy it
-// rather than re-judging it. Prose twin: skills/_shared/issue-verdict-cascade.md
-// (drift-checked by tests/skills/feat-1912-verdict-criterion-drift.sh).
-// Different axis from the confirm gate's G1: G1 asks how destructive the action is.
-// Only `reopen` is true. Every parent-attaching verdict is false for one reason: the
-// issue those verdicts name is a meta parent, a container that is never implemented
-// against, so creating or attaching resolves nothing. That covers `make-parent` (the
-// grouped children each keep their own fix) and, symmetrically, `sub-of` /
-// `bulk-sub-of`. The cascade order says the same thing independently: IC-C1 asks the
-// one-fix question of every candidate and only falls through to IC-C2 when the answer
-// was no for all of them.
+// SSOT for `same_fix` (does ONE fix resolve both the proposal and the issue the verdict names?):
+// a pure function of the verdict, so both producers copy it rather than re-judge it. Prose twin:
+// skills/_shared/issue-verdict-cascade.md (drift-checked by feat-1912-verdict-criterion-drift.sh).
+// Only `reopen` is true: every parent-attaching verdict names a meta parent that is never
+// implemented against, so attaching resolves nothing (IC-C1 asks the one-fix question first).
+// Different axis from the confirm gate's G1, which asks how destructive the action is.
 const SAME_FIX_BY_VERDICT = {
   none: false,
   reopen: true,
@@ -75,17 +60,10 @@ function readArgs(argv) {
   return args;
 }
 
-// numberSets(artifact): the allowlists and the per-candidate facts the cascade
-// prerequisites are read from.
-//   candidates — every issue the survey actually inspected
-//   parents    — the parents a sub-of verdict may attach to
-//   byNumber   — candidate lookup, for the orphan/eligibility tests below
-// A verdict naming anything outside the sets is a hallucination, not a disagreement.
-//
-// `parents` is NOT simply "every parent_number seen" (issue-verdict-cascade IC-C2):
-// only a `resolved` candidate's relation data is admissible at all, and only a
-// `parent_is_meta` parent is something a new issue may be filed under. An unresolved
-// candidate's parent is an unknown, and an unknown must never widen an allowlist.
+// numberSets(artifact) → { candidates (every surveyed issue), parents (sub-of may attach to),
+// byNumber (candidate lookup) }. A verdict naming anything outside the sets is a hallucination.
+// `parents` holds only the parent_is_meta parent of a `resolved` candidate (issue-verdict-cascade
+// IC-C2): an unresolved candidate's parent is an unknown, and an unknown never widens an allowlist.
 function numberSets(artifact) {
   const candidates = new Set();
   const parents = new Set();
@@ -315,11 +293,11 @@ function validate(artifact, rawText) {
     return { ok: false, reason: "same_fix must be " + JSON.stringify(SAME_FIX_BY_VERDICT[verdict]) + " for verdict " + verdict + " (got: " + JSON.stringify(r.same_fix) + ")" };
   }
 
-  return {
-    ok: true,
-    reason: "",
-    review: { verdict, target, children, related, reason: r.reason, worth_filing: r.worth_filing, same_fix: r.same_fix },
-  };
+  const review = { verdict, target, children, related, reason: r.reason, worth_filing: r.worth_filing, same_fix: r.same_fix };
+  // #2019: optional. An out-of-vocabulary value is dropped, never folded to invalid — the
+  // filing gate (bin/finding-filing-gate) reads a missing severity as "reviewer unavailable".
+  if (typeof r.severity === "string" && REVIEW_SEVERITIES.indexOf(r.severity.toUpperCase()) !== -1) review.severity = r.severity;
+  return { ok: true, reason: "", review };
 }
 
 // formatNote(...): the one line that goes into a GitHub comment. It is assembled from
@@ -361,7 +339,7 @@ function formatNote(surveyVerdict, reviewVerdict, status, reason) {
 
 module.exports = {
   validate, validateArtifact, formatNote, stripCommentMarkers,
-  VERDICTS, ARTIFACT_VERDICTS, RELATION_STATUSES, ISSUE_STATES,
+  VERDICTS, ARTIFACT_VERDICTS, RELATION_STATUSES, ISSUE_STATES, REVIEW_SEVERITIES,
   SCHEMA_VERSION, SAME_FIX_BY_VERDICT,
   CANDIDATE_MAX, REASON_MAX, NOTE_REASON_MAX, MAKE_PARENT_MIN_CHILDREN,
 };

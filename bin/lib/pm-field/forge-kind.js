@@ -12,7 +12,7 @@ const ORIGIN_TIMEOUT_MS = 2000;
 
 function originOf(cwd) {
   const [cmd, args, opts] = buildGitSpawn(["remote", "get-url", "origin"]);
-  const r = spawnSync(cmd, args, Object.assign({}, opts, { cwd: cwd || process.cwd(), timeout: ORIGIN_TIMEOUT_MS, windowsHide: true }));
+  const r = spawnSync(cmd, args, Object.assign({}, opts, { cwd: cwd || process.cwd(), timeout: ORIGIN_TIMEOUT_MS }));
   return r.status === 0 && r.stdout ? String(r.stdout).split(/\r?\n/)[0].trim() : null;
 }
 

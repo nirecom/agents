@@ -372,6 +372,11 @@
           },
           {
             "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/record-finding-approval-prompt.js\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/user-prompt-submit-wf-init-mark.js\"",
             "timeout": 5
           },
@@ -806,6 +811,16 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/conv-lang-reinject.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/record-finding-approval-answer.js\"",
             "timeout": 5
           }
         ]

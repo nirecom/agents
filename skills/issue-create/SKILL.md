@@ -78,7 +78,7 @@ Four phases: **Gather → Survey → Confirm → Dispatch**.
 ### Phase 1 — Gather
 
 Collect title and canonical-schema body from the user.
-Treat a direct `/issue-create` invocation as user-acknowledged (`true`); never ask whether to file it.
+A `/issue-create` the user types is approved by its own typed-command record, which G0 (Phase 3) consumes; never ask whether to file it.
 
 Required body schema for `type:task` (enforced by `bin/github-issues/issue-create.sh` exit 3):
 
@@ -96,34 +96,36 @@ When the user-provided body is missing one or both required fields, use `AskUser
 
 The survey follows an ordered cascade that considers `reopen` first; the criteria are defined in `skills/_shared/issue-verdict-cascade.md` (SSOT — never restated here or in the worker).
 
-Every route below produces the same schema-v2 artifact. The worker-bypassing routes write it with `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/make-empty-verdict.sh" <out-path> <verdict> --title T --background B --changes C [--parent N]`.
+Every route below produces the same schema-v2 artifact. The worker-bypassing routes write it with `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/make-empty-verdict.sh" <out-path> <verdict> --title T --background B --changes C [--parent N] [--severity S --body BODY]`.
 
 Of that artifact the main conversation reads only `verdict` / `target` / `children` / `related` / `reason` / `review_result` / `review.worth_filing` / `review.verdict` / `review.target` / `review.children` / `review.related`. Never read `proposal` or `candidates[].body` into the main context.
 
-If invoked with `--skip-survey` (caller already ran a bulk dedupe pass and supplies an explicit `--verdict bulk-sub-of --parent N --manifest FILE`): skip Phase 2 entirely, write the artifact with `make-empty-verdict.sh <out> bulk-sub-of --parent N`, and proceed to Phase 3 with the caller-supplied verdict.
+If invoked with `--skip-survey` (caller already ran a bulk dedupe pass and supplies an explicit `--verdict bulk-sub-of --parent N --manifest FILE`): skip Phase 2 entirely, write the artifact by the form above with verdict `bulk-sub-of` and target `--parent N`, and proceed to Phase 3 with the caller-supplied verdict.
 
-Skip this phase when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub remote) — write the artifact with `make-empty-verdict.sh <out> none` and proceed to Phase 3 with `verdict: none`.
+Skip this phase when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub remote) — write the artifact by the form above with verdict `none` and proceed to Phase 3 with `verdict: none`.
 
 2a. Pre-resolve in main: `session_id` (from `$CLAUDE_CODE_SESSION_ID`), `agents_main_root` (absolute), `artifact_dir` (`PLANS_DIR` resolved by calling `bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"` directly at this callsite — do NOT reuse any variable from IC-1).
-2b. Invoke the `issue-create-survey-worker` subagent via the Agent tool (`subagent_type`) with `title`, `background`, `changes` from Phase 1 input.
+2b. Invoke the `issue-create-survey-worker` subagent via the Agent tool (`subagent_type`) with `title`, `background`, `changes` from Phase 1 input, plus `severity` (the claimed level, when one is claimed) and the full `body` — G0's claim, on every route (`--severity` / `--body` for make-empty-verdict.sh).
     Set the JSON prompt's `dispatch_directive` key to the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section.
 2c. `status: failed` → stop and report error.
-2d. `status: no_candidates` → write the artifact with `make-empty-verdict.sh <out> none` and proceed to Phase 3 with `verdict: none`.
+2d. `status: no_candidates` → write the artifact by the form above with verdict `none` and proceed to Phase 3 with `verdict: none`.
 2e. `status: complete` → read verdict JSON from `artifact_path`.
 
 ### Phase 3 — Review and confirm
 
 3a. Review the survey verdict: `bash "$AGENTS_MAIN_ROOT/bin/github-issues/review-survey-verdict-codex.sh" --artifact <survey-artifact> --out <final-artifact>`.
 3b. Of `<final-artifact>` read only `verdict` / `target` / `children` / `related` / `reason` / `review.status` / `review.worth_filing` / `review.verdict` / `review.target` / `review.children` / `review.related`. Phase 4 dispatches on these, not on the Phase 2 values.
-3c. Delete the Phase 2 survey artifact (`rm -f <survey-artifact>`) — it is the only file holding full candidate bodies, and the final artifact has superseded it. Skip silently if absent.
-3d. Classify the gate: `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/eval-confirm-gate.sh" <final-artifact>` — stdout is `confirm: yes|no`, `reasons: <G-list>`, then the info line `worth_filing: true|false|unknown`.
+3c. Delete the Phase 2 survey artifact (`rm -f <survey-artifact>`) when Phase 3 ends (before Phase 4, or on a stop), never before 3d: G0 reads the claim from it via `review.artifact_path`. It is the only file holding full candidate bodies. Skip silently if absent.
+3d. Classify the gate: `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/eval-confirm-gate.sh" <final-artifact> [--finding-key <key>]` — stdout is `confirm: yes|no`, `reasons: <G-list>`, the info line `worth_filing: true|false|unknown`, and `defer: yes` when G0 defers — a HIGH claim the reviewer could not judge, with no approval record to consume (an unconsumed approval record is the user's decision and passes G0 instead): then stop without filing and leave the finding in the notes.
 3e. `confirm: no` → proceed to Phase 4 without asking.
-3f. Applies only when `confirm: yes`, `review.status` is not `disputed`, and G3 did not fire → check the fired conditions against the verdict and placement yourself.
+3f. Applies only when `confirm: yes`, `review.status` is not `disputed`, and neither G0 nor G3 fired → check the fired conditions against the verdict and placement yourself.
 When you agree, first record with `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/record-confirm-decision.sh" '<PLANS_DIR>' '<session-id>' auto '<reasons>' '<rationale>'`; proceed to Phase 4 without asking only when that exits 0, and tell the main conversation why in 1–2 sentences.
 Single-quote every argument of record-confirm-decision.sh and drop any `'` from the text you substitute (rationale is free text; double quotes would expand `$(...)`).
-3g. Otherwise (`disputed`, G3 fired, you disagree or are unsure, or the 3f record exited non-zero) → AskUserQuestion (`metadata.source=issue-create.confirm-gate`) before Phase 4, naming the fired conditions (for `disputed`, both verdicts), and record it the same way with `asked`.
+3g. Otherwise (`disputed`, G0 or G3 fired, you disagree or are unsure, or the 3f record exited non-zero) → AskUserQuestion (`metadata.source=issue-create.confirm-gate`) before Phase 4, naming the fired conditions (for `disputed`, both verdicts), and record it the same way with `asked`.
+When G0 fired, end the approving option's label with `[k:<key>]` (the notes entry key, else 8 hex digits you choose); after approval re-run 3d with `--finding-key <key>` and proceed only when G0 is gone from `reasons`.
 
-The gate is the logical OR of four conditions; the script owns the decision, this list only supplies the question text:
+The gate is the logical OR of five conditions; the script owns the decision, this list only supplies the question text:
+- G0 — no filing approval: neither the HIGH auto condition (claim, `## Severity` evidence and reviewer severity agree) nor an unconsumed approval record for this finding (`bin/finding-filing-gate`)
 - G1 — final verdict is `reopen`, `make-parent`, `sub-of` or `bulk-sub-of` (mutates existing state; `sub-of` / `bulk-sub-of` may reopen closed ancestors of the parent chain)
 - G2 — `review.status` is `disputed`, or the survey and final verdicts differ
 - G3 — the final JSON is missing or unreadable (no readable verdict to agree with, so G3 always goes to 3g)
@@ -140,7 +142,7 @@ After a `reopen`: continue the workflow using the existing issue number. Follow 
 ```bash
 bash "$AGENTS_MAIN_ROOT/bin/github-issues/issue-create-dispatch.sh" \
     --verdict <none|reopen|sub-of|make-parent|sibling> \
-    [--target N | --parent N | --children N,M | --related N,M] [--note "<review note>"] \
+    [--target N | --parent N | --children N,M | --related N,M] [--note "<review note>"] [--merged-finding-file <file>] \
     -- \
     --title "<title>" --body "<body>" \
     [--label "<extra-label>" ...] [--assignee "<user>"] [--milestone "<name>"]
@@ -148,6 +150,7 @@ bash "$AGENTS_MAIN_ROOT/bin/github-issues/issue-create-dispatch.sh" \
 
 When `review.status` is `disputed` and the user chose the reviewer's verdict, dispatch on `review.verdict` / `review.target` / `review.children` / `review.related` instead.
 `--note` applies to `reopen` only, and only when `review.status` is `disputed` and the user chose the reviewer's verdict: build it with `node "$AGENTS_MAIN_ROOT/bin/github-issues/lib/validate-review-verdict.js" --format-note --from <final-artifact>` — never retype the fields, the note is a public record of what the artifact says.
+`--merged-finding-file` applies to every `reopen`: write the proposal's full body to a temp file and pass it; the file's text becomes one comment on the target; on dispatch exit 3 (reopened, comment failed) report the failure and leave the entry unannotated (`skills/_shared/notes-promotion.md` NP-10) so the next NP-7 pass retries it.
 
 `make-parent` creates TWO issues:
 - a `meta`-labeled, `Group: `-titled parent with a generated body
@@ -177,9 +180,7 @@ Failure is non-fatal — the script logs a stderr warning and continues.
 ## Label policy
 
 - `type:task` is attached by `bin/github-issues/issue-create.sh` on every call. (meaning: implementation task ticket — closes as a FEATURE history entry)
-- Additional non-`type:*` labels (e.g. `area:hooks`, `priority:high`) may be
-  passed via `--label`. `type:*` is rejected to avoid confusing
-  `/issue-close-finalize` routing.
+- Additional non-`type:*` labels (e.g. `area:hooks`, `priority:high`) may be passed via `--label`. `type:*` is rejected to avoid confusing `/issue-close-finalize` routing.
 - **severity label (auto-classify, Phase 1)**: after gathering the issue title and body, classify severity; add at most one `severity:*` label — no script under `bin/` infers severity from keywords or any other signal.
   - Read `skills/_shared/severity.md` before judging severity; it is the only definition (SSOT).
   - Apply the label that file maps the severity to (`--label severity:high`, `--label severity:low`, or no label).

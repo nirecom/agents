@@ -1,30 +1,35 @@
 #!/usr/bin/env bash
-# eval-confirm-gate.sh <final-json>
+# eval-confirm-gate.sh <final-json> [--finding-key <k>]
 #
 # List which verdict checks fire before /issue-create creates; CC then decides whether it
-# agrees or must ask (#1926). Gate = OR of G1..G4. Definitions: SKILL.md "Phase 3" (SSOT).
-#
-# stdout: "confirm: yes|no", "reasons: G1,G3" (none → "reasons: "), then the info line
-#         "worth_filing: true|false|unknown" — reported, never used for gating.
-# exit:   0 whenever it classifies; non-zero ONLY on wrong argument count.
-# Every classifiable failure lands on `confirm: yes` — fail-closed by construction; `yes` hands
-# the decision to Phase 3's CC-agreement check (SKILL.md 3f/3g), where G3 always asks.
+# agrees or must ask (#1926). Gate = OR of G0..G4. Definitions: SKILL.md "Phase 3" (SSOT).
+# G0 (#2019) is bin/finding-filing-gate: session from CLAUDE_CODE_SESSION_ID, claim = the file at `review.artifact_path`.
+# stdout: "confirm: yes|no", "reasons: G0,G3" (none → "reasons: "), the info line
+#         "worth_filing: true|false|unknown" (never used for gating), and "defer: yes" when G0 defers.
+# exit:   0 whenever it classifies; 2 ONLY on a wrong argument shape.
+# Every classifiable failure lands on `confirm: yes` — fail-closed by construction.
 
 set -uo pipefail
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 WORTH_FILING="unknown"
+DEFER="no"
 
 emit() {  # <yes|no> <reasons-csv>
     printf 'confirm: %s\n' "$1"
     printf 'reasons: %s\n' "$2"
     printf 'worth_filing: %s\n' "$WORTH_FILING"
+    [[ "$DEFER" == "yes" ]] && printf 'defer: yes\n'
     exit 0
 }
 
 # Arity is a hard error, not something to fail-safe around: an un-migrated caller still
 # passing the retired severity label (#1926) must fail loudly, not be read as one argument.
-if [[ $# -ne 1 ]]; then
-    echo "ERROR: eval-confirm-gate.sh takes exactly 1 argument: <final-json> (got $#)" >&2
+FINDING_KEY=""
+if [[ $# -eq 3 && "$2" == "--finding-key" && -n "$3" ]]; then
+    FINDING_KEY="$3"
+elif [[ $# -ne 1 ]]; then
+    echo "ERROR: eval-confirm-gate.sh takes <final-json> [--finding-key <k>] (got $# arguments)" >&2
     exit 2
 fi
 
@@ -56,6 +61,22 @@ WORTH_FILING="$(printf '%s' "$FIELDS" | cut -f4)"
 [[ "$SURVEY_VERDICT" == "unreadable" ]] && emit yes "G3"
 
 REASONS=()
+
+# G0 — the filing approval (#2019). Runs last-in-effect: it may consume one approval record.
+# The claim is the reviewed survey artifact itself (`review.artifact_path`), handed over unread:
+# the gate hashes the bytes it parses against `review.proposal_sha256` — the one comparison.
+# No artifact_path (or no such file) → no claim, so G0 can only consume an approval (fail-closed).
+node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+G0_ARGS=(--session "${CLAUDE_CODE_SESSION_ID:-}" --review "$(node_path "$FINAL_JSON")")
+CLAIM_SRC="$(node -e 'const fs=require("fs");const a=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const p=a.review&&typeof a.review.artifact_path==="string"?a.review.artifact_path:"";if(p&&fs.existsSync(p))process.stdout.write(p);' "$(node_path "$FINAL_JSON")" 2>/dev/null)"
+[[ -n "$CLAIM_SRC" ]] && G0_ARGS+=(--claim "$CLAIM_SRC")
+[[ -n "$FINDING_KEY" ]] && G0_ARGS+=(--finding-key "$FINDING_KEY")
+G0="$(node "$(node_path "$SCRIPT_CHECKOUT_ROOT/bin/finding-filing-gate")" "${G0_ARGS[@]}" 2>/dev/null | sed -n 's/^g0: //p' | head -n 1)"
+case "$G0" in
+    pass) ;;
+    defer) DEFER="yes" ;;
+    *) REASONS+=("G0") ;;
+esac
 
 # G1 — the verdict itself changes existing issues rather than only adding one.
 # `sub-of` and `bulk-sub-of` belong here with `reopen` and `make-parent` (CPR-ORTH): they
