@@ -74,3 +74,18 @@ for (const [label, prompt] of NOT_TYPED) {
   test(`${label} -> promptInvokesWfInit false`, () => assert.strictEqual(require(MOD).promptInvokesWfInit(prompt), false));
 }
 caseEnd();
+
+// #2942 S1: arguments are read through leading IDE / system / pasted wrappers; an undecidable prompt
+// (unclosed or unknown leading wrapper) yields null.
+const IDE = "<ide_opened_file>The user opened the file c:\\x\\a.md in the IDE.</ide_opened_file>";
+caseBegin("wf-init-prompt-args-wrapped-2942", "hooks/lib/step-in-flight-policy.js");
+for (const [label, prompt, want] of [
+  ["bare /wf-init after ide_opened_file", `${IDE}\n/wf-init #12`, "#12"],
+  ["wrapped /workflow-init after system-reminder", `<system-reminder>\nx\n</system-reminder>\n${wrapped("workflow-init", "#3 #4")}`, "#3 #4"],
+  ["/wf-init inside pasted_content", "<pasted_content id=\"7f\">\n/wf-init #5\n</pasted_content id=\"7f\">", "#5"],
+  ["unclosed leading wrapper", "<ide_opened_file>x\n/wf-init #12", null],
+  ["unknown leading tag", "<foo_bar>x</foo_bar>\n/wf-init #12", null],
+]) {
+  test(`${label} -> ${JSON.stringify(want)}`, () => assert.strictEqual(norm(wfInitPromptArgs()(prompt)), want));
+}
+caseEnd();

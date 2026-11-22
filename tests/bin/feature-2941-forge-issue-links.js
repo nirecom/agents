@@ -109,3 +109,46 @@ test("meta-classify.js still loads after the move", () => {
   assert.strictEqual(typeof require(path.join(P.ROOT, "bin/workflow/lib/workflow-init/phases/meta-classify.js")).metaClassify, "function");
 });
 caseEnd();
+
+// #2942: an errors[] entry whose path lies strictly inside a slot's node fails that slot (gh_exec_failed) even
+// when the node is an object — the node is partial, so readNode never sees it. Other slots read normally.
+caseBegin("classify-graphql-error-inside-node", "bin/lib/forge-issue-links.js");
+const SLOTS = [{ key: "a", path: ["r0", "i0"] }, { key: "b", path: ["r0", "i1"] }];
+const issue = (n) => ({ number: n, parent: null });
+const gh = (data, errors, status = 1) => ({ status, stdout: JSON.stringify(errors ? { data, errors } : { data }) });
+function classify(r) {
+  const seen = [];
+  const c = L().classifyGraphqlResult(r, SLOTS, (node, key) => { seen.push(key); return { ok: true, n: node.number }; });
+  assert.strictEqual(c.ok, true, JSON.stringify(c));
+  return { res: c.results, seen };
+}
+const both = { r0: { i0: issue(1), i1: issue(2) } };
+test("E1 a non-NOT_FOUND error inside an object node -> gh_exec_failed, readNode not called", () => {
+  const { res, seen } = classify(gh(both, [{ type: "FORBIDDEN", path: ["r0", "i0", "projectItems", "nodes", 0, "project"] }]));
+  assert.deepStrictEqual(res.a, { ok: false, reason: "gh_exec_failed" });
+  assert.ok(!seen.includes("a"), `readNode read the partial node: ${seen}`);
+});
+test("E2 a NOT_FOUND inside an object node is gh_exec_failed, not issue_not_found", () => {
+  const { res, seen } = classify(gh(both, [{ type: "NOT_FOUND", path: ["r0", "i0", "parent"] }]));
+  assert.deepStrictEqual(res.a, { ok: false, reason: "gh_exec_failed" });
+  assert.ok(!seen.includes("a"), `readNode read the partial node: ${seen}`);
+});
+test("E3 an error inside i0 only leaves i1 read normally", () => {
+  const { res, seen } = classify(gh(both, [{ type: "FORBIDDEN", path: ["r0", "i0", "parent"] }]));
+  assert.deepStrictEqual(res.b, { ok: true, n: 2 });
+  assert.deepStrictEqual(seen, ["b"]);
+});
+test("E4 errors under another alias, a sibling slot or with no path do not touch an object node", () => {
+  for (const e of [{ type: "FORBIDDEN", path: ["r1", "i0", "parent"] }, { type: "FORBIDDEN", path: ["r0", "i1", "parent"] }, { type: "FORBIDDEN", path: ["r0", "i10", "parent"] }, { type: "FORBIDDEN" }]) {
+    const { res } = classify(gh(both, [e]));
+    assert.deepStrictEqual(res.a, { ok: true, n: 1 }, JSON.stringify(e));
+  }
+});
+test("E5 regression: a null node with NOT_FOUND is issue_not_found; with another type gh_exec_failed", () => {
+  const nf = classify(gh({ r0: { i0: null, i1: issue(2) } }, [{ type: "NOT_FOUND", path: ["r0", "i0"] }]));
+  assert.deepStrictEqual(nf.res.a, { ok: false, reason: "issue_not_found" });
+  assert.deepStrictEqual(nf.res.b, { ok: true, n: 2 });
+  const other = classify(gh({ r0: { i0: null, i1: issue(2) } }, [{ type: "FORBIDDEN", path: ["r0", "i0"] }]));
+  assert.deepStrictEqual(other.res.a, { ok: false, reason: "gh_exec_failed" });
+});
+caseEnd();

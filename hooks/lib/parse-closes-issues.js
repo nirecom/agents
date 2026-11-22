@@ -12,11 +12,17 @@ const fs = require("fs");
 // Group 1: repo slug (e.g. "owner/repo" or "repo"), or undefined for local issues.
 // Group 2: issue number digits.
 // Accepts: #N, repo#N, owner/repo#N, N (bare legacy), and optional ": <title>" suffix.
-const ISSUE_TOKEN_BODY_RE = /^(?:([a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)?)#|#)?(\d+)(?:.*)?$/;
+// Repo slug fragment ("repo" or "owner/repo") shared by every issue-reference regex below.
+const REPO_SLUG = "[a-zA-Z0-9_.-]+(?:\\/[a-zA-Z0-9_.-]+)?";
+const ISSUE_TOKEN_BODY_RE = new RegExp(`^(?:(${REPO_SLUG})#|#)?(\\d+)(?:.*)?$`);
 
 // CLI guard: token must contain '#' immediately before digits.
 // Rejects bare digit strings and decimal numbers (e.g. "3.2", "42").
-const ISSUE_TOKEN_CLI_GUARD_RE = /^(?:[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)?)?#\d/;
+const ISSUE_TOKEN_CLI_GUARD_RE = new RegExp(`^(?:${REPO_SLUG})?#\\d`);
+
+// Whole-value match for a CLI flag naming one issue: [[owner/]repo]#N or bare N, N a positive integer
+// without leading zeros, nothing after it. Group 1: repo slug; group 2: the number.
+const ISSUE_FLAG_VALUE_RE = new RegExp(`^(?:(${REPO_SLUG})?#)?([1-9][0-9]*)$`);
 
 function collectEntries(lines, headingRe) {
   let inSection = false;
@@ -62,6 +68,19 @@ function parseIssueToken(token) {
   return result;
 }
 
+// Parse the value of a CLI flag that names an issue (--issue): bare N is accepted here because the
+// flag name supplies the "issue" context free text lacks (`#` also starts a shell comment).
+// The value must match whole and strict: a flag names exactly one issue, so a tail ("#3.2", "#12abc") or a
+// non-canonical number ("#0", "#007") is a typo to refuse, not free text to read leniently as parseIssueToken does.
+function parseIssueFlagValue(token) {
+  const t = typeof token === "string" ? token.trim() : "";
+  const m = t.match(ISSUE_FLAG_VALUE_RE);
+  if (!m) return null;
+  const result = { number: parseInt(m[2], 10) };
+  if (m[1]) result.repo = m[1];
+  return result;
+}
+
 // Split free text on whitespace / commas, keep the words carrying '#', parse each in order.
 function parseIssueTokens(text) {
   const tokens = String(text || "").split(/[\s,\n]+/).filter(Boolean).filter((tok) => /#/.test(tok));
@@ -83,4 +102,4 @@ function parseClosesIssues(intentMdPath) {
   return collectEntries(lines, /^## closes_issues\s*$/);
 }
 
-module.exports = { parseClosesIssues, parseIssueToken, parseIssueTokens, ISSUE_TOKEN_CLI_GUARD_RE };
+module.exports = { parseClosesIssues, parseIssueToken, parseIssueFlagValue, parseIssueTokens, ISSUE_TOKEN_CLI_GUARD_RE };

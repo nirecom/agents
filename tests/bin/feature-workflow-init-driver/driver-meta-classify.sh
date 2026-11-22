@@ -23,7 +23,8 @@ RD_MOD="$PHASES_DIR/route-decision.js"
 # #2087: closed-detection sits immediately after fetch-issues — a closed issue must
 # be resolved (reopen/remove) before meta-classify consumes it into a meta_select
 # that replaces state.issues, and before wip-check claims ownership of it.
-WANT_PHASE_ORDER="adopt-prior-state,detect-issues,fetch-issues,closed-detection,label-extract,meta-classify,wip-check,route-decision,write-context"
+# #2942: pm-scan sits between wip-check and route-decision (owner of each issue, multi-pm block).
+WANT_PHASE_ORDER="adopt-prior-state,detect-issues,fetch-issues,closed-detection,label-extract,meta-classify,wip-check,pm-scan,route-decision,write-context"
 
 # --- probe harness -------------------------------------------------------------
 # Runs a node snippet from inside $CASE_DIR so the mock `gh` on PATH and the git

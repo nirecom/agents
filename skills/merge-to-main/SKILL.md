@@ -27,7 +27,9 @@ MM-3. **Merge the PR (pull_request):** run `node "$AGENTS_MAIN_ROOT/bin/workflow
    `OPEN` → issue the merge as one direct Bash call, never wrapped in a helper:
    github: `gh pr merge <PR_NUMBER> --squash --delete-branch`
    gitlab: `glab mr merge <PR_NUMBER> --squash --remove-source-branch`
-   Merge failure → surface the error and stop; on success go to MM-5.
+   Merge failure → surface the error and stop; on success go to MM-3a.
+
+MM-3a. **Notify the PM (fail-open):** run `node "$AGENTS_MAIN_ROOT/bin/pm-notify" record --point merge --issue <ref>` once per `closes_issues` ref, send per `skills/_shared/pm-notify.md`, then go to MM-5.
    `NONE` → run `bash "$AGENTS_MAIN_ROOT/bin/probe-remote-bootstrap.sh" "<WORKTREE_PATH>"`; `preBootstrap` true with `classification` `empty-repo` (the `/commit-push` outcome was `bootstrap_pending`) → MM-3b; otherwise go to MM-5, which accepts an earlier bootstrap push and refuses when `/commit-push` never opened the PR.
    `CLOSED` or `UNKNOWN` → surface the state and stop.
 

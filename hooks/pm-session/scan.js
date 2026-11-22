@@ -61,8 +61,30 @@ function isCurrentGeneration(sid, entries) {
   return Boolean(cur) && cur.session_id === sid;
 }
 
+// tagsOf(pm) -> every tag that names this PM (#2942): its tag, its retired tags, a pending rename target.
+function tagsOf(pm) {
+  const out = [pm.tag];
+  for (const t of Array.isArray(pm.retired_tags) ? pm.retired_tags : []) if (typeof t === "string") out.push(t);
+  if (pm.rename_pending && typeof pm.rename_pending.to === "string") out.push(pm.rename_pending.to);
+  return out;
+}
+
+const namesTag = (e, tag) => tagsOf(e.pm).some((t) => S.sameTag(t, tag));
+
 function tagInUse(tag, entries) {
-  return (entries || listPmFiles()).some((e) => S.sameTag(e.pm.tag, tag));
+  return (entries || listPmFiles()).some((e) => namesTag(e, tag));
+}
+
+// generationOfTag(tag, entries?) -> the current generation's entry {session_id, file, pm} of the PM a tag
+// names (its tag, a retired tag or a pending rename target; case-insensitive), or null (#2942).
+function generationOfTag(tag, entries) {
+  if (typeof tag !== "string" || tag === "") return null;
+  const named = (entries || listPmFiles()).filter((e) => namesTag(e, tag));
+  let best = null;
+  for (const e of named) {
+    if (!best || sinceMs(e) > sinceMs(best) || (sinceMs(e) === sinceMs(best) && e.session_id > best.session_id)) best = e;
+  }
+  return best;
 }
 
 function listPmTags(entries) {
@@ -101,5 +123,5 @@ function directHoldersOf(ref, opts) {
 }
 
 module.exports = {
-  listPmFiles, currentGenerations, currentOf, isCurrentGeneration, tagInUse, listPmTags, listActivePms, assignedAt, directHoldersOf,
+  listPmFiles, currentGenerations, currentOf, isCurrentGeneration, tagInUse, generationOfTag, tagsOf, listPmTags, listActivePms, assignedAt, directHoldersOf,
 };

@@ -25,6 +25,7 @@ function setup(S, name) {
   w.pm(own.c2, P.pm({ tag: "PM-ck2", issues: [4602] }));
   w.pm(own.c3, P.pm({ tag: "PM-ck3", issues: [4600] }));
   w.pm(own.c4, P.pm({ tag: "PM-ck4", issues: [4603] }));
+  w.field({ "o/r#4800": "PM-cliX", "o/r#4601": "PM-ck1", "o/r#4602": "PM-ck2", "o/r#4600": "PM-ck3", "o/r#4603": "PM-ck4" });
   w.plain(sid.wf);
   w.intent(sid.wf, ["#4601"]);
   w.plain(sid.bare);
@@ -75,11 +76,14 @@ function inputs(S) {
     assert.strictEqual(a.out, b.out);
   });
   test("cli-checkpoint: only the owners of state.issues are injected, not of the driver's input tokens", () => {
+    const before = w.ghLog().length;
     const r = w.cli(["--timing", "session-start", "--session", sid.bare, "--checkpoint", ckpt("done", checkpointOf(sid.bare, [4601, 4603]))], md);
     code(r, 0);
     for (const s of ["PM-ck1", own.c1, "PM-ck4", own.c4]) assert.ok(r.out.includes(s), `${s}: ${brief(r)}`);
     for (const s of ["PM-ck2", "PM-ck3"]) assert.ok(!r.out.includes(s), `${s} leaked: ${brief(r)}`);
-    assert.strictEqual(r.calls, 0, brief(r));
+    // The PM field is read for state.issues only: the driver's input tokens never reach the forge.
+    const asked = w.ghLog().slice(before);
+    for (const n of [4600, 4602]) assert.ok(!new RegExp(`number:\\s*${n}\\b`).test(asked), `#${n} was looked up: ${asked.slice(0, 600)}`);
   });
   test("cli-checkpoint: empty state.issues (Path C) -> empty stdout, exit 0", () => {
     const r = w.cli(["--timing", "session-start", "--session", sid.bare, "--checkpoint", ckpt("empty", checkpointOf(sid.bare, []))], md);
@@ -150,4 +154,27 @@ function timings(S) {
   }
 }
 
-module.exports = { argErrors, inputs, failures, timings };
+// bareIssue (#2942): `--issue N` is the same request as `--issue #N`; a non-issue number stays exit 2.
+function bareIssue(S) {
+  const { w, md, sid, own } = setup(S, "bare");
+  for (const [label, bare, hashed] of [["one issue", ["4601"], ["#4601"]], ["repeated issues", ["4601", "4603"], ["#4601", "#4603"]]]) {
+    test(`cli-issue-bare: ${label} as bare N -> same exit 0 and stdout as #N`, () => {
+      const args = (refs) => ["--timing", "before-companions", "--session", sid.bare].concat(...refs.map((x) => ["--issue", x]));
+      const a = w.cli(args(bare), md);
+      const b = w.cli(args(hashed), md);
+      code(b, 0);
+      code(a, 0);
+      assert.ok(b.out.includes("PM-ck1") && b.out.includes(own.c1), brief(b));
+      assert.strictEqual(a.out, b.out, `bare ${brief(a)} vs hashed ${brief(b)}`);
+    });
+  }
+  for (const v of ["0", "3.2", "007", "-1"]) {
+    test(`cli-issue-bare: --issue ${v} -> exit 2, nothing printed`, () => {
+      const r = w.cli(["--timing", "before-companions", "--session", sid.bare, "--issue", v], md);
+      code(r, 2);
+      assert.strictEqual(r.out, "", brief(r));
+    });
+  }
+}
+
+module.exports = { argErrors, inputs, failures, timings, bareIssue };

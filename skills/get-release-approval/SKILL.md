@@ -38,7 +38,7 @@ GA-2b. **Wait for the web merge:** run `bash "$AGENTS_MAIN_ROOT/skills/get-relea
 
 ## Completion
 
-GA-4. **Continue:** run `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --session "<session-id>"` and follow its `ACTION`.
+GA-4. **Continue:** after a web merge, run `node "$AGENTS_MAIN_ROOT/bin/pm-notify" record --point merge --issue <ref>` once per `closes_issues` ref and send per `skills/_shared/pm-notify.md` (fail-open); then run `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --session "<session-id>"` and follow its `ACTION`.
 
 ## Rules
 

@@ -2,7 +2,7 @@
 
 Procedure for `/commit-push` CP-1b: tell the assigned PM session before CP-2 creates the PR.
 Design and rationale: `docs/architecture/cross-session-messaging.md` §7; header, ack and exit codes: §4 and §6 there.
-ListAgents, SendMessage and AskUserQuestion are model tools, so these steps stay in the prompt rather than a CLI.
+ListAgents, SendMessage and AskUserQuestion are model tools, so these steps stay in the prompt rather than a CLI. <!-- askuser-none -->
 
 ## Recording the PM
 
@@ -15,14 +15,17 @@ ListAgents, SendMessage and AskUserQuestion are model tools, so these steps stay
 
 ## PPC-1. Decide whether a PM is assigned
 
-- Treat the PM as assigned only when this session chain received a `role=pm` `[peer-msg v1]` (the recorded facts above).
-- With no such message, skip the rest of this procedure and continue to CP-2.
+- Run `node "$AGENTS_MAIN_ROOT/bin/pm-notify" check-header --tag <PM tag> --pm-issues <recorded pm-issues> --closes <closes_issues>`; with no recorded header, pass `--tag` from `bin/pm-state owner` of `closes_issues` and `--pm-issues ""`.
+- Treat the PM as assigned when a `role=pm` header was recorded or `OWNER_TAG=` is non-empty (an `owner` hit counts without a record).
+- `RESULT=mismatch` or `RESULT=undecidable` → AskUserQuestion (`metadata.source=pm-pre-pr-contact.header-mismatch`) showing both sides: the header's `pm-issues` and `EXTRA=` / `MISSING=` / `OWNER_TAG=` / `REASON=`.
+- `REASON=pm-tag-renamed` → use `NEW_TAG=` as the tag and rerun the check.
+- With no record and no `owner` hit, skip the rest of this procedure and continue to CP-2.
 
 ## PPC-2. Confirm the PM is in ListAgents
 
 - Run ListAgents and write its output to a file under the session scratchpad with the Write tool.
 - Count the PM as present only when one entry's name matches `PM_NAME_PREFIX_RE`, contains the first number of the recorded `pm-issues`, and ends with the `SESSION_NAME_SUFFIX_RE` suffix (`hooks/lib/session-name.js`): ` sid-` followed by the first 8 characters of the recorded `from-session`.
-- When no entry qualifies, including a matching name with a different suffix, stop and AskUserQuestion: the PM may not have been started again by hand.
+- When no entry qualifies, including a matching name with a different suffix, stop and AskUserQuestion (`metadata.source=pm-pre-pr-contact.pm-missing`): the PM may not have been started again by hand.
 
 ## PPC-3. Send
 
@@ -36,5 +39,5 @@ ListAgents, SendMessage and AskUserQuestion are model tools, so these steps stay
 - Start `node "$AGENTS_MAIN_ROOT/bin/peer-msg" timer --msg-id <msg-id> --seconds 600` in the background.
 - When a `[peer-ack v1]` arrives, write it to a file and run `node "$AGENTS_MAIN_ROOT/bin/peer-msg" verify --msg-id <msg-id> --expect-session <PM full id> --ack-file <ack file>`.
 - On exit 0, emit `<<WORKFLOW_NEXT_STEP_RESUME: PM ack received>>` and continue to CP-2.
-- When the timer ends first or `verify` exits 3 or 4, emit the RESUME sentinel and AskUserQuestion.
+- When the timer ends first or `verify` exits 3 or 4, emit the RESUME sentinel and AskUserQuestion (`metadata.source=pm-pre-pr-contact.ack-failed`).
 - Never resend automatically; this procedure adds no gate.

@@ -20,19 +20,21 @@ function chainRecord(F) {
   });
 }
 
-// H7 — #2668: a session whose state cannot be read is its own root (its own control dir) and
-// gets the work name; a readable state that cannot confirm a root still stays quiet.
+// H7 — #2668: a session with no state is its own root (its own control dir) and gets the work
+// name; a readable state that cannot confirm a root still stays quiet.
+// #2942: a corrupt state is unreadable, so the PM writer cannot tell whether this is a PM session
+// and refuses the /wf-init (a PM-command hit): no name and no record.
 function unconfirmedRoots(F) {
   for (const [label, make] of [
     ["no state", () => {}],
     ["corrupt state", (sid) => { fs.mkdirSync(path.dirname(F.WS.getStatePath(sid)), { recursive: true }); fs.writeFileSync(F.WS.getStatePath(sid), "{broken"); }],
   ]) {
-    test(`H7 ${label}: /wf-init #12 emits the work name and records it in its own control dir`, () => {
+    test(`H7 ${label}: /wf-init #12 ${label === "no state" ? "emits the work name and records it in its own control dir" : "is refused, naming nothing"}`, () => {
       const sid = F.newSid("h7s"); make(sid);
-      const d = F.deps();
+      const d = F.deps(), want = label === "no state" ? "#12 Title12" : null;
       const r = F.call(sid, "/wf-init #12", d);
-      assert.strictEqual(r, "#12 Title12", JSON.stringify(r));
-      assert.strictEqual((F.readRecord(sid) || {}).last_emitted, "#12 Title12", JSON.stringify(F.readRecord(sid)));
+      assert.strictEqual(r, want, JSON.stringify(r));
+      assert.strictEqual((F.readRecord(sid) || {}).last_emitted, want || undefined, JSON.stringify(F.readRecord(sid)));
     });
   }
   for (const [label, make] of [

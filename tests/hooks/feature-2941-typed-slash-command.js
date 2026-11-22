@@ -72,3 +72,20 @@ for (const bad of [null, undefined, 42, {}]) {
   test(`non-string prompt ${String(bad)} -> null`, () => assert.strictEqual(norm(typed()(bad, NAMES)), null));
 }
 caseEnd();
+
+// #2942 S1: a typed command behind leading IDE / system wrappers or inside <pasted_content ...> is a hit;
+// an unclosed or unknown leading wrapper is undecidable, which typedSlashCommand reports as null.
+const REC = JSON.parse(require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "lib", "fixtures", "pasted-content-recorded.json"), "utf8"));
+const IDE = "<ide_opened_file>The user opened the file c:\\x\\a.md in the IDE.</ide_opened_file>";
+caseBegin("typed-slash-command-wrapped-prompts-2942", "hooks/lib/typed-slash-command.js");
+for (const [label, prompt, want] of [
+  ["/pm-init after ide_opened_file", `${IDE}\n/pm-init PM-a #1`, { name: "pm-init", args: "PM-a #1" }],
+  ["wrapped /pm-add after system-reminder", `<system-reminder>\nx\n</system-reminder>\n${P.wrapped("pm-add", "#5")}`, { name: "pm-add", args: "#5" }],
+  ["/pm-remove inside pasted_content", "<pasted_content id=\"3c\">\n/pm-remove #3\n</pasted_content id=\"3c\">", { name: "pm-remove", args: "#3" }],
+  ["the recorded pasted prompt", REC.blocks.join(""), REC.expect],
+  ["unclosed leading wrapper", "<ide_opened_file>x\n/pm-init PM-a", null],
+  ["unknown leading tag", "<foo_bar>x</foo_bar>\n/pm-init PM-a", null],
+]) {
+  test(`${label} -> ${JSON.stringify(want)}`, () => assert.deepStrictEqual(norm(typed()(prompt, NAMES)), want));
+}
+caseEnd();

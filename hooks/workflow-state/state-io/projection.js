@@ -47,6 +47,8 @@ const PERSISTED_TOP_LEVEL_KEYS = [
   "verbose_prompt",
   "merge_base_baseline",
   "pm",
+  "pm_notifications",
+  "pm_owner_records",
   "events",
   "current",
 ];

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // Tests: hooks/workflow-state/inheritance/apply.js, hooks/workflow-state/inheritance/adopt.js
-// Tags: TL2, session-inherit, workflow-state, state-handoff-record, event-stream, regression-2652, scope:issue-specific, dup-group-keep:size-hard-limit, pwsh-not-required, regression-2920, workflow-abort, regression-2941, pm-session
+// Tags: TL2, session-inherit, workflow-state, state-handoff-record, event-stream, regression-2652, scope:issue-specific, dup-group-keep:size-hard-limit, pwsh-not-required, regression-2920, workflow-abort, regression-2941, pm-session, regression-2942
 // #2652 S4: adopting (--from) a session-upstream whose state carries state handoff records — the
 // records stay generation-local (not copied), the downstream's own records survive (re-)adoption
 // and never trip the overwrite guard, and the upstream's records stay readable by sid.
@@ -342,6 +342,35 @@ caseBegin("adopt-keeps-pm-generation-local", "hooks/workflow-state/inheritance/a
     const r = adoptSoft("d-pm-none", "u-pm2");
     if (r.error) throw new Error(r.error);
     eq("pm" in F.raw("d-pm-none"), false, "pm key in the downstream");
+  });
+}
+caseEnd();
+
+// #2942 S14: pending notifications to the PM (workflow state `pm_notifications`, written by
+// bin/pm-notify record) travel to the session-downstream, so a later notification point still sends them.
+// Assumed shape: an array of {id, point, issue, status, ...}; ids identify one notification.
+const note = (id, status) => ({ id, point: "workflow-init", issue: "o/r#2942", status, recorded_at: "2026-11-20T00:00:00.000Z" });
+const withNotes = (sid, list) => { const st = F.raw(sid); st.pm_notifications = list; F.writeRaw(sid, st); };
+const noteIds = (sid) => (F.raw(sid).pm_notifications || []).map((n) => n.id).sort();
+
+caseBegin("adopt-carries-pm-notifications", "hooks/workflow-state/inheritance/apply.js");
+{
+  check("#2942: the upstream's pending and undelivered pm_notifications reach the downstream", () => {
+    F.seedUpstream("u-notes");
+    withNotes("u-notes", [note("n-1", "pending"), note("n-2", "undelivered")]);
+    F.seedDownstream("d-notes");
+    const r = adoptSoft("d-notes", "u-notes");
+    if (r.error) throw new Error(r.error);
+    eq(noteIds("d-notes"), ["n-1", "n-2"], "pm_notifications ids in the downstream");
+  });
+  check("#2942: the downstream's own pm_notifications survive the adoption, each id once", () => {
+    F.seedUpstream("u-notes2");
+    withNotes("u-notes2", [note("n-3", "pending"), note("n-4", "pending")]);
+    F.seedDownstream("d-notes2");
+    withNotes("d-notes2", [note("n-4", "pending"), note("n-5", "undelivered")]);
+    const r = adoptSoft("d-notes2", "u-notes2");
+    if (r.error) throw new Error(r.error);
+    eq(noteIds("d-notes2"), ["n-3", "n-4", "n-5"], "pm_notifications ids in the downstream");
   });
 }
 caseEnd();

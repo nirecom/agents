@@ -6,9 +6,11 @@ const path = require("path");
 const io = require("../workflow-state/state-io");
 const S = require("./schema");
 
-// The forge budget of one writer run: the hook's 10 s timeout also holds node start-up, the scan,
-// the writer's origin read (1 s) and the title's origin (1 s) and tracker (3 s) reads.
-const WRITER_FORGE_BUDGET_MS = 3000;
+// The forge budgets of one writer run (#2942): the checks (ancestry, PM field chains, sub-issues) and
+// the PM field writes each get their own. With the 1.5 s PM lock wait they fit the hook's 10 s, and
+// together they stay under PM_LOCK_STALE_MS (pm-lock.js) so a live writer is never seen as stale.
+const WRITER_CHECK_BUDGET_MS = 3000;
+const WRITER_WRITE_BUDGET_MS = 5000;
 const ORIGIN_TIMEOUT_MS = 1000;
 
 class Refusal extends Error {}
@@ -23,14 +25,27 @@ function workflowBegun(sid) {
   return readWorkflowBegun(sid).verdict === "begun";
 }
 
-// homeRepoOf(input, deps) -> the owner/repo of the cwd's origin (a local git read, no forge), or null.
-function homeRepoOf(input, deps) {
+// homeOriginOf(input, deps) -> the cwd's origin URL (a local git read, no forge), or null; read once per run.
+function homeOriginOf(input, deps) {
+  if (input && Object.prototype.hasOwnProperty.call(input, "__origin")) return input.__origin;
+  let url;
   try {
     const { toWindowsPath } = require("../lib/branch-diff");
     const { originUrl } = require("../workflow-gate/gh-detect");
-    const { parseOriginOwnerRepo } = require("../lib/parse-remote-url");
     const cwd = toWindowsPath(typeof input.cwd === "string" && input.cwd ? input.cwd : process.cwd());
-    const url = originUrl(cwd, { timeoutMs: ORIGIN_TIMEOUT_MS, spawnSync: deps && deps.spawnSync });
+    url = originUrl(cwd, { timeoutMs: ORIGIN_TIMEOUT_MS, spawnSync: deps && deps.spawnSync }) || null;
+  } catch (_) {
+    url = null;
+  }
+  if (input && typeof input === "object") Object.defineProperty(input, "__origin", { value: url, enumerable: false });
+  return url;
+}
+
+// homeRepoOf(input, deps) -> the owner/repo of the cwd's origin, or null.
+function homeRepoOf(input, deps) {
+  try {
+    const { parseOriginOwnerRepo } = require("../lib/parse-remote-url");
+    const url = homeOriginOf(input, deps);
     const parsed = url ? parseOriginOwnerRepo(url) : null;
     return parsed && parsed.ok ? parsed.ownerRepo : null;
   } catch (_) {
@@ -38,19 +53,39 @@ function homeRepoOf(input, deps) {
   }
 }
 
-// resolved(ref, home) -> {number, repo:"owner/repo"} when the repo is known, else the stored ref
-// (ancestry.holdersOf then answers repo-unknown for it).
-function resolved(ref, home) {
+// normalizeRef(ref, home) -> {number, repo:"owner/repo"}, the one ref normalizer of the writer and
+// bin/pm-state (#2942); idempotent. A ref whose repo cannot be resolved is Refusal("repo-unresolved").
+function normalizeRef(ref, home) {
   const repo = S.resolveRepo(ref, home);
-  return repo.includes("/") ? { number: Number(ref.number), repo } : S.toRef(ref);
+  if (!repo.includes("/")) {
+    refuse(`repo-unresolved: the repo of #${ref && ref.number} cannot be resolved (repo-unknown), and retrying will not fix it; run from a checkout whose origin is the issue's repo, or write owner/repo#N.`);
+  }
+  return { number: Number(ref.number), repo };
 }
 
-// ancestryOf(deps) -> a range checker over the forge, bounded by WRITER_FORGE_BUDGET_MS from now.
-function ancestryOf(deps) {
+// normalizeStoredRef(ref, home) -> normalizeRef's answer, or the stored ref {number, repo?} when its repo
+// cannot be resolved: for refs already in a state file (another PM's issues, an inherited assignment),
+// which the caller reads but never takes from the user. ancestry.holdersOf answers repo-unknown for it.
+function normalizeStoredRef(ref, home) {
+  try { return normalizeRef(ref, home); } catch (e) {
+    if (e instanceof Refusal) return S.toRef(ref);
+    throw e;
+  }
+}
+
+// ancestryOf(deps, deadlineAt?) -> a range checker over the forge, bounded by deadlineAt
+// (default: WRITER_CHECK_BUDGET_MS from now).
+function ancestryOf(deps, deadlineAt) {
   const BIN = path.join(__dirname, "..", "..", "bin", "lib");
   const { createAncestry } = require(path.join(BIN, "pm-state", "ancestry"));
   const fetch = (deps && deps.fetchAncestorChains) || require(path.join(BIN, "forge-issue-links")).fetchAncestorChains;
-  return createAncestry({ fetchAncestorChains: fetch, deadlineAt: Date.now() + WRITER_FORGE_BUDGET_MS });
+  return createAncestry({ fetchAncestorChains: fetch, deadlineAt: Number.isFinite(deadlineAt) ? deadlineAt : Date.now() + WRITER_CHECK_BUDGET_MS });
+}
+
+// lockRefusal(e) -> the Refusal of a busy PM lock, or e itself; the writer shows it like any refusal.
+function lockRefusal(e) {
+  const { PmLockBusy } = require("./pm-lock");
+  return e instanceof PmLockBusy ? new Refusal(e.message) : e;
 }
 
 const labels = (refs) => refs.map(S.refLabel).join(" ") || "(none)";
@@ -67,4 +102,7 @@ function note(op, pm, extra) {
   ]).join("\n");
 }
 
-module.exports = { WRITER_FORGE_BUDGET_MS, ORIGIN_TIMEOUT_MS, Refusal, refuse, rawOf, workflowBegun, homeRepoOf, resolved, ancestryOf, labels, note };
+module.exports = {
+  WRITER_CHECK_BUDGET_MS, WRITER_WRITE_BUDGET_MS, ORIGIN_TIMEOUT_MS, Refusal, refuse, rawOf, workflowBegun, homeOriginOf, homeRepoOf,
+  normalizeRef, normalizeStoredRef, ancestryOf, lockRefusal, labels, note,
+};

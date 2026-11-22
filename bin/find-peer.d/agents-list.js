@@ -15,13 +15,22 @@ const OWN_SESSION_RE = /^This session is (?!")(.+) \[([0-9a-f]{6})\] — [^[\]]*
 // eslint-disable-next-line no-control-regex
 const CONTROL_RE = /[\u0000-\u001f\u007f]/;
 
-// parseAgentsList(text) -> [{ref, name, sessionId|null}], or null when any non-blank line is not an entry.
+// The "Subagents (N):" section lists this session's own subagents (no peer, rows in another shape): its
+// indented lines are skipped (#2942); the first non-indented line ends it and is read as usual.
+const SUBAGENTS_HEADING_RE = /^Subagents \(\d+\):?$/;
+
+// parseAgentsList(text) -> [{ref, name, sessionId|null}], or null when any non-blank line outside the
+// Subagents section is not an entry (an unknown line in Peer sessions still fails, never skips).
 function parseAgentsList(text) {
   const entries = [];
+  let inSubagents = false;
   for (const raw of String(text).split("\n")) {
     const line = raw.replace(/\r$/, "");
     if (line.trim() === "") continue;
     if (CONTROL_RE.test(line)) return null;
+    if (SUBAGENTS_HEADING_RE.test(line)) { inSubagents = true; continue; }
+    if (inSubagents && /^\s/.test(line)) continue;
+    inSubagents = false;
     const legacy = line.match(LEGACY_ENTRY_RE);
     if (legacy) {
       entries.push({ ref: legacy[1], name: legacy[2], sessionId: legacy[3] || null });

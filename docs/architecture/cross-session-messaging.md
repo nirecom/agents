@@ -163,7 +163,48 @@ procedure is [skills/_shared/pm-pre-pr-contact.md](../../skills/_shared/pm-pre-p
   minutes even while busy with another turn, so 10 minutes does not over-wait.
 - A timeout or an ack mismatch goes to the user. There is no automatic resend and no new gate.
 
-## 8. Verification observations
+### `pm-issues`: how it is built and checked
+
+- `bin/peer-msg header --role pm` takes no `--pm-issues` (passing it is a usage error): it reads
+  the assigned issue list of its tag's current generation, so a PM cannot announce issues it does
+  not own, and a session of an older generation announces what the tag owns now, not its stale copy.
+  No PM state, a renamed tag (`NEW_TAG=`), or an empty list (`REASON=no-pm-issues`) refuses with
+  exit 1 and a `REASON`.
+- The workflow side runs `bin/pm-notify check-header` (PPC-1). It compares the header's whole
+  `pm-issues` set with `closes_issues` and with the forge owner of each issue (`OWNER_TAG=`):
+  `RESULT=mismatch` (`EXTRA=` / `MISSING=`, or `REASON=owner-differs`) and `RESULT=undecidable`
+  go to the user. An `owner` hit with no recorded header still counts as an assigned PM.
+
+## 8. PM notification points
+
+Why: the PM must learn of changes to its issues without polling each session. Each notification
+point records a note in the workflow session's state (`bin/pm-notify record`; a pending note for
+the same point, issue and PM is reused), and the skill loop
+[skills/_shared/pm-notify.md](../../skills/_shared/pm-notify.md) sends it with the §6 header and
+settles it as `ack`, `timeout` or `offline`. Every layer is fail-open: a failure never blocks the
+workflow. Notes the PM could not take land in its mailbox; `pm-notify close` reports what is left.
+
+| Point | Recorded by | Sent by |
+|---|---|---|
+| `start`, `multi-pm` | `/workflow-init` driver phase `pm-scan` (owner lookup, 10 s budget) and `write-context` | `/workflow-init` on `done` / `blocked` |
+| `wf-meta` | `bin/workflow/set-deliverable-type --type wf-meta` | `/workflow-init` PM3 |
+| `scope-change` | `next-step` gate on an approved detail scope change | `confirm-plan.md` `present-and-stop` |
+| `reopen`, `split`, detach | `issue-create-dispatch.sh` (`reopen`, `bulk-sub-of`, `make-parent`) | `/issue-create` after Phase 4 |
+| `merge` | `/merge-to-main` MM-3a, `/get-release-approval` GA-4 (web merge) | the same steps |
+| `session-close` | `/session-close` SC-6a | SC-6a, then `pm-notify close` |
+
+- Two or more owners among a session's issues block `/workflow-init` with `REASON=multi-pm`
+  after a `multi-pm` note goes to each PM; the user reassigns with `/pm-remove` / `/pm-add`.
+- On the PM side the inbox (`runInbox`) shows and empties the mailbox after each PM command and at
+  session start; the forge drift check runs only at session start, within its time slice.
+  The forge steps (unassigned owner lookup, drift, meta detach) run only when the home origin is
+  GitHub; elsewhere `unassigned.jsonl` is left as is and no `gh` call is made.
+- PM lock liveness: a lock holder counts as alive while its pid lives and its process start time
+  matches `start_ms` within 2000 ms (an unreadable start time counts as alive). A live holder's
+  lock is never taken, even past `PM_LOCK_STALE_MS`; the command refuses with `HOLDER_PID` and
+  `HOLDER_AGE_MS` so the user can stop the holder. Serialising forge writes wins over availability.
+
+## 9. Verification observations
 
 Verification (a) and (b) ran on a real session on 2026-11-09; the full note is a comment on issue #2668.
 
