@@ -164,14 +164,16 @@ cl_declared_producers() {
     esac
 }
 
-# cl_allowed_producers <format> — the closed set of producers that may appear in
-# a round of this format at all. An empty list means "no closed set" and only
-# the lexical token check in cl_stage applies. review-security-shared admits
-# exactly its primary and its fallback, so a round is provenance-bound to one of
-# them and no third name can stage a delta or complete a round (#2276 round-2 C3).
+# cl_allowed_producers <format> — the closed set of producers that may appear in a round
+# (empty = no closed set; only cl_stage's token check). Each format admits exactly its
+# primary and its fallback, so no third name stages or completes a round (#2276 C3, #2478).
 cl_allowed_producers() {
     case "$1" in
         review-security-shared) printf 'review-code-codex\nsecurity-scanner\n' ;;
+        test-review)   printf 'review-plan-codex\ntest-reviewer\n' ;;
+        security-plan) printf 'review-plan-codex\nplan-security-reviewer\n' ;;
+        outline-plan)  printf 'review-plan-codex\noutline-reviewer\n' ;;
+        detail-plan)   printf 'review-plan-codex\ndetail-reviewer\n' ;;
         *) : ;;
     esac
 }

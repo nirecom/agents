@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/plans-artifact-registry.js
-# Tags: scope:issue-specific, TL2, plans-dir-lint, feature-2434, plans-dir, control-dir, registry, classification, table-driven, pwsh-not-required
+# Tags: scope:issue-specific, TL2, plans-dir-lint, feature-2434, feature-2478, plans-dir, control-dir, registry, classification, table-driven, pwsh-not-required
 # Part file of tests/bin/feature-2434-plans-dir-lint.sh (sourced; uses its reg
 # driver, check, trim_f and SID_* fixtures). The registry's classification: the
 # inventory table, sid shapes, unregistered/no-sid, ambiguity and the kind sets.
@@ -66,7 +66,10 @@ survey-history.md                                   | artifact
 issue-prefill.md                                    | artifact
 test-review.md                                      | artifact
 test-review-fallback-raw.md                         | artifact
-concerns-log.md                                     | artifact
+outline-fallback-raw.md                             | artifact
+detail-fallback-raw.md                              | artifact
+security-plan-fallback-raw.md                       | artifact
+concerns-log.md                                    | artifact
 codex-round-2-raw.md                                | artifact
 complexity-judge-raw.txt                            | artifact
 detail-judge-raw.txt                                | artifact
@@ -173,6 +176,23 @@ check "legacyBasename is the pre-#2434 <sid>-<name> spelling" \
     "$SID_UUID-detail-plan-terminal.txt" "$(reg legacy "$SID_UUID" "detail-plan-terminal.txt")"
 check "getPlansArtifactPath throws on an unregistered kind" "threw" "$(reg artifact-path-unknown)"
 check "SOURCE_LINT_EXCEPTIONS is an array" "array" "$(reg lint-exceptions)"
+# #2478: the loop records the fallback round itself, so the `review-rounds` kind drops the pending and
+# discarded hand-off files; the plan-stage fallback raw is the plan-fallback-raw artifact kind.
+RR_SID="9d66b47d-8d7d-4798-a4ce-83a78b939281"
+while IFS='|' read -r name want; do
+    [ -z "$name" ] && continue
+    name="$(trim_f "$name")"; want="$(trim_f "$want")"; want="${want//__SID__/$RR_SID}"
+    check "kind set: $name parses as $want" "$want" "$(reg parse-kind "$RR_SID-$name")"
+done <<'TABLE'
+detail-plan-review-rounds.jsonl                     | control:review-rounds:__SID__
+security-plan-review-rounds-unrecorded.jsonl        | control:review-rounds:__SID__
+detail-plan-review-rounds-fallback-pending.json     | null
+test-review-review-rounds-fallback-discarded.json   | null
+outline-fallback-raw.md                             | artifact:plan-fallback-raw:__SID__
+detail-fallback-raw.md                              | artifact:plan-fallback-raw:__SID__
+security-plan-fallback-raw.md                       | artifact:plan-fallback-raw:__SID__
+test-review-fallback-raw.md                         | artifact:test-review-fallback-raw:__SID__
+TABLE
 case_end
 
 case_begin "sid-grammar-single-source" "hooks/lib/plans-artifact-registry.js"

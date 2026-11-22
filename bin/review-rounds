@@ -2,7 +2,8 @@
 "use strict";
 // bin/review-rounds — CLI of the step-wide review record (#2938 D5). Dispatch only: the record
 // lives in bin/lib/codex-review-loop/review-rounds-store.js, classification in review-rounds.js.
-// Exit: 0 ok, 2 usage / rejected value, 3 cannot derive (derive-ext), 4 HALT, 5 row parked (append).
+// Exit: 0 ok, 2 usage / rejected value, 3 cannot derive (derive-ext), 4 HALT, 5 row parked (append;
+// append --no-park parks nothing and is 4).
 
 const fs = require("fs");
 const path = require("path");
@@ -11,11 +12,15 @@ const store = require(path.join(LIB, "review-rounds-store"));
 const rounds = require(path.join(LIB, "review-rounds"));
 const { readInterval } = require(path.join(LIB, "state-interval"));
 
+// Flags that take no value.
+const SWITCHES = new Set(["no-park"]);
+
 function parse(argv) {
   const o = {};
   for (let i = 0; i < argv.length; i++) {
     const m = /^--([a-z-]+)$/.exec(argv[i]);
     if (!m) throw new store.StoreError(2, `unexpected argument: ${argv[i]}`);
+    if (SWITCHES.has(m[1])) { o[m[1]] = true; continue; }
     o[m[1]] = argv[i + 1];
     i += 1;
   }
@@ -37,18 +42,11 @@ const COMMANDS = {
     need(o, "counter-round", "exit", "verdict", "source", "run-id");
     store.appendFromWrapper(Object.assign(base(o), {
       counter_round: int(o["counter-round"], "counter-round"), exit: int(o.exit, "exit"), verdict: o.verdict,
-      source: o.source, run_id: o["run-id"], fingerprint: o.fingerprint || null,
+      source: o.source, run_id: o["run-id"], fingerprint: o.fingerprint || null, noPark: o["no-park"] === true,
     }));
   },
-  "stage-fallback": (o) => {
-    const p = store.stageFallback(Object.assign(base(o), {
-      counterRound: optInt(o["counter-round"], "counter-round"), fingerprint: o.fingerprint || null,
-    }));
-    return `counter_round=${p.counter_round}`;
-  },
+  "has-run": (o) => { need(o, "run-id"); return `recorded=${store.hasRun(Object.assign(base(o), { runId: o["run-id"] })) ? 1 : 0}`; },
   "inflight-close": (o) => { need(o, "run-id"); store.closeInflight(Object.assign(base(o), { runId: o["run-id"] })); },
-  "record-fallback": (o) => { need(o, "verdict"); store.recordFallback(Object.assign(base(o), { verdict: o.verdict })); },
-  "discard-fallback": (o) => { need(o, "reason"); store.discardFallback(Object.assign(base(o), { reason: o.reason })); },
   "accept-gap": (o) => { need(o, "reason"); return `accepted=${store.acceptGap(Object.assign(base(o), { reason: o.reason }))}`; },
   preflight: (o) => store.preflight(base(o)),
   summary: (o) => {

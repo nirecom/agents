@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/lib/plans-artifact-registry.js, hooks/lib/plans-artifact-registry.json
-// Tags: TL2, plans-dir, registry, review-tests, fallback-raw, continuing-marker, recovery, scope:issue-specific
+// Tags: TL2, feature-2478, plans-dir, registry, review-tests, fallback-raw, continuing-marker, recovery, scope:issue-specific
 // #2664 work unit 5-4 / 5-2a — the review_tests recovery reads two names the registry must know:
 // the exit-3 fallback output <sid>-test-review-fallback-raw.md (an artifact kind already in the JSON
 // table but with no path builder), and the exit-1/5 evidence test-review-continuing.txt (a new
@@ -66,5 +66,33 @@ test("every review format gets the continuing name (the regex is format-generic)
 test("control: an unrelated suffix stays out of review-round-state", () => {
   const p = REG.parsePlansEntry(`${SID}-test-review-continuation.txt`);
   assert.ok(!p || p.kind !== "review-round-state", JSON.stringify(p));
+});
+caseEnd();
+
+// #2478: the loop keeps every format's fallback raw. The plan formats share the plan-fallback-raw
+// kind (<stage>-fallback-raw.md); test-review keeps its own kind for the review-tests lookup.
+caseBegin("plan-fallback-raw-kind", "hooks/lib/plans-artifact-registry.json");
+test("each plan stage's fallback raw is a plan-fallback-raw artifact", () => {
+  for (const stage of ["outline", "detail", "security-plan"]) {
+    const p = REG.parsePlansEntry(`${SID}-${stage}-fallback-raw.md`);
+    assert.deepStrictEqual(p && { sid: p.sid, kind: p.kind, verdict: p.verdict },
+      { sid: SID, kind: "plan-fallback-raw", verdict: "artifact" }, stage);
+  }
+});
+test("control: the test-review fallback raw keeps its own kind", () => {
+  assert.strictEqual((REG.parsePlansEntry(`${SID}-test-review-fallback-raw.md`) || {}).kind,
+    "test-review-fallback-raw");
+});
+test("the retired pending and discarded hand-off files are no review-rounds kind", () => {
+  for (const name of ["detail-plan-review-rounds-fallback-pending.json",
+    "test-review-review-rounds-fallback-discarded.json"]) {
+    const p = REG.parsePlansEntry(`${SID}-${name}`);
+    assert.ok(!p || p.kind !== "review-rounds", `${name}: ${JSON.stringify(p)}`);
+  }
+});
+test("control: the record and its unrecorded side file stay review-rounds", () => {
+  for (const name of ["detail-plan-review-rounds.jsonl", "security-plan-review-rounds-unrecorded.jsonl"]) {
+    assert.strictEqual((REG.parsePlansEntry(`${SID}-${name}`) || {}).kind, "review-rounds", name);
+  }
 });
 caseEnd();

@@ -12,25 +12,17 @@ const NON_APPROVED_VERDICT = {
 
 const isNonApproved = (verdict, format) => verdict === "NEEDS_REVISION" || verdict === NON_APPROVED_VERDICT[format];
 
-// The verdicts record-fallback accepts for a format; null when the format has no wrapper-external fallback.
-function fallbackVerdicts(format) {
-  const v = NON_APPROVED_VERDICT[format];
-  return v ? ["APPROVED", v] : null;
-}
-
 const isWrapperRow = (r) => r.exit !== null && r.exit !== undefined;
 
 // classify(prev, input, iv) -> the derived fields of a new row. prev is the last row of the
 // format (or null); iv is readInterval(input.state_sid, prev.event_seq, untilSeq, ...).
+// A cc-fallback row is a prestaged round of the loop (#2478): it carries its exit like any other.
 function classify(prev, input, iv) {
   const cr = input.counter_round;
   let loopCycle = 1;
   let rowNo = 1;
   if (prev) {
-    const resumesFallback = prev.source === "cc-fallback" && !isWrapperRow(prev) && prev.counter_round === cr
-      && isNonApproved(prev.verdict, input.format) && prev.state_sid === input.state_sid
-      && iv.state === "present" && !iv.has_reset;
-    if (cr >= 2 || resumesFallback) {
+    if (cr >= 2) {
       loopCycle = prev.loop_cycle;
       rowNo = prev.row_no + 1;
     } else {
@@ -138,13 +130,6 @@ function deriveExtensions(sid, format, round) {
   return s.current_rows.filter((r) => r.verdict === "AUTO_EXTEND" && r.counter_round < round).length;
 }
 
-// stageRound(last, format) — the counter round a wrapper-external fallback takes (D2).
-function stageRound(last, format) {
-  if (!last || !Number.isInteger(last.counter_round)) return 1;
-  if (!isWrapperRow(last)) return last.source === "cc-fallback" && isNonApproved(last.verdict, format) ? last.counter_round : 1;
-  return isNonApproved(last.verdict, format) || last.verdict === "AUTO_EXTEND" ? last.counter_round + 1 : 1;
-}
-
 // olderInput(rows, ledgerText, fp) -> [{id, round}] of open / reopened concerns last raised
 // against a reviewed input other than fp (D8). A null fingerprint on either side never matches.
 function olderInput(rows, ledgerText, fp) {
@@ -162,6 +147,6 @@ function olderInput(rows, ledgerText, fp) {
 }
 
 module.exports = {
-  NON_APPROVED_VERDICT, isNonApproved, fallbackVerdicts, classify, summarizeRows, summarize,
-  deriveExtensions, stageRound, olderInput,
+  NON_APPROVED_VERDICT, isNonApproved, classify, summarizeRows, summarize,
+  deriveExtensions, olderInput,
 };

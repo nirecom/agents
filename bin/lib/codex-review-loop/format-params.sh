@@ -16,7 +16,7 @@ fp_resolve() {
       FP_PARSE_MODE="numbered-cnref"
       FP_INPUT_KIND="path"
       FP_LEDGER_FORMAT="$fmt"
-      FP_PRESTAGED="deny"
+      FP_PRESTAGED="allow"
       FP_SCANNER_REQUIRED=0
       ;;
     security-code)

@@ -107,7 +107,8 @@ The wrapper, not the calling skill, owns what happens after a review ends and ho
 
 - **Verdict sentinel.** The wrapper used to print the reviewer's raw output and let a separate step decide the exit code, so the printed sentinel and the exit could disagree (for example a MEDIUM downgrade that exited 0 under a non-approving sentinel). `verdict-sentinel.sh` makes the printed sentinel follow the final exit in both the codex and the prestaged dispatch paths.
 - **Terminal reopen after exit 6.** A changed fingerprint alone no longer releases the guard. It releases only through a matching accept marker (`bin/accept-exit6-residual`) or when every HIGH of the ledger that exit 6 recorded is closed (exit 9 otherwise). Tying the release to that ledger path means an old accept cannot excuse a new terminal.
-- **Per-round review record.** `bin/review-rounds` keeps a per-step record of every review round, so the count survives resets of the loop's own state and a later cap or ask decision (#2929) has real data. Fallback (CC reviewer) rounds are staged, then recorded; a round missing from the record is a gap that only the user can accept. Enforcing the 2+1 cap on fallback rounds stays with #2478.
+- **Per-round review record.** `bin/review-rounds` keeps a per-step record of every review round, so the count survives resets of the loop's own state and a later cap or ask decision (#2929) has real data. A round missing from the record is a gap that only the user can accept.
+- **Fallback rounds take the codex path.** A CC fallback round used to be recorded through a separate route (`record-fallback` and a pending file), so it bypassed the round counter, the 2+1 cap, the ledger and the terminal marker. After a codex exit 3 that route also left dead ends where no command could finish the step. Now the fallback report re-enters the wrapper with `--prestaged-report`, so one code path counts, caps, records and carries rejects over for both producers (#2478, #3123). A fallback round that does not reach the record is undone as a whole: its control files return to a snapshot taken under the round lock. A row that landed although its append command failed keeps the round.
 
 ## Where the code lives
 
@@ -123,7 +124,7 @@ The wrapper, not the calling skill, owns what happens after a review ends and ho
 | `bin/concern-ledger` | CLI front end; the only sanctioned entry point (`accept` / `list-drift` and exit 4 for tagged concerns) |
 | `bin/run-codex-review-loop` | Plan / test / security-code review loops; owns the round counter and the exit-7 contract |
 | `bin/lib/codex-review-loop/` | Wrapper internals: `verdict-sentinel.sh` (sentinel follows exit), `review-wrapper-control.sh` (terminal guard and ledger handover), `review-record.sh` + `review-rounds*.js` + `state-interval.js` (per-round record) |
-| `bin/review-rounds` | CLI for the per-round review record (fallback staging, gap acceptance) |
+| `bin/review-rounds` | CLI for the per-round review record (append, has-run, gap acceptance, extension derivation) |
 | `bin/accept-exit6-residual` | Records the accept marker for an exit 6 terminal |
 | `bin/review-code-codex` | The security-code primary reviewer (diff-based); invoked by the loop's ref-kind branch |
 | `bin/review-loop-summarize-concerns` | Renders the ledger for the cap-reach dialog |

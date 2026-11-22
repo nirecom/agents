@@ -2,12 +2,13 @@
 # bin/lib/codex-review-loop/review-record.sh — the loop's side of the step-wide review record
 # (#2938 D1 / D2 / D2a). Every file of the record is owned by bin/review-rounds; this lib only
 # calls it. Sourced by bin/run-codex-review-loop. Caller-scope globals: SID FORMAT
-# ROUND PRESTAGED_MODE PRESTAGED_POLICY FINAL_RC; optional INPUT_FP (reviewed-input
-# fingerprint). Sets RR_RUN_ID. Depends on srn_commits (round-counter.sh) and vs_name.
+# ROUND PRESTAGED_MODE INPUT_KIND FINAL_RC; optional INPUT_FP (reviewed-input fingerprint).
+# Sets RR_RUN_ID, PP_ROUND_RECORDED, PP_APPEND_RUN_ID. Depends on srn_commits (round-counter.sh) and vs_name.
 
 _REVIEW_RECORD_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 RR_RUN_ID=""
+PP_APPEND_RUN_ID=""
 
 _rr_cli() { node "$_REVIEW_RECORD_SCRIPT_CHECKOUT_ROOT/bin/review-rounds" "$@"; }
 
@@ -18,7 +19,7 @@ _rr_fp_args() {
 }
 
 # rr_preflight — D2a: the record must take a row, parked rows are replayed, a leftover
-# inflight or an unconsumed fallback pending halts (exit 4); then this run's inflight is opened.
+# inflight halts (exit 4); then this run's inflight is opened.
 rr_preflight() {
   local out
   if ! out="$(_rr_cli preflight --session "$SID" --format "$FORMAT")"; then
@@ -36,33 +37,49 @@ rr_close_inflight() {
 }
 
 # rr_record_round <rc> — append this run's row when <rc> commits the round (D2). Non-zero when
-# the row did not reach the record (it is parked, or the inflight is kept for accept-gap).
+# the row did not reach the record (it is parked, or the inflight is kept for accept-gap). A
+# path-kind CC-fallback round appends --no-park: its failure is undone whole (S1-4), never replayed.
 rr_record_round() {
-  local rc="$1" source="codex" run_id="$RR_RUN_ID"
+  local rc="$1" source="codex" run_id="$RR_RUN_ID" nopark=()
   srn_commits "$rc" || return 0
   [[ "${PRESTAGED_MODE:-0}" == "1" ]] && source="cc-fallback"
+  [[ "${PRESTAGED_MODE:-0}" == "1" && "${INPUT_KIND:-}" == "path" ]] && nopark=(--no-park)
   _rr_fp_args
   # The store consumes the inflight on every outcome but a total write failure, which it keeps.
   RR_RUN_ID=""
+  # shellcheck disable=SC2034  # read by rr_round_landed (pp_round_settle)
+  (( ${#nopark[@]} > 0 )) && PP_APPEND_RUN_ID="$run_id"
   if ! _rr_cli append --session "$SID" --format "$FORMAT" --counter-round "$ROUND" \
         --exit "$rc" --verdict "$(vs_name "$rc")" --source "$source" --run-id "$run_id" \
-        "${RR_FP_ARGS[@]}"; then
-    echo "run-codex-review-loop: counter round ${ROUND} is committed but is not in the review record; re-run once the record is writable (the row is replayed), or run bin/review-rounds accept-gap" >&2
+        "${RR_FP_ARGS[@]}" "${nopark[@]+"${nopark[@]}"}"; then
+    if (( ${#nopark[@]} > 0 )); then
+      echo "run-codex-review-loop: the fallback round ${ROUND} did not reach the review record; the round is undone (counter, ledger and row unchanged) — re-run the fallback once the record is writable" >&2
+    else
+      echo "run-codex-review-loop: counter round ${ROUND} is committed but is not in the review record; re-run once the record is writable (the row is replayed), or run bin/review-rounds accept-gap" >&2
+    fi
     return 1
   fi
+  # shellcheck disable=SC2034  # read by the loop's EXIT trap (pp_round_restore gate)
+  (( ${#nopark[@]} > 0 )) && PP_ROUND_RECORDED=1
+  return 0
 }
 
-# rr_exit_codex_unavailable — exit 3, after staging the fallback pending the caller's CC
-# fallback consumes (D2). A format whose fallback re-enters the loop (prestaged allow) stages none.
+# rr_round_landed — whether the --no-park append of PP_APPEND_RUN_ID reached the record although
+# its CLI failed (#2478 C1): 0 recorded, 1 not recorded, 2 undeterminable.
+rr_round_landed() {
+  local out
+  [[ -n "${PP_APPEND_RUN_ID:-}" ]] || return 2
+  out="$(_rr_cli has-run --session "$SID" --format "$FORMAT" --run-id "$PP_APPEND_RUN_ID" 2>/dev/null)" || return 2
+  case "$out" in
+    recorded=1) return 0 ;;
+    recorded=0) return 1 ;;
+    *) return 2 ;;
+  esac
+}
+
+# rr_exit_codex_unavailable — exit 3: codex produced no review. Nothing is staged; the caller's
+# CC fallback re-enters the loop as a prestaged round (#2478).
 rr_exit_codex_unavailable() {
-  if [[ "${PRESTAGED_POLICY:-deny}" != "allow" ]]; then
-    _rr_fp_args
-    if ! _rr_cli stage-fallback --session "$SID" --format "$FORMAT" --counter-round "$ROUND" \
-          "${RR_FP_ARGS[@]}" >/dev/null; then
-      echo "run-codex-review-loop: the CC fallback could not be staged in the review record; halting instead of falling back" >&2
-      exit 4
-    fi
-  fi
   exit 3
 }
 
