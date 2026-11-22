@@ -121,6 +121,8 @@ function writeContext(state, plansDir, sessionId) {
     };
   }
 
+  // #2942: the start notification for the issues' PM (bin/pm-notify record --point start); fail-open.
+  require("./pm-scan").recordStart(state, sessionId);
   return { done: false };
 }
 

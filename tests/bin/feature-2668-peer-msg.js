@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/lib/peer-msg.js, bin/peer-msg
-// Tags: TL1, TL2, scope:issue-specific, issue-2668, peer-msg, cross-session, ack
+// Tags: TL1, TL2, scope:issue-specific, issue-2668, peer-msg, cross-session, ack, regression-2942, pm-session
 // #2668: the [peer-msg v1] header and [peer-ack v1] ack of cross-session messages, and the
 // header / verify / timer verbs of bin/peer-msg. Assumed API of hooks/lib/peer-msg.js:
 // formatHeader({fromSession, msgId, replyTo, replyKind, role?, pmIssues?}) -> string,
@@ -184,18 +184,65 @@ test("PM2 header real dump with FROM_REPLY_VERIFIED=false: same reply-to as when
   assert.strictEqual(m[3], "[PM] #2728 #2927 PM infra / sentinel issues sid-4f6187e3 [42d2bd]");
   assert.strictEqual(m[4], "name");
 });
-test("PM2 header --role pm --pm-issues adds the PM suffix", () => {
-  const r = P.runBin("bin/peer-msg", ["header", "--agents-file", selfList(), "--role", "pm", "--pm-issues", "#1,#2"], { env: asSelf });
-  assert.strictEqual(r.code, 0, `${r.out}${r.err}`);
-  assert.ok((headerLine(r.out) || "").endsWith(" role=pm pm-issues=#1,#2"), r.out);
+// #2942 S11: pm-issues comes from the caller's own PM state (assigned issue list), never from an argument.
+const PMS = require("../lib/pm-state-fixture");
+const seedSelfPm = (pmValue) => PMS.seedPm(SELF, pmValue);
+const dropSelf = () => fs.rmSync(PMS.statePath(SELF), { force: true });
+test("PM2 header --role pm builds pm-issues from the own PM state's assigned issue list", () => {
+  seedSelfPm(PMS.pm({ tag: "PM-hdr", issues: [1, 2] }));
+  try {
+    const r = P.runBin("bin/peer-msg", ["header", "--agents-file", selfList(), "--role", "pm"], { env: asSelf });
+    assert.strictEqual(r.code, 0, `${r.out}${r.err}`);
+    assert.ok((headerLine(r.out) || "").endsWith(" role=pm pm-issues=#1,#2"), r.out);
+  } finally { dropSelf(); }
 });
-for (const [label, args] of [["--role pm without --pm-issues", ["--role", "pm"]], ["--pm-issues that are not refs", ["--role", "pm", "--pm-issues", "abc;rm"]]]) {
-  test(`PM2 header ${label} -> 2 and no header`, () => {
-    const r = P.runBin("bin/peer-msg", ["header", "--agents-file", selfList(), ...args], { env: asSelf });
-    assert.strictEqual(r.code, 2, `${r.out}${r.err}`);
-    assert.strictEqual(headerLine(r.out), null, r.out);
+test("PM2 header --role pm follows the assigned list as it changes (no stale copy)", () => {
+  seedSelfPm(PMS.pm({ tag: "PM-hdr", issues: [3, 4, 5] }));
+  try {
+    const r = P.runBin("bin/peer-msg", ["header", "--agents-file", selfList(), "--role", "pm"], { env: asSelf });
+    assert.strictEqual(r.code, 0, `${r.out}${r.err}`);
+    assert.ok((headerLine(r.out) || "").endsWith(" role=pm pm-issues=#3,#4,#5"), r.out);
+  } finally { dropSelf(); }
+});
+for (const [label, args] of [["--role pm --pm-issues (assignment is not an argument)", ["--role", "pm", "--pm-issues", "#1,#2"]], ["--pm-issues alone", ["--pm-issues", "#1"]]]) {
+  test(`PM2 header ${label} -> 2 usage and no header`, () => {
+    seedSelfPm(PMS.pm({ tag: "PM-hdr", issues: [1, 2] }));
+    try {
+      const r = P.runBin("bin/peer-msg", ["header", "--agents-file", selfList(), ...args], { env: asSelf });
+      assert.strictEqual(r.code, 2, `${r.out}${r.err}`);
+      assert.ok(/^REASON=usage$/m.test(r.out), r.out);
+      assert.strictEqual(headerLine(r.out), null, r.out);
+    } finally { dropSelf(); }
   });
 }
+test("PM2 header --role pm in a session without PM state -> non-zero and no header", () => {
+  dropSelf();
+  const r = P.runBin("bin/peer-msg", ["header", "--agents-file", selfList(), "--role", "pm"], { env: asSelf });
+  assert.notStrictEqual(r.code, 0, `${r.out}${r.err}`);
+  assert.strictEqual(headerLine(r.out), null, r.out);
+});
+test("PM2 header --role pm from an old-tag PM state answers the new tag (NEW_TAG=)", () => {
+  // SELF holds the generation renamed away from PM-old; the current generation carries PM-new and retired PM-old.
+  const NEWER = uuid("a11ce5e1");
+  seedSelfPm(PMS.pm({ tag: "PM-old", issues: [1], current_since: "2026-11-01T00:00:00.000Z" }));
+  PMS.seedPm(NEWER, Object.assign(PMS.pm({ tag: "PM-new", issues: [1], current_since: "2026-11-05T00:00:00.000Z", upstream_session_id: SELF }), { retired_tags: ["PM-old"] }));
+  try {
+    const r = P.runBin("bin/peer-msg", ["header", "--agents-file", selfList(), "--role", "pm"], { env: asSelf });
+    assert.ok(/^NEW_TAG=PM-new$/m.test(r.out), `${r.out}${r.err}`);
+  } finally { dropSelf(); fs.rmSync(PMS.statePath(NEWER), { force: true }); }
+});
+test("PM2 header --role pm from an older generation whose tag's current generation has no issues -> REASON=no-pm-issues, no header", () => {
+  // SELF still holds [1]; the newer generation of the same tag holds [], and the current generation's list wins.
+  const NEWER = uuid("e3b7e3b7");
+  seedSelfPm(PMS.pm({ tag: "PM-empty", issues: [1], current_since: "2026-11-01T00:00:00.000Z" }));
+  PMS.seedPm(NEWER, PMS.pm({ tag: "PM-empty", issues: [], current_since: "2026-11-05T00:00:00.000Z" }));
+  try {
+    const r = P.runBin("bin/peer-msg", ["header", "--agents-file", selfList(), "--role", "pm"], { env: asSelf });
+    assert.notStrictEqual(r.code, 0, `${r.out}${r.err}`);
+    assert.ok(/^REASON=no-pm-issues$/m.test(r.out), `${r.out}${r.err}`);
+    assert.strictEqual(headerLine(r.out), null, r.out);
+  } finally { dropSelf(); fs.rmSync(PMS.statePath(NEWER), { force: true }); }
+});
 test("PM2 two headers carry two different msg-ids", () => {
   const ids = [0, 1].map(() => {
     const line = headerLine(P.runBin("bin/peer-msg", ["header", "--agents-file", selfList()], { env: asSelf }).out) || "";

@@ -12,8 +12,9 @@ function createDeadline({ hookTimeoutMs, safetyMarginMs = DEFAULT_SAFETY_MARGIN_
   const deadlineAt = startedAt + Number(hookTimeoutMs) - safetyMarginMs;
   const remainingMs = () => deadlineAt - now();
   // A slice below MIN_SLICE_MS is not worth spawning for: 0 means "skip it".
+  // Floored because process.uptime() is fractional and child_process rejects a non-integer timeout with a RangeError.
   const sliceMs = (cap, reserve = 0) => {
-    const v = Math.min(cap, remainingMs() - reserve);
+    const v = Math.floor(Math.min(cap, remainingMs() - reserve));
     return v < MIN_SLICE_MS ? 0 : v;
   };
   return { remainingMs, sliceMs, deadlineAt };

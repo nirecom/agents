@@ -5,9 +5,9 @@
 //
 // DEPENDENCY-FREE ON PURPOSE: required from the hooks tree and from
 // hooks/workflow-state/lifecycle.js alike, so any require() would close a cycle.
-// The one exception, typed-slash-command.js, is itself dependency-free.
+// The one exception, typed-slash-command.js, depends only on the leaf leading-wrapper.js.
 
-const { typedSlashCommand } = require("./typed-slash-command");
+const { classifyTypedSlashCommand } = require("./typed-slash-command");
 
 // Steps whose work is genuinely delegated to a subagent. write_code is excluded
 // deliberately — it keeps its own isWriteCodeInFlight predicate.
@@ -82,9 +82,10 @@ function isWfInitDispatch(toolName, skillOrToolInput) {
 }
 
 // Recognition is hooks/lib/typed-slash-command.js (anchored, cross-session excluded, #2941).
+// An undecidable prompt yields null: nothing is marked begun (#2942).
 function wfInitPromptArgs(prompt) {
-  const hit = typedSlashCommand(prompt, WF_INIT_SKILLS);
-  return hit ? hit.args : null;
+  const c = classifyTypedSlashCommand(prompt, WF_INIT_SKILLS);
+  return c.status === "hit" ? c.args : null;
 }
 
 function promptInvokesWfInit(prompt) {

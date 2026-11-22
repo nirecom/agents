@@ -24,4 +24,5 @@ When `ended=true`, state explicitly that this PM session has ended, that its PM 
 
 ### PMR-3 — Issue sequence table (`ended=false` only)
 
-Drop the removed issues from the issue sequence table per `skills/pm-init/SKILL.md` PMI-4, and present the result to the user.
+The hook drops the removed issues from the issue sequence table in the same write, and marks a row whose `blocked_by` named one of them unverified (`removed`).
+Check the table with `node "$AGENTS_MAIN_ROOT/bin/pm-state" show --session "$CLAUDE_CODE_SESSION_ID"`, re-check any unverified row per `skills/pm-init/SKILL.md` PMI-4, and present the result to the user.

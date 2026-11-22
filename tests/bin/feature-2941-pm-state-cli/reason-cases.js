@@ -27,7 +27,7 @@ function reason(F) {
     const got = P.readPm(sid).assignment_log;
     assert.deepStrictEqual(got[0], log[0]);
     assert.strictEqual(got[1].reason, "PM and EM work closely together");
-    assert.strictEqual(r.calls.length, 0, JSON.stringify(r.calls));
+    assert.strictEqual(r.checkCalls.length, 0, JSON.stringify(r.calls));
   });
   test("S1 the last entry of a PM ended by /pm-remove can still be written", () => {
     const sid = seed([entry("init", "theme"), entry("remove", UNSTATED, "2026-11-02T00:00:00.000Z")], { issues: [], archived_at: "2026-11-02T00:00:00.000Z" });

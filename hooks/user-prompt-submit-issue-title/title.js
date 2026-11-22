@@ -114,12 +114,27 @@ function candidateFor(target, rec, d, cwd, now, sid, transcriptPath) {
   return SN.composeSessionName({ kind: target.kind, refs: target.refs, title: target.objective || title, sessionId: sid });
 }
 
+// writerFailure(input, e) -> the refusal for a PM-command prompt (hit or undecidable) whose writer threw,
+// else {} (the prompt passes as before, #2942).
+function writerFailure(input, e) {
+  try {
+    const { classifyTypedSlashCommand } = require("../lib/typed-slash-command");
+    const { NAMES } = require("../pm-session/names");
+    const c = classifyTypedSlashCommand(input && input.prompt, NAMES);
+    if (c.status === "none") return {};
+    const what = c.status === "hit" ? `/${c.name}` : "this prompt";
+    return { block: `[pm-session] ${what} refused: the PM writer failed (${String(e && e.message).split("\n")[0]}). Retry; if it keeps failing, report it.` };
+  } catch (_) {
+    return {};
+  }
+}
+
 // respond(input, deps) -> {block, context, notice, title}: the PM writer (#2941) runs first so a typed
-// /pm-init names its own prompt; a writer that throws is skipped (fail-open), a refusal names nothing.
+// /pm-init names its own prompt; a writer that throws refuses a PM-command prompt and passes any other.
 // notice is the writer's one sentence for the user (the entry emits it as systemMessage).
 function respond(input, deps) {
-  let w = {};
-  try { w = require("../pm-session/writer").runPmWriter(input, deps) || {}; } catch (_) { w = {}; }
+  let w;
+  try { w = require("../pm-session/writer").runPmWriter(input, deps) || {}; } catch (e) { w = writerFailure(input, e); }
   if (w.block) return { block: w.block, context: null, notice: null, title: null };
   return { block: null, context: w.context || null, notice: w.notice || null, title: run(input, deps) };
 }

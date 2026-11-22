@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 "use strict";
 // Tests: hooks/lib/pm-instructions.js, hooks/lib/pm-instructions/sections.js, hooks/lib/pm-instructions/role.js, hooks/lib/pm-instructions/render.js, bin/pm-instructions, bin/lib/pm-instructions/cli.js, hooks/session-start.js, hooks/post-compact.js, skills/_shared/pm-supervisor-duties.md, skills/workflow-init/SKILL.md, skills/clarify-intent/SKILL.md, skills/resume-session/SKILL.md, skills/session-close/SKILL.md, skills/pm-init/SKILL.md, skills/pm-add/SKILL.md, skills/pm-remove/SKILL.md
-// Tags: TL2, scope:issue-specific, hooks, pm-session, pm-instructions, session-start, post-compact, cli, fail-open, truncation, utf8
-// #3019: PM supervisor duties are read from one SSOT md and injected by role (from PM state only) at
+// Tags: TL2, scope:issue-specific, hooks, pm-session, pm-instructions, session-start, post-compact, cli, fail-open, truncation, utf8, pm-field, issue-2942
+// #3019: PM supervisor duties are read from one SSOT md and injected by role (PM state; a workflow's owner from the #2942 PM field) at
 // SessionStart / PostCompact and through bin/pm-instructions at the skill-step timings.
 // Dispatch only; the cases live in ./feature-3019-pm-instructions/ (Pattern A).
 // TL3 gap (what this test does NOT catch):
@@ -18,6 +18,7 @@ const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const { makeShared } = require("./feature-3019-pm-instructions/world");
 const C = require("./feature-3019-pm-instructions/contract-cases");
 const R = require("./feature-3019-pm-instructions/role-cases");
+const RR = require("./feature-3019-pm-instructions/role-repo-cases");
 const D = require("./feature-3019-pm-instructions/render-cases");
 const L = require("./feature-3019-pm-instructions/cli-cases");
 const H = require("./feature-3019-pm-instructions/hook-cases");
@@ -58,8 +59,8 @@ caseBegin("role-workflow-direct", "hooks/lib/pm-instructions/role.js");
 R.workflowDirect(S);
 caseEnd();
 
-caseBegin("role-workflow-tie-matches-pm-state", "hooks/lib/pm-instructions/role.js");
-R.tieBreak(S);
+caseBegin("role-workflow-pm-field-decides", "hooks/lib/pm-instructions/role.js");
+R.fieldDecides(S);
 caseEnd();
 
 caseBegin("role-meta-routed-deadline", "hooks/lib/pm-instructions/role.js");
@@ -75,11 +76,11 @@ R.peerOnly(S);
 caseEnd();
 
 caseBegin("role-current-generation", "hooks/lib/pm-instructions/role.js");
-R.currentGeneration(S);
+RR.currentGeneration(S);
 caseEnd();
 
 caseBegin("role-home-repo", "hooks/lib/pm-instructions/role.js");
-R.homeRepo(S);
+RR.homeRepo(S);
 caseEnd();
 
 caseBegin("render-cap-utf8", "hooks/lib/pm-instructions/render.js");
@@ -96,6 +97,10 @@ caseEnd();
 
 caseBegin("cli-failures-exit-1", "bin/lib/pm-instructions/cli.js");
 L.failures(S);
+caseEnd();
+
+caseBegin("cli-issue-bare-number", "bin/lib/pm-instructions/cli.js");
+L.bareIssue(S);
 caseEnd();
 
 caseBegin("cli-single-timing", "bin/pm-instructions");

@@ -2,7 +2,7 @@
 # (Content Date, Status + Todo/In Progress/Done, the WIP session-id field). Sourced, not executed.
 # ensure_project_ready <owner/repo> (gh with `project` scope) sets on rc 0: EPR_PROJECT_{ID,NUM,OWNER},
 #   EPR_CONTENT_DATE_FIELD_ID (may be empty), EPR_STATUS_FIELD_ID, EPR_{TODO,IN_PROGRESS,DONE}_OPTION_ID,
-#   EPR_SESSION_ID_FIELD_ID (lib/session-id-field.sh; also shown in board views, best-effort).
+#   EPR_SESSION_ID_FIELD_ID and EPR_PM_FIELD_ID (TEXT fields via lib/session-id-field.sh; shown in board views, best-effort).
 # rc 1 + an `error:` line: bad owner/repo (checked before any gh call), missing scope, a graphql or
 #   project-list failure. An unlinked board only warns (link_project_to_repo).
 # Never writes .env or the TSV cache: run-issue-setup.sh --step ensure-project does.
@@ -12,6 +12,9 @@ if [ -n "${_ENSURE_PROJECT_READY_SOURCED:-}" ]; then
     return 0 2>/dev/null || true
 fi
 _ENSURE_PROJECT_READY_SOURCED=1
+
+# The PM field's name; bin/lib/pm-field/read.js PM_FIELD_NAME reads the same field.
+PM_FIELD_NAME="pm"
 
 # Reuse the canonical repo-link helper. This file is always sourced, never
 # executed, so resolve the sibling relative to BASH_SOURCE (not $0).
@@ -34,6 +37,7 @@ ensure_project_ready() {
     EPR_IN_PROGRESS_OPTION_ID=""
     EPR_DONE_OPTION_ID=""
     EPR_SESSION_ID_FIELD_ID=""
+    EPR_PM_FIELD_ID=""
 
     local owner_repo="${1:-}"
     # Reject malformed/injection input before any gh call. Exactly two segments,
@@ -135,6 +139,14 @@ ensure_project_ready() {
     fi
     EPR_SESSION_ID_FIELD_ID="$SESSION_ID_FIELD_ENSURED_ID"
     session_id_field_show_in_views "$pid" "$EPR_SESSION_ID_FIELD_ID" || true
+    # The PM field (#2942): the PM tag owning the issue. Best-effort: only PM sessions use it, and
+    # their writer refuses (fail-closed) while the field is missing, so a failure here only warns.
+    if project_text_field_create_if_absent "$pid" "$PM_FIELD_NAME"; then
+        EPR_PM_FIELD_ID="$PROJECT_TEXT_FIELD_ENSURED_ID"
+        project_text_field_show_in_views "$pid" "$EPR_PM_FIELD_ID" "$PM_FIELD_NAME" || true
+    else
+        echo "warn: ensure-project-ready: the PM field '$PM_FIELD_NAME' is not ready; PM commands on this board refuse until a rerun creates it" >&2
+    fi
 
     return 0
 }

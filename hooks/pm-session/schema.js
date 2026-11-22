@@ -1,18 +1,19 @@
 "use strict";
 // SSOT of the `pm` state key (#2941): the tag syntax, the two predicates, and issue identity.
 // pm = {tag, issues: [{number, repo?}], objective, current_since, upstream_session_id,
-//       assignment_log: [{at, op, issues, reason}], sequence: {updated_at, tables, unverified}, archived_at}.
-// assignment_log[].reason is always a non-empty string (REASON_UNSTATED when none was given).
-// sequence.unverified is {reason, at} | null; reason is one of UNVERIFIED_REASONS (the forge check of
-// the table could not run), and only a passing check clears it.
-// hasPmMark: the key exists (archived included) -> no workflow ever runs in the session.
-// isActivePm: the key exists and archived_at is null -> the session still owns its issues.
+//       assignment_log: [{at, op, issues, reason}], sequence: {updated_at, tables, unverified}, archived_at,
+//       rename_pending?: {from, to}, retired_tags?: [tag], meta_children?: {<meta ref>: [child ref]},
+//       seen_notifications?: [id] (last SEEN_NOTIFICATIONS_MAX)} — the optional four are #2942's.
+// assignment_log[].reason is a non-empty string (REASON_UNSTATED when none was given). sequence.unverified
+// is {reason, at} | null, reason one of UNVERIFIED_REASONS; only a passing check clears it.
+// hasPmMark: the key exists (archived included); isActivePm: and archived_at is null.
 // Dependency-free: required by state-io's zombie sweep.
 
 const PM_TAG_RE = /^[A-Za-z0-9-]{1,40}$/;
 const PM_OPS = Object.freeze(["init", "add", "remove", "inherit"]);
 const REASON_UNSTATED = "reason not stated";
-const UNVERIFIED_REASONS = Object.freeze(["gh_exec_failed", "timeout", "parse_failed"]);
+const UNVERIFIED_REASONS = Object.freeze(["gh_exec_failed", "timeout", "parse_failed", "removed"]);
+const SEEN_NOTIFICATIONS_MAX = 200;
 
 function isValidPmTag(tag) {
   return typeof tag === "string" && PM_TAG_RE.test(tag);
@@ -54,5 +55,5 @@ function toRef(ref) {
 const refLabel = (ref) => (ref.repo ? `${ref.repo}#${ref.number}` : `#${ref.number}`);
 
 module.exports = {
-  PM_TAG_RE, PM_OPS, REASON_UNSTATED, UNVERIFIED_REASONS, isValidPmTag, hasPmMark, isActivePm, sameTag, resolveRepo, repoOf, sameIssue, toRef, refLabel,
+  PM_TAG_RE, PM_OPS, REASON_UNSTATED, UNVERIFIED_REASONS, SEEN_NOTIFICATIONS_MAX, isValidPmTag, hasPmMark, isActivePm, sameTag, resolveRepo, repoOf, sameIssue, toRef, refLabel,
 };

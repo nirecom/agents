@@ -292,6 +292,7 @@ if (sessionId) {
 }
 lines.push("");
 lines.push(buildWorkflowStatus(sessionId));
+try { lines.push(...require("./session-start/pm-inbox").pmInboxLines(sessionId, dl.sliceMs(2000, TAIL_RESERVE_MS))); } catch (_e) { /* fail-open */ }
 try {
   const d = settingsDrift.detectDrift({ homeDir: os.homedir() });
   if (d.drifted) {

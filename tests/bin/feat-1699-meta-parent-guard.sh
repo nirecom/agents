@@ -19,12 +19,14 @@ PREFLIGHT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh"
 RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 # Settings root: a fixture with empty private-info lists, so the outbound scan reaches its verdict.
-SETTINGS_FIXTURE="$(mktemp -d)"; readonly SETTINGS_FIXTURE
+# It also holds the pinned state dirs: reopen/bulk-sub-of record a PM notification (#2942,
+# bin/pm-notify) in the calling session's state, so the session id is a fake one too.
+SETTINGS_FIXTURE="$(mktemp -d)"; command -v cygpath >/dev/null 2>&1 && SETTINGS_FIXTURE="$(cygpath -m "$SETTINGS_FIXTURE")"; readonly SETTINGS_FIXTURE
 trap 'rm -rf "$SETTINGS_FIXTURE"' EXIT
 mkdir -p "$SETTINGS_FIXTURE/agents-main"
 : > "$SETTINGS_FIXTURE/agents-main/.private-info-blocklist"
 : > "$SETTINGS_FIXTURE/agents-main/.private-info-allowlist"
-export AGENTS_MAIN_ROOT="$SETTINGS_FIXTURE/agents-main"
+export AGENTS_MAIN_ROOT="$SETTINGS_FIXTURE/agents-main" WORKFLOW_STATE_DIR="$SETTINGS_FIXTURE/workflow-state" WORKFLOW_PLANS_DIR="$SETTINGS_FIXTURE/plans" CLAUDE_CODE_SESSION_ID="test-feat-1699-dispatch"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

@@ -35,8 +35,8 @@ Read all `KEY=VALUE` output lines. Dispatch on `ACTION=`:
 | ACTION | Meaning | What to do |
 |---|---|---|
 | `invoke` | Next skill ready | Run `NEXT_SKILL` via Skill tool |
-| `done` | Driver complete | Run WI-2a, then WI-10; follow `PATH_DECISION=` at WI-12 (Path C still runs WI-10 onward — no jump) |
-| `blocked` | Unrecoverable | Show `REASON=` + `NEXT_HINT=` and stop |
+| `done` | Driver complete | Send the recorded PM notifications per `skills/_shared/pm-notify.md`, run WI-2a, then WI-10; follow `PATH_DECISION=` at WI-12 (Path C still runs WI-10 onward — no jump) |
+| `blocked` | Unrecoverable | Show `REASON=` + `NEXT_HINT=` and stop; on `REASON=multi-pm`, first send per `skills/_shared/pm-notify.md` |
 | `ask_user` | User decision needed | Percent-decode `OPTIONS_DISPLAY=` (encoded like `QUESTION=`), present via `AskUserQuestion` with `metadata.source=workflow-init.<ASK_ID>` (`ASK_ID=` without a trailing `_<N>`); re-invoke with `--resume <CHECKPOINT> --answer '<token>'` |
 | `emit_sentinel` | Driver requests sentinel | Emit `SENTINEL=` via separate Bash call |
 
@@ -79,7 +79,7 @@ Apply `skills/_shared/survey-artifact-valid.md` to each artifact. On invalid: em
 WI-8 open sub-issue guard ensures all `ISSUES[@]` have no open sub-issues before reaching this path.
 - PM1. `node "$AGENTS_MAIN_ROOT/bin/workflow/set-deliverable-type" --session "$SESSION_ID" --type wf-meta --advance --step workflow_init --complete` (single Bash call — records `deliverable_type` and completes `workflow_init` together; no `--next` since the next action is fixed at PM2).
 - PM2. `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: meta issue — WF-META type; intent confirmed from issue body>>"`.
-- PM3. Use `/issue-create --skip-survey` with `--verdict bulk-sub-of --parent <meta-N> --manifest <file>` to create all planned sub-issues under the meta parent in a single bulk pass.
+- PM3. Use `/issue-create --skip-survey` with `--verdict bulk-sub-of --parent <meta-N> --manifest <file>` to create all planned sub-issues under the meta parent in a single bulk pass, then send the PM notifications per `skills/_shared/pm-notify.md`.
 - PM4. Invoke `make-outline-plan`. (next-step auto-skips `detail` and 8 other non-applicable WF-CODE steps after outline completes — `make-detail-plan` is never invoked in WF-META.)
 
 #### Path A — intent:clarified

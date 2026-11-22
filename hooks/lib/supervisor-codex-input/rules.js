@@ -5,19 +5,20 @@
 // A-* = action record (cursor range only), D-* = dropped. This file owns the
 // table; the rationale lives in docs/architecture/claude-code/supervisor-codex-input.md.
 
+const { stripLeadingWrappers } = require("../leading-wrapper");
+
 const SENTINEL_RE = /<<[A-Z][A-Za-z0-9_]*(?::[^>\n]*)?>>/g;
 const HOOK_DENY_RE = /^[A-Za-z]+:\S+ hook error:/;
-const LEADING_TAG_RE = /^\s*<(ide_opened_file|ide_selection|system-reminder)>[\s\S]*?<\/\1>/;
 const EDIT_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
 
 function drop(rule) {
   return { rule, keep: false, text: "" };
 }
 
+// Unreadable wrappers keep the text from where reading stopped (hooks/lib/leading-wrapper.js).
 function stripLeadingTags(text) {
-  let s = String(text);
-  for (let m = s.match(LEADING_TAG_RE); m; m = s.match(LEADING_TAG_RE)) s = s.slice(m[0].length);
-  return s.trim();
+  const r = stripLeadingWrappers(String(text));
+  return String(r.ok ? r.text : r.rest).trim();
 }
 
 // Text of a string content or of its text blocks, each block tag-stripped; empty blocks vanish.

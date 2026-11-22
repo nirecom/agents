@@ -2,7 +2,8 @@
 // Fixture of tests/hooks/feature-3019-pm-instructions.js (#3019). No case markers.
 // A world is its own pinned state/plans pair: the PM owner lookup scans every state file, so worlds never
 // share one. Every child (probe, CLI, hook) runs from one fixture repo (origin github.com/o/r) with the
-// #2941 fake gh first on PATH, no session id, an empty transcript base and a temp HOME.
+// #2941 fake gh first on PATH, no session id, an empty transcript base and a temp HOME. The PM owner of an
+// issue is the fake gh map's PM field value (W.field), read by `bin/pm-state owner` (#2942).
 const cp = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -28,7 +29,7 @@ const CONTRACT = [
   { h2: "Workflow session", h3: "After Final Report", recipient: "workflow", timing: "after-final-report" },
 ];
 const TIMING_KEYS = ["session-start", "issue-start", "before-companions", "before-plan-confirm", "before-user-verification", "after-final-report"];
-const INTERIM_ISSUES = [2942, 2943, 2944, 2991, 3056, 3057, 3118];
+const INTERIM_ISSUES = [2943, 2944, 2991, 3056, 3057, 3118];
 const mark = (c) => `BODY-${c.recipient}-${c.timing}`;
 const byKey = (recipient, timing) => CONTRACT.find((c) => c.recipient === recipient && c.timing === timing);
 // The session-start bundles: pm -> its one section; workflow -> the three sections the plan names.
@@ -111,7 +112,15 @@ function makeWorld(S, name) {
     fs.writeFileSync(f, `# Session progress\n\n## Current state\n\nfixture\n\n## Facts to carry over\n\n### User decisions\n\n- ${factLine}\n`);
   });
   W.setMap = (m) => fs.writeFileSync(W.map, JSON.stringify(m));
+  // field({"o/r#N": tag|null}) -> sets the Projects v2 PM field of those issues in the fake gh map (#2942: the
+  // owner is read from this field, never from the PM state's issue list); other map keys of an entry are kept.
+  W.field = (values) => {
+    const m = JSON.parse(fs.readFileSync(W.map, "utf8"));
+    for (const [k, tag] of Object.entries(values)) m[k] = Object.assign({}, m[k], { pm: tag });
+    W.setMap(m);
+  };
   W.ghCalls = () => fs.readFileSync(W.log, "utf8").split("\n").filter(Boolean).length;
+  W.ghLog = () => fs.readFileSync(W.log, "utf8");
   // env(extra) -> the child env; an extra value of null removes that key.
   W.env = (extra = {}) => {
     const e = Object.assign({}, process.env, {
@@ -119,7 +128,7 @@ function makeWorld(S, name) {
       HOME: S.home, USERPROFILE: S.home, AGENTS_MAIN_ROOT: S.cfg, CLAUDE_PROJECT_DIR: S.repo,
       PM_FAKE_GH_LOG: W.log, PM_FAKE_GH_MAP: W.map,
     });
-    for (const k of ["CLAUDE_CODE_SESSION_ID", MD_ENV, "PM_FAKE_GH_SLEEP_MS", "PM_FAKE_GH_MODE", "PM_FAKE_GH_SIDE"]) delete e[k];
+    for (const k of ["CLAUDE_CODE_SESSION_ID", MD_ENV, "PM_FAKE_GH_SLEEP_MS", "PM_FAKE_GH_MODE", "PM_FAKE_GH_SIDE", "PM_FAKE_GH_PM_STORE"]) delete e[k];
     for (const [k, v] of Object.entries(extra)) { if (v === null) delete e[k]; else e[k] = String(v); }
     const pathKey = Object.keys(e).find((k) => k.toUpperCase() === "PATH") || "PATH";
     e[pathKey] = `${S.ghBin}${path.delimiter}${e[pathKey] || ""}`;

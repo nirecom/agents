@@ -75,12 +75,33 @@ function pmNames(F) {
     setIssues(p, [2728, 3000]);
     assert.strictEqual(nameOf(F.call(sid, "hello again", F.deps())), `[PM] PM-infra: #2728 #3000 Title2728${sfx(sid)}`);
   });
+  // #2942: the neutral cwd has no origin, so a bare #N cannot be given a repo and is refused
+  // (normalizeRef); the ref carries its repo, and with no GitHub origin no PM field is written.
   test("P5 a typed /pm-init is written before naming, so its own prompt gets the PM name", () => {
     inFreshDirs(() => {
       const sid = crypto.randomUUID();
       F.seed(sid);
-      const r = F.call(sid, F.wrapped("pm-init", "PM-name5 #55 theme"), F.deps());
-      assert.strictEqual(nameOf(r), `[PM] PM-name5: #55 Title55${sfx(sid)}`, JSON.stringify(r));
+      // A non-GitHub origin lets the ownership check resolve the origin (no fail-closed refusal)
+      // while skipping the PM field write, so no gh call is made.
+      const d = F.deps();
+      d.spawnSync = (cmd, args, opts) => {
+        d.spawnCalls.push({ cmd, args, opts });
+        return cmd === "git" ? { status: 0, stdout: "https://gitlab.example.com/example/repo.git\n", stderr: "" } : { status: 1, stdout: "", stderr: "stub" };
+      };
+      const r = F.call(sid, F.wrapped("pm-init", "PM-name5 example/repo#55 theme"), d);
+      assert.strictEqual(nameOf(r), `[PM] PM-name5: example/repo#55 Title55${sfx(sid)}`, JSON.stringify(r));
+      assert.strictEqual(F.spawned(d, "gh").length, 0, F.cmds(d));
+    });
+  });
+  test("P5b a /pm-init whose bare #N has no resolvable repo is refused and names nothing", () => {
+    inFreshDirs(() => {
+      const sid = crypto.randomUUID();
+      F.seed(sid);
+      const T = require(F.ENTRY);
+      const r = T.respond(F.input(sid, F.wrapped("pm-init", "PM-name5b #55 theme")), F.deps());
+      assert.ok(typeof r.block === "string" && /repo/i.test(r.block), JSON.stringify(r));
+      assert.strictEqual(r.title, null, JSON.stringify(r));
+      assert.strictEqual(JSON.parse(fs.readFileSync(F.WS.getStatePath(sid), "utf8")).pm, undefined, "the refused session gets no pm");
     });
   });
 }
@@ -147,15 +168,16 @@ function pmOutput(F) {
     assert.strictEqual(h.sessionTitle, `[PM] PM-wire: theme${sfx(sid)}`, r.out);
     assert.ok(typeof h.additionalContext === "string" && h.additionalContext.startsWith("[pm-session] op=init tag=PM-wire"), r.out);
   });
-  test("PO3 a throwing writer is fail-open: exit 0, no block, the session is still named", () => {
+  // #2942: a writer throw on a PM-command prompt is refused (fail-closed), not passed through.
+  test("PO3 a throwing writer on a PM command is refused: exit 0, decision:block with the failure", () => {
     try { fs.rmSync(mark, { force: true }); } catch (_) { /* fresh */ }
     const sid = seedPm(P.pm({ tag: "PM-throw", issues: [], objective: "named even on failure" }));
     const r = hook(sid, F.wrapped("pm-add", "#77 reason"), ["--require", preload], { PM_WRITER_THROW_MARK: mark });
     assert.strictEqual(fs.existsSync(mark), true, `the injected writer never ran: ${r.out} ${r.err}`);
     assert.strictEqual(r.code, 0, r.err);
     assert.ok(r.json, `stdout is not JSON: ${r.out}`);
-    assert.notStrictEqual(r.json.decision, "block", r.out);
-    assert.strictEqual(hso(r.json).sessionTitle, `[PM] PM-throw: named even on failure${sfx(sid)}`, r.out);
+    assert.strictEqual(r.json.decision, "block", r.out);
+    assert.ok(/PM writer failed/.test(r.json.reason || ""), r.out);
     assert.deepStrictEqual(JSON.parse(fs.readFileSync(F.WS.getStatePath(sid), "utf8")).pm.issues, [], "the failed add left the assignment unchanged");
   });
   test("PO4 an accepted /pm-init also emits a top-level systemMessage for the user (#2941 Steps 3)", () => {

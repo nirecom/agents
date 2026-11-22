@@ -114,13 +114,14 @@ test("a ref without a repo is repo-unknown, not retryable", () => {
   a.prefetch([R(100)]);
   fails(a.holdersOf({ number: 100 }, [H("PM-ar", [100])]), "repo-unknown", false);
 });
-test("gh_exec_failed, parse_failed and timeout are retryable", () => {
+// #2942: a parse failure does not heal on retry (the same forge answer parses the same way).
+test("gh_exec_failed and timeout are retryable; parse_failed is not", () => {
   const h = H("PM-ag", [100]);
   try {
     G.mode("fail");
     fails(holders(R(111), [h]), "gh_exec_failed", true);
     G.mode("garbage");
-    fails(holders(R(111), [h]), "parse_failed", true);
+    fails(holders(R(111), [h]), "parse_failed", false);
   } finally { G.mode(null); }
   fails(holders(R(111), [h], { deadlineAt: Date.now() - 1 }), "timeout", true);
 });
