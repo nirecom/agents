@@ -3,12 +3,12 @@
 # Tests: bin/github-issues/lib/extract-field.sh, bin/github-issues/issue-to-history.sh
 # Tags: github, issues, extract-field, heading-boundary, parser, scope:issue-specific, layer:TL2
 #
-# extract_field()'s section-boundary rule. Capture starts at the target field's
-# heading/inline label and ends at (a) a heading for one of the other three
-# canonical fields, or (b) ANY line matching `^[ \t]*##+[ \t]+`. H1 deliberately
-# does NOT terminate. The F* rows pin CommonMark 4.5 fence semantics: a `## ...`
-# line inside a fenced block is code, not a heading. Rows the implementation
-# cannot yet satisfy are deliberate fail-before-fix reds, called out row by row.
+# extract_field()'s section-boundary rule (#2168 policy). Capture ends at (a) a
+# heading for another canonical field, (b) any `##` heading, or (c) a `###`..`######`
+# heading whose text is a KNOWN label (canonical four + Issue Forms `Sub-tasks (optional)`);
+# other `###`+ headings are body text. H1 never terminates. F* rows pin CommonMark 4.5
+# fences. New #2168 rows: tests/bin/fix-2168-extract-field-capture.sh.
+# Rows the implementation cannot yet satisfy are deliberate fail-before-fix reds.
 
 set -u
 
@@ -74,16 +74,21 @@ while IFS='|' read -r name field body want; do
     body="$(printf '%b' "$(trim "$body")")"
     assert_eq "H-$name" "$want" "$(BODY="$body" extract_field "$field")"
 done <<'TABLE'
-# --- terminating: every ATX level 2..6, canonical or free-text ---
+# --- terminating: `##` always; `###`..`######` only for a KNOWN label (#2168) ---
 h2-other          | Background | ### Background\n\nalpha\n\n## Other\n\nbeta\n            | alpha
-h3-other          | Background | ### Background\n\nalpha\n\n### Other\n\nbeta\n           | alpha
-h4-other          | Background | ### Background\n\nalpha\n\n#### Other\n\nbeta\n          | alpha
-h5-other          | Background | ### Background\n\nalpha\n\n##### Other\n\nbeta\n         | alpha
-h6-other          | Background | ### Background\n\nalpha\n\n###### Other\n\nbeta\n        | alpha
+# #2168 DELIBERATE RED (fail-before-fix, until extract-field.sh is fixed): an unknown
+# `###`..`######` heading is body text. Implementation-time decision: the heading
+# line stays in the value (joined by one space like any other line).
+h3-other          | Background | ### Background\n\nalpha\n\n### Other\n\nbeta\n           | alpha ### Other beta
+h4-other          | Background | ### Background\n\nalpha\n\n#### Other\n\nbeta\n          | alpha #### Other beta
+h5-other          | Background | ### Background\n\nalpha\n\n##### Other\n\nbeta\n         | alpha ##### Other beta
+h6-other          | Background | ### Background\n\nalpha\n\n###### Other\n\nbeta\n        | alpha ###### Other beta
 freetext-parens   | Background | ### Background\n\nalpha\n\n### Sub-tasks (optional)\n\nbeta\n | alpha
 freetext-amp      | Background | ### Background\n\nalpha\n\n## Notes & caveats\n\nbeta\n  | alpha
-freetext-punct    | Changes    | ### Changes\n\nalpha\n\n#### Why? / How!\n\nbeta\n       | alpha
-indented-h3       | Background | ### Background\n\nalpha\n\n  ### Other\n\nbeta\n         | alpha
+freetext-punct    | Changes    | ### Changes\n\nalpha\n\n#### Why? / How!\n\nbeta\n       | alpha #### Why? / How! beta
+# DELIBERATE RED (#2168): indent 2 is still a heading, but an unknown one; the value
+# keeps the verbatim indent, so 3 spaces sit between `alpha` and `###`.
+indented-h3       | Background | ### Background\n\nalpha\n\n  ### Other\n\nbeta\n         | alpha   ### Other beta
 # A TAB-indented `##` reaches column 4 and is NOT a heading. Every heading-INDENT
 # row lives in the HI group below instead: its values carry verbatim tabs, which
 # only the whitespace-squeezed comparison there can express.
@@ -134,7 +139,7 @@ pre-fence-inline     | Cause      | ```\nCause: decoy inside the fence\n```\n\n#
 pre-fence-h2         | Changes    | ~~~text\n## Changes\ndecoy inside the fence\n~~~\n\n## Changes\n\nreal\n | real
 # The counter-probe: with NO fence around it, the same decoy heading DOES start
 # capture — so the four rows above prove the fence, not a quirk of the fixture.
-pre-fence-control    | Background | ### Background\n\ndecoy line\n\n### Other\n\nx\n | decoy line
+pre-fence-control    | Background | ### Background\n\ndecoy line\n\n## Other\n\nx\n | decoy line
 # --- C5: a run of TWO never opens a fence, so the `## Other` below it is a real
 # heading and still terminates. (CommonMark 4.5: an opener needs 3+.) ---
 two-backtick-noopen  | Background | ### Background\n\nsnippet:\n\n``\n## Other\n\nbeta\n | snippet: ``
@@ -250,16 +255,16 @@ TABLE
 # ---------------------------------------------------------------------------
 MUT_DIR="$TMP/mut"
 mkdir -p "$MUT_DIR"
-BOUNDARY_LINE='if ($0 ~ /^[ \t]*##+[ \t]+/) { cap = 0; next }'
-
-if grep -qF "$BOUNDARY_LINE" "$LIB"; then
-    pass "M-anchor the generic-heading boundary line is present in $LIB"
+# Structure-independent anchor: the `##` boundary is the line that tests `$0 ~ /…##…/`
+# and does `cap = 0` (looked up by shape; the line number is never hard-coded).
+MUT_LINE="$(grep -nE '\$0 ~ /[^/]*##[^/]*/.*cap = 0' "$LIB" | head -n 1 | cut -d: -f1)"
+# kill mutant: the first regex of that line can never match.
+sed "${MUT_LINE:-0}s|\\\$0 ~ /[^/]*/|\$0 ~ /^\\\\x01NEVERMATCH/|" "$LIB" >"$MUT_DIR/kill.sh"
+if [ -n "$MUT_LINE" ] && ! cmp -s "$LIB" "$MUT_DIR/kill.sh"; then
+    pass "M-anchor the generic-heading boundary line (#$MUT_LINE) is found in $LIB and the kill mutant differs from it"
 else
-    fail "M-anchor — the boundary line this probe mutates is gone from $LIB; the probe below is meaningless"
+    fail "M-anchor — no '##' regex line with 'cap = 0' found or mutated in $LIB; the probe below is meaningless"
 fi
-
-# kill mutant: the generic boundary can never match.
-sed "s|\\^\\[ \\\\t\\]\\*##+\\[ \\\\t\\]\\+|^\\\\x01NEVERMATCH|" "$LIB" >"$MUT_DIR/kill.sh"
 # control mutant: a comment line only — behaviour must be unchanged.
 { printf '# control mutant: no behavioural change\n'; cat "$LIB"; } >"$MUT_DIR/control.sh"
 
@@ -267,7 +272,10 @@ probe_extract() {  # probe_extract <lib> <field> <body>
     BODY="$3" run_with_timeout 30 bash -c '. "$1"; extract_field "$2"' _ "$1" "$2"
 }
 
-PROBE_BODY=$'### Background\n\nalpha\n\n### Sub-tasks (optional)\n\nbeta\n'
+# An H2 heading: the unconditional arm. A `###` heading would also end capture via the
+# known-label arm after #2168, so it could not tell the kill mutant apart. The anchor
+# above finds the `##` arm by shape, so it survives the implementation landing.
+PROBE_BODY=$'### Background\n\nalpha\n\n## Notes\n\nbeta\n'
 assert_eq "M-control the control mutant still terminates at the free-text heading" \
     "alpha" "$(probe_extract "$MUT_DIR/control.sh" Background "$PROBE_BODY")"
 
