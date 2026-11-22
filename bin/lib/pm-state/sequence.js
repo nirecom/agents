@@ -6,6 +6,7 @@
 
 const path = require("path");
 const S = require(path.join(__dirname, "..", "..", "..", "hooks", "pm-session", "schema"));
+const W = require(path.join(__dirname, "..", "..", "..", "hooks", "pm-session", "writer-common"));
 
 const RETRY = "check `gh auth status` and run set-sequence again";
 
@@ -47,9 +48,11 @@ function issuesOf(tables) {
   return out;
 }
 
+// resolved(ref, homeRepo) -> the normalized ref (writer-common.normalizeRef, #2942), or null when its
+// repo cannot be resolved (checkSequence reports it as unresolvable instead of throwing).
 const resolved = (ref, homeRepo) => {
-  const repo = S.resolveRepo(ref, homeRepo);
-  return typeof repo === "string" && repo.includes("/") ? { number: Number(ref.number), repo } : null;
+  const r = W.normalizeStoredRef(ref, homeRepo);
+  return typeof r.repo === "string" && r.repo.includes("/") ? r : null;
 };
 
 // checkSequence(tables, owner, ctx) -> {ok:true}
@@ -117,4 +120,24 @@ function writeSequence(sid, tables, ctx) {
   });
 }
 
-module.exports = { RETRY, SeqRefusal, validatePayload, issuesOf, checkSequence, writeSequence };
+// removeFromSequence(sequence, refs, {homeRepo?, at?}) -> {tables, unverified} (#2942 PMR-3): the rows of
+// refs dropped (an emptied wave is dropped too); a remaining row whose blocked_by names a removed issue sets
+// unverified {reason:"removed", at}. Idempotent; the caller writes it in the /pm-remove state write.
+function removeFromSequence(seq, refs, opts) {
+  const o = opts || {};
+  const gone = (r) => (refs || []).some((x) => S.sameIssue(x, r, o.homeRepo));
+  const tables = Array.isArray(seq && seq.tables) ? seq.tables : [];
+  let orphaned = false;
+  const next = tables.map((t) => {
+    const waves = (Array.isArray(t.waves) ? t.waves : []).map((w) => {
+      const issues = (Array.isArray(w.issues) ? w.issues : []).filter((i) => !gone(i));
+      if (issues.some((i) => (Array.isArray(i.blocked_by) ? i.blocked_by : []).some(gone))) orphaned = true;
+      return Object.assign({}, w, { issues });
+    }).filter((w) => w.issues.length > 0);
+    return Object.assign({}, t, { waves });
+  });
+  const unverified = orphaned ? { reason: "removed", at: o.at || new Date().toISOString() } : (seq && seq.unverified) || null;
+  return Object.assign({}, seq, { tables: next, unverified });
+}
+
+module.exports = { RETRY, SeqRefusal, validatePayload, issuesOf, checkSequence, writeSequence, removeFromSequence };

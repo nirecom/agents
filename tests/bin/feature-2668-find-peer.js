@@ -298,3 +298,80 @@ test("FP11 ref: not-in-list carries no HINT=", () => {
   assert.deepStrictEqual(hintOf(r), [], r.out);
 });
 caseEnd();
+
+// #2942 S5: the real dump (recorded 2026-11, Claude Code ListAgents) carries a "Subagents (N):" section
+// between the own line and "Peer sessions (N):"; its rows ("  <agentId>  ·  <type>  ·  <state>  ·  started ...")
+// carry no [ref6]. parseAgentsList skips that section up to the next heading; an unknown line inside
+// "Peer sessions" still makes the whole dump null.
+const SUB_ROW = "  a9ce10ff9fa5da79d  ·  supervisor-audit  ·  completed  ·  started 1m ago";
+const withSubagents = (subRows, peers, o = base) => {
+  const [head, ...rest] = realAgentsListText(peers, o).split("\n");
+  return `${head}\n\nSubagents (${subRows.length}):\n${subRows.join("\n")}\n\n${rest.join("\n")}`;
+};
+const parse = (text) => require(path.join(P.ROOT, "bin", "find-peer.d", "agents-list.js")).parseAgentsList(text);
+
+caseBegin("FP12 the Subagents section is skipped up to the next heading", "bin/find-peer.d/agents-list.js");
+test("FP12 a real Subagents row is not an entry and does not null the dump", () => {
+  const r = parse(withSubagents([SUB_ROW], [peer]));
+  assert.notStrictEqual(r, null, "the Subagents section nulled the whole dump");
+  assert.deepStrictEqual(r.map((e) => e.ref), [base.ref, peer.ref]);
+});
+test("FP12 an unknown free-text line inside Subagents does not null the dump", () => {
+  const r = parse(withSubagents([SUB_ROW, "  (some future subagent line format)"], [peer]));
+  assert.notStrictEqual(r, null);
+  assert.deepStrictEqual(r.map((e) => e.ref), [base.ref, peer.ref]);
+});
+test("FP12 a peer-shaped row inside Subagents is skipped, not listed", () => {
+  const r = parse(withSubagents([`  #42 Fix it${sfx(U)} [a1b2c3]  ·  interactive  ·  idle  ·  started 1m ago`], [peer]));
+  assert.notStrictEqual(r, null, "the Subagents section nulled the whole dump");
+  assert.ok(!r.some((e) => e.ref === "a1b2c3"), JSON.stringify(r));
+});
+test("FP12 an empty Subagents (0): section parses", () => {
+  const r = parse(withSubagents([], [peer]));
+  assert.notStrictEqual(r, null, "the Subagents heading nulled the whole dump");
+  assert.deepStrictEqual(r.map((e) => e.ref), [base.ref, peer.ref]);
+});
+test("FP12 end to end: --session self resolves through a dump carrying Subagents (name policy)", () => {
+  ok(run(["--session", "self"], { policy: "name", self: U, list: withSubagents([SUB_ROW], [peer]) }), { ROLE: "self", SESSION_ID: U, DESTINATION: `${base.name} [c0ffee]`, DESTINATION_KIND: "name" });
+});
+// The holder is a session other than self: the own row (base) carries sid-${U}, so a holder with the
+// same suffix would match two rows and be ambiguous by design.
+test("FP12 end to end: --issue resolves a peer listed after a Subagents section", () => {
+  const HOLDER = uuid("5e6f7a8b");
+  const holderRow = { ref: "a1b2c3", name: `#42 Fix it${sfx(HOLDER)}` };
+  ok(run(["--issue", "42"], { policy: "name", holder: HOLDER, list: withSubagents([SUB_ROW], [peer, holderRow]) }), { ROLE: "working", SESSION_ID: HOLDER, DESTINATION: `${holderRow.name} [a1b2c3]`, DESTINATION_KIND: "name" });
+});
+caseEnd();
+
+caseBegin("FP13 an unknown line inside Peer sessions still nulls the dump", "bin/find-peer.d/agents-list.js");
+test("FP13 an unknown line after Peer sessions (with a Subagents section) -> null", () => {
+  assert.strictEqual(parse(`${withSubagents([SUB_ROW], [peer])}  (unknown peer line)\n`), null);
+});
+test("FP13 a subagent-shaped row inside Peer sessions -> null (the skip ends at the heading)", () => {
+  assert.strictEqual(parse(`${withSubagents([], [peer])}${SUB_ROW}\n`), null);
+});
+test("FP13 end to end: an unknown Peer sessions line -> 2 agents-list-unparsable", () => {
+  failed(run(["--session", "self"], { policy: "name", self: U, list: `${withSubagents([SUB_ROW], [peer])}  (unknown peer line)\n` }), 2, "agents-list-unparsable");
+});
+caseEnd();
+
+// The real bin/peer-msg CLI (production destination policy) over a dump that carries a Subagents section.
+// A peer-shaped row inside Subagents with this session's suffix would make the own name ambiguous (6) if
+// it were read as a peer; reply-to must stay the own line's name.
+caseBegin("FP14 bin/peer-msg header --agents-file skips the Subagents rows (never peers)", "bin/find-peer.d/agents-list.js");
+const HEADER_RE = /^\[peer-msg v1\] from-session=(\S+) msg-id=\S+ reply-to=(.*) reply-kind=(\S+)$/m;
+for (const [label, subRows] of [
+  ["a real subagent row", [SUB_ROW]],
+  ["a peer-shaped row with this session's suffix", [SUB_ROW, `  #43 Twin${sfx(U)} [a1b2c3]  ·  interactive  ·  idle  ·  started 1m ago`]],
+]) {
+  test(`FP14 header through a Subagents section with ${label} -> exit 0, reply-to is the own name`, () => {
+    const list = P.writeFile("agents-sub.txt", withSubagents(subRows, [peer]));
+    const r = P.runBin("bin/peer-msg", ["header", "--agents-file", list], { env: { CLAUDE_CODE_SESSION_ID: U } });
+    assert.strictEqual(r.code, 0, `${r.out}${r.err}`);
+    const m = HEADER_RE.exec(r.out);
+    assert.ok(m, r.out);
+    assert.deepStrictEqual([m[1], m[2], m[3]], [U, `${base.name} [${base.ref}]`, "name"], r.out);
+    assert.ok(!r.out.includes("a1b2c3") && !r.out.includes("a9ce10ff9fa5da79d"), r.out);
+  });
+}
+caseEnd();

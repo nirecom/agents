@@ -14,7 +14,7 @@ const OWNER_REPO_RE = /^([A-Za-z0-9._-]+)\/([A-Za-z0-9._-]+)$/;
 // Identity comes from the origin remote alone — no fallback (#1899).
 function resolveOwnerRepoFromOrigin() {
   const [cmd, args, opts] = buildGitSpawn(["remote", "get-url", "origin"]);
-  const result = spawnSync(cmd, args, opts);
+  const result = spawnSync(cmd, args, Object.assign({}, opts, { windowsHide: true }));
   if (result.status !== 0 || !result.stdout) {
     return { ok: false, message: "no 'origin' remote is configured" };
   }
@@ -48,20 +48,21 @@ function nodeFields(depth) {
   return depth < MAX_ANCESTOR_DEPTH ? `${own} parent{${nodeFields(depth + 1)}}` : `${own} parent{number}`;
 }
 
-// buildQuery(refs) -> {query, slots: [{key, repoAlias, issueAlias}]}; refs are validated already.
-function buildQuery(refs) {
+// buildQuery(refs, fields?) -> {query, slots: [{key, path: [repoAlias, issueAlias]}]}; refs are validated
+// already; fields is the issue selection (default: the ancestor chain).
+function buildQuery(refs, fieldsArg) {
   const byRepo = new Map();
   for (const r of refs) {
     if (!byRepo.has(r.repoKey)) byRepo.set(r.repoKey, { owner: r.owner, name: r.name, refs: [] });
     byRepo.get(r.repoKey).refs.push(r);
   }
   const slots = [];
-  const fields = nodeFields(0);
+  const fields = fieldsArg || nodeFields(0);
   let k = 0;
   const parts = [...byRepo.values()].map((g, ri) => {
     const issues = g.refs.map((r) => {
       const ia = `i${k++}`;
-      slots.push({ key: r.key, repoAlias: `r${ri}`, issueAlias: ia });
+      slots.push({ key: r.key, path: [`r${ri}`, ia] });
       return `${ia}: issue(number: ${r.number}) { ${fields} }`;
     });
     return `r${ri}: repository(owner: "${g.owner}", name: "${g.name}") { ${issues.join(" ")} }`;
@@ -94,37 +95,46 @@ function chainOf(node, selfKey) {
   return { ok: true, chain };
 }
 
-// runChunk(refs, timeoutMs) -> {ok:true, results} | {ok:false, reason}; one gh call.
-function runChunk(refs, timeoutMs) {
-  const { query, slots } = buildQuery(refs);
-  const [cmd, args, opts] = buildGhSpawn(["api", "graphql", "--input", "-"]);
-  const r = spawnSync(cmd, args, Object.assign({}, opts, { input: JSON.stringify({ query }), timeout: timeoutMs }));
+const nodeAt = (data, p) => p.reduce((o, k) => (o && typeof o === "object" ? o[k] : null), data);
+const covers = (errPath, slotPath) => Array.isArray(errPath) && errPath.length > 0 && errPath.length <= slotPath.length
+  && errPath.every((k, i) => k === slotPath[i]);
+
+// classifyGraphqlResult(spawnResult, slots, readNode) -> {ok:true, results: {[key]: readNode(node, key) |
+// {ok:false, reason}}} | {ok:false, reason: "timeout"|"gh_exec_failed"|"parse_failed"} (#2942).
+// gh exits 1 when one aliased node of a batch is missing yet still prints `data`; only a slot an
+// errors[].type NOT_FOUND covers is issue_not_found, a slot another error covers is gh_exec_failed, and
+// every other slot is read. No data on a non-zero exit is a whole-call gh_exec_failed (network, auth).
+function classifyGraphqlResult(r, slots, readNode) {
   if (r.error || r.signal) return { ok: false, reason: "timeout" };
-  if (r.status !== 0) return { ok: false, reason: "gh_exec_failed" };
   let body;
-  try { body = JSON.parse(String(r.stdout || "").trim()); } catch (_e) { return { ok: false, reason: "parse_failed" }; }
-  const data = body && body.data;
-  if (!data || typeof data !== "object") return { ok: false, reason: "parse_failed" };
+  try { body = JSON.parse(String(r.stdout || "").trim()); } catch { body = null; }
+  const data = body && body.data && typeof body.data === "object" ? body.data : null;
+  if (!data) return { ok: false, reason: r.status === 0 ? "parse_failed" : "gh_exec_failed" };
+  const errors = Array.isArray(body.errors) ? body.errors.filter((e) => e && typeof e === "object") : [];
   const results = {};
   for (const s of slots) {
-    const node = data[s.repoAlias] ? data[s.repoAlias][s.issueAlias] : null;
-    results[s.key] = node && typeof node === "object" ? chainOf(node, s.key) : { ok: false, reason: "issue_not_found" };
+    const node = nodeAt(data, s.path);
+    if (node && typeof node === "object") { results[s.key] = readNode(node, s.key); continue; }
+    const errs = errors.filter((e) => covers(e.path, s.path));
+    const notFound = errs.length > 0 ? errs.every((e) => e.type === "NOT_FOUND") : r.status === 0;
+    results[s.key] = { ok: false, reason: notFound ? "issue_not_found" : "gh_exec_failed" };
   }
   return { ok: true, results };
 }
 
-// fetchAncestorChains(refs, {deadlineAt?, timeoutMs?}) -> {ok:true, results: {[key]: {ok:true, chain} |
-// {ok:false, reason}}} or a whole-call {ok:false, reason: "gh_exec_failed"|"timeout"|"parse_failed"}.
-// key is "<owner/repo lower>#N" (refKey). Refs go 50 per gh call; one deadlineAt covers every call
-// (none left -> timeout without calling gh); without it each call gets timeoutMs (15 s).
-function fetchAncestorChains(refs, opts) {
+// batchedGraphql(refs, {fields, readNode, keyOf?}, {deadlineAt?, timeoutMs?}) -> {ok:true, results: {[key]:
+// readNode(node, key) | {ok:false, reason}}} or a whole-call {ok:false, reason: "gh_exec_failed"|"timeout"|
+// "parse_failed"}. key is keyOf(repo, N) (default refKey). Refs go 50 per gh call; one deadlineAt covers
+// every call (none left -> timeout without calling gh); without it each call gets timeoutMs (15 s).
+function batchedGraphql(refs, spec, opts) {
   const o = opts || {};
+  const keyOf = spec.keyOf || refKey;
   const results = {};
   const valid = new Map();
   for (const ref of Array.isArray(refs) ? refs : []) {
     const repo = ref && typeof ref.repo === "string" ? ref.repo : "";
     const m = repo.match(OWNER_REPO_RE);
-    const key = refKey(repo, ref && ref.number);
+    const key = keyOf(repo, ref && ref.number);
     if (!m) { results[key] = { ok: false, reason: "repo-unknown" }; continue; }
     if (!Number.isInteger(ref.number) || ref.number <= 0) { results[key] = { ok: false, reason: "issue_not_found" }; continue; }
     if (!valid.has(key)) valid.set(key, { key, number: ref.number, owner: m[1], name: m[2], repoKey: repo.toLowerCase() });
@@ -132,17 +142,25 @@ function fetchAncestorChains(refs, opts) {
   const list = [...valid.values()];
   for (let i = 0; i < list.length; i += CHUNK_SIZE) {
     let timeoutMs = Number.isFinite(o.timeoutMs) ? o.timeoutMs : GH_TIMEOUT_MS;
-    if (Number.isFinite(o.deadlineAt)) {
-      timeoutMs = o.deadlineAt - Date.now();
-      if (timeoutMs <= 0) return { ok: false, reason: "timeout" };
-    }
-    const r = runChunk(list.slice(i, i + CHUNK_SIZE), timeoutMs);
-    if (!r.ok) return r;
-    Object.assign(results, r.results);
+    if (Number.isFinite(o.deadlineAt)) timeoutMs = Math.min(timeoutMs, o.deadlineAt - Date.now());
+    if (timeoutMs <= 0) return { ok: false, reason: "timeout" };
+    const { query, slots } = buildQuery(list.slice(i, i + CHUNK_SIZE), spec.fields);
+    const [cmd, args, spawnOpts] = buildGhSpawn(["api", "graphql", "--input", "-"]);
+    const r = spawnSync(cmd, args, Object.assign({}, spawnOpts, { input: JSON.stringify({ query }), timeout: timeoutMs, windowsHide: true }));
+    const c = classifyGraphqlResult(r, slots, spec.readNode);
+    if (!c.ok) return c;
+    Object.assign(results, c.results);
   }
   return { ok: true, results };
 }
 
+// fetchAncestorChains(refs, {deadlineAt?, timeoutMs?}) -> {ok:true, results: {[refKey]: {ok:true, chain} |
+// {ok:false, reason}}} or a whole-call {ok:false, reason}; see batchedGraphql.
+const fetchAncestorChains = (refs, opts) => batchedGraphql(refs, { fields: nodeFields(0), readNode: chainOf }, opts);
+
 module.exports = {
-  resolveOwnerRepoFromOrigin, parseOwnerRepoFromApiUrl, fetchAncestorChains, refKey, META_LABEL, MAX_ANCESTOR_DEPTH,
+  resolveOwnerRepoFromOrigin, parseOwnerRepoFromApiUrl, fetchAncestorChains, classifyGraphqlResult, batchedGraphql, refKey, META_LABEL,
+  MAX_ANCESTOR_DEPTH, OWNER_REPO_RE,
 };
+// fetchSubIssueTree lives in ./sub-issue-tree.js (it reads the PM field, which needs this module first).
+module.exports.fetchSubIssueTree = (refs, opts) => require("./sub-issue-tree").fetchSubIssueTree(refs, opts);

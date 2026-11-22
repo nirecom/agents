@@ -33,20 +33,22 @@ function seedWorld(F) {
   P.seedPm(SID.tieA, held(TAG.tieA, [960], "2026-11-05T00:00:00.000Z"));
   P.seedPm(SID.late, held(TAG.late, [970], "2026-11-06T00:00:00.000Z"));
   P.seedPm(SID.early, held(TAG.early, [970], "2026-11-02T00:00:00.000Z"));
+  // #2942 PM field (owner's source): 100, 300 = A; 200 = B; 103 = F; 400 = C; x/y#950 = E; 960 = tieB and
+  // 970 = late (the field, not the local assignedAt / tag order, decides); 150 none (the old generation's).
   const meta = (p) => Object.assign(p || { parent: null }, { labels: ["meta"] });
   const map = {
-    "o/r#100": meta(), "o/r#101": parent(100), "o/r#102": parent(101), "o/r#103": parent(100),
-    "o/r#200": meta(parent(100)), "o/r#202": parent(200),
-    "o/r#300": { parent: null, labels: ["a"], more: true }, "o/r#301": parent(300),
-    "o/r#500": parent(501), "o/r#501": { parent: null },
+    "o/r#100": meta({ parent: null, pm: TAG.A }), "o/r#101": parent(100), "o/r#102": parent(101), "o/r#103": Object.assign(parent(100), { pm: TAG.F }),
+    "o/r#200": meta(Object.assign(parent(100), { pm: TAG.B })), "o/r#202": parent(200),
+    "o/r#300": { parent: null, labels: ["a"], more: true, pm: TAG.A }, "o/r#301": parent(300),
+    "o/r#500": parent(501), "o/r#501": { parent: null }, "o/r#400": { parent: null, pm: TAG.C },
     "o/r#600": parent(601), "o/r#601": parent(600),
-    "o/r#800": { fail: true },
+    "o/r#800": { fail: true }, "o/r#960": { parent: null, pm: TAG.tieB }, "o/r#970": { parent: null, pm: TAG.late },
     "o/r#111": parent(110), "o/r#112": parent(110), "o/r#110": parent(100),
   };
   for (let i = 700; i < 715; i++) map[`o/r#${i}`] = parent(i + 1);
   map["x/y#900"] = parent(100, "o/r");
   map["x/y#100"] = { parent: null };
-  map["x/y#951"] = parent(950, "x/y");
+  map["x/y#951"] = parent(950, "x/y"); map["x/y#950"] = { parent: null, pm: TAG.E };
   for (let i = 0; i < CAP_CHAINS; i++) map[`o/r#${1000 + i}`] = parent(100);
   F.setMap(map);
 }

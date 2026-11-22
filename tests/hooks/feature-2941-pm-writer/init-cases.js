@@ -183,7 +183,8 @@ function overlap() {
     assert.ok(!b.includes("100 or fewer"), b);
   });
   refusedInit("V4 a #N with no origin repo is repo-unknown", 8403, [8400], (b) => notRetry(b, 8403, "repo-unknown"), { cwd: process.cwd() });
-  test("V5 no forge call for an issue-less /pm-init, nor when no other PM is active", () => {
+  // Alone, the forge sees only the PM field read/write and the sub-issue reads (descendant check, inbox meta_children baseline).
+  test("V5 no forge call for an issue-less /pm-init; alone, only the PM field is read and written (#2942)", () => {
     const tag = W.nextTag("PM-nof");
     const r = W.write(fresh(), P.wrapped("pm-init", `${tag} theme`));
     W.assertAccepted(r, "init", tag);
@@ -192,7 +193,7 @@ function overlap() {
       const t2 = W.nextTag("PM-solo");
       const r2 = W.write(fresh(), P.wrapped("pm-init", `${t2} #8404`));
       W.assertAccepted(r2, "init", t2);
-      assert.strictEqual(r2.calls, 0, W.brief(r2));
+      assert.deepStrictEqual(W.G.queries().slice(W.G.calls() - r2.calls).filter((q) => !/pm: fieldValueByName|^project item-edit |subIssues\(/.test(q)), [], W.brief(r2)); assert.strictEqual(W.G.pmStore().PVTI_o_r_8404, t2, "the PM field names the new PM");
     });
   });
 }

@@ -1,0 +1,7 @@
+#!/usr/bin/env node
+"use strict";
+// bin/pm-notify — the notification-point layer CLI (#2942). Dispatch only; usage and logic: bin/lib/pm-notify/cli.js.
+
+const { main } = require("./lib/pm-notify/cli");
+
+process.exitCode = main(process.argv.slice(2));

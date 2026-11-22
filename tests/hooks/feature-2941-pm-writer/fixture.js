@@ -40,7 +40,9 @@ for (const args of [["init", "-q"], ["config", "core.hooksPath", "/dev/null"], [
   const r = cp.spawnSync("git", ["-C", home, ...args], { encoding: "utf8", timeout: 20000 });
   if (r.status !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr}`);
 }
-after(() => { G.restore(); fs.rmSync(home, { recursive: true, force: true }); });
+// Windows may refuse to remove home while a test's cwd or a child still holds it (EPERM / EBUSY): the
+// cwd is left first, and a still-held tmp dir is left to the OS rather than failing the file.
+after(() => { G.restore(); if (path.relative(home, process.cwd()).split(path.sep)[0] !== "..") process.chdir(os.tmpdir()); try { fs.rmSync(home, { recursive: true, force: true, maxRetries: 3 }); } catch (e) { if (process.platform !== "win32" || !["EPERM", "EBUSY"].includes(e.code)) throw e; } });
 
 function writer() {
   const fn = P.load(WRITER).runPmWriter;

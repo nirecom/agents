@@ -138,6 +138,9 @@ try {
   process.exit(args.advance ? 2 : 1);
 }
 
+// #2942: becoming WF-META is a notification point for the issues' PM (pm-notify record); fail-open.
+if (type === "wf-meta") require(path.join(__dirname, "..", "lib", "pm-notify", "record")).recordSessionIssues(sessionId, "wf-meta");
+
 if (!args.advance) process.exit(0);
 
 runAdvance({

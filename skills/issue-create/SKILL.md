@@ -160,12 +160,12 @@ When `review.status` is `disputed` and the user chose the reviewer's verdict, di
 - recover per `rules/github-issues.md` "Converting an issue into a meta parent"
 
 For `bulk-sub-of`, the manifest path is `<PLANS_DIR>/<session-id>-bulk-dispatch-<n>.tsv` with n the parent issue number (Phase 5 reuses this value).
-Pipe TSV rows (one `title<TAB>body` per child) to `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/run-bulk-dispatch.sh" "<manifest path>" N [-- passthrough flags]`; the script writes the manifest there and calls the dispatcher.
-Stdout is N URL lines (one per child, manifest order).
+Pipe TSV rows (one `title<TAB>body` per child) to `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/run-bulk-dispatch.sh" "<manifest path>" N [-- passthrough flags]`; the script writes the manifest there and calls the dispatcher; stdout is N URL lines (one per child, manifest order).
 
 **Stdout contract**: `none|reopen|sub-of|sibling` emit exactly one URL line on success (last line of stdout); `make-parent` emits two (parent first, proposal last); `bulk-sub-of` emits N URL lines (one per child, manifest order, end of stdout). All other output goes to stderr. Single-verdict callers read the last stdout line and take the trailing digits of that URL as the issue number — no pipeline; `bulk-sub-of` callers loop over all trailing URL lines. Enforced by `bin/github-issues/issue-create-dispatch.sh`.
 
 Issues created here may be added to an existing session's `closes_issues` list (see `rules/github-issues.md` "Session model").
+After a dispatch with exit 0 on `reopen`, `make-parent` or `bulk-sub-of`, send the recorded PM notifications per `skills/_shared/pm-notify.md` (fail-open).
 
 ### Phase 5 — Record to WORKTREE_NOTES.md (primary-path capture)
 

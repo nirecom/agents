@@ -1,31 +1,37 @@
 #!/usr/bin/env bash
-# Dispatch wrapper for /issue-create skill — executes the mechanical branch
-# selected by Claude's survey verdict (none / reopen / sub-of / make-parent / sibling).
-#
-# Usage:
-#   issue-create-dispatch.sh --verdict <kind> [verdict-specific flags] -- <issue-create.sh args...>
-#
-# Verdicts:
-#   none         (no extra flags)            New issue with no relation
-#   reopen       --target N [--note TEXT]    Reopen #N; no new issue created
-#   sub-of       --parent N                  New issue, attached as sub-issue of #N
-#   make-parent  --children N,M,...          New META parent + the proposal as its child
-#   sibling      --related N,M,...           New issue with "Related to #N" appended to body
-#   bulk-sub-of  --parent N --manifest FILE   Create N new sub-issues under #N from manifest
-#
-# sub-of / bulk-sub-of verify that #N is a real meta parent (lib/require-meta-parent.sh)
-# BEFORE the first create, because an issue attached to an unusable parent cannot be
-# un-created. Ineligible parent → exit 2; indeterminate lookup → exit 1 (fail CLOSED).
-#
-# Stdout: final issue URL(s).
-#   none/reopen/sub-of/sibling: one URL (last line of stdout).
-#   make-parent: TWO lines — the meta parent first, the proposal (the child) LAST, so
-#                callers piping through `tail -n 1` still receive the proposal's URL.
-#   bulk-sub-of: N URLs in manifest order (one per line, end of stdout; progress on stderr only).
-#   reopen: URL of the reopened issue; all other verdicts: URL of the new issue.
-# Exit: 0 on success; 2 on usage error; 1 on structural failure.
+# Dispatch wrapper for /issue-create skill — executes the mechanical branch selected by
+# Claude's survey verdict. Verdicts, stdout contract and exit codes: the usage text in usage().
+# Notification points for the issues' PM (#2942, bin/pm-notify): reopen, split (bulk-sub-of),
+# and the owner records around make-parent --children (detach before/after); all fail-open.
 
 set -euo pipefail
+
+# shellcheck disable=SC2016  # literal usage text; nothing in it is meant to expand
+USAGE_TEXT='Dispatch wrapper for /issue-create skill — executes the mechanical branch
+selected by Claude'"'"'s survey verdict (none / reopen / sub-of / make-parent / sibling).
+
+Usage:
+  issue-create-dispatch.sh --verdict <kind> [verdict-specific flags] -- <issue-create.sh args...>
+
+Verdicts:
+  none         (no extra flags)            New issue with no relation
+  reopen       --target N [--note TEXT]    Reopen #N; no new issue created
+  sub-of       --parent N                  New issue, attached as sub-issue of #N
+  make-parent  --children N,M,...          New META parent + the proposal as its child
+  sibling      --related N,M,...           New issue with "Related to #N" appended to body
+  bulk-sub-of  --parent N --manifest FILE   Create N new sub-issues under #N from manifest
+
+sub-of / bulk-sub-of verify that #N is a real meta parent (lib/require-meta-parent.sh)
+BEFORE the first create, because an issue attached to an unusable parent cannot be
+un-created. Ineligible parent → exit 2; indeterminate lookup → exit 1 (fail CLOSED).
+
+Stdout: final issue URL(s).
+  none/reopen/sub-of/sibling: one URL (last line of stdout).
+  make-parent: TWO lines — the meta parent first, the proposal (the child) LAST, so
+               callers piping through `tail -n 1` still receive the proposal'"'"'s URL.
+  bulk-sub-of: N URLs in manifest order (one per line, end of stdout; progress on stderr only).
+  reopen: URL of the reopened issue; all other verdicts: URL of the new issue.
+Exit: 0 on success; 2 on usage error; 1 on structural failure.'
 
 VERDICT=""
 TARGET=""
@@ -40,7 +46,7 @@ NOTE=""
 PASSTHROUGH=()
 
 usage() {
-    sed -n '2,26p' "$0" >&2
+    printf '%s\n' "$USAGE_TEXT" >&2
     exit 2
 }
 
@@ -179,6 +185,19 @@ passthrough_value() {
     return 1
 }
 
+# Fail-open and silent: stdout is the URL contract.
+pm_notify() {
+    node "$SCRIPT_DIR/../pm-notify" "$@" >/dev/null 2>&1 || true
+}
+
+pm_detach_children() {
+    local phase="$1" c
+    IFS=',' read -ra PM_CHILDREN <<< "$CHILDREN"
+    for c in "${PM_CHILDREN[@]}"; do
+        pm_notify detach --issue "#${c// /}" --phase "$phase"
+    done
+}
+
 extract_issue_number() {
     printf '%s' "$1" | grep -oE '[0-9]+$'
 }
@@ -238,6 +257,7 @@ case "$VERDICT" in
         else
             bash "$(dirname "${BASH_SOURCE[0]}")/reopen-with-update.sh" "$TARGET"
         fi
+        pm_notify record --point reopen --issue "#${TARGET}"
         slug="$(get_repo_slug)"
         echo "https://github.com/${slug}/issues/${TARGET}"
         ;;
@@ -295,6 +315,8 @@ case "$VERDICT" in
         if ! passthrough_value --body >/dev/null && ! passthrough_value --body-file >/dev/null; then
             echo "Error: --body or --body-file is required for --verdict make-parent" >&2; exit 2
         fi
+
+        pm_detach_children before
 
         # The parent is unusable without the `meta` label — require-meta-parent.sh would
         # refuse it on the next attach. Repair the repo's label set before creating it.
@@ -360,6 +382,7 @@ case "$VERDICT" in
                 failed+=("$child")
             fi
         done
+        pm_detach_children after
         # Both issues exist by now, so their URLs are emitted whatever happened next:
         # swallowing them on a partial failure would strand two real issues.
         echo "$parent_url"
@@ -412,6 +435,7 @@ case "$VERDICT" in
         done < "$MANIFEST"
         # Reopen parent ancestor when at least one child was attached (mirrors sub-of).
         if [[ ${#created_urls[@]} -gt 0 ]]; then
+            pm_notify record --point split --issue "#${PARENT}"
             if ! bash "$(dirname "${BASH_SOURCE[0]}")/parent-ancestor-reopen.sh" "$slug" \
                     "$(extract_issue_number "${created_urls[0]}")"; then
                 echo "WARN: ancestor reopen had failures for parent #${PARENT} — see above" >&2

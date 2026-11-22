@@ -204,6 +204,8 @@ function runGate(rawSession, opts) {
       hint += " The scope-change check failed: warn the user that it could not run.";
     }
     if (sc.changed && action === "proceed" && approved) {
+      // #2942: the user's scope-change decision is a notification point for the issues' PM; fail-open.
+      require("../../../lib/pm-notify/record").recordSessionIssues(sid, "scope-change");
       return withAudit("proceed", HINTS.proceed, ["scope-change-approved"].concat(causeReason ? [causeReason] : []));
     }
     if (sc.changed) {

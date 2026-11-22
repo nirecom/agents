@@ -99,7 +99,9 @@ function run(o) {
   try {
     if (o.before) o.before(up);
     const r = W.write(down, from(up.sid), o.cwd);
-    return { up, down, r, pm: P.readPm(down), sideLeft: W.G.sideArmed() };
+    // tableCalls: the gh calls other than the post-lock inbox's one-time sub-issue read (#2942 meta_children baseline).
+    const tableCalls = W.G.queries().slice(W.G.calls() - r.calls).filter((q) => !/subIssues\(/.test(q)).length;
+    return { up, down, r, pm: P.readPm(down), sideLeft: W.G.sideArmed(), tableCalls };
   } finally {
     W.G.mode(null);
     W.G.sleep(null);
@@ -132,7 +134,7 @@ function sequenceCases() {
     delete seq.tables[0].waves[0].issues[0].blocked_by;
     const x = run({ seq });
     notCopied(x, ["structure"]);
-    assert.strictEqual(x.r.calls, 0, W.brief(x.r));
+    assert.strictEqual(x.tableCalls, 0, W.brief(x.r));
   });
   for (const field of ["blocked_by", "conflicts"]) {
     test(`F1 a table whose ${field} holds a malformed element is structure, without a forge call`, () => {
@@ -140,14 +142,14 @@ function sequenceCases() {
       seq.tables[0].waves[0].issues[0][field] = ["abc"];
       const x = run({ seq });
       notCopied(x, ["structure"]);
-      assert.strictEqual(x.r.calls, 0, W.brief(x.r));
+      assert.strictEqual(x.tableCalls, 0, W.brief(x.r));
     });
   }
   test("F1 an empty upstream table is sequence=none without a forge call", () => {
     const x = run({ seq: { updated_at: null, tables: [] } });
     W.assertAccepted(x.r, "inherit", x.up.tag);
     assert.match(String(x.r.context), /sequence=none/);
-    assert.strictEqual(x.r.calls, 0, W.brief(x.r));
+    assert.strictEqual(x.tableCalls, 0, W.brief(x.r));
   });
   for (const [reason, issues, table, cwd] of [
     ["label-overflow", [8200], [8201]], ["depth-cap", [8300], [8311]], ["cycle", [8320], [8321]], ["repo-unknown", [6101], [8510], process.cwd()],

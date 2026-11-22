@@ -19,7 +19,12 @@ function buildInjection(sessionId, opts) {
   const issues = Array.isArray(o.issues) ? o.issues : getClosesIssues(sessionId);
   const deadline = o.deadline || createDeadline({ hookTimeoutMs: CLI_BUDGET_MS });
   const role = resolveRole(sessionId, { issues, deadline, reserveMs: o.reserveMs, cwd: o.cwd });
-  if (!role.role) return null;
+  if (!role.role) {
+    if (role.reason) {
+      try { process.stderr.write(`pm-instructions: ${role.reason}\n`); } catch (_) { /* fail-open */ }
+    }
+    return null;
+  }
   const loaded = loadSections();
   return render(role, timing, sectionsFor(role.role, timing, loaded));
 }

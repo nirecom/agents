@@ -15,6 +15,7 @@ Follow the assignment rules in `skills/_shared/pm-supervisor-duties.md` `## PM s
 Read the `[pm-session] op=add tag=<tag>` context the hook added to this prompt; its `issues=` line is the updated assigned list.
 When the hook refused the prompt (not a PM session, an ended one, an older generation, or an issue another PM owns), this skill does not run; the user sees the refusal reason.
 When the refusal is an overlap or an issue whose scope cannot be checked, report the other PM's tag, or the reason and its exit, to the user.
+When the refusal names a PM set on an ancestor or a descendant of the issue (the PM field), report that PM's tag and session to the user; that PM removes it first.
 When no `[pm-session]` context is present, tell the user nothing was added and stop.
 
 ### PMA-2 — Report
