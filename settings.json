@@ -769,11 +769,11 @@
         ]
       },
       {
-        "matcher": "Monitor|EnterWorktree",
+        "matcher": "Monitor",
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_MAIN_ROOT/hooks/merged-allow-deny.js\" --matcher-group monitor-worktree",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/merged-allow-deny.js\" --matcher-group monitor",
             "timeout": 15
           }
         ]

@@ -77,6 +77,11 @@ fi
 FAKE_CFG="$FIXTURE/fake-cfg"
 mkdir -p "$FAKE_CFG/bin"
 cp "$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh" "$FAKE_CFG/bin/scan-outbound.sh"
+# scan-outbound.sh is a launcher: without scan-outbound.d/, its hooks/lib modules, and the
+# lists at the stand-in's own root (outside git it reads its own tree) it exits 4 and fails closed.
+script_checkout_fixture_copy "$FAKE_CFG" bin/scan-outbound.d hooks/lib
+: > "$FAKE_CFG/.private-info-blocklist"
+: > "$FAKE_CFG/.private-info-allowlist"
 cp "$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/check-private-repo-name.js" "$FAKE_CFG/bin/check-private-repo-name.js"
 cat > "$FAKE_CFG/bin/resolve-session-id" <<'STUB'
 #!/bin/sh

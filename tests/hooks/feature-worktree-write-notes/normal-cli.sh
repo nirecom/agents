@@ -63,23 +63,26 @@ test_I4_cli_idempotent() {
     fi
 }
 
-# ---- N8: WORKTREE_BASE_DIR env unset → "(default)" ----
+# ---- N8: WORKTREE_BASE_DIR env unset → the resolver's in-repo base (#1610) ----
+# The global .env is pinned to an empty dir so a developer's WORKTREE_BASE_DIR cannot leak in.
 test_N8_env_unset_defaults() {
     require_bin "test_N8_env_unset_defaults" || return
     local main; main="$(setup_main_repo "n8-main")"
     local wt;   wt="$(setup_worktree_dest "n8-wt")"
     local main_node; main_node="$(node_path "$main")"
+    local conf="$TMPDIR_BASE/n8-conf"; mkdir -p "$conf"
 
     (
         unset WORKTREE_BASE_DIR
+        export AGENTS_MAIN_ROOT="$(node_path "$conf")"
         COPIED_JSON='{"copied":[]}' run_with_timeout 120 node "$BIN_JS" "$main_node" "$wt" "feature/n8" "" >/dev/null 2>&1
     )
 
     local notes_file="$TMPDIR_BASE/n8-wt/WORKTREE_NOTES.md"
-    if grep -q "^WORKTREE_BASE_DIR: (default)$" "$notes_file" 2>/dev/null; then
-        pass "N8: WORKTREE_BASE_DIR env unset → '(default)'"
+    if grep -qiE '^WORKTREE_BASE_DIR: .*n8-main[/\\]\.claude[/\\]worktrees[/\\]?$' "$notes_file" 2>/dev/null; then
+        pass "N8: WORKTREE_BASE_DIR env unset → <main>/.claude/worktrees recorded"
     else
-        fail "N8: '(default)' line not found in $notes_file"
+        fail "N8: '<main>/.claude/worktrees' base line not found in $notes_file (content: $(cat "$notes_file" 2>/dev/null))"
     fi
 }
 

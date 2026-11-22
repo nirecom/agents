@@ -23,16 +23,20 @@ store. Sessions can work concurrently with full isolation.
 All worktrees follow a two-level layout:
 
 ```
-<WORKTREE_BASE_DIR>/<task-name>/<repo-name>
+<base>/<task-name>/<repo-name>
 ```
 
 | Variable | Default | Description |
 |---|---|---|
-| `WORKTREE_BASE_DIR` | `~/git/worktrees` | Root for all worktrees. Set in agents config (`.env`). |
+| base | `<repo>/.claude/worktrees` | Each repo keeps its worktrees inside itself, so `EnterWorktree` raises no confirmation dialog. Setting `WORKTREE_BASE_DIR` in agents config (`.env`) replaces it with one base shared by every repo. `bin/worktree-base` prints the resolved base. |
 | `task-name` | derived automatically | Short task identifier, shared across repos (`[a-zA-Z0-9][a-zA-Z0-9_-]*`). Derived by `/worktree-start` from the session intent — never asked for. |
 | `repo-name` | git repo directory name | Set automatically by `/worktree-start`. |
 
-**Windows example** (set in `.env`):
+**`additionalDirectories` under the in-repo default:** the `../dotfiles` entry in `settings.json` resolves against the directory Claude Code was launched from (the main repo), not the worktree. With the in-repo default it therefore names the sibling **main repo** — including that repo's `.claude/worktrees/` — rather than a sibling worktree under a shared base. Address a sibling repo's worktree by its full path (`<sibling>/.claude/worktrees/<task-name>/<repo-name>`), not by `../<repo>` from inside your own worktree.
+
+**Explicit base inside a repo:** the main-worktree create exemption covers only `<repo>/.claude/worktrees/`. A `WORKTREE_BASE_DIR` pointing at another path inside the repo falls outside it, so creating a worktree there from the main worktree is blocked by `enforce-worktree` and needs your explicit approval (or `ENFORCE_WORKTREE=off`). Point an explicit base outside the repo.
+
+**Shared-base example on Windows** (set in `.env`; `EnterWorktree` then asks once per entry):
 ```
 WORKTREE_BASE_DIR=C:\src\worktrees
 ```

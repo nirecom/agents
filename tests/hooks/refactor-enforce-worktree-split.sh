@@ -4,7 +4,8 @@
 # Tags: enforce-worktree, refactor, module-split, re-export, contract, scope:issue-specific
 #
 # Tests 1-8 (regression): current enforce-worktree.js contract; PASS before AND after the #712 split.
-# Tests 9-12 (post-refactor contract): target module layout + getWorktreeBaseDir->getWorktreeBaseDirResolved rename; FAIL until the refactor lands.
+# Tests 9-10 (post-refactor contract): target module layout. Tests 11-12 (regression, #1610):
+# hooks/lib/worktree-base.js is the single base resolver (the old getter was removed).
 # Exit code reflects ONLY regression failures, so this can be checked in before the refactor lands.
 
 set -u
@@ -229,32 +230,31 @@ for mod in "${MODULES[@]}"; do
     fi
 done
 
-# 11. enforce-worktree.js exports getWorktreeBaseDirResolved (renamed from getWorktreeBaseDir)
+# 11. #1610: hooks/lib/worktree-base.js is the single base resolver; enforce-worktree.js keeps no copy.
+BASE_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/worktree-base.js"
 out=$(node -e "
 const m = require('${ENFORCE_JS}');
-if (typeof m.getWorktreeBaseDirResolved !== 'function') {
-  console.log('FAIL typeof=' + typeof m.getWorktreeBaseDirResolved);
+const b = require('${BASE_JS}');
+const stale = ['getWorktreeBaseDir', 'getWorktreeBaseDirResolved'].filter((k) => k in m);
+if (typeof b.resolveWorktreeBase !== 'function' || stale.length) {
+  console.log('FAIL resolver=' + typeof b.resolveWorktreeBase + ' stale=' + stale.join(','));
   process.exit(1);
 }
 console.log('OK');
 " 2>&1)
 if [ "$out" = "OK" ]; then
-    pass_contract "enforce-worktree.js exports getWorktreeBaseDirResolved"
+    pass_regression "worktree-base.js resolves the base; enforce-worktree.js exports no base getter"
 else
-    fail_contract "enforce-worktree.js exports getWorktreeBaseDirResolved" "$out"
+    fail_regression "worktree-base.js resolves the base; enforce-worktree.js exports no base getter" "$out"
 fi
 
-# 12. cleanup-orphan-dir.js uses getWorktreeBaseDirResolved (verifies post-rename import)
-# Note: require() does not throw when destructuring a non-existent export — the variable
-# is just undefined. A simple require() check would falsely pass. Grep for the symbol instead.
-if [ -f "$CLEANUP_JS" ]; then
-    if grep -q "getWorktreeBaseDirResolved" "$CLEANUP_JS"; then
-        pass_contract "cleanup-orphan-dir.js imports getWorktreeBaseDirResolved (post-rename)"
-    else
-        fail_contract "cleanup-orphan-dir.js imports getWorktreeBaseDirResolved (post-rename)" "still uses old name getWorktreeBaseDir"
-    fi
+# 12. cleanup-orphan-dir.js takes the base from that resolver. A destructured missing export is
+# just undefined (require() does not throw), so the source text is checked instead.
+if [ -f "$CLEANUP_JS" ] && grep -q 'require("./lib/worktree-base")' "$CLEANUP_JS" \
+    && ! grep -q 'getWorktreeBaseDir' "$CLEANUP_JS"; then
+    pass_regression "cleanup-orphan-dir.js resolves the base through hooks/lib/worktree-base.js"
 else
-    fail_contract "cleanup-orphan-dir.js imports getWorktreeBaseDirResolved (post-rename)" "file missing"
+    fail_regression "cleanup-orphan-dir.js resolves the base through hooks/lib/worktree-base.js" "no ./lib/worktree-base require, or a getWorktreeBaseDir reference remains"
 fi
 case_end
 

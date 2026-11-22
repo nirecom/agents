@@ -85,6 +85,11 @@ fi
 PR_CFG="$FIXTURE/pr-cfg"
 mkdir -p "$PR_CFG/bin" "$PR_CFG/hooks/lib"
 cp "$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh" "$PR_CFG/bin/scan-outbound.sh"
+# scan-outbound.sh is a launcher: without scan-outbound.d/ and the lists at the stand-in's own
+# root (outside git it reads its own tree) it exits 4 and fails closed.
+script_checkout_fixture_copy "$PR_CFG" bin/scan-outbound.d
+: > "$PR_CFG/.private-info-blocklist"
+: > "$PR_CFG/.private-info-allowlist"
 cp "$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/check-private-repo-name.js" "$PR_CFG/bin/check-private-repo-name.js"
 # check-private-repo-name.js resolves its matcher as <script-dir>/../hooks/lib/
 # is-private-repo.js and fail-opens (exit 0) when that require throws — so without
@@ -270,7 +275,19 @@ fi
 INTENT_B21H="$FIXTURE/b21h-intent.md"
 write_intent "$INTENT_B21H" '!!! @@@' '- #1910: self-name exclusion'
 PRIVATE_REPO_NAMES_CACHE='selfname-repo'
+# The issue-numbered intent plus SELF_REPO's github.com origin reaches D4's
+# `gh issue view` label lookup; a failing stub keeps the run off the network.
+B21H_STUBDIR="$FIXTURE/b21h-stub"
+mkdir -p "$B21H_STUBDIR"
+cat > "$B21H_STUBDIR/gh" <<'STUB'
+#!/bin/sh
+exit 1
+STUB
+chmod +x "$B21H_STUBDIR/gh"
+B21H_SAVED_PATH="$PATH"
+PATH="$B21H_STUBDIR:$PATH"
 run_derive B21h --intent "$INTENT_B21H" --repo-dir "$SELF_REPO"
+PATH="$B21H_SAVED_PATH"
 B21H_TN="$(task_name)"
 if [ "$RC" -eq 0 ] && printf '%s' "$B21H_TN" | grep -qE "^1910-worktree-$TS_RE\$"; then
     pass "B21h/downstream: the exclusion reaches the D2 repo-name fallback, then D6's unfiltered rescan still catches the embedded self-name ($B21H_TN)"

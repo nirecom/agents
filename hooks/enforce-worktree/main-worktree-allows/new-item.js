@@ -1,33 +1,17 @@
 "use strict";
-// hooks/enforce-worktree/main-worktree-allows/new-item.js
-// Allow predicate for PowerShell New-Item / ni commands that create directories
-// outside the session repo root (#1290, #1441).
-//
-// Contract: isAllowedNewItemCommand(head, repoRoot) → boolean
-//   head     — the command string (already stripped of any trailing && cd … tail,
-//              and passing the shared rejectInterpreterAndChaining / hasShellChaining
-//              guards in the caller).
-//   repoRoot — the resolved repo root string for the current CWD (may be null/undefined).
-//
-// Allow conditions (all required):
-//   1. Token 0 of the command IS New-Item or ni (verified here — the predicate
-//      does not rely on its caller's head-anchored dispatch; defense in depth).
-//   2. -ItemType Directory (any casing) is present — -ItemType File → block.
-//   3. A target path is extractable (fail-closed when absent).
-//   4. The resolved path is OUTSIDE the repo root, OR under plans-dir, OR
-//      under the session scratchpad allow root (lib/claude-scratchpad-base.js).
-//
-// PowerShell quote semantics: a SINGLE-quoted path is LITERAL — '$SCRATCHPAD/x'
-// creates a directory literally named "$SCRATCHPAD" relative to the CWD. Env
-// expansion is therefore applied ONLY to double-quoted and bare path tokens;
-// single-quoted tokens containing `$` fail closed (they denote an in-CWD
-// relative path the hook cannot vouch for).
+// Allow predicate for PowerShell New-Item / ni directory creation from the main worktree
+// (#1290, #1441, #1610). All required: token 0 is New-Item/ni; -ItemType Directory; a target
+// path is extractable; that path is outside the repo root, strictly below its in-repo worktree
+// base (<repo>/.claude/worktrees), under plans-dir, or under the scratchpad allow root.
+// A single-quoted path is literal in PowerShell, so only double-quoted and bare tokens are
+// env-expanded; a single-quoted `$` fails closed.
 
 const path = require("path");
 const { isPathOutsideRepo } = require("../shared-cmd-utils");
 const { findRepoRoot } = require("../git-repo-detection");
 const { expandStaticShellTokens } = require("../../lib/bash-write-targets/helpers");
 const { isAllowedScratchpadTarget } = require("../../lib/claude-scratchpad-base");
+const { isInRepoBase } = require("../../lib/worktree-base");
 
 /**
  * True when head is a PowerShell New-Item / ni command that creates a directory
@@ -93,7 +77,7 @@ function isAllowedNewItemCommand(head, repoRoot) {
     if (rawPath.includes("$")) return false;
     // `~` is likewise treated literally (conservative: no expansion) — the path
     // falls through to the static outside-repo check below.
-    return isPathOutsideRepo(rawPath, repoRoot);
+    return isOutsideOrInRepoBase(rawPath, repoRoot);
   }
 
   // Env-var or tilde path (double-quoted or bare): expand, then check destination.
@@ -118,11 +102,15 @@ function isAllowedNewItemCommand(head, repoRoot) {
     if (isAllowedScratchpadTarget(path.resolve(expanded), findRepoRoot)) return true;
 
     // Else: check if outside repo.
-    return isPathOutsideRepo(expanded, repoRoot);
+    return isOutsideOrInRepoBase(expanded, repoRoot);
   }
 
   // Static path (no env-var/tilde): allow only when outside the repo (NI-1, NI-3).
-  return isPathOutsideRepo(rawPath, repoRoot);
+  return isOutsideOrInRepoBase(rawPath, repoRoot);
+}
+
+function isOutsideOrInRepoBase(target, repoRoot) {
+  return isPathOutsideRepo(target, repoRoot) || isInRepoBase(target, repoRoot);
 }
 
 module.exports = { isAllowedNewItemCommand };

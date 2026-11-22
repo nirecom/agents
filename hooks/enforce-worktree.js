@@ -43,10 +43,8 @@ const { handleEditWrite } = require("./enforce-worktree/handle-edit-write");
 const { isEditWriteTool, isCommandTool, collectEditWritePaths } = require("./lib/write-tools");
 const { scannableCommandListOf } = require("./lib/scannable-command-list");
 
-// Hook input comes from the shared reader hooks/lib/read-stdin.js; getWorktreeBaseDirResolved
-// lives in enforce-worktree/entry-helpers.js (file-split) and stays re-exported below.
+// Hook input comes from the shared reader hooks/lib/read-stdin.js.
 const { readHookInput, readFailureReason, readFailOpenDiagnostic } = require("./lib/read-stdin");
-const { getWorktreeBaseDirResolved } = require("./enforce-worktree/entry-helpers");
 
 // Captured at hook-input parse time so the `done()` helper can self-report on block.
 let _reportContext = { sessionId: undefined, command: undefined, toolName: undefined, extras: undefined };
@@ -321,7 +319,6 @@ module.exports = {
   parseBranchDeleteTarget,
   isAllowedBranchDeleteWhenNotCheckedOut,
   isAllowedReadOnlyConfigCheck,
-  getWorktreeBaseDirResolved,
   isAllowedPushAllExcluded,
   hasGitHooksBypass,
   findFirstUnquotedAnd,

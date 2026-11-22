@@ -9,6 +9,7 @@
 
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/lib/review-size.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/lib/worktree-base-prune.sh"
 
 HDR="## Code-size Review"
 HARD_HIT=0
@@ -58,8 +59,9 @@ report_records() {
 }
 
 if [[ "$ALL_SCAN" -eq 1 ]]; then
-  review_size_check "$HDR" code none worktree < <(find . -type f \
-    -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | sort | review_size_worktree_nul)
+  worktree_base_prune_args
+  review_size_check "$HDR" code none worktree < <(find . "${WT_BASE_PRUNE_ARGS[@]}" -type f \
+    -not -path '*/node_modules/*' -not -path '*/.git/*' -print 2>/dev/null | sort | review_size_worktree_nul)
   if [[ "$RS_TARGETS" -eq 0 ]]; then
     echo "$HDR: SKIPPED — no code files found"; exit 0
   fi

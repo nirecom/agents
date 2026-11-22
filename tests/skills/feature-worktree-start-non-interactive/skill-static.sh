@@ -142,4 +142,38 @@ else
     fail "TC13: WS-2's reuse-safety comparison does not mention case normalization (block='$WS2_BLOCK')"
 fi
 
+# --- TC14 (#1610/#1849): the path comes from WORKTREE_PATH=, no parent mkdir step ---
+# derive-worktree-name.sh now emits WORKTREE_PATH=; `git worktree add` creates parents,
+# and the in-repo base removes the one-off EnterWorktree dialog.
+WS3_BLOCK="$(sed -n '/^WS-3\./,/^WS-4\./p' "$SKILL_MD")"
+if printf '%s\n' "$WS2_BLOCK$WS3_BLOCK" | grep -qF 'WORKTREE_PATH='; then
+    pass "TC14/path-key: WS-2/WS-3 read the worktree path from the WORKTREE_PATH= stdout key"
+else
+    fail "TC14/path-key: WS-2/WS-3 do not name the WORKTREE_PATH= key"
+fi
+if grep -qE 'mkdir -p "<WORKTREE_BASE_DIR>|New-Item -ItemType Directory -Force -Path "<WORKTREE_BASE_DIR>' "$SKILL_MD"; then
+    fail "TC14/no-parent-mkdir: SKILL.md still carries the parent-directory creation step"
+else
+    pass "TC14/no-parent-mkdir: the parent-directory creation step is gone"
+fi
+if grep -qiE 'confirmation dialog.*is normal' "$SKILL_MD"; then
+    fail "TC14/no-dialog-normal: WS-8 still says an EnterWorktree confirmation dialog is normal"
+else
+    pass "TC14/no-dialog-normal: WS-8 no longer expects an EnterWorktree confirmation dialog"
+fi
+
+# --- TC15 (#1610): reuse-safety comparison folds MSYS drive paths -------------
+# git under Git Bash can print the drive-path form while WORKTREE_PATH= carries the
+# drive-letter form; without the fold a reusable worktree reads as a collision.
+# Both placeholder tokens are pinned on the Reuse-safety line itself.
+REUSE_LINE="$(printf '%s\n' "$WS2_BLOCK" | grep -F '**Reuse-safety check**')"
+if [ -z "$REUSE_LINE" ]; then
+    fail "TC15: WS-2 has no **Reuse-safety check** line"
+elif printf '%s\n' "$REUSE_LINE" | grep -qF '/<drive>/<rest>' \
+    && printf '%s\n' "$REUSE_LINE" | grep -qF '<DRIVE>:/<rest>'; then
+    pass "TC15: the Reuse-safety check names the MSYS drive-path normalization (both forms)"
+else
+    fail "TC15: the Reuse-safety check does not name both MSYS drive-path forms (line='$REUSE_LINE')"
+fi
+
 finish

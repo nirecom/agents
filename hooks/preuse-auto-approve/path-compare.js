@@ -1,13 +1,12 @@
 "use strict";
-// hooks/preuse-auto-approve/path-compare.js — path comparison shared by the preuse-auto-approve
-// judgment and block-capture-echo/remedy.js.
+// hooks/preuse-auto-approve/path-compare.js — path normalization used by block-capture-echo/remedy.js.
 
 const path = require("path");
 
 // normalizeForCompare collapses backslashes to forward slashes, resolves
-// `.`/`..` segments (so a `../../etc` traversal attempt cannot forge a
-// prefix match against WORKTREE_BASE_DIR), and lowercases the result (so
-// Windows drive-letter casing does not defeat the comparison).
+// `.`/`..` segments (so a `../../etc` traversal cannot forge an equality
+// match), and lowercases the result (so Windows drive-letter casing does not
+// defeat the comparison).
 function normalizeForCompare(p) {
   if (typeof p !== "string" || p.length === 0) return "";
   const slashed = p.replace(/\\/g, "/");
@@ -25,14 +24,4 @@ function normalizeForCompare(p) {
   return normalized.toLowerCase();
 }
 
-// isInsideBase answers "does candidatePath live under baseDir?" using a
-// segment-boundary check (not a bare startsWith), so WORKTREE_BASE_DIR=/foo
-// does not falsely match a sibling directory like /foobar.
-function isInsideBase(candidatePath, baseDir) {
-  const normCandidate = normalizeForCompare(candidatePath);
-  const normBase = normalizeForCompare(baseDir);
-  if (!normCandidate || !normBase) return false;
-  return normCandidate === normBase || normCandidate.startsWith(normBase + "/");
-}
-
-module.exports = { normalizeForCompare, isInsideBase };
+module.exports = { normalizeForCompare };

@@ -9,7 +9,7 @@ context: fork
 Reclaims zombie linked worktrees left behind when `/worktree-end` could not
 physically remove a worktree (e.g. Windows CWD lock from VS Code's extension
 host). After successful worktree removal, also deletes the corresponding
-branch. Also scans `WORKTREE_BASE_DIR` for orphan directories not tracked by
+branch. Also scans the worktree base (`bin/worktree-base`) for orphan directories not tracked by
 git's worktree registry.
 
 ## Procedure
@@ -17,7 +17,8 @@ git's worktree registry.
 SWT-1. Resolve `$AGENTS_MAIN_ROOT` from the environment; abort with a clear error
    if unset.
 SWT-2. Invoke the sweeper script, forwarding the user's flags verbatim:
-   `bash "$AGENTS_MAIN_ROOT/bin/sweep-worktrees.sh" [--dry-run] [--force] [--min-age-hours N] [--ci-mode]`
+   `bash "$AGENTS_MAIN_ROOT/bin/sweep-worktrees.sh" [--dry-run] [--force] [--min-age-hours N] [--ci-mode] [--repo <dir>]...`
+   `--repo` adds another repo's in-repo base to the orphan scan; the CWD repo's base is always scanned.
 SWT-3. Print the script's stdout verbatim. Do not summarize or filter.
 
 Add no flags of your own.
@@ -35,7 +36,7 @@ Add no flags of your own.
   merged check, no `branch -D` target).
 - A 4-AND safety check is required before any deletion: registered linked
   worktree AND PR merged AND clean working tree (bypassed by `--force`) AND mtime > threshold.
-- Orphan-directory scan uses a 4-AND gate: containment under WORKTREE_BASE_DIR
+- Orphan-directory scan uses a 4-AND gate: containment under the worktree base
   AND no .git AND mtime > threshold AND ownership proof via `Main repo:` field
   in `WORKTREE_NOTES.md`. Basename match alone is NOT ownership proof — two
   unrelated repos can share `agents`/`dotfiles` basenames. The former
