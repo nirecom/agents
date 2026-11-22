@@ -14,7 +14,7 @@ function headBlobOf(top, rel) {
   const r = spawnSync("git", ["show", `HEAD:${rel}`], {
     cwd: top,
     timeout: 5000,
-    maxBuffer: HEAD_BLOB_MAX_BYTES,
+    maxBuffer: HEAD_BLOB_MAX_BYTES, windowsHide: true,
   });
   if (r.error || r.status !== 0 || !Buffer.isBuffer(r.stdout)) return null;
   return r.stdout;

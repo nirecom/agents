@@ -19,7 +19,7 @@ function dirHasStagedTests(dir) {
   try {
     buf = execFileSync('git', ['-C', dir, 'diff', '--cached', '--name-only', '-z'], {
       timeout: 5000,
-      encoding: 'buffer',
+      encoding: 'buffer', windowsHide: true,
     });
   } catch (_e) {
     return false;

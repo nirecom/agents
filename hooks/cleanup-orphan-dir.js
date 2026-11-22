@@ -151,7 +151,7 @@ function main(argv) {
   const scriptRepo = path.dirname(__dirname);
   const wtRes = spawnSync(
     "git", ["-C", scriptRepo, "worktree", "list", "--porcelain"],
-    { encoding: "utf8", timeout: 5000 }
+    { encoding: "utf8", timeout: 5000, windowsHide: true }
   );
   if (wtRes.status !== 0) {
     refuse(`git worktree list failed (status ${wtRes.status}): ${(wtRes.stderr || "").trim()}`);

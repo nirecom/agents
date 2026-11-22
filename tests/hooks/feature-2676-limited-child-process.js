@@ -39,7 +39,7 @@ function stubChildProcess(behaviour) {
   for (const name of FNS) {
     childProcess[name] = (...args) => {
       const options = args.find((arg, index) => index > 0 && arg && typeof arg === "object" && !Array.isArray(arg)) || {};
-      calls.push({ name, args, timeout: options.timeout });
+      calls.push({ name, args, timeout: options.timeout, windowsHide: options.windowsHide });
       return behaviour(name, options);
     };
   }
@@ -77,7 +77,7 @@ const call = (ctx, name, timeout) => {
 };
 
 for (const name of FNS) {
-  test(`${name} not armed: the options reach child_process untouched`, () => {
+  test(`${name} not armed: the caller's options reach child_process with only windowsHide: true fixed on (#3127)`, () => {
     const ctx = setup({ armed: false, spentMs: 3600 * 1000 });
     try {
       for (const timeout of [undefined, 1234]) {
@@ -86,6 +86,7 @@ for (const name of FNS) {
         assert.strictEqual(done.exited, false);
       }
       assert.deepStrictEqual(ctx.calls.map((entry) => entry.timeout), [undefined, 1234]);
+      assert.deepStrictEqual(ctx.calls.map((entry) => entry.windowsHide), [true, true], "windowsHide: true is fixed on");
       assert.deepStrictEqual(ctx.calls.map((entry) => entry.name), [name, name], "not routed through file-stdio spawnSync");
     } finally { ctx.done(); }
   });
@@ -97,6 +98,7 @@ for (const name of FNS) {
       const shorter = Math.max(MIN_SLICE_MS + 50, Math.floor(left / 2));
       for (const timeout of [undefined, left * 10, shorter]) call(ctx, name, timeout);
       assert.deepStrictEqual(ctx.calls.map((entry) => entry.timeout), [left, left, left]);
+      assert.deepStrictEqual(ctx.calls.map((entry) => entry.windowsHide), [true, true, true], "windowsHide: true reaches child_process (#3127)");
     } finally { ctx.done(); }
   });
 

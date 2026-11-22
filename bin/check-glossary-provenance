@@ -39,7 +39,7 @@ function parseArgs(argv) {
 }
 
 function git(repo, args, allowFail) {
-  const r = spawnSync("git", ["-c", "core.quotePath=false"].concat(args), { cwd: repo, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const r = spawnSync("git", ["-c", "core.quotePath=false"].concat(args), { cwd: repo, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, windowsHide: true });
   if (r.error || r.status !== 0) {
     if (allowFail) return null;
     fail(2, "git " + args.join(" ") + " failed: " + (r.stderr || (r.error && r.error.message) || "").trim());

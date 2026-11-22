@@ -24,7 +24,7 @@ function currentHead(toolCwd, repoCwd) {
   const dir = normalizeCwd(toolCwd) || repoCwd;
   if (!dir) return null;
   const r = spawnSync("git", ["-C", dir, "rev-parse", "--verify", "--quiet", "HEAD"],
-    { encoding: "utf8", timeout: 2000 });
+    { encoding: "utf8", timeout: 2000, windowsHide: true });
   const out = r.status === 0 ? String(r.stdout || "").trim() : "";
   return out === "" ? null : out;
 }

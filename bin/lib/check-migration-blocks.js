@@ -37,7 +37,7 @@ function walkTree(dir, cb) {
 function readIndexContent(filePath, root, env) {
   const rel = path.relative(root, filePath).replace(/\\/g, "/");
   try {
-    return execFileSync("git", ["show", ":" + rel], { cwd: root, env: env || process.env, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], timeout: 15000 });
+    return execFileSync("git", ["show", ":" + rel], { cwd: root, env: env || process.env, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], timeout: 15000, windowsHide: true });
   } catch (e) {
     return null;
   }
@@ -156,7 +156,7 @@ function staleReport(rootArg, io) {
 
 function getGitRoot(io) {
   try {
-    return execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: io.cwd, env: io.env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 15000 }).trim();
+    return execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: io.cwd, env: io.env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 15000, windowsHide: true }).trim();
   } catch (e) {
     return io.cwd;
   }

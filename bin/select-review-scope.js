@@ -48,7 +48,7 @@ function resolveWorktree(sid, explicit) {
   if (fromState) return toWindowsPath(fromState);
   try {
     return execFileSync("git", ["rev-parse", "--show-toplevel"], {
-      encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
+      encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"], windowsHide: true,
     }).trim();
   } catch (_) {
     return null;

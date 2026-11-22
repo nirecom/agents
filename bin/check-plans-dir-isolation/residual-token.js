@@ -12,7 +12,7 @@ const TOKEN_RE = new RegExp("CLAUDE_" + "WORKFLOW_DIR", "i");
 // Append-only records keep the old name by design; hooks/lib/append-only-record-path.js owns the list.
 
 function git(repoRoot, args) {
-  return execFileSync("git", ["-C", repoRoot, ...args], { maxBuffer: 256 * 1024 * 1024 });
+  return execFileSync("git", ["-C", repoRoot, ...args], { maxBuffer: 256 * 1024 * 1024, windowsHide: true });
 }
 
 const nulList = (buf) => buf.toString("utf8").split("\0").filter(Boolean);
@@ -56,7 +56,7 @@ function stagedHits(repoRoot, paths) {
   if (batched.length === 0) return out;
   const buf = execFileSync("git", ["-C", repoRoot, "cat-file", "--batch"], {
     input: batched.map((rel) => `:${rel}`).join("\n") + "\n",
-    maxBuffer: 256 * 1024 * 1024,
+    maxBuffer: 256 * 1024 * 1024, windowsHide: true,
   });
   let pos = 0;
   for (const rel of batched) {
