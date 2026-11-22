@@ -1,5 +1,6 @@
 # Usage: BODY="$body" extract_field <Background|Changes|Cause|Fix>
 # Recognizes "Field: text", "## Field", "### Field" (case-insensitive). No synonym expansion.
+# Capture ends at "##" or a "###"+ heading naming a known label; other "###"+ headings are body.
 
 extract_field() {
     printf '%s\n' "$BODY" | awk -v F="$1" '
@@ -14,6 +15,15 @@ extract_field() {
                 else { break }
             }
             return w
+        }
+        # SSOT of heading labels that end a field: canonical four + Issue Forms labels
+        # (.github/ISSUE_TEMPLATE/*.yml; parity checked by tests/bin/fix-2168-extract-field-capture.sh).
+        function is_known_label(line,   t) {
+            t = lc(line)
+            sub(/^[ \t]*#+[ \t]+/, "", t)
+            sub(/[ \t]+$/, "", t)
+            sub(/[ \t]+#+$/, "", t)   # optional ATX closing sequence ("### Fix ###")
+            return (t == "background" || t == "changes" || t == "cause" || t == "fix" || t == "sub-tasks (optional)")
         }
         BEGIN { cap = 0; out = ""; target = lc(F); fenced = 0 }
         {
@@ -51,13 +61,12 @@ extract_field() {
                     next
                 } else { cap = 0; next }
             }
-            # Any other ATX heading (##+) also ends capture, so an unrecognized textarea
-            # heading is not swallowed into the field above it. Inline "Foo: bar" labels
-            # do not terminate (prose has colons); nor does H1 (Issue Forms render
-            # textarea labels as "###", so a real H1 is rarer than a "# comment" in a
-            # fenced code block).
+            # "##" always ends capture. "###".."######" end it only for a known label
+            # (else it is body text). Inline "Foo: bar" labels and H1 never terminate.
             if (indent <= 3) {
-                if ($0 ~ /^[ \t]*##+[ \t]+/) { cap = 0; next }
+                if ($0 ~ /^[ \t]*##[ \t]+/) { cap = 0; next }
+                # ATX headings stop at six "#"; seven or more is plain text, not a heading.
+                if ($0 ~ /^[ \t]*###(#?#?#?)[ \t]+/ && is_known_label($0)) { cap = 0; next }
             }
             if (cap && $0 ~ /[^ \t]/) { out = (out == "" ? $0 : out " " $0) }
         }
