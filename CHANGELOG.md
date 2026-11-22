@@ -296,3 +296,7 @@ Changes: Workflow sessions now find the PM that owns their issues and notify it 
 ### FEATURE: PR #3131 (2026-11-22)
 Background: feat(#2478, #3123): run CC fallback review rounds through the codex review-loop path
 Changes: Review loops that fall back to the Claude reviewer when codex is unavailable now count those rounds against the same 2+1 cap, keep rejected concerns rejected, and no longer get stuck after a codex failure.
+
+### FEATURE: PR #3134 (2026-11-22)
+Background: fix(#3127): hide console window for hook/bin child spawns and scan th...
+Changes: Fixed: hooks and bin scripts that spawn git, gh, or bash no longer flash a console window on Windows. A static test now scans every `hooks/**` and `bin/**` spawn so new gaps are caught.
