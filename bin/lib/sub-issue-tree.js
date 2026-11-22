@@ -4,7 +4,8 @@
 //   fetchSubIssueTree(refs, {deadlineAt?, timeoutMs?, maxCalls?}) -> {ok:true, results: {[refKey]:
 //     {ok:true, descendants:[{repo, number, pm, state}]} | {ok:false, reason}}} | whole-call {ok:false, reason}
 // Each call reads SUB_DEPTH levels; a node cut off below that (totalCount > 0, no nodes) is read again in
-// the next call, up to maxCalls. A truncated page or a remaining frontier is {ok:false} (fail-closed).
+// the next call, up to maxCalls. A truncated page or a remaining frontier is {ok:false} (fail-closed);
+// a descendant's failed PM read (pm-field-ambiguous, pm-field-truncated) fails its root the same way.
 
 const { batchedGraphql, refKey } = require("./forge-issue-links");
 const { pmReadOf } = require("./pm-field/read");
@@ -12,7 +13,7 @@ const { pmReadOf } = require("./pm-field/read");
 const SUB_DEPTH = 3;
 const SUB_PAGE = 20;
 const DEFAULT_MAX_CALLS = 4;
-const ITEMS = 'projectItems(first:10){nodes{id pm: fieldValueByName(name:"pm"){... on ProjectV2ItemFieldTextValue{text}} project{id field(name:"pm"){... on ProjectV2FieldCommon{id}}}}}';
+const ITEMS = 'projectItems(first:10){nodes{id pm: fieldValueByName(name:"pm"){... on ProjectV2ItemFieldTextValue{text}} project{id field(name:"pm"){... on ProjectV2FieldCommon{id}}}} pageInfo{hasNextPage}}';
 
 function subFields(depth) {
   const own = `number state repository{nameWithOwner} ${ITEMS}`;

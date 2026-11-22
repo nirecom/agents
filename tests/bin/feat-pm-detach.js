@@ -128,3 +128,27 @@ test("D6 an assigned leaf records no baseline, and an unread forge with empty me
   assert.doesNotMatch(failed.out, /meta detach check skipped/, brief(failed));
 });
 caseEnd();
+
+// #2942: `detach --issue N` (no `#`, which a shell reads as a comment) is the same ref as `--issue #N`.
+caseBegin("detach-issue-bare-number", "bin/lib/pm-notify/detach.js");
+test("D7 detach --issue N brackets a dispatch exactly like --issue #N (before records, after records the detach)", () => {
+  seed({ tag: "PM-dt7", issues: [11271] });
+  G.setMap({ "o/r#11271": { pm: "PM-dt7" }, "o/r#11272": { parent: { number: 11271 } } });
+  const s = sid();
+  P.seedState(s);
+  const before = X.notify(["detach", "--issue", "11272", "--phase", "before"], { sid: s });
+  assert.deepStrictEqual([before.code, before.kv.RESULT, before.kv.OWNER_TAG], [0, "recorded", "PM-dt7"], brief(before));
+  G.setMap({ "o/r#11271": { pm: "PM-dt7" }, "o/r#11272": {} });
+  const afterR = X.notify(["detach", "--issue", "#11272", "--phase", "after"], { sid: s });
+  assert.deepStrictEqual([afterR.code, afterR.kv.RESULT, afterR.kv.TO_TAG], [0, "detach", "PM-dt7"], brief(afterR));
+  assert.strictEqual(detachNotes(s, 11272).length, 1, JSON.stringify(X.notes(s)));
+});
+for (const v of ["3.2", "0"]) {
+  test(`D8 detach --issue ${v} -> exit 2 REASON=usage`, () => {
+    const s = sid();
+    P.seedState(s);
+    const r = X.notify(["detach", "--issue", v, "--phase", "before"], { sid: s });
+    assert.deepStrictEqual([r.code, r.kv.REASON], [2, "usage"], brief(r));
+  });
+}
+caseEnd();

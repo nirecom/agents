@@ -8,6 +8,16 @@ const path = require("node:path");
 const { gitInit } = require("../../lib/harness");
 const P = require("../../lib/pm-state-fixture");
 
+// inboxTailDropped(calls) -> calls without the trailing `subIssues(` read and the `number projectItems(` read before it.
+function inboxTailDropped(calls) {
+  const is = (a, re) => Boolean(a) && re.test(a.join(" "));
+  let end = calls.length;
+  if (!is(calls[end - 1], /subIssues\(/)) return calls;
+  end -= 1;
+  if (is(calls[end - 1], /\bnumber projectItems\(/)) end -= 1;
+  return calls.slice(0, end);
+}
+
 function makeFixture(tmp) {
   const bin = path.join(tmp, "bin");
   const repo = path.join(tmp, "repo");
@@ -40,8 +50,9 @@ function makeFixture(tmp) {
     let json;
     try { json = JSON.parse(String(r.stdout).trim()); } catch (_) { json = undefined; }
     const calls = ghCalls().slice(before);
-    // checkCalls: calls minus the post-lock inbox's sub-issue read (#2942 S15 meta_children baseline), i.e. the command's own checks.
-    const checkCalls = calls.filter((a) => !/subIssues\(/.test(a.join(" ")));
+    // checkCalls: the command's own checks, i.e. calls minus the post-lock inbox tail (set-* only): its sub-issue read
+    // (#2942 S15) and, right before it, its drift read (C18), which set-* commands' own reads never take the shape of.
+    const checkCalls = inboxTailDropped(calls);
     return { code: r.status, out: r.stdout || "", err: `${r.stderr || ""}${r.error ? String(r.error) : ""}`, json, calls, checkCalls };
   }
   let n = 0;

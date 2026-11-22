@@ -47,19 +47,21 @@ function pmScan(state, sid) {
       if (a.r.ok && a.r.owner && !owners.some((o) => C.S.sameTag(o.tag, a.r.owner.tag))) owners.push({ tag: a.r.owner.tag, ref: a.ref });
     }
     const at = new Date().toISOString();
-    C.updateNotes(sid, (notes, records) => {
-      for (const issue of unresolved) keep(notes, "start", issue, sid, { result: "undelivered", reason: "repo-unresolved" });
-      for (const a of answers) {
-        if (!a.r.ok) {
-          keep(notes, "start", C.issueOf(a.ref), sid, { result: "undelivered", reason: a.r.reason });
-          continue;
+    try {
+      C.updateNotes(sid, (notes, records) => {
+        for (const issue of unresolved) keep(notes, "start", issue, sid, { result: "undelivered", reason: "repo-unresolved" });
+        for (const a of answers) {
+          if (!a.r.ok) {
+            keep(notes, "start", C.issueOf(a.ref), sid, { result: "undelivered", reason: a.r.reason });
+            continue;
+          }
+          records[C.keyOf(a.ref)] = { tag: a.r.owner ? a.r.owner.tag : null, at };
         }
-        records[C.keyOf(a.ref)] = { tag: a.r.owner ? a.r.owner.tag : null, at };
-      }
-      if (owners.length > 1) {
-        for (const o of owners) keep(notes, "multi-pm", C.issueOf(o.ref), sid, { to_tag: o.tag });
-      }
-    });
+        if (owners.length > 1) {
+          for (const o of owners) keep(notes, "multi-pm", C.issueOf(o.ref), sid, { to_tag: o.tag });
+        }
+      });
+    } catch (_) { /* fail-open: a lost notes write must not drop the multi-pm block */ }
     if (owners.length < 2) return { done: false };
     const tags = owners.map((o) => o.tag).join(", ");
     return {

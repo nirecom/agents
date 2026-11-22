@@ -11,7 +11,7 @@ const path = require("path");
 const HOOKS = path.join(__dirname, "..", "..", "..", "hooks");
 const { buildInjection, TIMINGS } = require(path.join(HOOKS, "lib", "pm-instructions"));
 const { SectionError } = require(path.join(HOOKS, "lib", "pm-instructions", "sections"));
-const { parseIssueToken } = require(path.join(HOOKS, "lib", "parse-closes-issues"));
+const { parseIssueFlagValue } = require(path.join(HOOKS, "lib", "parse-closes-issues"));
 const { SESSION_ID_VALID_RE } = require(path.join(HOOKS, "workflow-state", "state-io"));
 const { resolveSessionId } = require(path.join(HOOKS, "workflow-state", "session-id"));
 const { readCheckpoint } = require("../../workflow/lib/workflow-init/checkpoint");
@@ -29,8 +29,8 @@ function parseArgs(argv) {
     if (v === undefined) fail(2, `${a} needs a value`);
     i += 1;
     if (a === "--issue") {
-      const ref = parseIssueToken(String(v));
-      if (!ref) fail(2, "--issue takes #N or owner/repo#N");
+      const ref = parseIssueFlagValue(String(v));
+      if (!ref) fail(2, "--issue takes N, #N or owner/repo#N");
       o.issues.push(ref);
     } else {
       o[a.slice(2)] = String(v);

@@ -133,3 +133,30 @@ test("P8 a rerun of the blocked scan in the same session adds no second note per
   assert.deepStrictEqual(X.notes(s).map((e) => e.to_tag).sort(), ["PM-sc8a", "PM-sc8b"], JSON.stringify(X.notes(s)));
 });
 caseEnd();
+
+// #2942: a failed notes write must not turn a known multi-pm into a pass. pm-scan reads C.ownerOf / C.updateNotes
+// off the shared pm-notify/common exports at call time, so the case swaps them there and restores them.
+const COMMON = require(path.join(P.ROOT, "bin", "lib", "pm-notify", "common"));
+function scanWith(stubs, nums) {
+  const saved = {};
+  for (const k of Object.keys(stubs)) { saved[k] = COMMON[k]; COMMON[k] = stubs[k]; }
+  try { return scan(nums); } finally { Object.assign(COMMON, saved); }
+}
+const ownersBy = (tags) => (ref) => ({ ok: true, owner: { tag: tags[ref.number], session_id: null } });
+const notesFail = () => { throw new Error("notes write failed"); };
+caseBegin("pm-scan-multi-pm-survives-notes-failure", "bin/workflow/lib/workflow-init/phases/pm-scan.js");
+test("C17 two owners and updateNotes throws -> still blocked multi-pm, the hint naming both tags", () => {
+  const { r } = scanWith({ ownerOf: ownersBy({ 11181: "PM-c17a", 11182: "PM-c17b" }), updateNotes: notesFail }, [11181, 11182]);
+  assert.strictEqual(r.blocked, true, `a notes failure hid multi-pm: ${JSON.stringify(r)}`);
+  assert.strictEqual(r.reason, "multi-pm", JSON.stringify(r));
+  for (const want of ["PM-c17a", "PM-c17b"]) assert.ok(String(r.hint).includes(want), `hint lacks ${want}: ${r.hint}`);
+});
+test("C17 one owner and updateNotes throws -> fail-open {done:false}", () => {
+  const { r } = scanWith({ ownerOf: ownersBy({ 11183: "PM-c17c", 11184: "PM-c17c" }), updateNotes: notesFail }, [11183, 11184]);
+  assert.deepStrictEqual(r, { done: false });
+});
+test("C17 an error before the owners are known (owner lookup throws) -> fail-open {done:false}", () => {
+  const { r } = scanWith({ ownerOf: () => { throw new Error("ask failed"); } }, [11185, 11186]);
+  assert.deepStrictEqual(r, { done: false });
+});
+caseEnd();

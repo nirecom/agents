@@ -22,15 +22,16 @@ const R = (n, repo) => ({ number: n, repo: repo || "o/r" });
 const key = (r) => `${r.repo}#${r.number}`;
 
 // withStub(answer) -> {tree, calls}: sub-issue-tree loaded over a batchedGraphql whose answer(refs, call) is
-// {[refKey]: node} or a whole-call {ok:false}; calls lists the refs each call asked.
+// {[refKey]: node} or a whole-call {ok:false}; calls lists the refs each call asked. answer also gets the spec
+// ({fields}) the call selected, so a fake can honor the query.
 function withStub(answer) {
   const real = require(LINKS);
   const calls = [];
   const saved = require.cache[LINKS];
   delete require.cache[SRC];
-  const batchedGraphql = (refs) => {
+  const batchedGraphql = (refs, spec) => {
     calls.push(refs.map(key));
-    const a = answer(refs, calls.length);
+    const a = answer(refs, calls.length, spec);
     if (a && a.ok === false) return a;
     return { ok: true, results: Object.fromEntries(refs.map((r) => [key(r), a[key(r)] ? { ok: true, node: a[key(r)] } : { ok: false, reason: "issue_not_found" }])) };
   };
@@ -113,5 +114,110 @@ test("ST3 a descendant on two Projects naming different PMs fails its root with 
 test("ST3 the same tag on both Projects (case aside) reads that tag", () => {
   const { tree } = withStub(() => ({ "o/r#85": node(85, null, [two(86, "PM-a", "pm-a")]) }));
   assert.deepStrictEqual(desc(tree.fetchSubIssueTree([R(85)]), R(85)), ["o/r#86:PM-a:OPEN"]);
+});
+caseEnd();
+
+// #2942: a descendant whose projectItems page has more cards than fetched cannot be read whole -> its root
+// fails with pm-field-truncated; the query asks every projectItems for pageInfo{hasNextPage} beside nodes.
+function blockEnd(s, open) {
+  let depth = 0;
+  for (let i = open; i < s.length; i++) {
+    if (s[i] === "{") depth++;
+    if (s[i] === "}" && --depth === 0) return i;
+  }
+  return s.length;
+}
+// itemsBodies(q) -> each projectItems(...){ } body of q with its nodes{...} block cut out.
+function itemsBodies(q) {
+  const out = [];
+  for (const m of q.matchAll(/projectItems\([^)]*\)\{/g)) {
+    const open = m.index + m[0].length - 1;
+    const body = q.slice(open + 1, blockEnd(q, open));
+    const n = body.indexOf("nodes{");
+    out.push(n < 0 ? body : body.slice(0, n) + body.slice(blockEnd(body, n + 5) + 1));
+  }
+  return out;
+}
+const more = (nd) => Object.assign(nd, { projectItems: Object.assign(nd.projectItems, { pageInfo: { hasNextPage: true } }) });
+caseBegin("sub-issue-tree-pm-field-truncated", "bin/lib/sub-issue-tree.js");
+test("ST4 the query sent to gh asks every projectItems for pageInfo{hasNextPage}", () => {
+  G.setMap({ "o/r#9201": {} });
+  const before = G.calls();
+  P.load("bin/lib/sub-issue-tree.js").fetchSubIssueTree([R(9201)]);
+  const q = G.queries().slice(before).find((x) => x.includes("projectItems(")) || "";
+  const bodies = itemsBodies(q);
+  assert.ok(bodies.length > 0, `no projectItems in the query: ${q}`);
+  for (const b of bodies) assert.match(b, /pageInfo\s*\{\s*hasNextPage\s*\}/, q);
+});
+test("ST4 a descendant with a truncated card page fails its root with pm-field-truncated; another root stays whole", () => {
+  const { tree } = withStub(() => ({ "o/r#95": node(95, null, [node(96, null, [more(node(97, "PM-a"))])]), "o/r#98": node(98, null, [node(99, "PM-ok")]) }));
+  const r = tree.fetchSubIssueTree([R(95), R(98)]);
+  assert.deepStrictEqual(r.results["o/r#95"], { ok: false, reason: "pm-field-truncated" });
+  assert.deepStrictEqual(desc(r, R(98)), ["o/r#99:PM-ok:OPEN"]);
+});
+test("ST4 the real batchedGraphql on the fake gh: a truncated descendant fails the root closed", () => {
+  G.setMap({ "o/r#9211": {}, "o/r#9212": { parent: R(9211), pm: "PM-st", itemsMore: true } });
+  const r = P.load("bin/lib/sub-issue-tree.js").fetchSubIssueTree([R(9211)]);
+  assert.deepStrictEqual(r.results["o/r#9211"], { ok: false, reason: "pm-field-truncated" }, JSON.stringify(r));
+});
+caseEnd();
+
+// #2942: every level down to SUB_DEPTH (3 in the source) must select projectItems, or a deep descendant's PM
+// goes unread. The fake gh answers projectItems whatever is asked, so ST5 builds its answer from the query.
+const SUB_DEPTH = 3;
+// levelsOf(q) -> per nesting level (split on subIssues( ), whether that level selects projectItems.
+const levelsOf = (q) => q.split("subIssues(").map((seg) => seg.includes("projectItems("));
+// dropDeepestItems(q) -> q with its last projectItems(...){...} selection deleted.
+function dropDeepestItems(q) {
+  const at = q.lastIndexOf("projectItems(");
+  return q.slice(0, at) + q.slice(blockEnd(q, q.indexOf("{", at)) + 1);
+}
+// chainFor(q, pms, more) -> root 500 with a single-child chain one issue per level; level i carries projectItems
+// (pm pms[i], hasNextPage more[i]) only when q selects it there.
+function chainFor(q, pms, more = []) {
+  const levels = levelsOf(q);
+  let below = { totalCount: 0 };
+  for (let i = levels.length - 1; i >= 0; i--) {
+    const nd = { number: 500 + i, state: "OPEN", repository: { nameWithOwner: "o/r" }, subIssues: below };
+    if (levels[i]) nd.projectItems = { nodes: [{ id: `I${i}`, pm: pms[i] ? { text: pms[i] } : null }], pageInfo: { hasNextPage: Boolean(more[i]) } };
+    below = { nodes: [nd], pageInfo: { hasNextPage: false }, totalCount: 1 };
+  }
+  return below.nodes[0];
+}
+// runChain(pms, more, mutate) -> fetchSubIssueTree's result for root 500 over a stub answering chainFor(query).
+function runChain(pms, more, mutate = (q) => q) {
+  const { tree } = withStub((refs, call, spec) => ({ "o/r#500": chainFor(mutate(spec.fields), pms, more) }));
+  return tree.fetchSubIssueTree([R(500)]).results["o/r#500"];
+}
+caseBegin("sub-issue-tree-items-every-level", "bin/lib/sub-issue-tree.js");
+test("ST5 the query selects projectItems with pageInfo once per level, root to SUB_DEPTH, each deeper", () => {
+  G.setMap({ "o/r#9301": {} });
+  const before = G.calls();
+  P.load("bin/lib/sub-issue-tree.js").fetchSubIssueTree([R(9301)]);
+  const q = G.queries().slice(before).find((x) => x.includes("projectItems(")) || "";
+  assert.strictEqual((q.match(/projectItems\(/g) || []).length, SUB_DEPTH + 1, q);
+  const segs = q.split("subIssues(");
+  assert.strictEqual(segs.length, SUB_DEPTH + 1, q);
+  for (const s of segs) {
+    const bodies = itemsBodies(s);
+    assert.strictEqual(bodies.length, 1, s);
+    assert.match(bodies[0], /pageInfo\s*\{\s*hasNextPage\s*\}/, s);
+  }
+  const depthAt = (i) => [...q.slice(0, i)].reduce((d, c) => d + (c === "{") - (c === "}"), 0);
+  const depths = [...q.matchAll(/projectItems\(/g)].map((m) => depthAt(m.index));
+  for (let i = 1; i < depths.length; i++) assert.ok(depths[i] > depths[i - 1], `depths ${depths}`);
+  assert.strictEqual((q.match(/subIssues\{totalCount\}/g) || []).length, 1, q);
+  assert.match(segs[segs.length - 1], /subIssues\{totalCount\}/);
+});
+test("ST5 an answer built from the query: depth-2 and depth-3 descendants report their PM and truncation", () => {
+  const ok = runChain([null, null, "PM-two", "PM-three"]);
+  assert.deepStrictEqual(ok.descendants.map((d) => `${d.number}:${d.pm}`), ["501:null", "502:PM-two", "503:PM-three"]);
+  assert.deepStrictEqual(runChain([], [false, false, true]), { ok: false, reason: "pm-field-truncated" });
+  assert.deepStrictEqual(runChain([], [false, false, false, true]), { ok: false, reason: "pm-field-truncated" });
+});
+test("ST5 sensitivity: a query without the deepest projectItems loses the depth-3 PM and its truncation", () => {
+  const lost = runChain([null, null, "PM-two", "PM-three"], [], dropDeepestItems);
+  assert.deepStrictEqual(lost.descendants.map((d) => `${d.number}:${d.pm}`), ["501:null", "502:PM-two", "503:null"]);
+  assert.strictEqual(runChain([], [false, false, false, true], dropDeepestItems).ok, true);
 });
 caseEnd();

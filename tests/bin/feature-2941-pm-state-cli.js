@@ -1,7 +1,7 @@
 "use strict";
 // tests/bin/feature-2941-pm-state-cli.js
 // Tests: bin/pm-state, bin/lib/pm-state/cli.js, bin/lib/pm-state/ancestry.js, bin/lib/pm-state/sequence.js, bin/lib/pm-state/owner.js
-// Tags: TL2, scope:issue-specific, pm-session, cli, forge
+// Tags: TL2, scope:issue-specific, pm-session, cli, forge, issue-2942, owner-batch
 // #2941 bin/pm-state show / list / owner / set-sequence / set-reason against a seeded PM world; the forge is a
 // fake gh on PATH (black-box: no assumption on the deps shape of cli.js). Dispatcher only.
 // TL3 gap: real gh against a live GitHub sub-issue tree is not exercised.
@@ -23,6 +23,7 @@ const reads = require(path.join(DIR, "read-cases.js"));
 const seq = require(path.join(DIR, "sequence-cases.js"));
 const reason = require(path.join(DIR, "reason-cases.js"));
 const dup = require(path.join(DIR, "duplicate-cases.js"));
+const batch = require(path.join(DIR, "batch-cases.js"));
 const F = makeFixture(tmp);
 seedWorld(F);
 
@@ -52,4 +53,8 @@ caseEnd();
 
 caseBegin("pm-state-set-sequence-duplicate-issue", "bin/lib/pm-state/sequence.js");
 dup.duplicates(F);
+caseEnd();
+
+caseBegin("pm-state-owner-batched-issues", "bin/lib/pm-state/cli.js");
+batch.batch(F);
 caseEnd();

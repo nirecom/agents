@@ -15,7 +15,8 @@ const fs = require("node:fs");
 // edit before the write (a hung write), $PM_FAKE_GH_EDIT_PID_FILE gets the pid, $PM_FAKE_GH_EDIT_MODE=fail exits 1.
 // Each node also carries subIssues.nodes: the map entries whose parent is that issue, nested (fetchSubIssueTree),
 // and state: the map entry's `state` (OPEN|CLOSED, default OPEN) for the notifications tied to a forge state.
-// A map entry's `noCard` drops the card (see noCardNow) for the card-creation path of createPmField.prepare.
+// A map entry's `noCard` drops the card (see noCardNow) for the card-creation path of createPmField.prepare;
+// `noPmField` keeps the card but on a Project without the `pm` field (pmItems).
 const NEST = 14;
 const args = process.argv.slice(2);
 let stdinQuery = null;
@@ -110,9 +111,16 @@ function pmItems(repo, n, a) {
   const store = readStore();
   const v = Object.prototype.hasOwnProperty.call(store, id) ? store[id] : (a.pm === undefined ? null : a.pm);
   const value = v === null || v === "" ? null : { text: v };
-  return { nodes: [{ id, fieldValueByName: value, pm: value }] };
+  // The card sits on a Project with a `pm` field; noPmField: true puts it on a Project without one.
+  const project = a.noPmField ? { id: "PVT_fake_other", field: null } : { id: "PVT_fake", field: { id: "PVTF_fake_pm" } };
+  const items = { nodes: [{ id, fieldValueByName: value, pm: value, project }] };
+  if (a.itemsMore !== undefined) items.pageInfo = { hasNextPage: Boolean(a.itemsMore) };
+  return items;
 }
 
+// A map entry's innerError: "<TYPE>" nulls its card's project and adds an errors[] entry at that path
+// (inside the issue node), and gh exits 1 while still printing data, as the real gh does.
+const errors = [];
 const data = {};
 let failed = false;
 let repoAlias = null;
@@ -125,7 +133,13 @@ for (let m = re.exec(query); m; m = re.exec(query)) {
   const a = map[`${repo}#${n}`] || {};
   if (a.fail) failed = true;
   data[repoAlias][m[4]] = a.missing ? null : node(repo, n, 0);
+  const card = a.innerError && data[repoAlias][m[4]] && data[repoAlias][m[4]].projectItems.nodes[0];
+  if (card) {
+    card.project = null;
+    errors.push({ type: a.innerError, path: [repoAlias, m[4], "projectItems", "nodes", 0, "project"], message: "fake inner error" });
+  }
 }
 if (failed) { process.stderr.write("fake gh: HTTP 502\n"); process.exit(1); }
 if (Object.keys(data).length === 0) { process.stderr.write(`fake gh: cannot read the query: ${query}\n`); process.exit(1); }
-process.stdout.write(`${JSON.stringify({ data })}\n`);
+process.stdout.write(`${JSON.stringify(errors.length > 0 ? { data, errors } : { data })}\n`);
+if (errors.length > 0) process.exit(1);

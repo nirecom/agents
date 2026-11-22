@@ -59,13 +59,16 @@ test("B2 an upstream issue that names another repo keeps that repo", () => {
   assert.deepStrictEqual(x.pm.issues, [R(7102, "other/x"), R(7103)]);
 });
 
-test("B3 an upstream table naming one issue twice is not copied: structure duplicate, no forge call", () => {
+test("B3 an upstream table naming one issue twice is not copied: structure duplicate, no extra forge call", () => {
   const x = inheritFrom([7104], seqOf([7104], [R(7104)]));
+  // Since #2942 writer.js withInbox runs checkMeta after the inherit, reading the forge once for the
+  // meta_children baseline; that read is by design, so compare against a plain inherit, not zero.
+  const control = inheritFrom([7105]);
   assert.deepStrictEqual(x.pm.sequence, EMPTY);
   assert.deepStrictEqual(x.pm.issues, [R(7104)]);
   for (const k of ["context", "notice"]) {
     assert.ok(String(x.r[k]).includes("structure duplicate issue in the sequence"), `${k}: ${W.brief(x.r)}`);
   }
   assert.match(String(x.r.context), /sequence=not-copied/);
-  assert.strictEqual(x.r.calls, 0, W.brief(x.r));
+  assert.strictEqual(x.r.calls, control.r.calls, `${W.brief(x.r)} / control: ${W.brief(control.r)}`);
 });

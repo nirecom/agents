@@ -62,6 +62,8 @@
     { "id": "issue-close-verified.wip-override", "level": "high", "reason": "Publication: closes an issue another session holds." },
     { "id": "scan-offensive.redaction-confirm", "level": "high", "reason": "Destructive and publication: rewrites GitHub text." },
     { "id": "notes-promotion.file-issue", "level": "high", "reason": "Publication: files a GitHub issue." },
+    { "id": "notes-promotion.final-list", "level": "high", "reason": "Publication: the user picks which findings are filed as GitHub issues." },
+    { "id": "mid-workflow-findings.blocking-file", "level": "low", "steps": ["write_code", "run_tests"], "reason": "File a finding that blocks the work now or keep it for the final list; a Jev answer is never an approval, so the finding falls back to the final list." },
     { "id": "user-verified.tl4-single", "level": "high", "reason": "Approval: TL4 verification." },
     { "id": "user-verified.tl4-multi", "level": "high", "reason": "Approval: TL4 verification." }
   ]
