@@ -29,8 +29,7 @@ const { closedDetection } = require("./lib/workflow-init/phases/closed-detection
 const { routeDecision } = require("./lib/workflow-init/phases/route-decision");
 const { writeContext } = require("./lib/workflow-init/phases/write-context");
 
-// Exactly one directive line may ever reach stdout, so the top-level guard needs
-// to know whether one already did.
+// Exactly one directive line may ever reach stdout, so the top-level guard needs to know whether one already did.
 let directiveEmitted = false;
 const emitDone = (...a) => { directiveEmitted = true; return directive.emitDone(...a); };
 const emitAskUser = (...a) => { directiveEmitted = true; return directive.emitAskUser(...a); };
@@ -40,12 +39,11 @@ const emitBlocked = (...a) => { directiveEmitted = true; return directive.emitBl
 
 const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..");
 
-const plansDir =
-  process.env.WORKFLOW_PLANS_DIR ||
-  path.join(require("os").homedir(), ".workflow-plans");
+const plansDir = process.env.WORKFLOW_PLANS_DIR || path.join(require("os").homedir(), ".workflow-plans");
 
 const nonGithub = process.env.NON_GITHUB === "1";
-const isPmSession = (sid) => { try { return require("../../hooks/pm-session/schema").hasPmMark(require("../../hooks/workflow-state/state-io").readRawState(sid)); } catch (_) { return false; } };
+// true | false | null: null when the state cannot be read, which the caller blocks on (fail-closed, #2942).
+const isPmSession = (sid) => { try { return require("../../hooks/pm-session/schema").hasPmMark(require("../../hooks/workflow-state/state-io").readRawState(sid)); } catch (_) { return null; } };
 
 // --- Session ID resolution --------------------------------------------------
 
@@ -329,18 +327,17 @@ function applyAnswer(ckptData, answer, tokens) {
 // --- Phase pipeline -----------------------------------------------------------
 
 const PHASE_ORDER = [
-  // #1305: first, because a crash-resumed session must be offered its own prior
-  // state before any later phase records anything into the fresh one.
+  // #1305: first, so a crash-resumed session is offered its own prior state before any phase records into the fresh one.
   "adopt-prior-state",
   "detect-issues",
   "fetch-issues",
-  // #2087: closed-detection ahead of meta-classify and wip-check, so a closed
-  // issue is resolved before either phase acts on it.
+  // #2087: closed-detection ahead of meta-classify and wip-check, so a closed issue is resolved before either acts on it.
   "closed-detection",
   // #2087: meta-classify ahead of wip-check, so meta issues are never wip-checked.
   "label-extract",
   "meta-classify",
   "wip-check",
+  "pm-scan",
   "route-decision",
   "write-context",
 ];
@@ -404,6 +401,8 @@ function runPipeline(state, startPhase, tokens, sessionId, ckptFile) {
       result = metaClassify(state);
     } else if (phase === "wip-check") {
       result = wipCheck(state, sessionId);
+    } else if (phase === "pm-scan") {
+      result = require("./lib/workflow-init/phases/pm-scan").pmScan(state, sessionId);
     } else if (phase === "closed-detection") {
       result = closedDetection(state);
     } else if (phase === "route-decision") {
@@ -460,7 +459,9 @@ function main() {
     return;
   }
   // A PM session (#2941, archived included) runs no workflow: the last line against a Skill-tool wf-init.
-  if (isPmSession(sessionId)) return void emitBlocked(ckptFile, "pm-session", "this is a PM session; no workflow runs here. Start the work in a new session.");
+  const pmSession = isPmSession(sessionId);
+  if (pmSession === null) return void emitBlocked(ckptFile, "pm-session-undecidable", "the session's state file cannot be read, so whether this is a PM session is unknown. Repair or remove the state file, then rerun.");
+  if (pmSession) return void emitBlocked(ckptFile, "pm-session", "this is a PM session; no workflow runs here. Start the work in a new session.");
 
   // NON_GITHUB=1 → immediate done/Path C (also writes context.md)
   if (nonGithub) {

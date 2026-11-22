@@ -36,7 +36,7 @@ function realMd(S) {
     const { pairs } = headingPairs(readMd());
     for (const c of CONTRACT) assert.strictEqual(pairs.get(`${c.h2}/${c.h3}`), 1, `${c.h2} / ${c.h3}: ${pairs.get(`${c.h2}/${c.h3}`) || 0}`);
   });
-  test("contract-md: [interim: #NNNN] markers name exactly the seven follow-up issues", () => {
+  test("contract-md: [interim: #NNNN] markers name exactly the six follow-up issues", () => {
     const found = new Set([...readMd().matchAll(/\[interim: #(\d+)\]/g)].map((m) => Number(m[1])));
     assert.deepStrictEqual([...found].sort((a, b) => a - b), INTERIM_ISSUES);
   });
@@ -65,6 +65,7 @@ function realMd(S) {
   w.pm(pmSid, P.pm({ tag: "PM-real", issues: [4951] }));
   w.plain(wf);
   w.intent(wf, ["#4951"]);
+  w.field({ "o/r#4951": "PM-real" });
   for (const [label, sid] of [["pm", pmSid], ["workflow", wf]]) {
     test(`contract-md: the real ${label} bundle fits ${MAX_BYTES} bytes untruncated`, () => {
       const r = w.probe({ sid, deadline: "hook" });
@@ -92,7 +93,7 @@ const DUTIES = [
   ["workflow", "before-companions", "consults the PM before presenting companions", /consult the assigned PM[^\n]*companion/i],
   ["workflow", "before-plan-confirm", "emits the plan confirmation only after the PM's OK", /review the plan[^\n]*only after the PM's OK/i],
   ["workflow", "before-user-verification", "emits USER_VERIFIED only after the PM's OK", /USER_VERIFIED[^\n]*only after the PM's OK/],
-  ["workflow", "after-final-report", "reports completion to the assigned PM", /report completion to the assigned PM/i],
+  ["workflow", "after-final-report", "reports completion to the assigned PM", /report completion to (?:the|each) assigned PM/i],
 ];
 
 // realDuties: the real md (no MD_ENV) rendered per recipient x timing carries each key duty's directive.
@@ -102,6 +103,7 @@ function realDuties(S) {
   w.pm(sid.pm, P.pm({ tag: "PM-duty", issues: [4961] }));
   w.plain(sid.workflow);
   w.intent(sid.workflow, ["#4961"]);
+  w.field({ "o/r#4961": "PM-duty" });
   const cache = new Map();
   const render = (recipient, timing) => {
     const k = `${recipient}/${timing}`;

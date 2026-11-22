@@ -254,6 +254,8 @@ run_epr() {
     SID_ID="$(get_field "$out" EPR_SESSION_ID_FIELD_ID)"
 }
 n_op() { grep -c "^$1" "$GH_MOCK_FIELDS_LOG" 2>/dev/null || true; }
+# Creates of one named field (the log line ends with the field name); #2942 adds the best-effort `pm` field.
+n_create_of() { grep -cE "^create .* $1 *\$" "$GH_MOCK_FIELDS_LOG" 2>/dev/null || true; }
 n_rename() { grep -E 'updateProjectV2Field' "$MOCK_LOG" 2>/dev/null | grep -vc 'singleSelectOptions' || true; }
 ops() { tr '\n' '|' < "$GH_MOCK_FIELDS_LOG" | cut -c1-400; }
 
@@ -262,7 +264,7 @@ case_begin "epr-session-id-legacy-only-creates" "bin/github-issues/lib/ensure-pr
 setup_case
 export GH_MOCK_SID_FIELD=legacy
 run_epr
-if [ "$RC" = "0" ] && [ "$SID_ID" = "PVTF_new_sid" ] && [ "$(n_op create)" = "1" ] && [ "$(n_rename)" = "0" ]; then
+if [ "$RC" = "0" ] && [ "$SID_ID" = "PVTF_new_sid" ] && [ "$(n_create_of session-id)" = "1" ] && [ "$(n_rename)" = "0" ]; then
     pass "E1: legacy-only project → session-id created (PVTF_new_sid), legacy field not renamed"
 else
     fail "E1: rc=$RC sid=$SID_ID creates=$(n_op create) renames=$(n_rename) ops=$(ops)"
@@ -274,8 +276,8 @@ case_begin "epr-session-id-found-on-page-2" "bin/github-issues/lib/ensure-projec
 setup_case
 export GH_MOCK_SID_FIELD=present GH_MOCK_FIELD_PAGES=2
 run_epr
-if [ "$RC" = "0" ] && [ "$SID_ID" = "PVTF_existing_sid" ] && [ "$(n_op create)" = "0" ]; then
-    pass "E2: session-id on page 2 → reused (PVTF_existing_sid), no create"
+if [ "$RC" = "0" ] && [ "$SID_ID" = "PVTF_existing_sid" ] && [ "$(n_create_of session-id)" = "0" ] && [ "$(n_create_of pm)" = "1" ]; then
+    pass "E2: session-id on page 2 → reused (PVTF_existing_sid), no session-id create (only the absent pm field)"
 else
     fail "E2: rc=$RC sid=$SID_ID creates=$(n_op create) ops=$(ops)"
 fi
@@ -299,7 +301,7 @@ setup_case
 export GH_MOCK_SID_FIELD=absent GH_MOCK_CREATE_NO_ID=1 GH_MOCK_FIELDS_STATE="$CASE_DIR/fields.state"
 run_epr
 RELIST="$(sed -n '/^create/,$p' "$GH_MOCK_FIELDS_LOG" | grep -c '^list-fields' || true)"
-if [ "$RC" = "0" ] && [ "$SID_ID" = "PVTF_new_sid" ] && [ "$(n_op create)" = "1" ] && [ "$RELIST" -ge 1 ]; then
+if [ "$RC" = "0" ] && [ "$SID_ID" = "PVTF_new_sid" ] && [ "$(n_create_of session-id)" = "1" ] && [ "$RELIST" -ge 1 ]; then
     pass "E4: create without id → re-list resolves PVTF_new_sid"
 else
     fail "E4: rc=$RC sid=$SID_ID creates=$(n_op create) relist=$RELIST ops=$(ops)"

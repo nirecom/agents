@@ -16,6 +16,7 @@ function missingHeading(S) {
   w.pm(pmSid, P.pm({ tag: "PM-miss", issues: [4601] }));
   w.plain(wf);
   w.intent(wf, ["#4601"]);
+  w.field({ "o/r#4601": "PM-miss" });
   const cases = [
     ["the PM session / Session start H3", pmSid, fixtureMd({ drop: { h2: "PM session", h3: "Session start" } })],
     ["the whole Workflow session H2", wf, fixtureMd({ drop: { h2: "Workflow session" } })],

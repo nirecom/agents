@@ -286,4 +286,67 @@ if [ -z "$RETIRED" ]; then
 else fail "G5-5" "hits=[$(printf '%s\n' "$RETIRED" | head -10)]"; fi
 case_end
 
+# #2942 S6: the field helpers take the field name (project_text_field_*), so the PM field `pm` is made
+# like session-id; session_id_field_create_if_absent stays a one-line wrapper. gh is a shell function
+# here answering with the post-jq lines; MOCK_FIELDS holds the "id<TAB>name" lines on the board.
+TF_LOG="$(make_tmp)/tf-gh.log"
+tf_gh() {
+    printf '%s\n' "$*" >>"$TF_LOG"
+    local a
+    if [[ "$*" == *createProjectV2Field* ]]; then
+        for a in "$@"; do [[ "$a" == name=* ]] && echo "PVTF_new_${a#name=}"; done
+        return 0
+    elif [[ "$*" == *updateProjectV2View* ]]; then
+        return 0
+    elif [[ "$*" == *views* ]]; then
+        printf 'V\tPVTV_1\tBOARD_LAYOUT\tfalse\tPVTF_a\nP\tfalse\t\n'
+    elif [[ "$*" == *fields* ]]; then
+        [ -n "$MOCK_FIELDS" ] && printf '%s\n' "$MOCK_FIELDS" | sed 's/^/F\t/'
+        printf 'P\tfalse\t\n'
+    else
+        return 1
+    fi
+}
+# tf_run <fields> <snippet> — call inside $(...): sources the field helpers fresh against tf_gh.
+tf_run() {
+    unset _SESSION_ID_FIELD_SOURCED
+    : >"$TF_LOG"
+    MOCK_FIELDS="$1"
+    gh() { tf_gh "$@"; }
+    # shellcheck source=/dev/null
+    . "$R/$SIF"
+    eval "$2"
+}
+tf_creates() { grep -c 'createProjectV2Field' "$TF_LOG"; }
+
+case_begin "text-field-create-takes-the-name" "bin/github-issues/lib/session-id-field.sh"
+OUT="$(tf_run "$(printf 'PVTF_sid\tsession-id')" 'project_text_field_create_if_absent PVT_1 pm; echo "rc=$?"' 2>&1)"
+if printf '%s' "$OUT" | grep -q 'rc=0' && [ "$(tf_creates)" -eq 1 ] && grep 'createProjectV2Field' "$TF_LOG" | grep -q 'name=pm'; then
+    pass "TF1: pm absent -> created once as a TEXT field named pm"
+else fail "TF1" "out=[$OUT] log=[$(cat "$TF_LOG")]"; fi
+case_end
+
+case_begin "text-field-create-reuses-an-existing-field" "bin/github-issues/lib/session-id-field.sh"
+OUT="$(tf_run "$(printf 'PVTF_sid\tsession-id\nPVTF_pm\tpm')" 'project_text_field_create_if_absent PVT_1 pm; echo "rc=$?"' 2>&1)"
+if printf '%s' "$OUT" | grep -q 'rc=0' && [ "$(tf_creates)" -eq 0 ] && grep -q 'fields' "$TF_LOG"; then
+    pass "TF2: pm already on the board -> reused, no create"
+else fail "TF2" "out=[$OUT] log=[$(cat "$TF_LOG")]"; fi
+case_end
+
+case_begin "text-field-show-in-views-takes-the-field" "bin/github-issues/lib/session-id-field.sh"
+OUT="$(tf_run "" 'project_text_field_show_in_views PVT_1 PVTF_pm pm; echo "rc=$?"' 2>&1)"
+UPD="$(grep 'updateProjectV2View' "$TF_LOG")"
+if printf '%s' "$OUT" | grep -q 'rc=0' && printf '%s' "$UPD" | grep -q 'ids\[\]=PVTF_a' && printf '%s' "$UPD" | grep -q 'ids\[\]=PVTF_pm'; then
+    pass "TF3: the board view gets PVTF_pm added to its visible fields (PVTF_a kept)"
+else fail "TF3" "out=[$OUT] log=[$(cat "$TF_LOG")]"; fi
+case_end
+
+case_begin "session-id-wrapper-keeps-its-callers" "bin/github-issues/lib/session-id-field.sh"
+OUT="$(tf_run "" 'session_id_field_create_if_absent PVT_1; echo "rc=$? id=$SESSION_ID_FIELD_ENSURED_ID"; declare -f session_id_field_create_if_absent' 2>&1)"
+if printf '%s' "$OUT" | grep -q 'rc=0 id=PVTF_new_session-id' && grep 'createProjectV2Field' "$TF_LOG" | grep -q 'name=session-id' \
+   && printf '%s' "$OUT" | grep -q 'project_text_field_create_if_absent'; then
+    pass "TF4: the wrapper still sets SESSION_ID_FIELD_ENSURED_ID and delegates to project_text_field_create_if_absent"
+else fail "TF4" "out=[$OUT] log=[$(cat "$TF_LOG")]"; fi
+case_end
+
 wip_finish

@@ -75,44 +75,54 @@ project_field_id_exists() {
     return 1
 }
 
-# session_id_field_create_if_absent <pid> — reuse or create the session-id TEXT field.
-# Sets SESSION_ID_FIELD_ENSURED_ID, rc 0. rc 1 with an `error:` line otherwise. Never creates when
-# the field list cannot be read (a blind create could duplicate). The retired name is never consulted.
-session_id_field_create_if_absent() {
-    local pid="$1" id rc
-    SESSION_ID_FIELD_ENSURED_ID=""
-    id="$(session_id_field_find "$pid" "$SESSION_ID_FIELD_NAME")"; rc=$?
+# project_text_field_create_if_absent <pid> <name> — reuse or create the TEXT field <name> (#2942:
+# session-id and the PM field `pm`). Sets PROJECT_TEXT_FIELD_ENSURED_ID, rc 0. rc 1 with an `error:`
+# line otherwise. Never creates when the field list cannot be read (a blind create could duplicate).
+project_text_field_create_if_absent() {
+    local pid="$1" fname="$2" id rc
+    PROJECT_TEXT_FIELD_ENSURED_ID=""
+    id="$(session_id_field_find "$pid" "$fname")"; rc=$?
     if [ "$rc" -eq 2 ]; then
-        echo "error: session-id-field: field list query failed; not creating '$SESSION_ID_FIELD_NAME'" >&2
+        echo "error: project-text-field: field list query failed; not creating '$fname'" >&2
         return 1
     fi
     if [ "$rc" -ne 0 ]; then
-        if ! id=$(gh api graphql -F projectId="$pid" -f name="$SESSION_ID_FIELD_NAME" \
+        if ! id=$(gh api graphql -F projectId="$pid" -f name="$fname" \
                 -f query='mutation($projectId:ID!,$name:String!){createProjectV2Field(input:{projectId:$projectId,name:$name,dataType:TEXT}){projectV2Field{...on ProjectV2FieldCommon{id name}}}}' \
                 --jq '.data.createProjectV2Field.projectV2Field.id // ""' 2>/dev/null); then
-            echo "error: session-id-field: createProjectV2Field ($SESSION_ID_FIELD_NAME TEXT) failed" >&2
+            echo "error: project-text-field: createProjectV2Field ($fname TEXT) failed" >&2
             return 1
         fi
         id="$(printf '%s' "$id" | tr -d '\r' | head -1)"
         # The create answered without an id: read the list again.
-        [ -n "$id" ] || id="$(session_id_field_find "$pid" "$SESSION_ID_FIELD_NAME")" || id=""
+        [ -n "$id" ] || id="$(session_id_field_find "$pid" "$fname")" || id=""
     fi
     id="$(printf '%s' "$id" | tr -d '\r' | head -1)"
     if [ -z "$id" ]; then
-        echo "error: session-id-field: '$SESSION_ID_FIELD_NAME' field id unresolved after create" >&2
+        echo "error: project-text-field: '$fname' field id unresolved after create" >&2
         return 1
     fi
-    SESSION_ID_FIELD_ENSURED_ID="$id"
+    PROJECT_TEXT_FIELD_ENSURED_ID="$id"
     return 0
 }
 
-# session_id_field_show_in_views <pid> <fid> — best-effort: add <fid> to every BOARD view that does
-# not show it, passing the view's full visible list plus <fid> (replace-vs-append is undocumented).
+# session_id_field_create_if_absent <pid> — the session-id field; sets SESSION_ID_FIELD_ENSURED_ID.
+# The retired name is never consulted.
+session_id_field_create_if_absent() {
+    project_text_field_create_if_absent "$1" "$SESSION_ID_FIELD_NAME" || { SESSION_ID_FIELD_ENSURED_ID=""; return 1; }
+    SESSION_ID_FIELD_ENSURED_ID="$PROJECT_TEXT_FIELD_ENSURED_ID"
+}
+
+# session_id_field_show_in_views <pid> <fid> — the session-id field's view update.
+session_id_field_show_in_views() { project_text_field_show_in_views "$1" "$2" "$SESSION_ID_FIELD_NAME"; }
+
+# project_text_field_show_in_views <pid> <fid> <name> — best-effort: add <fid> to every BOARD view that
+# does not show it, passing the view's full visible list plus <fid> (replace-vs-append is undocumented).
 # Each view's original visibleFieldIds is logged first so it can be restored by hand. A BOARD view
 # whose visible fields exceed one page (100) is skipped with a warn: sending its truncated list
-# would hide the rest. Always rc 0.
-session_id_field_show_in_views() {
-    local pid="$1" fid="$2" cursor="" guard=0 out line has_next next vid layout truncated ids
+# would hide the rest. <name> only labels the messages. Always rc 0.
+project_text_field_show_in_views() {
+    local pid="$1" fid="$2" fname="${3:-$2}" cursor="" guard=0 out line has_next next vid layout truncated ids
     local -a updates=()
     local query='query($projectId: ID!, $after: String) {
   node(id: $projectId) {
@@ -131,7 +141,7 @@ session_id_field_show_in_views() {
             out=$(gh api graphql -F projectId="$pid" --jq "$jq_page" -f query="$query" 2>/dev/null)
         else
             out=$(gh api graphql -F projectId="$pid" -f after="$cursor" --jq "$jq_page" -f query="$query" 2>/dev/null)
-        fi || { echo "warn: session-id-field: view list failed; add '$SESSION_ID_FIELD_NAME' to board views by hand" >&2; return 0; }
+        fi || { echo "warn: session-id-field: view list failed; add '$fname' to board views by hand" >&2; return 0; }
         has_next="false" next=""
         while IFS= read -r line; do
             line="${line%$'\r'}"
@@ -150,7 +160,7 @@ session_id_field_show_in_views() {
         [ "$layout" = "BOARD_LAYOUT" ] || continue
         case ",$ids," in *",$fid,"*) continue ;; esac
         if [ "$truncated" = "true" ]; then
-            echo "warn: session-id-field: view $vid shows more than one page of fields; not updated, add '$SESSION_ID_FIELD_NAME' to it by hand" >&2
+            echo "warn: session-id-field: view $vid shows more than one page of fields; not updated, add '$fname' to it by hand" >&2
             continue
         fi
         echo "info: session-id-field: view $vid visibleFieldIds before update: ${ids:-<none>}" >&2
@@ -162,7 +172,7 @@ session_id_field_show_in_views() {
         if ! gh api graphql -f viewId="$vid" "${args[@]}" \
                 -f query='mutation($viewId:ID!,$ids:[ID!]!){updateProjectV2View(input:{viewId:$viewId,configuration:{visibleFieldIds:$ids}}){projectV2View{id}}}' \
                 >/dev/null 2>&1; then
-            echo "warn: session-id-field: could not show '$SESSION_ID_FIELD_NAME' in view $vid; add it by hand" >&2
+            echo "warn: session-id-field: could not show '$fname' in view $vid; add it by hand" >&2
         fi
     done
     return 0

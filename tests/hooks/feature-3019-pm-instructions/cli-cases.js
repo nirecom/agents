@@ -25,6 +25,7 @@ function setup(S, name) {
   w.pm(own.c2, P.pm({ tag: "PM-ck2", issues: [4602] }));
   w.pm(own.c3, P.pm({ tag: "PM-ck3", issues: [4600] }));
   w.pm(own.c4, P.pm({ tag: "PM-ck4", issues: [4603] }));
+  w.field({ "o/r#4800": "PM-cliX", "o/r#4601": "PM-ck1", "o/r#4602": "PM-ck2", "o/r#4600": "PM-ck3", "o/r#4603": "PM-ck4" });
   w.plain(sid.wf);
   w.intent(sid.wf, ["#4601"]);
   w.plain(sid.bare);
@@ -75,11 +76,14 @@ function inputs(S) {
     assert.strictEqual(a.out, b.out);
   });
   test("cli-checkpoint: only the owners of state.issues are injected, not of the driver's input tokens", () => {
+    const before = w.ghLog().length;
     const r = w.cli(["--timing", "session-start", "--session", sid.bare, "--checkpoint", ckpt("done", checkpointOf(sid.bare, [4601, 4603]))], md);
     code(r, 0);
     for (const s of ["PM-ck1", own.c1, "PM-ck4", own.c4]) assert.ok(r.out.includes(s), `${s}: ${brief(r)}`);
     for (const s of ["PM-ck2", "PM-ck3"]) assert.ok(!r.out.includes(s), `${s} leaked: ${brief(r)}`);
-    assert.strictEqual(r.calls, 0, brief(r));
+    // The PM field is read for state.issues only: the driver's input tokens never reach the forge.
+    const asked = w.ghLog().slice(before);
+    for (const n of [4600, 4602]) assert.ok(!new RegExp(`number:\\s*${n}\\b`).test(asked), `#${n} was looked up: ${asked.slice(0, 600)}`);
   });
   test("cli-checkpoint: empty state.issues (Path C) -> empty stdout, exit 0", () => {
     const r = w.cli(["--timing", "session-start", "--session", sid.bare, "--checkpoint", ckpt("empty", checkpointOf(sid.bare, []))], md);

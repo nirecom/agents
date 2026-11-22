@@ -1,0 +1,8 @@
+{
+  "source": "message.content text blocks of a live human prompt (a typed /pm-init pasted with a note) recorded 2026-11 in a Claude Code transcript; the <ide_opened_file> wrapper and the <pasted_content id=...> open and close tags (the close tag repeats the id attribute) are kept byte for byte; the user name in the paths was replaced with 'example', the plan uuid with a placeholder, and the Japanese note line was translated to English for CODE_LANG=english",
+  "blocks": [
+    "<ide_opened_file>The user opened the file c:\\Users\\example\\.workflow-plans\\00000000-0000-4000-8000-000000000000-user-requested-pm-takeover.md in the IDE. This may or may not be related to the current task.</ide_opened_file>",
+    "\n\n<pasted_content id=\"247f\">\n/pm-init PM-infra #2728 #708 #2732 #3086\n\nPlease also refer to the hand-over md\n C:\\Users\\example\\.workflow-plans\\00000000-0000-4000-8000-000000000000-user-requested-pm-takeover.md\n</pasted_content id=\"247f\">\n"
+  ],
+  "expect": { "name": "pm-init", "args": "PM-infra #2728 #708 #2732 #3086" }
+}

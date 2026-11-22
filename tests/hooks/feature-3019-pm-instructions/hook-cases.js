@@ -22,6 +22,7 @@ function setup(S, which) {
   w.pm(pmSid, P.pm({ tag: "PM-hook", issues: [4901] }));
   w.plain(wf);
   w.intent(wf, ["#4901"]);
+  w.field({ "o/r#4901": "PM-hook" });
   w.plain(plain);
   return { w, pmSid, wf, plain };
 }
@@ -77,13 +78,15 @@ function originDir(S, name, origin) {
   return d;
 }
 
-// hookHomeRepo: both hooks resolve a workflow session's bare intent #N against the hook cwd's origin, so a
-// PM holding ownerA/repoA#N is injected only when the session runs in ownerA/repoA.
+// hookHomeRepo: both hooks resolve a workflow session's bare intent #N against the hook cwd's origin (the
+// owner spawn runs `bin/pm-state owner` there), so the PM field set on ownerA/repoA#N injects its PM only
+// when the session runs in ownerA/repoA; in ownerB/repoB the field of ownerB/repoB#N is empty.
 function hookHomeRepo(S) {
   const w = makeWorld(S, "hook-home");
   const pmSid = P.uuid(0x30190a01);
   const wf = P.uuid(0x30190a02);
   w.pm(pmSid, P.pm({ tag: "PM-hookhome", issues: [{ number: 4950, repo: "ownerA/repoA" }] }));
+  w.field({ "ownerA/repoA#4950": "PM-hookhome" });
   w.plain(wf);
   w.intent(wf, ["#4950"]);
   const md = { [MD_ENV]: S.md("hook-home", fixtureMd()) };
@@ -91,7 +94,7 @@ function hookHomeRepo(S) {
   const inB = originDir(S, "b", "https://github.com/ownerB/repoB.git");
   const neutral = originDir(S, "none", null);
   for (const [file, event] of HOOKS) {
-    // The owner spawn fallback reads the origin of the process cwd, so only a neutral process cwd shows
+    // `bin/pm-state owner` reads the origin of its own cwd, so only a neutral hook process cwd shows
     // whether the hook input cwd itself reaches resolveRole.
     test(`hook-home-repo-${event}: input cwd origin ownerA/repoA, process cwd without origin -> the PM block`, () => {
       const r = hookIn(w, S, file, event, wf, inA, md, neutral);
@@ -129,6 +132,7 @@ function startup(S) {
   w.pm(pmSid, P.pm({ tag: "PM-startup", issues: [4902] }));
   w.plain(wf);
   w.intent(wf, ["#4902"]);
+  w.field({ "o/r#4902": "PM-startup" });
   const md = { [MD_ENV]: S.md("hook-startup", fixtureMd()) };
   const START = { source: "startup" };
   test("hook-SessionStart-startup: a fresh session id without a state file -> no block, the session-id line intact", () => {

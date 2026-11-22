@@ -1,13 +1,13 @@
 "use strict";
 // bin/pm-state (#2941): the read side of the `pm` state key and the one writer of pm.sequence.
 //   show --session <sid>                       {tag, issues, archived, current, sequence} or {pm:null}
-//   owner --issue <ref>                        {tag, session_id} or {pm:null}; non-zero when undecidable
+//   owner --issue <ref> [--timeout-ms <n>]     {tag, session_id} or {pm:null} from the PM field (owner.js)
 //   list                                       {tags: [...]} every tag ever used, archived included
 //   set-sequence [--session <sid>] --file <f> | --revalidate   the caller's table, after the range check
 //   set-reason --text <reason>                 fills the caller's last unstated assignment_log entry
-// The caller is CLAUDE_CODE_SESSION_ID (deps.callerSessionId in tests); the writes touch only its PM.
-// Exit 0 on success, 1 on a refusal or an undecidable range, 2 on a malformed request.
-// main(argv, deps) — deps: {fetchAncestorChains?, resolveOwnerRepoFromOrigin?, callerSessionId?, now?, out?, err?}.
+// The caller is CLAUDE_CODE_SESSION_ID (deps.callerSessionId); writes touch only its PM, under the PM lock
+// (#2942: an old generation is refused with stale-generation, a busy lock with pm-lock-busy).
+// Exit 0 on success, 1 on a refusal or undecidable answer, 2 on a malformed request. deps: see main().
 
 const fs = require("fs");
 const path = require("path");
@@ -15,6 +15,7 @@ const HOOKS = path.join(__dirname, "..", "..", "..", "hooks");
 const io = require(path.join(HOOKS, "workflow-state", "state-io"));
 const S = require(path.join(HOOKS, "pm-session", "schema"));
 const scan = require(path.join(HOOKS, "pm-session", "scan"));
+const W = require(path.join(HOOKS, "pm-session", "writer-common"));
 const { parseIssueToken } = require(path.join(HOOKS, "lib", "parse-closes-issues"));
 const { resolveSessionId } = require(path.join(HOOKS, "workflow-state", "session-id"));
 const links = require("../forge-issue-links");
@@ -22,6 +23,8 @@ const { createAncestry } = require("./ancestry");
 const { resolveOwner } = require("./owner");
 const { unresolvableExit, refLabelOf } = require("./overlap");
 const SEQ = require("./sequence");
+const { forgeKindOf } = require("../pm-field/forge-kind");
+const { withPmLock, PmLockBusy } = require(path.join(HOOKS, "pm-session", "pm-lock"));
 
 const TOOL = "pm-state";
 class Exit extends Error { constructor(code, msg) { super(msg); this.code = code; } }
@@ -61,12 +64,14 @@ function homeRepoOf(d) {
   return r && r.ok ? r.ownerRepo : null;
 }
 
-// normalizer(homeRepo) -> ref -> {number, repo: "owner/repo"}; the rule is S.resolveRepo.
+// normalizer(homeRepo) -> ref -> {number, repo: "owner/repo"}; the rule is W.normalizeRef (#2942),
+// whose repo-unresolved refusal becomes exit 1.
 function normalizer(homeRepo) {
   return (ref) => {
-    const repo = S.resolveRepo(ref, homeRepo);
-    if (!repo.includes("/")) fail(1, `the repo of #${ref.number} is unknown: run from a checkout whose origin is the issue's repo, or write owner/repo#N`);
-    return { number: Number(ref.number), repo };
+    try { return W.normalizeRef(ref, homeRepo); } catch (e) {
+      if (e instanceof W.Refusal) fail(1, e.message);
+      throw e;
+    }
   };
 }
 
@@ -76,8 +81,8 @@ function contextOf(d) {
   const now = typeof d.now === "function" ? d.now : Date.now;
   const ancestry = createAncestry({ fetchAncestorChains: d.fetchAncestorChains || links.fetchAncestorChains, now });
   const resolve = (ref) => {
-    const repo = S.resolveRepo(ref, homeRepo);
-    return repo.includes("/") ? { number: Number(ref.number), repo } : null;
+    const r = W.normalizeStoredRef(ref, homeRepo);
+    return r.repo && r.repo.includes("/") ? r : null;
   };
   return { S, scan, entries, homeRepo, ancestry, resolve, normalize: normalizer(homeRepo) };
 }
@@ -97,11 +102,18 @@ function show(argv) {
 }
 
 function owner(argv, d) {
-  const o = parseFlags(argv, ["issue"]);
+  const o = parseFlags(argv, ["issue", "timeout-ms"]);
   const ref = parseIssueToken(o.issue);
   if (!ref) fail(2, "--issue <#N | owner/repo#N> is required");
+  let timeoutMs;
+  if (o["timeout-ms"] !== undefined) {
+    if (!/^[1-9][0-9]*$/.test(o["timeout-ms"])) fail(2, "--timeout-ms takes a positive integer (milliseconds)");
+    timeoutMs = Number(o["timeout-ms"]);
+  }
+  // The PM field lives on GitHub only: a GitLab checkout has no owner and makes no gh call.
+  if ((d.forgeKindOf || forgeKindOf)({ cwd: process.cwd() }) === "gitlab") return { pm: null };
   const ctx = contextOf(d);
-  const r = resolveOwner(ctx.normalize(ref), ctx);
+  const r = resolveOwner(ctx.normalize(ref), Object.assign({}, ctx, { timeoutMs }));
   if (!r.ok) fail(1, `the owner of ${o.issue} could not be decided (${r.reason}); check \`gh auth status\` and retry`);
   return r.owner || { pm: null };
 }
@@ -125,9 +137,17 @@ function ownPm(sid, entries) {
   if (me.pm.archived_at) fail(1, `set-sequence refused: the PM ${me.pm.tag} has ended; an ended PM takes no sequence`);
   if (!scan.isCurrentGeneration(sid, entries)) {
     const cur = scan.currentOf(me.pm.tag, entries);
-    fail(1, `set-sequence refused: session ${sid} is an old generation of ${me.pm.tag}; write from the current one, ${cur ? cur.session_id : "(unknown)"}`);
+    fail(1, `set-sequence refused: stale-generation: session ${sid} is an old generation of ${me.pm.tag}; write from the current one, ${cur ? cur.session_id : "(unknown)"}`);
   }
   return me;
+}
+
+// locked(d, fn) — runs fn under the PM lock (#2942); a busy lock is exit 1 with pm-lock-busy.
+function locked(d, fn) {
+  try { return withPmLock(fn, { waitMs: d.pmLockWaitMs }); } catch (e) {
+    if (e instanceof PmLockBusy) fail(1, e.message);
+    throw e;
+  }
 }
 
 function setSequence(argv, d) {
@@ -144,17 +164,19 @@ function setSequence(argv, d) {
       throw e;
     }
   }
-  const ctx = contextOf(d);
-  const me = ownPm(caller, ctx.entries);
-  if (o.revalidate) tables = me.pm.sequence && Array.isArray(me.pm.sequence.tables) ? me.pm.sequence.tables : [];
-  const r = SEQ.checkSequence(tables, { tag: me.pm.tag, session_id: caller, issues: me.pm.issues || [] }, { ancestry: ctx.ancestry, homeRepo: ctx.homeRepo });
-  if (!r.ok) fail(1, `set-sequence refused: ${sequenceRefusal(r)}`);
-  const now = nowIso(d);
-  try { SEQ.writeSequence(caller, tables, { io, S, now, checkedIssues: me.pm.issues || [], homeRepo: ctx.homeRepo }); } catch (e) {
-    if (e instanceof SEQ.SeqRefusal) fail(1, `set-sequence refused: ${e.message}`);
-    throw e;
-  }
-  return { ok: true, session_id: caller, updated_at: now };
+  return locked(d, () => {
+    const ctx = contextOf(d);
+    const me = ownPm(caller, ctx.entries);
+    if (o.revalidate) tables = me.pm.sequence && Array.isArray(me.pm.sequence.tables) ? me.pm.sequence.tables : [];
+    const r = SEQ.checkSequence(tables, { tag: me.pm.tag, session_id: caller, issues: me.pm.issues || [] }, { ancestry: ctx.ancestry, homeRepo: ctx.homeRepo });
+    if (!r.ok) fail(1, `set-sequence refused: ${sequenceRefusal(r)}`);
+    const now = nowIso(d);
+    try { SEQ.writeSequence(caller, tables, { io, S, now, checkedIssues: me.pm.issues || [], homeRepo: ctx.homeRepo }); } catch (e) {
+      if (e instanceof SEQ.SeqRefusal) fail(1, `set-sequence refused: ${e.message}`);
+      throw e;
+    }
+    return { ok: true, session_id: caller, updated_at: now };
+  });
 }
 
 const REASON_OPS = ["init", "add", "remove"];
@@ -165,6 +187,16 @@ function setReason(argv, d) {
   if (typeof o.text !== "string" || o.text.trim() === "") fail(2, "--text <reason> is required (not blank)");
   const caller = callerOf(d);
   const text = o.text.trim();
+  return locked(d, () => writeReason(caller, text));
+}
+
+function writeReason(caller, text) {
+  const entries = scan.listPmFiles();
+  const me = entries.find((e) => e.session_id === caller);
+  if (me && !scan.isCurrentGeneration(caller, entries)) {
+    const cur = scan.currentOf(me.pm.tag, entries);
+    fail(1, `set-reason refused: stale-generation: session ${caller} is an old generation of ${me.pm.tag}; write from the current one, ${cur ? cur.session_id : "(unknown)"}`);
+  }
   try {
     io.updateTopLevel(caller, (rec) => {
       if (!S.hasPmMark(rec)) throw new Exit(1, `set-reason refused: session ${caller} is not a PM session`);
@@ -191,6 +223,16 @@ const COMMANDS = {
   "set-reason": setReason,
 };
 
+// inboxAfter(sid, err): the PM's inbox (#2942) once a write has released the PM lock; fail-open.
+function inboxAfter(sid, err) {
+  try {
+    const text = require("../pm-notify/inbox").runInbox(sid, { budgetMs: 2000, drift: false });
+    if (text) err(`${text}\n`);
+  } catch (_) { /* fail-open: the inbox runs at the next PM command */ }
+}
+
+// main(argv, deps) — deps: {fetchAncestorChains?, resolveOwnerRepoFromOrigin?, forgeKindOf?, pmLockWaitMs?,
+//   callerSessionId?, now?, out?, err?}.
 function main(argv, deps) {
   const d = deps || {};
   const out = d.out || ((s) => process.stdout.write(s));
@@ -198,7 +240,9 @@ function main(argv, deps) {
   try {
     const cmd = COMMANDS[argv[0]];
     if (!cmd) fail(2, `usage: ${TOOL} show|owner|list|set-sequence|set-reason …`);
-    out(`${JSON.stringify(cmd(argv.slice(1), d))}\n`);
+    const res = cmd(argv.slice(1), d);
+    out(`${JSON.stringify(res)}\n`);
+    if (argv[0].startsWith("set-") && res && res.session_id) inboxAfter(res.session_id, err);
     return 0;
   } catch (e) {
     err(`${TOOL}: ${e.message}\n`);

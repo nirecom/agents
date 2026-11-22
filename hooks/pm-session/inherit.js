@@ -1,6 +1,6 @@
 "use strict";
 // `/resume-session --from <sid>` for the pm key writer (#2941): the new generation of a PM. The
-// assignment always comes over; the upstream table is checked (sequence.checkSequence) outside the
+// assignment always comes over; the upstream table is checked (sequence.checkSequence) inside the PM
 // lock and copied only when it passes, or with the unverified mark when only the forge failed.
 
 const path = require("path");
@@ -35,14 +35,27 @@ function exitOf(value, reason, upSid) {
   return `Exit: restore it with \`/pm-add\`, or fix or drop that issue in the table from \`bin/pm-state show --session ${upSid}\` and rewrite it with \`bin/pm-state set-sequence --file\`${lo}.`;
 }
 
-// inherit(sid, args, nowMs, input, deps) -> {pm, context, notice} or null when there is nothing to inherit.
-function inherit(sid, args, nowMs, input, deps) {
+// upstreamOf(sid, args) -> {upSid, up} when args name another session holding an active PM, else null.
+function upstreamOf(sid, args) {
   const m = String(args || "").match(FROM_RE);
   if (!m || m[1] === sid) return null;
-  const upSid = m[1];
   let up;
-  try { up = io.readRawState(upSid); } catch (_) { return null; }
-  if (!S.isActivePm(up)) return null;
+  try { up = io.readRawState(m[1]); } catch (_) { return null; }
+  return S.isActivePm(up) ? { upSid: m[1], up } : null;
+}
+
+// wantsInherit(sid, args) -> whether the writer takes the PM lock for this /resume-session at all.
+const wantsInherit = (sid, args) => upstreamOf(sid, args) !== null;
+
+// Carried to the new generation as they are (#2942): the rename record and the notify-side bookkeeping.
+const CARRIED_KEYS = ["retired_tags", "rename_pending", "meta_children", "seen_notifications"];
+
+// inherit(sid, args, nowMs, input, deps) -> {pm, context, notice} or null when there is nothing to
+// inherit. The caller holds the PM lock (#2942): the upstream state is read and checked inside it.
+function inherit(sid, args, nowMs, input, deps) {
+  const u = upstreamOf(sid, args);
+  if (!u) return null;
+  const { upSid, up } = u;
   const entries = scan.listPmFiles();
   const oldGen = (es) => {
     const cur = scan.currentOf(up.pm.tag, es);
@@ -77,13 +90,14 @@ function inherit(sid, args, nowMs, input, deps) {
     if (refKeys(now.pm.issues, home) !== snap.issues || nowAt !== snap.updated_at) v = { sequence: EMPTY_SEQ(), value: "not-copied", reason: "changed" };
     const upSince = Date.parse(now.pm.current_since);
     const since = new Date(Number.isNaN(upSince) ? nowMs : Math.max(nowMs, upSince + 1)).toISOString();
-    const issues = (now.pm.issues || []).map((i) => C.resolved(i, home));
+    const issues = (now.pm.issues || []).map((i) => C.normalizeStoredRef(i, home));
     const logReason = `from ${upSid} sequence=${v.value}${v.reason ? ` sequence_reason=${v.reason}` : ""}`;
     pm = {
       tag: now.pm.tag, issues, objective: now.pm.objective || null, current_since: since, upstream_session_id: upSid,
       assignment_log: (now.pm.assignment_log || []).concat([{ at: since, op: "inherit", issues, reason: logReason }]),
       sequence: v.sequence, archived_at: null,
     };
+    for (const k of CARRIED_KEYS) if (now.pm[k] !== undefined) pm[k] = now.pm[k];
     rec.pm = pm;
   });
   const exit = exitOf(v.value, v.reason, upSid);
@@ -92,4 +106,4 @@ function inherit(sid, args, nowMs, input, deps) {
   return { pm, context: C.note("inherit", pm, lines), notice };
 }
 
-module.exports = { inherit };
+module.exports = { inherit, wantsInherit };

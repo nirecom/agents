@@ -56,7 +56,7 @@ function sequence(F) {
   test("Q6 a table is checked with one forge query", () => {
     const r = set(SID.A, table([111, 112]));
     assert.strictEqual(r.code, 0, brief(r));
-    assert.strictEqual(r.calls.length, 1, JSON.stringify(r.calls));
+    assert.strictEqual(r.checkCalls.length, 1, JSON.stringify(r.calls));
   });
   rejected("Q7 an old generation cannot write", SID.Aold, table([100]));
   rejected("Q7 an archived PM cannot write", SID.C, table([400]));
@@ -231,12 +231,12 @@ function limits(F) {
   test("Q12 25 issues under the meta are one forge call", () => {
     const r = set(SID.A, chains(25));
     assert.strictEqual(r.code, 0, brief(r));
-    assert.strictEqual(r.calls.length, 1, `forge calls: ${r.calls.length}`);
+    assert.strictEqual(r.checkCalls.length, 1, `forge calls: ${r.calls.length}`);
   });
   test(`Q13 ${CAP_CHAINS} issues are split into two forge calls of at most 50`, () => {
     const r = set(SID.A, chains(CAP_CHAINS));
     assert.strictEqual(r.code, 0, brief(r));
-    assert.strictEqual(r.calls.length, 2, `forge calls: ${r.calls.length}`);
+    assert.strictEqual(r.checkCalls.length, 2, `forge calls: ${r.calls.length}`);
     assert.deepStrictEqual(tablesOf(SID.A), chains(CAP_CHAINS).tables);
   });
 }

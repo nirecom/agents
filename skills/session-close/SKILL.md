@@ -148,6 +148,12 @@ After emitting, mark completion with two separate Bash calls:
 
 `stop-final-report-guard.js` blocks (exit 2) when any of the 13 headings or any unsubstituted `<TOKEN>` is missing/present after `## Final Report — <session-id>`.
 
+## SC-6a — Notify the issues' PM (#2942; fail-open)
+
+1. Run `node "$AGENTS_MAIN_ROOT"/bin/pm-notify record --point session-close --issue <ref>` once per `closes_issues` ref (empty → the workflow state's issue).
+2. Send it and every pending notification per `skills/_shared/pm-notify.md`.
+3. Run `node "$AGENTS_MAIN_ROOT"/bin/pm-notify close`; show its lines to the user as-is.
+
 ## SC-7 — Surface alert findings (post-Final-Report)
 
 Read `<CONTROL_DIR>/supervisor-state.json` (Read tool). If absent, or `alert.findings` is empty, or `alert.findings_surfaced_at` is already set, skip to SC-7a.

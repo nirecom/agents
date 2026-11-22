@@ -39,7 +39,10 @@ function makeFixture(tmp) {
     const r = cp.spawnSync("bash", ["-c", '"$0" "$@"', P.fwd(path.join(P.ROOT, "bin", "pm-state")), ...args], { cwd: repo, env, encoding: "utf8", timeout: 60000 });
     let json;
     try { json = JSON.parse(String(r.stdout).trim()); } catch (_) { json = undefined; }
-    return { code: r.status, out: r.stdout || "", err: `${r.stderr || ""}${r.error ? String(r.error) : ""}`, json, calls: ghCalls().slice(before) };
+    const calls = ghCalls().slice(before);
+    // checkCalls: calls minus the post-lock inbox's sub-issue read (#2942 S15 meta_children baseline), i.e. the command's own checks.
+    const checkCalls = calls.filter((a) => !/subIssues\(/.test(a.join(" ")));
+    return { code: r.status, out: r.stdout || "", err: `${r.stderr || ""}${r.error ? String(r.error) : ""}`, json, calls, checkCalls };
   }
   let n = 0;
   const seqFile = (obj) => {

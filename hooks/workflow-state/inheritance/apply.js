@@ -66,6 +66,20 @@ function excludeGenerationLocalKinds(events) {
   return events.filter((e) => !(e && GENERATION_LOCAL_KINDS.includes(e.kind)));
 }
 
+// #2942: the notifications to the PM (and their first owner records) travel to the session-downstream;
+// on the same id or issue the session-downstream's own entry wins, so each is kept once.
+function carryPmNotifications(clone, downstream) {
+  const down = downstream || {};
+  const notes = new Map();
+  for (const list of [clone.pm_notifications, down.pm_notifications]) {
+    for (const n of Array.isArray(list) ? list : []) if (n && typeof n.id === "string") notes.set(n.id, n);
+  }
+  if (notes.size > 0) clone.pm_notifications = JSON.parse(JSON.stringify([...notes.values()]));
+  const records = Object.assign({}, isPlainObject(clone.pm_owner_records) ? clone.pm_owner_records : {},
+    isPlainObject(down.pm_owner_records) ? down.pm_owner_records : {});
+  if (Object.keys(records).length > 0) clone.pm_owner_records = JSON.parse(JSON.stringify(records));
+}
+
 // Steps (3)-(6) of the copy: identity, boundary, and the session-downstream's own location facts.
 function buildCopy(downstreamSid, createdAt, upstreamSid, upstream, downstream) {
   const clone = upstream;
@@ -96,6 +110,7 @@ function buildCopy(downstreamSid, createdAt, upstreamSid, upstream, downstream) 
   // The pm key is the session-downstream's own (#2941): a PM generation never comes from a copy.
   if (downstream && isPlainObject(downstream.pm)) clone.pm = JSON.parse(JSON.stringify(downstream.pm));
   else delete clone.pm;
+  carryPmNotifications(clone, downstream);
 
   // Where this process runs and on which model are session-downstream facts; dropping them
   // in the copy would make state.cwd / session_model describe the session-upstream.
