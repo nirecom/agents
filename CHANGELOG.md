@@ -292,3 +292,7 @@ Changes: Issue-to-history entries no longer lose most of an issue body when the 
 ### FEATURE: PR #3130 (2026-11-22)
 Background: feat(#2942): link issues to a PM and notify the PM from workflow sess...
 Changes: Workflow sessions now find the PM that owns their issues and notify it automatically; PM sessions see pending notifications at start, and `/pm-rename` renames a PM tag across its issues (#2942).
+
+### FEATURE: PR #3131 (2026-11-22)
+Background: feat(#2478, #3123): run CC fallback review rounds through the codex review-loop path
+Changes: Review loops that fall back to the Claude reviewer when codex is unavailable now count those rounds against the same 2+1 cap, keep rejected concerns rejected, and no longer get stuck after a codex failure.
