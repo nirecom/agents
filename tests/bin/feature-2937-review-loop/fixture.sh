@@ -226,7 +226,7 @@ row() {
     ' "$(np "$(rec "$1" "$2")")" "$3" "$4"
 }
 
-# side <sid> <fmt> <suffix> — a file beside the record (e.g. -fallback-pending.json).
+# side <sid> <fmt> <suffix> — a file beside the record (e.g. -unrecorded.jsonl).
 side() { printf '%s/%s-review-rounds%s' "$(ctl "$1")" "$2" "$3"; }
 # inflights <sid> <fmt> — how many inflight markers the record has left behind.
 inflights() { find "$(ctl "$1")" -maxdepth 1 -name "$2-review-rounds-inflight-*.json" 2>/dev/null | grep -c .; }

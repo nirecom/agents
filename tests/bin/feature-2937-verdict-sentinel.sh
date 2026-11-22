@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/run-codex-review-loop, bin/lib/codex-review-loop/verdict-sentinel.sh, bin/lib/codex-review-loop/ledger-verdict.sh, skills/review-tests/SKILL.md, skills/review-plan-security/SKILL.md, skills/_shared/codex-review-loop.md
-# Tags: feature-2937, codex-review-loop, verdict-sentinel, raw-round-number, table-driven, scope:issue-specific, TL2
+# Tags: feature-2937, feature-2478, codex-review-loop, verdict-sentinel, raw-round-number, table-driven, scope:issue-specific, TL2
 #
 # #2937 (D7) T1 / T2: every verdict-bearing exit ends stdout with
 # "REVIEW_LOOP_VERDICT: <NAME> (exit <rc>)", a finalize failure keeps its reason
@@ -88,18 +88,24 @@ case_begin "t2-3-review-tests-exit0-note-is-not-a-warnings-gap" "skills/review-t
 b="$(block "$SCRIPT_CHECKOUT_ROOT/skills/review-tests/SKILL.md" '^- exit 0 ')"
 assert_contains "the exit 0 line names the downgrade note" "downgraded-medium" "$b"
 assert_contains "and says it is not a WARNINGS ground" "WARNINGS" "$b"
+# #2478 (S3-3): the fallback round goes through the loop (brief, then the prestaged report).
 b="$(block "$SCRIPT_CHECKOUT_ROOT/skills/review-tests/SKILL.md" '^- exit 3 ')"
-assert_contains "the exit 3 line records the fallback round" "record-fallback" "$b"
+assert_contains "the exit 3 line asks the loop for the fallback brief" "--brief" "$b"
+assert_contains "and keeps the reviewer output as the fallback raw" "test-review-fallback-raw.md" "$b"
+assert_not_contains "the retired record-fallback route is gone" "record-fallback" "$b"
 case_end
 
 case_begin "t2-3-review-plan-security-exit3-records-fallback" "skills/review-plan-security/SKILL.md"
 b="$(block "$SCRIPT_CHECKOUT_ROOT/skills/review-plan-security/SKILL.md" '^- exit 3 ')"
-assert_contains "the exit 3 line records the fallback round" "record-fallback" "$b"
+assert_contains "the exit 3 line points at the shared fallback steps" "codex-review-loop.md" "$b"
+assert_not_contains "the retired record-fallback route is gone" "record-fallback" "$b"
 case_end
 
 case_begin "t2-3-shared-loop-exit3-records-fallback" "skills/_shared/codex-review-loop.md"
 b="$(block "$SCRIPT_CHECKOUT_ROOT/skills/_shared/codex-review-loop.md" '^Exit 3 = ')"
-assert_contains "the Exit 3 paragraph records the fallback round" "record-fallback" "$b"
+assert_contains "the Exit 3 paragraph asks for the fallback brief" "--fallback-brief" "$b"
+assert_contains "and records the round as a prestaged report" "--prestaged-report" "$b"
+assert_not_contains "the retired record-fallback route is gone" "record-fallback" "$b"
 case_end
 
 finish

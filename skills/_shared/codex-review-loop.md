@@ -48,11 +48,12 @@ A NON_APPROVED_VERDICT (exit 1) is round-continuing: the caller addresses the co
 `review-tests` fires `WORKFLOW_REVIEW_TESTS_WARNINGS` on the terminal exits; `review-plan-security` presents concerns and proposes mitigations; `review-code-security` re-runs its reviewer.
 Exit 0 = APPROVED (review-tests fires `WORKFLOW_REVIEW_TESTS_COMPLETE`).
 Exit 2 / 5 / 6 CAN occur under the unified cap (ESCALATE, AUTO_EXTEND, HIGH_UNRESOLVED) — they no longer "do not occur".
-Exit 3 = codex CLI unusable → caller silently launches CC REVIEWER_AGENT fallback (for `security-code`, the `security-scanner` subagent, re-run at the same round via `--prestaged-report`).
-Before that launch, run `bin/resolve-accepted-tradeoffs-file` with the format's chain and pass its stdout path to the REVIEWER_AGENT prompt as the Accepted Tradeoffs file.
+Exit 3 = codex CLI unusable → the CC REVIEWER_AGENT fallback is one counted, capped round of the loop (`security-code` keeps its own `security-scanner` re-run via `--prestaged-report`), four standalone steps with the same exports (review-tests wraps them in `scripts/run-fallback-review.sh`):
+1. Run the stage wrapper with `--fallback-brief`; its stdout (`FALLBACK_ROUND`, and the prior findings from round 2) goes verbatim into the REVIEWER_AGENT prompt, with the `bin/resolve-accepted-tradeoffs-file` path of the format's chain as the Accepted Tradeoffs file.
+2. Silently launch REVIEWER_AGENT. 3. Write its output via the Write tool to `<PLANS_DIR>/<session-id>-{outline,detail,security-plan,test-review}-fallback-raw.md`.
+4. Run the stage wrapper with `--prestaged-report <that file> --prestaged-producer <REVIEWER_AGENT> --prestaged-exec PERFORMED`, and handle its exit code by the table below (`INPUT_ERROR <path>` → exit 4).
 Every REVIEWER_AGENT (and `security-scanner`) launch passes `model:` = the `model=` line of `node "$AGENTS_MAIN_ROOT/bin/resolve-role-model" --role reviewer`.
 Every such prompt carries the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section; the `security-scanner` JSON prompt carries it under the `dispatch_directive` key.
-Right after the fallback verdict (outline / detail included), run `node "$AGENTS_MAIN_ROOT/bin/review-rounds" record-fallback --session <session-id> --format <FORMAT> --verdict <APPROVED or the NON_APPROVED_VERDICT of the Parameters table, colon dropped>` as one standalone command; non-zero → HALT as exit 4. `security-code` records none (its fallback re-enters the loop).
 Exit 4 = HALT — same as Contract B; no fallback.
 
 ## FORMAT vs LEDGER_FORMAT
@@ -64,13 +65,11 @@ Two distinct tokens, resolved per `FORMAT` in `bin/lib/codex-review-loop/format-
 
 ## Round Counter (ROUND_NUMBER)
 
-`ROUND_NUMBER` is an orchestrator-tracked integer independent of `EXTENSIONS_USED`.
+`ROUND_NUMBER` is an orchestrator-tracked integer independent of `EXTENSIONS_USED` — NEVER `EXTENSIONS_USED + 1`, a derivation that would mis-tag the second review of the detail stage as "round 1" and break the ESCALATE policy.
 
 - Every stage runs the unified CAP=2 / MAX_EXTENSIONS=1 budget: ROUND_NUMBER reaches 2 on the second review within the same `EXTENSIONS_USED=0` budget; if the loop extends, ROUND_NUMBER reaches 3 while `EXTENSIONS_USED=1`. Round 3 is the last — no code path allows a round 4.
 
-ROUND_NUMBER is NEVER `EXTENSIONS_USED + 1` — that derivation would mis-tag the second review of the detail stage as "round 1" and break the ESCALATE policy.
-
-`bin/run-codex-review-loop` owns the counter at `<CONTROL_DIR>/<format>-round-number.txt` (`<CONTROL_DIR>` = output of `node "$AGENTS_MAIN_ROOT/bin/workflow-control-dir" --session <session-id>`); stage wrappers do not touch it. `--round` is optional (auto-incremented from ROUND_FILE when omitted). The file is deleted on terminal verdicts (exit 0/2/6 for all formats) and `<CONTROL_DIR>/<format>-last-round.txt` is written with the final round value. It persists on CONTINUE (exit 1 for every format, review-only included — #2276 S9-c) and AUTO_EXTEND (exit 5). On infrastructure failure (exit 3/4/7) the counter is rolled back to its pre-call value.
+`bin/run-codex-review-loop` owns the counter at `<CONTROL_DIR>/<format>-round-number.txt` (`<CONTROL_DIR>` = output of `node "$AGENTS_MAIN_ROOT/bin/workflow-control-dir" --session <session-id>`); stage wrappers do not touch it. `--round` is optional (auto-incremented from ROUND_FILE when omitted). The file is deleted on terminal verdicts (exit 0/2/6 for all formats) and `<CONTROL_DIR>/<format>-last-round.txt` is written with the final round value. It persists on CONTINUE (exit 1 for every format, review-only included — #2276 S9-c) and AUTO_EXTEND (exit 5). On infrastructure failure (exit 3/4/7) the counter is rolled back to its pre-call value, so the exit-3 fallback's prestaged ADVANCE consumes that round; a fallback round that is not recorded is undone whole (counter, ledger, record).
 
 `--force-round <N>` overrides the recorded counter for recovery and test use only — it announces itself on stderr and bypasses the sequence check. No shipped skill caller uses it; the flag is reserved for manual recovery from a corrupt counter and for test harnesses that need to start at an arbitrary round.
 
@@ -156,7 +155,7 @@ Quick reference (public exit codes — Contract B):
 | 0 | APPROVED | Write/confirm phase. |
 | 1 | CONTINUE | Capture RAW → append round log → re-invoke planner with `model: PLANNER_MODEL`. |
 | 2 | ESCALATE | Present concern summary → stop loop; per-format follow-up: exit-codes.md "Escalation by format". |
-| 3 | codex CLI unusable | Silently launch `REVIEWER_AGENT` fallback with the `resolve-role-model --role reviewer` model; then `bin/review-rounds record-fallback` (see "Exit 3 = " above). |
+| 3 | codex CLI unusable | Run the four fallback steps of "Exit 3 = " above; the fallback round's exit code is handled by this table. |
 | 4 | HALT | Surface stderr verbatim; do not fall back. |
 | 5 | AUTO_EXTEND | Capture RAW → re-enter loop; the wrapper derives `EXTENSIONS_USED` from the review record. |
 | 6 | HIGH_UNRESOLVED | Present HIGH concern summary → stop loop; do not proceed to write/confirm. |

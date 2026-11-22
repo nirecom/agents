@@ -62,6 +62,7 @@ PRESTAGED_REPORT=""
 PRESTAGED_PRODUCER=""
 PRESTAGED_EXEC=""
 INPUT_FP=""
+FALLBACK_BRIEF=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -136,6 +137,9 @@ while [[ $# -gt 0 ]]; do
     --input-fingerprint)
       require_value "--input-fingerprint" "${2:-}"
       INPUT_FP="$2"; shift 2 ;;
+    # Prints the round the next CC-fallback round parses and its prior; writes nothing (#2478).
+    --fallback-brief)
+      FALLBACK_BRIEF=1; shift ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -143,8 +147,6 @@ done
 [[ -n "$FORMAT" ]]    || die "--format is required"
 [[ -n "$SID" ]]       || die "--session-id is required"
 [[ -n "$PLANS_DIR" ]] || die "--plans-dir is required"
-[[ -n "$CAP" ]]       || die "--cap is required"
-[[ -n "$MAX_EXT" ]]   || die "--max-extensions is required"
 [[ -n "$TRADEOFFS" ]] || die "--accepted-tradeoffs is required"
 if [[ -n "${ROUND:-}" ]] && [[ -n "${FORCE_ROUND:-}" ]]; then
   echo "run-codex-review-loop: --round and --force-round are mutually exclusive" >&2; exit 4
@@ -192,6 +194,13 @@ if [[ -n "$PRESTAGED_REPORT$PRESTAGED_PRODUCER$PRESTAGED_EXEC" ]]; then
     PERFORMED|COMPLETE|TRUNCATED|PARTIAL|ABSENT|BASE-*) : ;;
     *) die "--prestaged-exec must be one of PERFORMED|COMPLETE|TRUNCATED|PARTIAL|ABSENT|BASE-* (got: $PRESTAGED_EXEC)" ;;
   esac
+  # A path-kind CC-fallback round is always a whole-review ADVANCE (#2478 S1-3).
+  if [[ "$INPUT_KIND" == "path" ]]; then
+    [[ "$PRESTAGED_EXEC" == "PERFORMED" ]] \
+      || die "--prestaged-exec must be PERFORMED for path-kind format ${FORMAT} (got: $PRESTAGED_EXEC)"
+    [[ -z "$ROUND" ]] || die "--round is not accepted for a path-kind fallback round; the loop allocates it"
+    [[ -z "$FORCE_ROUND" ]] || die "--force-round is not accepted for a path-kind fallback round; the loop allocates it"
+  fi
   PRESTAGED_MODE=1
 fi
 
@@ -250,8 +259,14 @@ source "$CRL_LIB/prestaged-pass.sh"  || die "required library failed to load: pr
 source "$CRL_LIB/verdict-sentinel.sh" || die "required library failed to load: verdict-sentinel.sh"
 # shellcheck source=bin/lib/codex-review-loop/review-record.sh
 source "$CRL_LIB/review-record.sh"   || die "required library failed to load: review-record.sh"
+# shellcheck source=bin/lib/codex-review-loop/path-ledger-pass.sh
+source "$CRL_LIB/path-ledger-pass.sh" || die "required library failed to load: path-ledger-pass.sh"
+# shellcheck source=bin/lib/codex-review-loop/prestaged-path-pass.sh
+source "$CRL_LIB/prestaged-path-pass.sh" || die "required library failed to load: prestaged-path-pass.sh"
 
 resolve_concern_ledger || die "concern-ledger not found in this checkout (${SCRIPT_CHECKOUT_ROOT}) or beside the wrapper ($(dirname "$(dirname "$0")")); repair the agents checkout"
+
+(( FALLBACK_BRIEF == 1 )) && fallback_brief
 
 # The scanner may only stage under a producer the ledger format admits (#2276 C3).
 if (( PRESTAGED_MODE == 1 )); then
@@ -261,15 +276,21 @@ if (( PRESTAGED_MODE == 1 )); then
     *) die "--prestaged-producer not permitted for format ${FORMAT}: $PRESTAGED_PRODUCER" ;;
   esac
 fi
+# Checked after the producer gate so a refused producer is named first (#2478 T5).
+[[ -n "$CAP" ]]       || die "--cap is required"
+[[ -n "$MAX_EXT" ]]   || die "--max-extensions is required"
 
 FINAL_RC=4
-trap 'settle_round_counter "$FINAL_RC"; release_round_lock; rr_close_inflight; rm -f "${TMP_OUT:-}"' EXIT
+# An unrecorded path-kind fallback round is undone before the counter settles (#2478 S1-4).
+trap 'pp_round_settle; settle_round_counter "$FINAL_RC"; release_round_lock; rr_close_inflight; rm -f "${TMP_OUT:-}"' EXIT
 rr_preflight
 
-# PRESTAGED (scanner fallback) pass — joins the current round, no reviewer run,
-# no counter advance (#2276 S8-d). Body extracted to prestaged-pass.sh under
-# rules/coding/file-split.md Pattern A; run_prestaged_pass exits the process.
+# PRESTAGED pass: path-kind is the CC-fallback ADVANCE (#2478); ref-kind is the scanner
+# fallback (#2276 S8-d). Both bodies are sourced libs and exit the process.
 if (( PRESTAGED_MODE == 1 )); then
+  if [[ "$INPUT_KIND" == "path" ]]; then
+    run_prestaged_path_pass
+  fi
   run_prestaged_pass
 fi
 
@@ -420,73 +441,7 @@ elif [[ "$INPUT_KIND" != "path" ]] && [[ -f "$LEDGER" ]] \
 fi
 
 if (( NEEDS_LEDGER_PASS == 1 )); then
-  # Checked before the reduce commits the round: a missing verdict engine halts while
-  # REDUCE_COMMITTED is still false, so the counter rolls back instead of leaving a record gap.
-  require_verdict_bin
-  # Exclusively created beside TMP_OUT, not the predictable "${TMP_OUT}.delta":
-  # that name is derivable from a mktemp in the shared $TMPDIR (#2025 C6).
-  DELTA_SRC="$(sp_mktemp_beside "$TMP_OUT")" \
-    || die "cannot stage the round's concerns beside: $TMP_OUT"
-
-  if [[ "$INPUT_KIND" == "path" ]]; then
-    if [[ "$ROUND" == "1" ]]; then
-      parse_round1_numbered
-    else
-      parse_round2_cnref
-    fi
-    STAGE_EXEC_ARGS=(--exec PERFORMED --parser "$PARSER")
-  else
-    # ref-kind: the whole raw output is the anchored delta; the exec label is
-    # auto-derived from the reviewer header, so NO --exec is passed.
-    rk_stage_anchored
-    STAGE_EXEC_ARGS=(--parser "$PARSER")
-  fi
-
-  CL_NO_OPEN_CONCERNS="<!-- concern-ledger: no open concerns in round ${ROUND} -->"
-  if [[ ! -s "$DELTA_SRC" ]]; then
-    printf '%s\n' "$CL_NO_OPEN_CONCERNS" > "$DELTA_SRC" \
-      || die "cannot write concern sentinel: $DELTA_SRC"
-  fi
-
-  if ! ledger_cli stage --round "$ROUND" --producer "$CL_PRODUCER_NAME" \
-        "${STAGE_EXEC_ARGS[@]}" --from-report "$DELTA_SRC" >/dev/null 2>&1; then
-    # The reviewer's own review still reaches the author even though the ledger
-    # write failed: the halt (exit 4) is a wrapper fault, not a lost review.
-    cat "$TMP_OUT"
-    echo "run-codex-review-loop: failed to write ledger to $LEDGER" >&2
-    rm -f "$DELTA_SRC"
-    exit 4
-  fi
-  REDUCE_RC=0
-  TALLY="$(ledger_cli reduce --round "$ROUND" 2>/dev/null)" || REDUCE_RC=$?
-  rm -f "$DELTA_SRC"
-  if (( REDUCE_RC != 0 )) || [[ -z "$TALLY" ]] || [[ ! -f "$LEDGER" ]]; then
-    echo "run-codex-review-loop: round ${ROUND} could not be folded into the ledger (reduce rc=${REDUCE_RC}); refusing to judge it from the previous round's tally" >&2
-    exit 4
-  fi
-
-  if [[ -f "$LEDGER" ]] && ! grep -qE '^C[0-9]+\|' "$LEDGER"; then
-    echo "run-codex-review-loop: ledger exists but contains no valid concern entries after reduce (round ${ROUND}); refusing to judge from a header-only ledger" >&2
-    exit 4
-  fi
-  # Committed only after the sanity check: its exit 4 leaves the round unsettled, so
-  # _srn_rollback restores ROUND_PREV instead of consuming a round the record has no row for.
-  REDUCE_COMMITTED=true
-
-  # The tally the verdict reads is the ledger's own view of what is still open,
-  # not a count of this round's bullets.
-  for _kv in $TALLY; do
-    case "$_kv" in
-      open_high=*)   HIGH_N="${_kv#*=}" ;;
-      open_medium=*) MED_N="${_kv#*=}" ;;
-      open_low=*)    LOW_N="${_kv#*=}" ;;
-    esac
-  done
-  [[ "$HIGH_N" =~ ^[0-9]+$ ]] || HIGH_N=0
-  [[ "$MED_N"  =~ ^[0-9]+$ ]] || MED_N=0
-  [[ "$LOW_N"  =~ ^[0-9]+$ ]] || LOW_N=0
-
-  dispatch_codex_verdict
+  path_ledger_pass "$CL_PRODUCER_NAME"
 else
   cleanup_ledger
   FINAL_EXIT=0

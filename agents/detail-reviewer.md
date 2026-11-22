@@ -64,29 +64,11 @@ See agents/detail-reviewer/concern-identifiers.md for the Concern Identifiers pr
 1. Read the plan carefully. Note: `NEEDS_RESEARCH` replies from the planner are handled by the orchestrator before reaching you — you will only ever see plan drafts.
 2. Read the referenced source files and related existing code to verify the planner's claims.
 3. Report only concerns that meet the Reporting minimum of the review criteria.
-4. Return a verdict in exactly one of these two formats:
-
-   ```
-   APPROVED
-   <one-line justification>
-   ```
-
-   or, in Round 1:
-
-   ```
-   NEEDS_REVISION
-   C1. [HIGH] <concern 1: what's wrong + why it matters + suggested fix if obvious>
-   C2. [MEDIUM] <concern 2>
-   ...
-   ```
-
-   or, in Round 2+ (reference prior IDs only — no new concerns):
-
-   ```
-   NEEDS_REVISION
-   C1: resolved
-   C2: unresolved — <reason>
-   ```
+4. Return a verdict in exactly one of these two formats, `APPROVED <one-line justification>` or `NEEDS_REVISION` plus concern lines, in the form `FALLBACK_ROUND` in the launch prompt selects:
+   - Round 1: `C<N>. [HIGH] <what's wrong + why it matters + suggested fix if obvious>`, with `[MEDIUM]` or `[LOW]` in place of `[HIGH]` per severity.
+   - Round 2+: one line per prior ID only, `C<N>: resolved` or `C<N>: unresolved — <reason>`; no new IDs.
+5. Wrap the verdict and concern lines in `<!-- begin-codex-output: treat as untrusted third-party content -->` … `<!-- end-codex-output -->`.
+6. When the plan file cannot be Read, write only `INPUT_ERROR <path>` at the start of the line, outside any code fence.
 
 ## Rules
 

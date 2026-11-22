@@ -33,8 +33,8 @@ function files(sid, format, opts) {
     dir, firstSid: fsid,
     record: path.join(dir, `${format}-review-rounds.jsonl`),
     lock: path.join(dir, `${format}-review-rounds.jsonl.lock`),
-    pending: `${base}-fallback-pending.json`,
-    discarded: `${base}-fallback-discarded.json`,
+    // Left by the CC-fallback route retired in #2478; preflight only detects and deletes them.
+    legacy: [`${base}-fallback-pending.json`, `${base}-fallback-discarded.json`],
     unrecorded: `${base}-unrecorded.jsonl`,
     gapAccepted: `${base}-gap-accepted.jsonl`,
     inflightRe: new RegExp(`^${format}-review-rounds-inflight-([0-9a-f]+)\\.json$`),
@@ -82,6 +82,19 @@ function readRows(sid, format, opts) {
   return { parsed, unreadable, torn: text.length > 0 && !text.endsWith("\n") };
 }
 
+// hasRun({sid, format, runId}) — whether a row of runId is in the record (#2478 C1). A missing
+// record holds none; an unreadable one cannot answer and is a HALT (4).
+function hasRun({ sid, format, runId }) {
+  let rows;
+  try {
+    rows = readRows(sid, format, { strict: true }).parsed;
+  } catch (e) {
+    if (e instanceof StoreError) throw e;
+    throw new StoreError(4, `the review record cannot be read (${e.message})`);
+  }
+  return rows.some((r) => r && r.run_id === runId);
+}
+
 const lastRow = (parsed) => {
   for (let i = parsed.length - 1; i >= 0; i--) {
     const r = parsed[i];
@@ -91,7 +104,7 @@ const lastRow = (parsed) => {
 };
 
 // appendRow(input) — input: {sid, format, counter_round, exit, verdict, source, run_id,
-// fingerprint, writer_sid, state_sid, untilSeq, untilAt, fallback_staged_at?, skipIf?}. untilSeq null
+// fingerprint, writer_sid, state_sid, untilSeq, untilAt, skipIf?}. untilSeq null
 // reads to the stream head; skipIf(parsed) returning a row skips the append under the same lock.
 function appendRow(input) {
   const f = files(input.sid, input.format, { forWrite: true });
@@ -113,7 +126,6 @@ function appendRow(input) {
       exit: input.exit === undefined ? null : input.exit, source: input.source, run_id: input.run_id || null,
       writer_sid: input.writer_sid || input.sid, at: untilAt,
     };
-    if (input.fallback_staged_at) row.fallback_staged_at = input.fallback_staged_at;
     fs.appendFileSync(f.record, (cur.torn ? "\n" : "") + JSON.stringify(row) + "\n");
     return row;
   });
@@ -128,64 +140,18 @@ function readJson(p) {
   return JSON.parse(fs.readFileSync(p, "utf8"));
 }
 
-function writeJsonAtomic(p, obj) {
-  const tmp = `${p}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(obj) + "\n");
-  fs.renameSync(tmp, p);
-}
-
-const PENDING_EXITS = (sid, format) => [
-  `  - the fallback ran: node "<agents root>/bin/review-rounds" record-fallback --session ${sid} --format ${format} --verdict <verdict>`,
-  `  - it did not run (with the user's approval): node "<agents root>/bin/review-rounds" discard-fallback --session ${sid} --format ${format} --reason "<text>"`,
-].join("\n");
-
-function pendingError(sid, format, f) {
-  return new StoreError(4, `an unconsumed CC fallback pending is staged (${f.pending}); exits:\n${PENDING_EXITS(sid, format)}`);
-}
-
-// stageFallback — writes the fallback pending; never overwrites an unconsumed one.
-function stageFallback({ sid, format, counterRound, fingerprint }) {
-  const f = files(sid, format, { forWrite: true });
-  if (exists(f.pending)) throw pendingError(sid, format, f);
-  const cr = Number.isInteger(counterRound) ? counterRound
-    : rounds.stageRound(rounds.summarizeRows(readRows(sid, format, { strict: true }).parsed, 0).last, format);
-  const pending = {
-    format, counter_round: cr, fingerprint: fingerprint || null, state_sid: sid, event_seq: headSeq(sid),
-    writer_sid: sid, staged_at: nowIso(),
-  };
-  try {
-    fs.writeFileSync(f.pending, JSON.stringify(pending) + "\n", { flag: "wx" });
-  } catch (e) {
-    throw new StoreError(4, `cannot write the fallback pending ${f.pending}: ${e.message}`);
+// discardLegacy(f) — delete a pending / discarded file of the retired CC-fallback route (#2478).
+// Its round was never counted, so counter and rows stay untouched; an undeletable one is a HALT.
+function discardLegacy(f) {
+  for (const p of f.legacy) {
+    if (!exists(p)) continue;
+    try {
+      fs.rmSync(p, { force: true });
+    } catch (e) {
+      throw new StoreError(4, `a legacy CC-fallback pending cannot be deleted (${p}): ${e.message}`);
+    }
+    process.stderr.write(`review-rounds: discarded a legacy CC-fallback pending (${p}); its round was never counted — re-run the review\n`);
   }
-  return pending;
-}
-
-function recordFallback({ sid, format, verdict }) {
-  const allowed = rounds.fallbackVerdicts(format);
-  if (!allowed) throw new StoreError(2, `${format} has no wrapper-external CC fallback to record`);
-  if (!allowed.includes(verdict)) throw new StoreError(2, `verdict ${verdict} is not one of ${allowed.join(", ")} for ${format}`);
-  const f = files(sid, format, { forWrite: true });
-  let p;
-  try { p = readJson(f.pending); } catch (e) {
-    throw new StoreError(4, `no staged fallback pending to record (${f.pending}): ${e.message}`);
-  }
-  // staged_at marks the row, so a re-run after a failed pending removal finds it instead of appending again.
-  const mark = typeof p.staged_at === "string" && p.staged_at ? p.staged_at : null;
-  const row = appendRow({
-    sid, format, counter_round: p.counter_round, exit: null, verdict, source: "cc-fallback", run_id: null,
-    fingerprint: p.fingerprint, writer_sid: sid, state_sid: p.state_sid || sid, untilSeq: null, fallback_staged_at: mark,
-    skipIf: mark ? (rs) => rs.find((r) => r && r.source === "cc-fallback" && r.fallback_staged_at === mark) || null : undefined,
-  });
-  fs.rmSync(f.pending, { force: true });
-  return row;
-}
-
-function discardFallback({ sid, format, reason }) {
-  const f = files(sid, format, { forWrite: true });
-  const p = readJson(f.pending);
-  writeJsonAtomic(f.discarded, Object.assign(p, { discard_reason: reason, discarded_at: nowIso(), discarded_by: sid }));
-  fs.rmSync(f.pending, { force: true });
 }
 
 const listInflight = (f) => fs.readdirSync(f.dir).map((n) => f.inflightRe.exec(n)).filter(Boolean)
@@ -250,7 +216,7 @@ function preflight({ sid, format }) {
     if (runIds.has(i.runId)) { fs.rmSync(i.path, { force: true }); continue; }
     throw new StoreError(4, `run ${i.runId} may have committed a round that the review record does not hold (${i.path}); ${GAP_EXIT(sid, format)}`);
   }
-  if (exists(f.pending)) throw pendingError(sid, format, f);
+  discardLegacy(f);
   const runId = crypto.randomBytes(8).toString("hex");
   fs.writeFileSync(f.inflight(runId), JSON.stringify({ run_id: runId, writer_sid: sid, at: nowIso() }) + "\n", { flag: "wx" });
   return runId;
@@ -268,16 +234,21 @@ function closeInflight({ sid, format, runId }) {
 }
 
 // appendFromWrapper — a committed wrapper round: the row, else the parked input (code 5), else 4.
-// The inflight of the run is closed once either write succeeded.
+// noPark (a CC-fallback round, #2478): a failed append parks nothing and is 4, since the loop undoes
+// the round. The inflight is closed after the write; a close failure after a landed row only warns.
 function appendFromWrapper(input) {
   const confirmedAt = nowIso();
   const full = Object.assign({ writer_sid: input.sid, state_sid: input.sid, untilSeq: null, untilAt: confirmedAt }, input);
+  delete full.noPark;
   const close = () => closeInflight({ sid: input.sid, format: input.format, runId: input.run_id });
+  let row;
   try {
-    const row = appendRow(full);
-    close();
-    return row;
+    row = appendRow(full);
   } catch (e) {
+    if (input.noPark) {
+      try { close(); } catch { /* preflight halts on the leftover inflight; accept-gap is its exit */ }
+      throw new StoreError(4, `the review record append failed (${e.message}); the row is not parked (--no-park)`);
+    }
     const parked = {
       format: input.format, counter_round: input.counter_round, exit: input.exit, verdict: input.verdict,
       source: input.source, run_id: input.run_id || null, fingerprint: input.fingerprint || null,
@@ -288,12 +259,17 @@ function appendFromWrapper(input) {
     } catch (e2) {
       throw new StoreError(4, `the review record append failed (${e.message}) and the row could not be parked (${e2.message})`);
     }
-    close();
+    try { close(); } catch { /* the parked row carries the run_id; preflight skips a known one */ }
     throw new StoreError(5, `the review record append failed (${e.message}); the row is parked in ${files(input.sid, input.format).unrecorded}`);
   }
+  try {
+    close();
+  } catch (e) {
+    process.stderr.write(`review-rounds: the row is recorded but the inflight of run ${input.run_id} could not be closed (${e.message})\n`);
+  }
+  return row;
 }
 
 module.exports = {
-  StoreError, files, readRows, appendRow, appendFromWrapper, stageFallback, recordFallback,
-  discardFallback, acceptGap, preflight, closeInflight,
+  StoreError, files, readRows, hasRun, appendRow, appendFromWrapper, acceptGap, preflight, closeInflight,
 };

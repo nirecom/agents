@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/skills/feature-2664-review-tests-continuing-marker.sh
 # Tests: skills/review-tests/scripts/run-codex-review-loop.sh, bin/lib/codex-review-loop/review-wrapper-control.sh
-# Tags: review-tests, review-loop, continuing-marker, fingerprint, warnings-accepted, recovery, scope:issue-specific, pwsh-not-required, TL2
+# Tags: review-tests, review-loop, continuing-marker, fingerprint, warnings-accepted, recovery, scope:issue-specific, pwsh-not-required, TL2, feature-2478
 #
 # #2664: a review that ends on exit 1 or 5 (round continuing) leaves evidence for the
 # WARNINGS_ACCEPTED recovery: <sid>.control/test-review-continuing.txt, line 1 = rc,
@@ -48,8 +48,10 @@ build_fake_config() {
     printf '#!/usr/bin/env bash\necho NOSTATE\n' > "$fake/bin/resolve-worktree-path"
     printf '#!/usr/bin/env bash\nprintf "%%s" "${STUB_CC_SID:-%s}"\n' "$SID" > "$fake/bin/resolve-session-id"
     printf '#!/usr/bin/env bash\necho /dev/null\nexit 0\n' > "$fake/bin/resolve-accepted-tradeoffs-file"
+    # rc 3 = nothing to carry (benign for render-concerns-log).
+    printf '#!/usr/bin/env bash\nexit 3\n' > "$fake/bin/concern-ledger"
     chmod +x "$fake/bin/run-codex-review-loop" "$fake/bin/resolve-worktree-path" \
-        "$fake/bin/resolve-session-id" "$fake/bin/resolve-accepted-tradeoffs-file"
+        "$fake/bin/resolve-session-id" "$fake/bin/resolve-accepted-tradeoffs-file" "$fake/bin/concern-ledger"
     cp "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/review-tests-evidence.js" "$fake/hooks/workflow-gate/review-tests-evidence.js"
     printf '%s' "$fake"
 }
@@ -261,43 +263,57 @@ run_case_unrev_cleared() {
     rm -rf "$root" "$fake" "$repo" 2>/dev/null || true
 }
 
-# --- (w-b/c) exit 8: sentinel exit on stderr, wsid pointer written, ACCEPTED recovers; unreviewed marker kept ---
+# --- (w-b/c) exit 8 (a terminal rc 2, same input): sentinel exit on stderr, wsid pointer written,
+# ACCEPTED recovers through the pointer; unreviewed marker kept. #3123 D2: rc 3 is no guard. ---
 run_case_exit8_pointer() {
     local root fake repo fp rc out rc2
     root=$(mk_root); fake=$(build_fake_config); repo=$(build_repo); fp="$(expected_fp "$repo")"
-    put_ctl "$root/wf/$WSID.control/test-review-terminal.txt" 3 "$fp"
+    put_ctl "$root/wf/$WSID.control/test-review-terminal.txt" 2 "$fp"
     rc=$(run_wrapper "$root" "$fake" "$repo" 0 "$WSID" "$CCSID" "$root/plans" "$root/stub.log" "$root/err")
     if [ "$rc" = "8" ] && grep -qF '<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>' "$root/err"; then
-        pass "(w-b) exit 8 names the WARNINGS_ACCEPTED sentinel as the exit"
+        pass "(w-b) exit 8 after a terminal rc 2 names the WARNINGS_ACCEPTED sentinel as the exit"
     else
-        fail "(w-b) RED-EXPECTED: rc=$rc, stderr lacks the sentinel exit: $(tr '\n' ' ' < "$root/err")"
+        fail "(w-b) terminal rc 2, same input: rc=$rc (want 8), stderr lacks the sentinel exit: $(tr '\n' ' ' < "$root/err")"
     fi
     if [ "$(sed -n 1p "$root/wf/$CCSID.control/test-review-wsid.txt" 2>/dev/null)" = "$WSID" ]; then
         pass "(w-b2) the CC sid control dir holds the wsid pointer"
     else
-        fail "(w-b2) RED-EXPECTED: no test-review-wsid.txt = $WSID under $CCSID.control"
+        fail "(w-b2) no test-review-wsid.txt = $WSID under $CCSID.control"
     fi
     out="$(accept_as "$root" "$CCSID" "$repo")"
-    if [ "$(rt_status "$root" "$CCSID")" = "complete" ] && grep -q 'unreviewed-terminal-3' "$root/wf/$CCSID.json" \
+    if [ "$(rt_status "$root" "$CCSID")" = "complete" ] && grep -q '"terminal-2"' "$root/wf/$CCSID.json" \
         && [ ! -e "$root/wf/$WSID.control/test-review-terminal.txt" ]; then
-        pass "(w-b3) ACCEPTED through the pointer -> complete (unreviewed-terminal-3), wsid terminal removed"
+        pass "(w-b3) ACCEPTED through the pointer -> complete (terminal-2), wsid terminal removed"
     else
-        fail "(w-b3) RED-EXPECTED: ACCEPTED did not recover through the pointer (status=$(rt_status "$root" "$CCSID"), out=$out)"
+        fail "(w-b3) ACCEPTED did not recover through the pointer as terminal-2 (status=$(rt_status "$root" "$CCSID"), out=$out)"
     fi
     rc2=$(run_wrapper "$root" "$fake" "$repo" 0 "$WSID" "$CCSID" "$root/plans" "$root/stub.log" "$root/err")
-    if [ "$rc2" != "8" ]; then pass "(w-b4) the re-run is no longer exit 8 (rc=$rc2)"; else fail "(w-b4) RED-EXPECTED: the re-run is still exit 8"; fi
+    if [ "$rc2" != "8" ]; then pass "(w-b4) the re-run is no longer exit 8 (rc=$rc2)"; else fail "(w-b4) the re-run after ACCEPTED is still exit 8"; fi
     rm -rf "$root" "$fake" "$repo" 2>/dev/null || true
 }
 run_case_exit8_keeps_unrev() {
     local root fake repo fp rc
     root=$(mk_root); fake=$(build_fake_config); repo=$(build_repo); fp="$(expected_fp "$repo")"
-    put_ctl "$(term_of "$root")" 3 "$fp"
+    put_ctl "$(term_of "$root")" 2 "$fp"
     put_ctl "$(unrev_of "$root" "$SID")" scope-full:no-record "$fp"
     rc=$(run_wrapper "$root" "$fake" "$repo" 0 "$SID" "$SID" "$root/plans" "$root/stub.log" "$root/err")
     if [ "$rc" = "8" ] && [ -f "$(unrev_of "$root" "$SID")" ] && [ ! -f "$root/stub.log" ]; then
-        pass "(w-c) exit 8 launches no review and keeps the unreviewed marker"
+        pass "(w-c) exit 8 (terminal rc 2) launches no review and keeps the unreviewed marker"
     else
-        fail "(w-c) exit 8 path: rc=$rc, marker=$([ -f "$(unrev_of "$root" "$SID")" ] && echo kept || echo gone)"
+        fail "(w-c) terminal rc 2, same input: rc=$rc (want 8), marker=$([ -f "$(unrev_of "$root" "$SID")" ] && echo kept || echo gone)"
+    fi
+    rm -rf "$root" "$fake" "$repo" 2>/dev/null || true
+}
+# --- (w-f) #3123 D2: a legacy terminal rc 3 on the same input is evidence, not a guard ---
+run_case_rc3_not_guard() {
+    local root fake repo fp rc
+    root=$(mk_root); fake=$(build_fake_config); repo=$(build_repo); fp="$(expected_fp "$repo")"
+    put_ctl "$(term_of "$root")" 3 "$fp"
+    rc=$(run_wrapper "$root" "$fake" "$repo" 0 "$SID" "$SID" "$root/plans" "$root/stub.log" "$root/err")
+    if [ "$rc" != "8" ] && [ -f "$root/stub.log" ]; then
+        pass "(w-f) a terminal rc 3 with the same input runs the review (rc=$rc, not exit 8)"
+    else
+        fail "(w-f) terminal rc 3, same input: rc=$rc, review ran=$([ -f "$root/stub.log" ] && echo y || echo n) (want a review, not exit 8)"
     fi
     rm -rf "$root" "$fake" "$repo" 2>/dev/null || true
 }
@@ -336,6 +352,43 @@ run_case_unrev_undeletable() {
     rm -rf "$root" "$fake" "$repo" 2>/dev/null || true
 }
 
+# --- (f) #2478 S3: rwc_parse_fallback_args, sourced and called directly (table-driven) ---
+# row: <label>|<args, space-separated>|<want rc>|<want stderr or stdout fragment>
+FALLBACK_ARG_ROWS=(
+    "unknown|--bogus|4|unknown argument: --bogus"
+    "unknown-after-valid|--fallback-brief --bogus|4|unknown argument: --bogus"
+    "report-no-value|--prestaged-report|4|--prestaged-report needs a value"
+    "producer-no-value|--prestaged-producer|4|--prestaged-producer needs a value"
+    "exec-no-value|--prestaged-exec|4|--prestaged-exec needs a value"
+    "valid|--prestaged-report r.md --prestaged-producer test-reviewer --prestaged-exec PERFORMED --fallback-brief|0|FWD=7 BRIEF=1"
+)
+run_case_fallback_args() {
+    local row label args want_rc want_frag out rc
+    for row in "${FALLBACK_ARG_ROWS[@]}"; do
+        IFS='|' read -r label args want_rc want_frag <<< "$row"
+        rc=0
+        # shellcheck disable=SC2086  # args are split on purpose
+        out="$(bash -c '
+            . "$1" || exit 90
+            shift
+            rwc_parse_fallback_args review-tests "$@"
+            echo "FWD=${#RWC_FWD_ARGS[@]} BRIEF=$RWC_FALLBACK_BRIEF"
+        ' _ "$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-review-loop/review-wrapper-control.sh" $args 2>&1)" || rc=$?
+        if [ "$rc" = "$want_rc" ] && [[ "$out" == *"$want_frag"* ]]; then
+            pass "(f-$label) rwc_parse_fallback_args '$args' -> rc $rc, '$want_frag'"
+        else
+            fail "(f-$label) rwc_parse_fallback_args '$args': rc=$rc want $want_rc, out=$out"
+        fi
+        if [ "$want_rc" != "0" ] && [[ "$out" == *"FWD="* ]]; then
+            fail "(f-$label-halt) the reject did not stop the caller (out=$out)"
+        fi
+    done
+}
+
+case_begin "rwc-parse-fallback-args-reject-and-accept" "bin/lib/codex-review-loop/review-wrapper-control.sh"
+run_case_fallback_args
+case_end
+
 case_begin "rwc-arm-continuing-unit" "bin/lib/codex-review-loop/review-wrapper-control.sh"
 run_case_unit
 case_end
@@ -361,6 +414,7 @@ case_end
 case_begin "unreviewed-marker-wrapper-lifecycle" "skills/review-tests/scripts/run-codex-review-loop.sh"
 run_case_unrev_cleared
 run_case_exit8_keeps_unrev
+run_case_rc3_not_guard
 run_case_mktemp_halt
 run_case_unrev_undeletable
 case_end

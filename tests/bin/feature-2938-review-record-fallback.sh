@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Tests: bin/run-codex-review-loop, bin/lib/codex-review-loop/review-record.sh, skills/review-tests/scripts/run-codex-review-loop.sh, bin/lib/codex-review-loop/prestaged-pass.sh
-# Tags: feature-2938, review-record, codex-review-loop, cc-fallback, prestaged, static, scope:issue-specific, TL2, round-rollback
+# Tags: feature-2938, feature-2478, review-record, codex-review-loop, cc-fallback, prestaged, scope:issue-specific, TL2, round-rollback
 #
-# #2938 T5-2/3/5, T4-10: every exit 3 (reviewer failure, SKIPPED / FAILED header, review-tests
-# skip) stages a fallback pending that record-fallback turns into one cc-fallback row, and no
-# exit 3 site is bare; security-code's prestaged ADVANCE writes its own row. T5-8/13: a prestaged
-# pass derives EXTENSIONS_USED at its round; the older-input concerns block is display only.
+# #2478 (replaces #2938 T5-2/3, T4-10): exit 3 (reviewer failure, SKIPPED / FAILED header,
+# review-tests skip) stages nothing; the CC fallback is a prestaged round counted as the next
+# round. The legacy-pending cases (T7) live in feature-2478-fallback-legacy.sh. #2938 T5-5/8/13:
+# security-code's prestaged ADVANCE writes its row; EXTENSIONS_USED is derived at its round;
+# the older-input concerns block is display only.
 # TL3 gap: a real codex CLI round is not run; the reviewer is the stub of tests/bin/feature-2937-review-loop/fixture.sh.
 set -uo pipefail
 
@@ -14,6 +15,8 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=tests/bin/feature-2937-review-loop/fixture.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2937-review-loop/fixture.sh"
+# shellcheck source=tests/bin/feature-2478-fallback/helpers.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2478-fallback/helpers.sh"
 
 LOOP_ARGS=(--cap 3 --max-extensions 0 --extensions-used 0)
 pend() { side "$1" "$2" -fallback-pending.json; }
@@ -24,37 +27,34 @@ counter() {
     if [ -f "$f" ]; then tr -d '\r\n' < "$f"; else printf 'absent'; fi
 }
 
-# --- Exit 3 stages a fallback pending; record-fallback turns it into a row. ---
-case_begin "t5-2-outline-exit3-then-record-fallback-keeps-the-round" "bin/lib/codex-review-loop/review-record.sh"
+# --- Exit 3 stages nothing; the fallback is a prestaged round counted as the next round. ---
+case_begin "exit3-stages-nothing-and-the-fallback-round-is-the-next-round" "bin/lib/codex-review-loop/review-record.sh"
 sid="f2"; F=outline-plan
 st seed "$sid"
-for i in 1 2; do
-    export FX_RV=1
-    loop "$sid" "$F" "${LOOP_ARGS[@]}"
-    unset FX_RV
-    assert_eq "exit 3 #$i (precondition)" "3" "$L_RC"
-    assert_eq "exit 3 #$i writes no row" "$((i - 1))" "$(rows "$sid" "$F")"
-    assert_eq "exit 3 #$i stages a pending" "present" "$(clf_file_state "$(pend "$sid" "$F")")"
-    rr record-fallback --session "$sid" --format "$F" --verdict MISSING_ALTERNATIVE
-    assert_eq "record-fallback #$i succeeds" "0" "$R_RC"
-    assert_eq "it consumes the pending" "missing" "$(clf_file_state "$(pend "$sid" "$F")")"
-    assert_eq "one cc-fallback row #$i" "$i" "$(rows "$sid" "$F")"
-    assert_eq "row #$i: source" "cc-fallback" "$(row "$sid" "$F" -1 source)"
-    assert_eq "row #$i: exit is null" "null" "$(row "$sid" "$F" -1 exit)"
-    assert_eq "row #$i: the verdict as passed" "MISSING_ALTERNATIVE" "$(row "$sid" "$F" -1 verdict)"
-    assert_eq "row #$i: the exit-3 round (the counter rolled back)" "1" "$(row "$sid" "$F" -1 counter_round)"
-done
+export FX_RV=1
 loop "$sid" "$F" "${LOOP_ARGS[@]}"
-assert_eq "the codex retry runs round 1 again (exit 1)" "1" "$L_RC"
-assert_eq "it writes a third row" "3" "$(rows "$sid" "$F")"
-assert_eq "with the same counter_round" "1" "$(row "$sid" "$F" -1 counter_round)"
-assert_eq "the same cycle" "1" "$(row "$sid" "$F" -1 loop_cycle)"
-assert_eq "and the next row_no" "3" "$(row "$sid" "$F" -1 row_no)"
+unset FX_RV
+assert_eq "exit 3 (precondition)" "3" "$L_RC"
+assert_eq "exit 3 writes no row" "0" "$(rows "$sid" "$F")"
+assert_eq "exit 3 stages no pending" "missing" "$(clf_file_state "$(pend "$sid" "$F")")"
+assert_eq "exit 3 gives its round back" "absent" "$(counter "$sid" "$F" round-number)"
+report "$FX_TMP/f2-r1.md" "$(verdict_of "$F")" "C1. [HIGH] an unchecked input reaches the shell"
+fb "$sid" "$F" "$FX_TMP/f2-r1.md" "${LOOP_ARGS[@]}"
+assert_eq "the fallback round continues (exit 1)" "1" "$L_RC"
+assert_eq "it writes one row" "1" "$(rows "$sid" "$F")"
+assert_eq "a cc-fallback row" "cc-fallback" "$(row "$sid" "$F" 1 source)"
+assert_eq "with the loop's exit" "1" "$(row "$sid" "$F" 1 exit)"
+assert_eq "at round 1" "1" "$(row "$sid" "$F" 1 counter_round)"
+loop "$sid" "$F" "${LOOP_ARGS[@]}"
+assert_eq "the codex retry is round 2, not round 1 again" "2" "$(row "$sid" "$F" -1 counter_round)"
+assert_eq "it writes a second row" "2" "$(rows "$sid" "$F")"
+assert_eq "in the same cycle" "1" "$(row "$sid" "$F" -1 loop_cycle)"
+assert_eq "as its next row_no" "2" "$(row "$sid" "$F" -1 row_no)"
 case_end
 
 # The reviewer can run and still report no review: a SKIPPED or a FAILED status header.
-# Both are exit 3 of the loop, so both must stage the pending before the wrapper returns.
-case_begin "t4-10-skipped-and-failed-headers-stage-the-fallback" "bin/run-codex-review-loop"
+# Both are exit 3 of the loop, and neither leaves anything staged behind.
+case_begin "skipped-and-failed-headers-stage-nothing" "bin/run-codex-review-loop"
 for hdr in "SKIPPED — codex CLI not installed" "FAILED — codex timed out"; do
     kind="${hdr%% *}"
     sid="fh-$(printf '%s' "$kind" | tr 'A-Z' 'a-z')"; F=detail-plan
@@ -65,75 +65,21 @@ for hdr in "SKIPPED — codex CLI not installed" "FAILED — codex timed out"; d
     unset FX_HEADER
     assert_eq "$kind header: the wrapper exits 3" "3" "$W_RC"
     assert_contains "$kind header: the reviewer's explanation reaches the author" "## Codex Review: $kind" "$W_OUT"
-    assert_eq "$kind header: no row yet" "0" "$(rows "$sid" "$F")"
-    assert_eq "$kind header: a fallback pending is staged" "present" "$(clf_file_state "$(pend "$sid" "$F")")"
-    rr record-fallback --session "$sid" --format "$F" --verdict NEEDS_REVISION
-    assert_eq "$kind header: record-fallback succeeds" "0" "$R_RC"
-    assert_eq "$kind header: it writes one row" "1" "$(rows "$sid" "$F")"
-    assert_eq "$kind header: a cc-fallback row" "cc-fallback" "$(row "$sid" "$F" 1 source)"
-    assert_eq "$kind header: at the exit-3 round" "1" "$(row "$sid" "$F" 1 counter_round)"
+    assert_eq "$kind header: no row" "0" "$(rows "$sid" "$F")"
+    assert_eq "$kind header: no fallback pending is staged" "missing" "$(clf_file_state "$(pend "$sid" "$F")")"
 done
 case_end
 
-case_begin "t5-3-review-tests-skip-stages-a-fallback" "skills/review-tests/scripts/run-codex-review-loop.sh"
+case_begin "review-tests-skip-outside-a-repository-stages-nothing" "skills/review-tests/scripts/run-codex-review-loop.sh"
 OUT="$FX_TMP/outside"
 mkdir -p "$OUT"
 seed_sid f3a
-wrap review-tests f3a "$OUT"
-assert_eq "outside a repository with no state the wrapper skips (exit 3)" "3" "$W_RC"
-assert_eq "the skip stages a pending" "present" "$(clf_file_state "$(pend f3a test-review)")"
-rr record-fallback --session f3a --format test-review --verdict NEEDS_REVISION
-assert_eq "record-fallback succeeds" "0" "$R_RC"
-assert_eq "one row" "1" "$(rows f3a test-review)"
-assert_eq "a cc-fallback row" "cc-fallback" "$(row f3a test-review 1 source)"
-assert_eq "with no fingerprint" "null" "$(row f3a test-review 1 fingerprint)"
-assert_eq "numbered 1 (no rows before)" "1" "$(row f3a test-review 1 counter_round)"
-
-seed_sid f3b
-wrap review-tests f3b "$OUT"
-before="$(clf_digest "$(pend f3b test-review)")"
-wrap review-tests f3b "$OUT"
-assert_eq "an unconsumed pending stops the skip (exit 4)" "4" "$W_RC"
-assert_contains "exit 1 of 2: record the fallback verdict" "record-fallback" "$W_ERR"
-assert_contains "exit 2 of 2: discard with a reason" "discard-fallback" "$W_ERR"
-assert_eq "the existing pending is not overwritten" "$before" "$(clf_digest "$(pend f3b test-review)")"
-assert_ne "and it was there" "absent" "$before"
-
-seed_sid f3c
-mkdir -p "$(pend f3c test-review)"
-wrap review-tests f3c "$OUT"
-assert_eq "a pending that cannot be written is exit 4, not 3" "4" "$W_RC"
-case_end
-
-# --- Static: no exit 3 site skips its staging helper (rr_exit_codex_unavailable / rwc_stage_fallback). ---
-WRAPPERS=(make-outline-plan make-detail-plan review-plan-security review-code-security review-tests)
-# A non-comment exit 3 with no staging helper on it or in the 3 lines before it.
-BARE_AWK='{ b[NR] = $0 } /^[[:space:]]*#/ { next } /(^|[^0-9A-Za-z_])exit 3([^0-9]|$)/ { ok = 0; for (i = NR; i >= NR - 3 && i >= 1; i--) if (b[i] ~ /rr_exit_codex_unavailable|rwc_stage_fallback/) ok = 1; if (!ok) printf "%s ", NR }'
-
-# expect_none <label> <file> — PASS when <file> has no bare exit 3.
-expect_none() {
-    local hits
-    hits="$(awk "$BARE_AWK" "$2")"
-    if [ -z "$hits" ]; then pass "$1"; else fail "$1" "bare exit 3 at line(s) $hits"; fi
-}
-
-case_begin "t4-10-every-exit-3-stages-the-fallback-first" "bin/run-codex-review-loop"
-LOOP_BIN="$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop"
-expect_none "the loop has no exit 3 without rr_exit_codex_unavailable" "$LOOP_BIN"
-n="$(grep -c 'rr_exit_codex_unavailable' "$LOOP_BIN")"
-if [ "$n" -ge 3 ]; then pass "the loop stages at its three exit-3 sites (RV, SKIPPED, FAILED)"
-else fail "the loop stages at its three exit-3 sites (RV, SKIPPED, FAILED)" "found $n"; fi
-for w in "${WRAPPERS[@]}"; do
-    expect_none "$w wrapper: no exit 3 without a staging helper" "$SCRIPT_CHECKOUT_ROOT/skills/$w/scripts/run-codex-review-loop.sh"
+for i in 1 2; do
+    wrap review-tests f3a "$OUT"
+    assert_eq "outside a repository the wrapper skips (exit 3) #$i" "3" "$W_RC"
+    assert_eq "the skip stages no pending #$i" "missing" "$(clf_file_state "$(pend f3a test-review)")"
+    assert_eq "and writes no row #$i" "0" "$(rows f3a test-review)"
 done
-case_end
-
-case_begin "t4-10-review-tests-skip-stages-the-fallback" "skills/review-tests/scripts/run-codex-review-loop.sh"
-if grep -q 'rwc_stage_fallback' "$SCRIPT_CHECKOUT_ROOT/skills/review-tests/scripts/run-codex-review-loop.sh"; then
-    pass "the review-tests skip calls rwc_stage_fallback"
-else
-    fail "the review-tests skip calls rwc_stage_fallback"
-fi
 case_end
 
 # --- Prestaged (security-scanner) passes of security-code. ---

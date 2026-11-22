@@ -15,6 +15,8 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/bin/lib/codex-rev
 # so a containment refusal is never read as ESCALATE or as codex-unavailable.
 ACCEPTED_TRADEOFFS_FILE="$("$SCRIPT_CHECKOUT_ROOT/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" outline intent)" || exit 4
 rwc_resolve security-plan review-plan-security
+# #2478: the CC-fallback round (--fallback-brief, --prestaged-*) goes through this same wrapper.
+rwc_parse_fallback_args review-plan-security "$@"
 
 # Plans are named after first_session_id (#2748). Only the basename comes from
 # bin/plan-artifact-path, so the path keeps PLANS_DIR's own spelling; no own-sid fallback.
@@ -69,6 +71,8 @@ args=(
 )
 REPO_ROOT_VAL="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -n "$REPO_ROOT_VAL" ]]; then args+=(--repo-root "$REPO_ROOT_VAL"); fi
+# --fallback-brief only reads the round counter and ledger.
+(( RWC_FALLBACK_BRIEF == 1 )) && exec "$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" "${RWC_FWD_ARGS[@]}"
 # CTX_CONCERNS_LOG is auto-generated from the ledger, never inherited (#2185): a
 # stale parent value would leak an old carrier into this review. The CLI prints
 # the carrier path only when it holds something to carry (rc 0); rc 3 is benign
@@ -90,6 +94,7 @@ done
 # a model-written file turn HIGH_UNRESOLVED into ESCALATE past the exit-6 accept (#2434).
 rwc_input_fp_args "$CUR_FP"
 RC=0
-"$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" ${RWC_FP_ARGS[@]+"${RWC_FP_ARGS[@]}"} || RC=$?
+"$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" ${RWC_FP_ARGS[@]+"${RWC_FP_ARGS[@]}"} \
+  ${RWC_FWD_ARGS[@]+"${RWC_FWD_ARGS[@]}"} || RC=$?
 arm_terminal_guard "$RC" || true
 exit "$RC"

@@ -1,12 +1,12 @@
 "use strict";
 // Tests: bin/lib/codex-review-loop/review-rounds.js, bin/lib/codex-review-loop/review-rounds-store.js, bin/lib/codex-review-loop/state-interval.js, bin/review-rounds
-// Tags: feature-2938, review-rounds, review-record, loop-cycle, kind-route, stage-fallback, audit-block, scope:issue-specific, TL1
-// #2938 T4-1..13: the review record writes one row per round through appendRow, which fixes
+// Tags: feature-2938, feature-2478, review-rounds, review-record, loop-cycle, kind-route, no-park, audit-block, has-run, scope:issue-specific, TL1
+// #2938 T4-1..15: the review record writes one row per round through appendRow, which fixes
 // loop_cycle / row_no / kind / route from the previous row and the state event interval;
-// summarize counts by (loop_cycle, row_no); older-input filtering, the single writer, stage-fallback
-// numbering, the audit-block route and the per-format record-fallback verdicts read from
-// skills/_shared/codex-review-loop.md. Rows are written through bin/review-rounds and read back
-// from the first sid's control dir. state-interval.js is called directly.
+// summarize counts by (loop_cycle, row_no); older-input filtering, the single writer and the
+// audit-block route. #2478: a CC-fallback round is a prestaged loop round (an append with source
+// cc-fallback), the stage / record / discard-fallback route is gone, and append --no-park
+// closes the inflight without parking. Rows are read back from the first sid's control dir.
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 
 const assert = require("node:assert");
@@ -21,8 +21,6 @@ after(() => restore());
 const D = "detail-plan";
 const pick = (rs, k) => rs.map((r) => r[k]);
 const ok = (r, what) => assert.strictEqual(r.status, 0, `${what}: ${r.err}`);
-const stage = (sid, fmt) => F.rr(["stage-fallback", "--session", sid, "--format", fmt]);
-const record = (sid, fmt, v) => F.rr(["record-fallback", "--session", sid, "--format", fmt, "--verdict", v]);
 const interval = (...a) => F.mod("bin/lib/codex-review-loop/state-interval.js").readInterval(...a);
 
 caseBegin("t4-1-kind-is-decided-by-row-no-and-fingerprint", "bin/lib/codex-review-loop/review-rounds-store.js");
@@ -156,20 +154,22 @@ test("t4-5-summarize-splits-kind-and-source-and-drops-duplicates", () => {
 });
 caseEnd();
 
-caseBegin("t4-6-fallback-retry-stays-in-cycle", "bin/lib/codex-review-loop/review-rounds-store.js");
-test("t4-6-fallback-retry-stays-in-cycle", () => {
+caseBegin("t4-6-codex-round-after-a-fallback-round-is-the-next-round", "bin/lib/codex-review-loop/review-rounds-store.js");
+test("t4-6-codex-round-after-a-fallback-round-is-the-next-round", () => {
   F.seed("k6a");
-  F.fallback("k6a", D, "NEEDS_REVISION");
-  F.append("k6a", D, 1, 1, "NEEDS_REVISION", { fp: F.FP.a });
+  F.fallback("k6a", D, 1, "NEEDS_REVISION", { fp: F.FP.a });
+  F.append("k6a", D, 2, 1, "NEEDS_REVISION", { fp: F.FP.a });
   const a = F.rows("k6a", D);
-  assert.deepStrictEqual(pick(a, "loop_cycle"), [1, 1], "a codex retry of the fallback's round stays in its cycle");
+  assert.deepStrictEqual(pick(a, "counter_round"), [1, 2], "the fallback round is counted like a codex round");
+  assert.deepStrictEqual(pick(a, "loop_cycle"), [1, 1]);
   assert.deepStrictEqual(pick(a, "row_no"), [1, 2]);
   assert.deepStrictEqual(pick(a, "kind"), ["explore", "confirm"]);
   assert.deepStrictEqual(pick(a, "route"), ["initial", "in-cycle"]);
-  assert.deepStrictEqual([a[0].source, a[0].exit, a[0].run_id], ["cc-fallback", null, null]);
+  assert.deepStrictEqual([a[0].source, a[0].exit], ["cc-fallback", 1], "a fallback row carries the loop's exit");
+  assert.match(String(a[0].run_id), /^[0-9a-f]+$/, "and the loop run's id");
 
   F.seed("k6b");
-  F.fallback("k6b", D, "APPROVED");
+  F.fallback("k6b", D, 1, "APPROVED");
   F.append("k6b", D, 1, 1, "NEEDS_REVISION", { fp: F.FP.a });
   assert.deepStrictEqual(pick(F.rows("k6b", D), "loop_cycle"), [1, 2], "after an APPROVED fallback round 1 opens a cycle");
 });
@@ -178,7 +178,7 @@ caseEnd();
 caseBegin("t4-6-reset-or-new-generation-after-fallback-opens-a-cycle", "bin/lib/codex-review-loop/review-rounds-store.js");
 test("t4-6-reset-or-new-generation-after-fallback-opens-a-cycle", () => {
   F.seed("k6r");
-  F.fallback("k6r", D, "NEEDS_REVISION");
+  F.fallback("k6r", D, 1, "NEEDS_REVISION");
   F.reset("k6r");
   F.append("k6r", D, 1, 1, "NEEDS_REVISION", { fp: F.FP.a });
   const r = F.rows("k6r", D);
@@ -189,7 +189,7 @@ test("t4-6-reset-or-new-generation-after-fallback-opens-a-cycle", () => {
   F.seed("k6g1");
   F.seed("k6g2");
   F.handover("k6g2", "k6g1");
-  F.fallback("k6g1", D, "NEEDS_REVISION");
+  F.fallback("k6g1", D, 1, "NEEDS_REVISION");
   F.append("k6g2", D, 1, 1, "NEEDS_REVISION", { fp: F.FP.a });
   const g = F.rows("k6g1", D);
   assert.deepStrictEqual(pick(g, "loop_cycle"), [1, 2], "another generation is not joined to the fallback's cycle");
@@ -233,11 +233,6 @@ test("t4-9-downstream-writes-the-first-sid-record", () => {
   assert.strictEqual(F.rr(["summary", "--session", "k9B", "--format", D]).out, sa.out);
   assert.strictEqual(F.kv(sa.out).rows, "1");
 
-  const st = F.rr(["stage-fallback", "--session", "k9B", "--format", D]);
-  assert.strictEqual(st.status, 0, st.err);
-  const pend = `${D}-review-rounds-fallback-pending.json`;
-  assert.ok(fs.existsSync(path.join(F.ctlDir("k9A"), pend)), "B's pending is in A's control dir");
-  assert.ok(!fs.existsSync(path.join(F.ctlDir("k9B"), pend)));
   const pf = F.rr(["preflight", "--session", "k9B", "--format", "test-review"]);
   assert.strictEqual(pf.status, 0, pf.err);
   const infl = fs.readdirSync(F.ctlDir("k9A")).filter((n) => /^test-review-review-rounds-inflight-[0-9a-f]+\.json$/.test(n));
@@ -297,7 +292,7 @@ caseBegin("t4-10-every-writer-fills-the-derived-fields", "bin/lib/codex-review-l
 test("t4-10-every-writer-fills-the-derived-fields", () => {
   F.seed("c10");
   F.append("c10", "detail-plan", 1, 1, "NEEDS_REVISION", { fp: F.FP.a });
-  F.fallback("c10", "detail-plan", "NEEDS_REVISION");
+  F.fallback("c10", "detail-plan", 2, "NEEDS_REVISION");
   const rs = F.rows("c10", "detail-plan");
   assert.strictEqual(rs.length, 2);
   for (const r of rs) {
@@ -308,35 +303,103 @@ test("t4-10-every-writer-fills-the-derived-fields", () => {
 });
 caseEnd();
 
-caseBegin("t4-11-stage-fallback-numbers-the-round", "bin/review-rounds");
-test("t4-11-stage-fallback-numbers-the-round", () => {
-  const fmt = "detail-plan";
-  F.seed("c11a");
-  F.fallback("c11a", fmt, "NEEDS_REVISION");
-  F.fallback("c11a", fmt, "NEEDS_REVISION");
-  F.append("c11a", fmt, 1, 1, "NEEDS_REVISION", { fp: F.FP.a });
-  const a = F.rows("c11a", fmt);
-  assert.deepStrictEqual(pick(a, "counter_round"), [1, 1, 1], "no rows -> 1, and a non-approved fallback keeps its round");
-  assert.deepStrictEqual(pick(a, "loop_cycle"), [1, 1, 1]);
-  assert.deepStrictEqual(pick(a, "row_no"), [1, 2, 3]);
+caseBegin("t4-11-cli-has-no-wrapper-external-fallback-route", "bin/review-rounds");
+test("t4-11-cli-has-no-wrapper-external-fallback-route", () => {
+  F.seed("c11");
+  for (const cmd of [["stage-fallback"], ["record-fallback", "--verdict", "NEEDS_REVISION"], ["discard-fallback", "--reason", "x"]]) {
+    const r = F.rr([...cmd, "--session", "c11", "--format", D]);
+    assert.strictEqual(r.status, 2, `${cmd[0]} is not a command any more: ${r.err}`);
+    assert.match(r.err, /usage: review-rounds </, `${cmd[0]}: refused as an unknown command`);
+    assert.ok(!r.err.split("usage:")[1].includes(cmd[0]), `${cmd[0]} is not listed in the usage`);
+  }
+  const ctl = fs.existsSync(F.ctlDir("c11")) ? fs.readdirSync(F.ctlDir("c11")) : [];
+  assert.deepStrictEqual(ctl.filter((n) => /fallback-(pending|discarded)/.test(n)), [], "nothing is staged");
+  assert.strictEqual(F.rows("c11", D).length, 0);
+});
+caseEnd();
 
-  F.seed("c11b");
-  F.append("c11b", fmt, 1, 1, "NEEDS_REVISION", { fp: F.FP.a });
-  F.fallback("c11b", fmt, "NEEDS_REVISION");
-  F.fallback("c11b", fmt, "NEEDS_REVISION");
-  assert.deepStrictEqual(pick(F.rows("c11b", fmt), "counter_round"), [1, 2, 2], "after a wrapper round K -> K+1");
+// noParkRun(sid, extra) — preflight, then an append that meets a directory at the record path.
+function noParkRun(sid, extra) {
+  F.seed(sid);
+  const pf = F.rr(["preflight", "--session", sid, "--format", D]);
+  ok(pf, "preflight");
+  const runId = pf.out.trim();
+  fs.rmSync(F.recPath(sid, D), { force: true });
+  fs.mkdirSync(F.recPath(sid, D));
+  const r = F.rr(["append", "--session", sid, "--format", D, "--counter-round", 1, "--exit", 1,
+    "--verdict", "NEEDS_REVISION", "--source", "cc-fallback", "--run-id", runId, ...extra]);
+  fs.rmSync(F.recPath(sid, D), { recursive: true, force: true });
+  const names = fs.readdirSync(F.ctlDir(sid));
+  return { r, inflight: names.filter((n) => n.includes(`inflight-${runId}`)), parked: names.filter((n) => n.endsWith("-unrecorded.jsonl")) };
+}
 
-  F.seed("c11c");
-  F.append("c11c", fmt, 1, 1, "NEEDS_REVISION", { fp: F.FP.a });
-  F.append("c11c", fmt, 2, 5, "AUTO_EXTEND", { fp: F.FP.a });
-  F.fallback("c11c", fmt, "NEEDS_REVISION");
-  assert.strictEqual(F.lastRow("c11c", fmt).counter_round, 3, "after AUTO_EXTEND round 2 -> 3");
+caseBegin("t4-16-append-no-park-closes-the-inflight-and-parks-nothing", "bin/lib/codex-review-loop/review-rounds-store.js");
+test("t4-16-append-no-park-closes-the-inflight-and-parks-nothing", () => {
+  const n = noParkRun("c16n", ["--no-park"]);
+  assert.strictEqual(n.r.status, 4, `a failed --no-park append is a HALT (4), not a park (5): ${n.r.err}`);
+  assert.deepStrictEqual([n.inflight, n.parked], [[], []], "the inflight is closed and no row is parked");
+  ok(F.rr(["preflight", "--session", "c16n", "--format", D]), "the next preflight");
+  assert.strictEqual(F.rows("c16n", D).length, 0, "the next preflight replays no row");
+});
+caseEnd();
 
-  F.seed("c11d");
-  F.append("c11d", fmt, 1, 0, "APPROVED", { fp: F.FP.a });
-  F.fallback("c11d", fmt, "NEEDS_REVISION");
-  const d = F.lastRow("c11d", fmt);
-  assert.deepStrictEqual([d.counter_round, d.loop_cycle, d.row_no], [1, 2, 1], "after APPROVED -> 1 in a new cycle");
+caseBegin("t4-16-append-without-no-park-still-parks", "bin/lib/codex-review-loop/review-rounds-store.js");
+test("t4-16-append-without-no-park-still-parks", () => {
+  const p = noParkRun("c16p", []);
+  assert.strictEqual(p.r.status, 5, `a failed append parks the row (5): ${p.r.err}`);
+  assert.deepStrictEqual([p.inflight, p.parked.length], [[], 1], "the inflight is closed and the row is parked");
+  ok(F.rr(["preflight", "--session", "c16p", "--format", D]), "the next preflight");
+  assert.strictEqual(F.rows("c16p", D).length, 1, "the next preflight replays the parked row");
+});
+caseEnd();
+
+// #2478 C1: has-run tells the loop whether its --no-park append landed although the CLI failed.
+const hasRun = (sid, fmt, extra) => F.rr(["has-run", "--session", sid, "--format", fmt, ...extra]);
+
+caseBegin("t4-17-has-run-reports-a-landed-run-id", "bin/review-rounds");
+test("t4-17-has-run-reports-a-landed-run-id", () => {
+  F.seed("c17");
+  F.append("c17", D, 1, 1, "NEEDS_REVISION", { source: "cc-fallback" });
+  const runId = F.lastRow("c17", D).run_id;
+  const r = hasRun("c17", D, ["--run-id", runId]);
+  ok(r, "has-run");
+  assert.strictEqual(r.out.trim(), "recorded=1", "the run's row is in the record");
+  const store = F.mod("bin/lib/codex-review-loop/review-rounds-store.js");
+  assert.strictEqual(typeof store.hasRun, "function", "the store exports hasRun");
+  assert.strictEqual(store.hasRun({ sid: "c17", format: D, runId }), true, "hasRun finds the run's row");
+});
+caseEnd();
+
+caseBegin("t4-17-has-run-reports-an-absent-run-id", "bin/review-rounds");
+test("t4-17-has-run-reports-an-absent-run-id", () => {
+  F.seed("c17a");
+  F.append("c17a", D, 1, 1, "NEEDS_REVISION");
+  const unknown = hasRun("c17a", D, ["--run-id", "0fdeadbeef"]);
+  ok(unknown, "has-run for an unknown run id");
+  assert.strictEqual(unknown.out.trim(), "recorded=0", "no row carries that run id");
+  const none = hasRun("c17a", "test-review", ["--run-id", "0fdeadbeef"]);
+  ok(none, "has-run for a format without a record file");
+  assert.strictEqual(none.out.trim(), "recorded=0", "no record file is no row");
+});
+caseEnd();
+
+caseBegin("t4-17-has-run-without-run-id-is-a-usage-error", "bin/review-rounds");
+test("t4-17-has-run-without-run-id-is-a-usage-error", () => {
+  F.seed("c17u");
+  const r = hasRun("c17u", D, []);
+  assert.strictEqual(r.status, 2, `has-run without --run-id: ${r.err}`);
+  assert.match(r.err, /--run-id is required/, "refused for the missing --run-id, not as an unknown command");
+});
+caseEnd();
+
+caseBegin("t4-17-has-run-on-an-unreadable-record-halts", "bin/lib/codex-review-loop/review-rounds-store.js");
+test("t4-17-has-run-on-an-unreadable-record-halts", () => {
+  F.seed("c17h");
+  fs.mkdirSync(F.recPath("c17h", D), { recursive: true });
+  const r = hasRun("c17h", D, ["--run-id", "0fdeadbeef"]);
+  fs.rmSync(F.recPath("c17h", D), { recursive: true, force: true });
+  assert.strictEqual(r.status, 4, `an unreadable record cannot answer (4), never recorded=0: ${r.err}`);
+  assert.doesNotMatch(r.out, /recorded=/, "no answer is printed");
 });
 caseEnd();
 
@@ -374,111 +437,13 @@ caseBegin("t4-13-outline-fallback-records-missing-alternative", "bin/review-roun
 test("t4-13-outline-fallback-records-missing-alternative", () => {
   const O = "outline-plan";
   F.seed("c13");
-  F.fallback("c13", O, "MISSING_ALTERNATIVE");
+  F.fallback("c13", O, 1, "MISSING_ALTERNATIVE");
   assert.strictEqual(F.lastRow("c13", O).verdict, "MISSING_ALTERNATIVE");
   assert.strictEqual(F.summarize("c13", O).rows, 1);
-  F.append("c13", O, 1, 1, "MISSING_ALTERNATIVE", { fp: F.FP.a });
+  F.append("c13", O, 2, 1, "MISSING_ALTERNATIVE", { fp: F.FP.a });
   const rs = F.rows("c13", O);
-  assert.deepStrictEqual([pick(rs, "loop_cycle"), pick(rs, "row_no")], [[1, 1], [1, 2]], "the codex retry joins the fallback's cycle");
-
-  F.seed("c13d");
-  ok(stage("c13d", "detail-plan"), "stage-fallback");
-  assert.notStrictEqual(record("c13d", "detail-plan", "MISSING_ALTERNATIVE").status, 0, "detail-plan rejects MISSING_ALTERNATIVE");
-  assert.strictEqual(F.rows("c13d", "detail-plan").length, 0);
-});
-caseEnd();
-
-// NON_APPROVED_VERDICT per format, from the parameter tables of the shared loop doc.
-function docVerdicts() {
-  const NAME = { "outline value": "outline-plan", "detail value": "detail-plan" };
-  const out = {};
-  let cols = null;
-  for (const l of src("skills/_shared/codex-review-loop.md").split(/\r?\n/)) {
-    const cells = l.split("|").slice(1, -1).map((c) => c.trim());
-    if (cells[0] === "Parameter") cols = cells.slice(1).map((c) => NAME[c] || c);
-    else if (cols && cells[0] === "NON_APPROVED_VERDICT") {
-      cells.slice(1).forEach((c, i) => { out[cols[i]] = c.replace(/`/g, "").replace(/:$/, ""); });
-    }
-  }
-  return out;
-}
-
-caseBegin("t4-13-record-fallback-verdicts-follow-the-doc-table", "bin/review-rounds");
-test("t4-13-record-fallback-verdicts-follow-the-doc-table", () => {
-  const v = docVerdicts();
-  assert.deepStrictEqual(Object.keys(v).sort(), ["detail-plan", "outline-plan", "security-plan", "test-review"]);
-  for (const [fmt, verdict] of Object.entries(v)) {
-    const sid = `c13t-${fmt}`;
-    F.seed(sid);
-    ok(stage(sid, fmt), `${fmt} stage-fallback`);
-    assert.notStrictEqual(record(sid, fmt, "BOGUS").status, 0, `${fmt} rejects an unknown verdict`);
-    assert.strictEqual(F.rows(sid, fmt).length, 0, `${fmt}: a rejected verdict writes no row`);
-    if (fmt !== "outline-plan") assert.notStrictEqual(record(sid, fmt, "MISSING_ALTERNATIVE").status, 0, `${fmt} rejects MISSING_ALTERNATIVE`);
-    ok(record(sid, fmt, verdict), `${fmt} records ${verdict}`);
-    assert.strictEqual(F.rows(sid, fmt).length, 1);
-    ok(stage(sid, fmt), `${fmt} stage-fallback again`);
-    ok(record(sid, fmt, "APPROVED"), `${fmt} records APPROVED`);
-  }
-});
-caseEnd();
-
-const pendPath = (sid, fmt) => path.join(F.ctlDir(sid), `${fmt}-review-rounds-fallback-pending.json`);
-const ccRows = (sid, fmt) => F.rows(sid, fmt).filter((r) => r.source === "cc-fallback");
-
-caseBegin("t4-14-record-fallback-retry-after-failed-pending-removal-is-one-row", "bin/review-rounds");
-test("t4-14-record-fallback-retry-after-failed-pending-removal-is-one-row", () => {
-  const sid = "c14", fmt = "detail-plan";
-  F.seed(sid);
-  ok(stage(sid, fmt), "stage-fallback");
-  const raw = fs.readFileSync(pendPath(sid, fmt), "utf8");
-  const stagedAt = JSON.parse(raw).staged_at;
-  ok(record(sid, fmt, "NEEDS_REVISION"), "record-fallback");
-  fs.writeFileSync(pendPath(sid, fmt), raw);
-  ok(record(sid, fmt, "NEEDS_REVISION"), "record-fallback retry");
-  assert.strictEqual(ccRows(sid, fmt).length, 1, "the retry finds the row instead of appending again");
-  assert.ok(!fs.existsSync(pendPath(sid, fmt)), "the retry removes the pending");
-  assert.strictEqual(ccRows(sid, fmt)[0].fallback_staged_at, stagedAt);
-
-  F.sleep(5);
-  ok(stage(sid, fmt), "stage-fallback for a new pending");
-  assert.notStrictEqual(JSON.parse(fs.readFileSync(pendPath(sid, fmt), "utf8")).staged_at, stagedAt);
-  ok(record(sid, fmt, "NEEDS_REVISION"), "record-fallback of the new pending");
-  assert.strictEqual(ccRows(sid, fmt).length, 2, "a different pending is a different row");
-});
-caseEnd();
-
-caseBegin("t4-14-record-fallback-module-retry-returns-the-recorded-row", "bin/lib/codex-review-loop/review-rounds-store.js");
-test("t4-14-record-fallback-module-retry-returns-the-recorded-row", () => {
-  const store = F.mod("bin/lib/codex-review-loop/review-rounds-store.js");
-  const sid = "c14m", fmt = "detail-plan";
-  F.seed(sid);
-  const p = store.stageFallback({ sid, format: fmt });
-  const raw = fs.readFileSync(pendPath(sid, fmt), "utf8");
-  const first = store.recordFallback({ sid, format: fmt, verdict: "NEEDS_REVISION" });
-  fs.writeFileSync(pendPath(sid, fmt), raw);
-  const again = store.recordFallback({ sid, format: fmt, verdict: "NEEDS_REVISION" });
-  assert.deepStrictEqual(again, first, "the retry returns the row already recorded");
-  assert.strictEqual(again.fallback_staged_at, p.staged_at);
-  assert.strictEqual(ccRows(sid, fmt).length, 1);
-  assert.ok(!fs.existsSync(pendPath(sid, fmt)));
-});
-caseEnd();
-
-caseBegin("t4-14-legacy-pending-without-staged-at-is-not-deduped", "bin/lib/codex-review-loop/review-rounds-store.js");
-test("t4-14-legacy-pending-without-staged-at-is-not-deduped", () => {
-  const sid = "c14l", fmt = "detail-plan";
-  F.seed(sid);
-  ok(stage(sid, fmt), "stage-fallback");
-  const legacy = JSON.parse(fs.readFileSync(pendPath(sid, fmt), "utf8"));
-  delete legacy.staged_at;
-  const raw = JSON.stringify(legacy) + "\n";
-  fs.writeFileSync(pendPath(sid, fmt), raw);
-  ok(record(sid, fmt, "NEEDS_REVISION"), "record-fallback of a legacy pending");
-  fs.writeFileSync(pendPath(sid, fmt), raw);
-  ok(record(sid, fmt, "NEEDS_REVISION"), "record-fallback of the same legacy pending");
-  const rs = ccRows(sid, fmt);
-  assert.strictEqual(rs.length, 2, "no staged_at -> no mark to dedupe on");
-  assert.ok(rs.every((r) => !("fallback_staged_at" in r)), "a legacy row carries no fallback_staged_at");
+  assert.deepStrictEqual([pick(rs, "loop_cycle"), pick(rs, "row_no")], [[1, 1], [1, 2]], "the next codex round joins the fallback's cycle");
+  assert.deepStrictEqual(F.summarize("c13", O).by_source, { codex: 1, cc_fallback: 1 });
 });
 caseEnd();
 
