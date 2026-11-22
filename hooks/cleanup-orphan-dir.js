@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Safely delete an orphan dir under WORKTREE_BASE_DIR left by `git worktree remove` (worktree-end
-// WE-12), in place of the blocked `rm -rf`. Usage: [--force-if-not-registered [--expect-main-root
-// <main>]] <path>. Default: an empty dir only (rmdir). Force: recursive, when no `.git` sits anywhere
-// in the subtree (scan capped at MAX_GIT_SCAN_ENTRIES). Gitlink path (#322 / #2875): a target whose
+// Safely delete an orphan dir under the worktree base left by `git worktree remove` (worktree-end
+// WE-12), in place of the blocked `rm -rf`. Usage: [--repo <dir>] [--force-if-not-registered
+// [--expect-main-root <main>]] <path>. Default: an empty dir only (rmdir). Force: recursive, when no `.git` sits anywhere
+// in the subtree (scan capped at MAX_GIT_SCAN_ENTRIES), and only with a resolvable repo. Gitlink path (#322 / #2875): a target whose
 // `.git` is a gitlink file goes only in force mode with --expect-main-root, as an unregistered
 // leftover of that main checkout (cleanup-orphan-dir/leftover.js): uncapped walk, nested `.git` or
 // unreadable subdir refused, links never followed. Every other check fails closed with exit 1 and a
@@ -17,7 +17,7 @@ const { spawnSync } = require("child_process");
 try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ }
 
 const { normalizeCwd } = require("./lib/path-normalize");
-const { getWorktreeBaseDirResolved } = require("./enforce-worktree");
+const { resolveWorktreeBase, explicitWorktreeBase } = require("./lib/worktree-base");
 const { leftoverRefusal, subtreeRefusal } = require("./cleanup-orphan-dir/leftover");
 
 function isGitlinkFile(p) {
@@ -70,20 +70,33 @@ function containsAnyGitEntry(dir) {
   return false;
 }
 
+// Repo precedence: --repo > --expect-main-root > CWD. Only an unresolvable non---repo candidate
+// may fall back to an explicit WORKTREE_BASE_DIR; there this checkout answers Step 6, not the repo
+// owning the target, so main() limits the fallback to the empty-dir rmdir.
+function resolveScope(repoArg, expectMainRoot) {
+  const r = resolveWorktreeBase(path.resolve(repoArg || expectMainRoot || process.cwd()));
+  if (r.ok) return { base: path.resolve(r.base), registryRepo: r.mainDir, fallback: false };
+  const explicit = repoArg ? null : explicitWorktreeBase();
+  if (explicit === null) refuse(`cannot resolve the worktree base: ${r.reason}`);
+  return { base: explicit, registryRepo: path.dirname(__dirname), fallback: true };
+}
+
 function main(argv) {
   // 1. Parse args: optional --force-if-not-registered + exactly one positional.
   let forceIfNotRegistered = false;
   let expectMainRoot = null;
+  let repoArg = null;
   const positionals = [];
   const args = argv.slice(2);
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--force-if-not-registered") {
       forceIfNotRegistered = true;
-    } else if (a === "--expect-main-root") {
+    } else if (a === "--expect-main-root" || a === "--repo") {
       const v = args[++i];
-      if (typeof v !== "string" || v === "" || v.startsWith("-")) refuse("--expect-main-root requires a path value");
-      expectMainRoot = normalizeCwd(v) || v;
+      if (typeof v !== "string" || v === "" || v.startsWith("-")) refuse(`${a} requires a path value`);
+      if (a === "--repo") repoArg = normalizeCwd(v) || v;
+      else expectMainRoot = normalizeCwd(v) || v;
     } else if (a.startsWith("-")) {
       refuse(`flags not accepted: ${a}`);
     } else {
@@ -95,23 +108,16 @@ function main(argv) {
   }
   const input = positionals[0];
 
-  // 2. WORKTREE_BASE_DIR must be set.
-  const baseRaw = getWorktreeBaseDirResolved();
-  if (!baseRaw) refuse("WORKTREE_BASE_DIR is not set");
-
-  let base;
-  try {
-    base = path.resolve(normalizeCwd(baseRaw) || baseRaw);
-  } catch (e) {
-    refuse(`cannot resolve WORKTREE_BASE_DIR: ${e.message}`);
+  // 2. Worktree base and the repo whose registry Step 6 asks (hooks/lib/worktree-base.js).
+  const { base, registryRepo, fallback } = resolveScope(repoArg, expectMainRoot);
+  if (fallback && forceIfNotRegistered) {
+    refuse("--force-if-not-registered needs a resolvable repo (--repo, --expect-main-root, or a repo CWD); the explicit-base fallback allows only an empty-dir rmdir");
   }
 
-  // 3. Floor check: ≥ 3 path segments from root.
-  // Windows: C:\a\b ✓ (segments: C:, a, b after normalization)
-  // POSIX: /var/wt/x ✓ (segments: var, wt, x)
+  // 3. Floor check: ≥ 3 path segments from root (C:\a\b, /var/wt/x).
   const baseSegments = base.split(/[\\/]/).filter(Boolean);
   if (baseSegments.length < 3) {
-    refuse(`WORKTREE_BASE_DIR too shallow (< 3 segments): ${base}`);
+    refuse(`worktree base too shallow (< 3 segments): ${base}`);
   }
 
   // 4. Resolve target and verify strict containment under base.
@@ -123,9 +129,10 @@ function main(argv) {
   }
 
   const rel = path.relative(base, resolved);
-  if (rel === "") refuse(`target equals WORKTREE_BASE_DIR: ${resolved}`);
-  if (rel.startsWith("..") || path.isAbsolute(rel)) {
-    refuse(`target is outside WORKTREE_BASE_DIR: ${resolved}`);
+  if (rel === "") refuse(`target equals the worktree base: ${resolved}`);
+  // Segment-aware: a child named "..x" stays inside the base.
+  if (rel === ".." || rel.startsWith(".." + path.sep) || path.isAbsolute(rel)) {
+    refuse(`target is outside the worktree base ${base}: ${resolved}`);
   }
 
   // 5. lstat: idempotent on ENOENT, refuse on symlink/non-dir.
@@ -146,11 +153,9 @@ function main(argv) {
   }
   if (!lstats.isDirectory()) refuse(`target is not a directory: ${resolved}`);
 
-  // 6. Registered worktree check via this script's own repo.
-  //    Script lives at <repo>/hooks/cleanup-orphan-dir.js — repo is one level up.
-  const scriptRepo = path.dirname(__dirname);
+  // 6. Registered worktree check via the target repo's main root.
   const wtRes = spawnSync(
-    "git", ["-C", scriptRepo, "worktree", "list", "--porcelain"],
+    "git", ["-C", registryRepo, "worktree", "list", "--porcelain"],
     { encoding: "utf8", timeout: 5000 }
   );
   if (wtRes.status !== 0) {

@@ -6,8 +6,7 @@ user-invocable: false
 
 Set up a new linked worktree and initialize its gitignored state before starting work.
 
-**Personal config:** Set `WORKTREE_BASE_DIR` in your agents config to customize the worktree
-base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=D:\src\worktrees`.
+**Personal config:** Unset `WORKTREE_BASE_DIR` → each repo's own `<repo>/.claude/worktrees`; set it (e.g. `D:\src\worktrees`) for one base shared by every repo. `bin/worktree-base` owns the resolution.
 
 ## Procedure
 
@@ -20,8 +19,8 @@ WS-1. Verify the task fits the worktree criteria in `rules/worktree.md` (fit tab
 
 WS-2. Derive the task name and branch type — always automatic, never asked of the user:
    Run `bash "$AGENTS_MAIN_ROOT/skills/worktree-start/scripts/derive-worktree-name.sh"`, adding `--headless <label>` when the caller cannot present `AskUserQuestion` (running as a subagent or forked execution context) or when no workflow session hosts this run. <!-- askuser-none -->
-   Read `TASK_NAME=`, `BRANCH_TYPE=`, and `REPO_NAME=` from its stdout — `REPO_NAME` is the validated `<REPO_NAME>` path component; never infer it yourself. Non-zero exit → surface its stderr and stop; never substitute a name of your own and never ask the user for one.
-   **Reuse-safety check**: run `git worktree list --porcelain` and find the entry whose `worktree` line equals `<WORKTREE_BASE_DIR>/<TASK_NAME>/<REPO_NAME>` — normalize both sides before comparing: convert every backslash to a forward slash and every MSYS-style `/c/<rest>` path to its `C:/<rest>` form (or vice versa), then strip any trailing slash, then lowercase both sides when the filesystem is case-insensitive (Windows, and default macOS). No entry → continue to WS-3. An entry exists → an existing path is not proof it is safe to attach to, so reuse only when all three hold:
+   Read `TASK_NAME=`, `BRANCH_TYPE=`, `REPO_NAME=`, `WORKTREE_BASE=`, and `WORKTREE_PATH=` from its stdout — `REPO_NAME` is the validated `<REPO_NAME>` path component and `WORKTREE_PATH` is `<WORKTREE_BASE>/<TASK_NAME>/<REPO_NAME>`; never infer it yourself. Non-zero exit or a missing `WORKTREE_PATH=` → surface its stderr and stop; never substitute a name of your own and never ask the user for one.
+   **Reuse-safety check**: run `git worktree list --porcelain` and find the entry whose `worktree` line equals `<WORKTREE_PATH>` — normalize both sides before comparing: convert every backslash to a forward slash and every MSYS-style `/<drive>/<rest>` path to its `<DRIVE>:/<rest>` form (or vice versa), then strip any trailing slash, then lowercase both sides when the filesystem is case-insensitive (Windows, and default macOS). No entry → continue to WS-3. An entry exists → an existing path is not proof it is safe to attach to, so reuse only when all three hold:
    - Its `branch` line equals `refs/heads/<BRANCH_TYPE>/<TASK_NAME>`; a different branch is a naming collision, not a reusable worktree — surface both paths and branches to the user and stop.
    - It carries neither a `locked` nor a `prunable` line; either means another process or a stale registration owns it — surface the reason and stop.
    - `git -C "<path>" status --porcelain` (standalone command, no chaining) prints nothing; non-empty output is another session's in-flight work — never delete or reset it; report the dirty path and stop.
@@ -30,7 +29,7 @@ WS-2. Derive the task name and branch type — always automatic, never asked of 
 
    All three pass → print the path and branch to stdout, skip WS-3–WS-6 (already exists — do not run `git worktree add`), and continue at WS-7.
 
-WS-3. Worktree path: `<WORKTREE_BASE_DIR>/<TASK_NAME>/<REPO_NAME>`. Branch name: `<BRANCH_TYPE>/<TASK_NAME>`. Report both in chat — do not ask for approval.
+WS-3. Worktree path: the `WORKTREE_PATH=` value from WS-2, verbatim. Branch name: `<BRANCH_TYPE>/<TASK_NAME>`. Report both in chat — do not ask for approval.
 
 WS-4. Check for conflicts:
    ```
@@ -38,17 +37,10 @@ WS-4. Check for conflicts:
    ```
    Report any existing worktrees at the same path or on the same branch.
 
-WS-5. Create the parent directory (platform-aware):
-   - POSIX: `mkdir -p "<WORKTREE_BASE_DIR>/<TASK_NAME>"`
-   - PowerShell: `New-Item -ItemType Directory -Force -Path "<WORKTREE_BASE_DIR>\<TASK_NAME>"`
+WS-5. Path collision check: the WS-3 path existing without a WS-4 registration is another session's leftover — never remove or reuse it; surface the path and stop.
+   `git worktree add` creates the parent directories itself; create none by hand.
 
-   **Do NOT chain or pipe this command** (no `;`, `&&`, `||`, `|`, `$()`, backticks).
-   `enforce-worktree.js` only grants its `New-Item -ItemType Directory` exemption to
-   isolated commands — any shell operator removes the exemption and the command is
-   rejected as a write from the main worktree. Run it as its own Bash call.
-   The same rule applies to WS-6 (`git worktree add`).
-
-WS-6. Create the worktree (isolated command — same chaining caveat as WS-5):
+WS-6. Create the worktree as its own Bash call — no `;`, `&&`, `||`, `|`, `$()`, or backticks; `enforce-worktree.js` allows only the isolated form from the main worktree:
    ```
    git worktree add <path> -b <BRANCH_TYPE>/<TASK_NAME>
    ```
@@ -77,7 +69,6 @@ WS-7a. Build the CodeGraph index for the new worktree — one Bash call:
    never gates it. It can take tens of seconds on a large repository.
 
 WS-8. Enter the worktree: call the native `EnterWorktree` tool with the WS-3 path.
-   One confirmation dialog for worktrees outside `.claude/worktrees/` is normal since v2.1.206.
    Protocol: `skills/_shared/worktree-transition.md`
 
 WS-9. Final report: worktree path, branch, which gitignored state was copied, and whether the session entered the worktree (WS-8).

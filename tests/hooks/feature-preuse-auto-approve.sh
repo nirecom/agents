@@ -2,8 +2,8 @@
 # Tests: hooks/preuse-auto-approve.js
 # Tags: scope:issue-specific
 
-# PreToolUse hook (matcher: Monitor|EnterWorktree) that auto-approves low-risk tool calls:
-# Monitor always, EnterWorktree only when the target path resolves inside WORKTREE_BASE_DIR.
+# PreToolUse hook (matcher: Monitor) that auto-approves low-risk tool calls: Monitor always.
+# Since #1610 EnterWorktree gets no decision on any path; the cases below pin that pass-through.
 
 # TL3 gap (what this test does NOT catch):
 # - Does not verify the hook fires in a live CC session when Monitor/EnterWorktree is called
@@ -74,7 +74,6 @@ BASE_DIR="C:/git/worktrees"
 # allow() emits the full PreToolUse hookSpecificOutput envelope; passThrough()
 # emits a bare "{}" (still valid JSON, distinct from "no output").
 MONITOR_ALLOW='{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"Monitor auto-approved: low-risk background monitoring"}}'
-ENTERWORKTREE_ALLOW='{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"EnterWorktree auto-approved: path is within WORKTREE_BASE_DIR"}}'
 PASSTHROUGH_OUT='{}'
 
 # is_allow returns success when the given output is an allow decision
@@ -110,15 +109,15 @@ run_case2() {
     fi
 }
 
-# --- Case 3: EnterWorktree inside WORKTREE_BASE_DIR -> allow -----------------
+# --- Case 3: EnterWorktree inside WORKTREE_BASE_DIR -> pass-through (#1610) --
 run_case3() {
     local cfg
     cfg="$(make_fixture "WORKTREE_BASE_DIR=$BASE_DIR")"
     run_hook "$cfg" '{"tool_name":"EnterWorktree","tool_input":{"path":"C:/git/worktrees/task/agents"},"session_id":"s1"}'
-    if [ "$RC" = "0" ] && [ "$OUT" = "$ENTERWORKTREE_ALLOW" ]; then
-        pass "3: EnterWorktree inside WORKTREE_BASE_DIR -> allow"
+    if [ "$RC" = "0" ] && [ "$OUT" = "$PASSTHROUGH_OUT" ]; then
+        pass "3: EnterWorktree inside WORKTREE_BASE_DIR -> pass-through, exit 0"
     else
-        fail "3: EnterWorktree inside WORKTREE_BASE_DIR -> allow (rc=$RC out=$OUT)"
+        fail "3: EnterWorktree inside WORKTREE_BASE_DIR -> pass-through, exit 0 (rc=$RC out=$OUT)"
     fi
 }
 
@@ -249,45 +248,6 @@ run_case13() {
     fi
 }
 
-# --- Case 14: EnterWorktree boundary matrix (table-driven) ------------------
-# Each row: description|base_dir|candidate_path|expect ("allow"|"deny")
-# Uses a JSON-escaped candidate_path (backslashes doubled for JSON string).
-BOUNDARY_CASES=(
-    "exact base match|C:/git/worktrees|C:/git/worktrees|allow"
-    "descendant two levels deep|C:/git/worktrees|C:/git/worktrees/task/agents|allow"
-    "sibling-prefix directory (not a real descendant)|C:/git/worktrees|C:/git/worktrees-other/task|deny"
-    "mixed separators (backslash)|C:/git/worktrees|C:\\\\git\\\\worktrees\\\\task\\\\agents|allow"
-    "case difference on drive letter|C:/git/worktrees|c:/git/worktrees/task/agents|allow"
-    "trailing separator on base|C:/git/worktrees/|C:/git/worktrees/task/agents|allow"
-    "trailing separator on candidate|C:/git/worktrees|C:/git/worktrees/task/agents/|allow"
-    ". segment in candidate path|C:/git/worktrees|C:/git/worktrees/./task/agents|allow"
-    ".. traversal attempt|C:/git/worktrees|C:/git/worktrees/task/../../etc|deny"
-)
-
-run_case14() {
-    local idx=0 row desc base cand expect cfg json
-    for row in "${BOUNDARY_CASES[@]}"; do
-        idx=$((idx + 1))
-        IFS='|' read -r desc base cand expect <<< "$row"
-        cfg="$(make_fixture "WORKTREE_BASE_DIR=$base")"
-        json="{\"tool_name\":\"EnterWorktree\",\"tool_input\":{\"path\":\"$cand\"},\"session_id\":\"s1\"}"
-        run_hook "$cfg" "$json"
-        if [ "$expect" = "allow" ]; then
-            if [ "$RC" = "0" ] && [ "$OUT" = "$ENTERWORKTREE_ALLOW" ]; then
-                pass "14.$idx: $desc -> allow"
-            else
-                fail "14.$idx: $desc -> allow (rc=$RC out=$OUT base=$base cand=$cand)"
-            fi
-        else
-            if [ "$RC" = "0" ] && ! is_allow "$OUT"; then
-                pass "14.$idx: $desc -> NOT allow"
-            else
-                fail "14.$idx: $desc -> NOT allow (rc=$RC out=$OUT base=$base cand=$cand)"
-            fi
-        fi
-    done
-}
-
 # --- Case 15: non-string path (JSON number) -> pass-through, exit 0 ---------
 run_case15() {
     local cfg
@@ -297,51 +257,6 @@ run_case15() {
         pass "15: EnterWorktree, non-string path -> pass-through, exit 0"
     else
         fail "15: EnterWorktree, non-string path -> pass-through, exit 0 (rc=$RC out=$OUT)"
-    fi
-}
-
-# --- Case 16: symlink inside WORKTREE_BASE_DIR pointing outside -------------
-# C6: creates a real symlink under the base dir that resolves outside it.
-# The implementation resolves symlinks via fs.realpathSync before the
-# boundary check (see hooks/preuse-auto-approve.js), so a symlink cannot be
-# used to bypass WORKTREE_BASE_DIR containment: the resolved target lives
-# outside the base, so this asserts NOT allow.
-# Skipped on Windows when symlink creation requires elevated privilege
-# (Developer Mode / admin) — detected via a live symlink probe.
-run_case16() {
-    local base_real outside_real link_path
-    base_real="$(mktemp -d "$WORK_DIR/base.XXXXXX")"
-    outside_real="$(mktemp -d "$WORK_DIR/outside.XXXXXX")"
-    link_path="$base_real/symlink"
-
-    # Normalize to a Windows-recognizable path form so Node (which sees
-    # native Windows paths, not the MSYS/Git-Bash /tmp/... view) resolves
-    # WORKTREE_BASE_DIR and the symlink target consistently.
-    if command -v cygpath >/dev/null 2>&1; then
-        base_real="$(cygpath -m "$base_real")"
-        outside_real="$(cygpath -m "$outside_real")"
-        link_path="$(cygpath -m "$link_path")"
-    fi
-
-    # Probe: can we create symlinks at all in this environment?
-    if ! node -e '
-        const fs = require("fs");
-        try { fs.symlinkSync(process.argv[2], process.argv[1], "dir"); }
-        catch (e) { process.exit(1); }
-    ' "$link_path" "$outside_real" 2>/dev/null; then
-        skip "16: symlink inside WORKTREE_BASE_DIR pointing outside (symlink creation unsupported/unprivileged on this host)"
-        return
-    fi
-
-    local cfg
-    cfg="$(make_fixture "WORKTREE_BASE_DIR=$base_real")"
-    local json
-    json="{\"tool_name\":\"EnterWorktree\",\"tool_input\":{\"path\":\"$link_path\"},\"session_id\":\"s1\"}"
-    run_hook "$cfg" "$json"
-    if [ "$RC" = "0" ] && ! is_allow "$OUT"; then
-        pass "16: symlink inside WORKTREE_BASE_DIR pointing outside -> NOT allow (symlinks resolved)"
-    else
-        fail "16: symlink inside WORKTREE_BASE_DIR pointing outside -> NOT allow (rc=$RC out=$OUT)"
     fi
 }
 
@@ -358,9 +273,7 @@ run_case10
 run_case11
 run_case12
 run_case13
-run_case14
 run_case15
-run_case16
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

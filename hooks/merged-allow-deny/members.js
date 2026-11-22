@@ -16,7 +16,7 @@ const PRIMARY_TOOLS = Object.freeze(["Bash", "Read", "Grep", "Glob", "Edit", "Wr
 // One settings.json registration per group; the groups do not overlap.
 const GROUPS = Object.freeze({
   primary: PRIMARY_TOOLS,
-  "monitor-worktree": Object.freeze(["Monitor", "EnterWorktree"]),
+  monitor: Object.freeze(["Monitor"]),
 });
 
 // bash-guard verdict -> judge result. notify keeps today's approve + extras (b-rejected branch).
@@ -62,7 +62,7 @@ const MEMBERS = Object.freeze([
     judge: (input) => captureEchoJudge.judgeCaptureEcho(input),
   },
   {
-    name: "preuse-auto-approve", tools: Object.freeze(["Monitor", "EnterWorktree", "Bash", "runInTerminal", "runCommands"]),
+    name: "preuse-auto-approve", tools: Object.freeze(["Monitor", "Bash", "runInTerminal", "runCommands"]),
     failClosed: false, needsEnv: true,
     failure: { "read-error": "none", "json-invalid": "none" }, diagnose: [],
     judge: (input) => autoApproveJudge.judgeAutoApprove(input),

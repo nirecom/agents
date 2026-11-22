@@ -31,7 +31,7 @@ Never emit WORKTREE_OFF and never use `--force` to force removal — /sweep-work
 `git -C <main> worktree prune`
 
 ## WE-14 — Orphan-dir cleanup
-`node "$AGENTS_MAIN_ROOT/hooks/cleanup-orphan-dir.js" "<WORKTREE_BASE_DIR>/<task-name>"`. If it refuses with "not empty", re-run with `--force-if-not-registered` (requires WE-5 inventory complete — issue #322).
+`node "$AGENTS_MAIN_ROOT/hooks/cleanup-orphan-dir.js" --repo <main> "<task-dir>"`, where `<task-dir>` is the parent directory of the removed worktree path (`<WORKTREE_BASE>/<task-name>`; `bin/worktree-base --repo <main>` prints `WORKTREE_BASE=`). If it refuses with "not empty", re-run with `--force-if-not-registered` (requires WE-5 inventory complete — issue #322).
 
 ## WE-15 — Delete branch
 `WORKTREE_END_SKILL=1 git -C <main> branch -D <branch>` — `-D` required because squash-merge produces a new commit not recognised by `-d`'s fully-merged check. The inline `WORKTREE_END_SKILL=1` is the authorization token for `enforce-worktree.js`.

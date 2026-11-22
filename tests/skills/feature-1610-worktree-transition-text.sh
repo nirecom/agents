@@ -13,6 +13,8 @@
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=tests/lib/harness.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 FRAGMENT="$SCRIPT_CHECKOUT_ROOT/skills/_shared/worktree-transition.md"
 WS="$SCRIPT_CHECKOUT_ROOT/skills/worktree-start/SKILL.md"
 WE="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/SKILL.md"
@@ -21,11 +23,6 @@ WE="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/SKILL.md"
 NEXT_STEP="$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/next-step/steps.js"
 ENTRY_GATE="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/worktree-entry-gate.js"
 REMEDY="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree/worktree-remedy.js"
-
-PASS=0; FAIL=0; SKIP=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
 require_source() {
     local path="$1" label="$2"
@@ -257,9 +254,65 @@ run_X12e() {
     fi
 }
 
-run_X1; run_X2; run_X3; run_X4; run_X5; run_X6
-run_X7; run_X8; run_X9; run_X10; run_X11; run_X12
+case_begin "fragment-size-under-warn" "skills/_shared/worktree-transition.md"
+run_X1
+case_end
+case_begin "fragment-has-no-code-fences" "skills/_shared/worktree-transition.md"
+run_X2
+case_end
+case_begin "start-entry-step-references-fragment" "skills/worktree-start/SKILL.md"
+run_X3
+case_end
+case_begin "start-final-report-mentions-entry" "skills/worktree-start/SKILL.md"
+run_X4
+case_end
+case_begin "end-return-step-references-fragment" "skills/worktree-end/SKILL.md"
+run_X5
+case_end
+case_begin "entry-gate-carries-fragment-path" "hooks/workflow-gate/worktree-entry-gate.js"
+run_X6
+case_end
+case_begin "remedy-carries-fragment-path" "hooks/enforce-worktree/worktree-remedy.js"
+run_X7
+case_end
+case_begin "end-cwd-ordering-warning-kept" "skills/worktree-end/SKILL.md"
+run_X8
+case_end
+case_begin "no-decimal-step-labels" "skills/worktree-start/SKILL.md"
+run_X9
+case_end
+case_begin "skill-files-under-warn" "skills/worktree-start/SKILL.md"
+run_X10
+case_end
+case_begin "step-hint-references-fragment" "bin/workflow/lib/next-step/"
+run_X11
+case_end
+case_begin "duplication-policy-static" "skills/_shared/worktree-transition.md"
+run_X12
+case_end
+case_begin "referrers-omit-cd-mechanics" "skills/worktree-start/SKILL.md"
 run_X12e
+case_end
+
+# X13 — #1610/#1849: the in-repo worktree base removes the EnterWorktree confirmation
+# dialog, so the fragment stops calling it normal and unsuppressible. TL3 gap: whether
+# a live EnterWorktree call skips the dialog needs a real session (manual smoke).
+case_begin "dialog-not-called-normal" "skills/_shared/worktree-transition.md"
+check_lacks "X13a: the entry section no longer calls the confirmation dialog normal" \
+    "that is normal since v2.1.206" "$FRAGMENT"
+case_end
+case_begin "dialog-not-called-unsuppressible" "skills/_shared/worktree-transition.md"
+check_lacks "X13b: the notes no longer say the dialog cannot be suppressed" \
+    "cannot be suppressed from this repository" "$FRAGMENT"
+case_end
+case_begin "transcript-note-kept" "skills/_shared/worktree-transition.md"
+check_has "X13c: the transcript-relocation note is kept" \
+    "Entering relocates the session transcript" "$FRAGMENT"
+case_end
+case_begin "entry-still-uses-enterworktree" "skills/_shared/worktree-transition.md"
+check_has "X13d: the entry section still calls the native EnterWorktree tool" \
+    'Call the native `EnterWorktree` tool' "$FRAGMENT"
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

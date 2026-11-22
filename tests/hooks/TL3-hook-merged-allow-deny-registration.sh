@@ -12,7 +12,7 @@
 set -uo pipefail
 
 # TL3 gap (what even this file does NOT catch): runInTerminal cannot be started from
-# `claude -p`, and Monitor / EnterWorktree are not reliably reachable there either; the TL2
+# `claude -p`, and Monitor is not reliably reachable there either; the TL2
 # tests/hooks/feature-2676-merged-allow-deny.js covers them (routing, failure parity, parity).
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
@@ -72,7 +72,7 @@ unset CLAUDECODE
 case_begin "merged-registration-live" "hooks/merged-allow-deny.js"
 COPIED="$(node "$(node_path "$WRITER")" "$(node_path "$SCRIPT_CHECKOUT_ROOT/settings.json")" "$AGENTS_M" "$(node_path "$REPO/.claude/settings.json")")"
 expect "settings-json-registers-the-merged-hook-twice (precondition)" "2" "$COPIED" \
-    "settings.json does not carry the primary and monitor-worktree registrations of hooks/merged-allow-deny.js yet"
+    "settings.json does not carry the primary and monitor registrations of hooks/merged-allow-deny.js yet"
 
 declare -A TURN_RC=()
 run_turn() { # <session-uuid> <prompt> [repo]; no --dangerously-skip-permissions: the decision is measured

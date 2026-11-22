@@ -70,7 +70,7 @@ Because a cancel is visible only in the transcript, `hooks/lib/hook-cancel-notic
 
 ## Merged allow-deny hook
 
-`hooks/merged-allow-deny.js` runs `bash-guard`, `preuse-auto-approve`, `block-dotenv`, `block-credentials` and `block-capture-echo` in one process. It is registered once per matcher group (`--matcher-group primary` and `--matcher-group monitor-worktree`); `hooks/merged-allow-deny/members.js` owns which tools route to which member.
+`hooks/merged-allow-deny.js` runs `bash-guard`, `preuse-auto-approve`, `block-dotenv`, `block-credentials` and `block-capture-echo` in one process. It is registered once per matcher group (`--matcher-group primary` and `--matcher-group monitor`, Monitor only since #1610); `hooks/merged-allow-deny/members.js` owns which tools route to which member.
 
 - Members decide on the parsed input in order; the first deny ends the run. Results merge as deny > ask > allow > approve > none (`hooks/merged-allow-deny/merge.js`); `none` never turns into `approve`.
 - Unreadable or malformed input answers per member as each standalone hook did (unreadable stdin denies for `block-dotenv`, `block-credentials` and `bash-guard`; everything else fails open), with at most one stderr diagnostic.

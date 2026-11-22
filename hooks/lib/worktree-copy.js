@@ -9,6 +9,21 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const { buildMatcher } = require("./worktree-include-match");
+const { IN_REPO_BASE_REL, resolveWorktreeBase, inRepoRelative } = require("./worktree-base");
+
+// #1610: repo-relative roots never copied — the default in-repo base, plus the resolver base when
+// it lies inside this repo — so live nested worktrees never leak into a new one.
+function baseExcludeRoots(mainDir) {
+  const roots = [IN_REPO_BASE_REL];
+  const r = resolveWorktreeBase(mainDir);
+  const rel = r.ok ? inRepoRelative(r.base, mainDir) : null;
+  if (rel && !roots.includes(rel)) roots.push(rel);
+  return roots;
+}
+
+function underAnyRoot(rel, roots) {
+  return roots.some((root) => rel === root || rel.startsWith(root + "/"));
+}
 
 function readPatternFile(filePath) {
   try {
@@ -74,6 +89,7 @@ function copyInclude({ targetMainRoot, worktreePath, includeFile }) {
   }
 
   const gitignored = lsResult.stdout.toString("utf8").split("\0").filter(Boolean);
+  const baseRoots = baseExcludeRoots(mainDir);
 
   // Build matchers
   const includeMatcher = buildMatcher(includePatterns);
@@ -102,7 +118,8 @@ function copyInclude({ targetMainRoot, worktreePath, includeFile }) {
     // entry is removed or typo'd.
     const normalizedRel = relPath.replace(/\\/g, "/");
     if (normalizedRel === ".worktree-backup" ||
-        normalizedRel.startsWith(".worktree-backup/")) {
+        normalizedRel.startsWith(".worktree-backup/") ||
+        underAnyRoot(normalizedRel, baseRoots)) {
       result.denied.push(relPath);
       continue;
     }
