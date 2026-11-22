@@ -134,7 +134,7 @@ function git(repo, args) {
   return execFileSync('git', ['-C', repo].concat(args), {
     encoding: 'buffer',
     maxBuffer: 64 * 1024 * 1024,
-    stdio: ['pipe', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true,
   });
 }
 

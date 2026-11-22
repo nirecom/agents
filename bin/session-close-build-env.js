@@ -77,7 +77,7 @@ if (args.wfMeta) writeEnv(noPrEnv(""));
 
 // argv only, no shell: the branch name is attacker-controllable (CWE-78).
 function run(file, argv) {
-  return execFileSync(file, argv, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+  return execFileSync(file, argv, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], windowsHide: true }).trim();
 }
 
 let branch;

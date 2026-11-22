@@ -45,7 +45,7 @@ function isScannedPath(rel) {
 }
 
 const git = (repoRoot, args, input) =>
-  execFileSync("git", ["-C", repoRoot, ...args], { input, maxBuffer: 256 * 1024 * 1024 });
+  execFileSync("git", ["-C", repoRoot, ...args], { input, maxBuffer: 256 * 1024 * 1024, windowsHide: true });
 
 // readIndexShellFiles(repoRoot, sub) → Map<absPath, text> of every scanned *.sh staged
 // under <repoRoot>/<sub>, read from the index (stage 0) rather than the working tree.

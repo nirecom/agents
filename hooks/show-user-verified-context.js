@@ -31,7 +31,7 @@ function resolveCwd(input) {
 function getStagedFiles(cwd) {
   try {
     const r = spawnSync("git", ["-C", cwd, "diff", "--cached", "--name-only"], {
-      encoding: "utf8", timeout: 5000,
+      encoding: "utf8", timeout: 5000, windowsHide: true,
     });
     if (r.status !== 0) return [];
     return r.stdout.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
@@ -41,7 +41,7 @@ function getStagedFiles(cwd) {
 function getPrUrl(cwd) {
   try {
     const r = spawnSync("gh", ["pr", "view", "--json", "url", "-q", ".url"], {
-      cwd, encoding: "utf8", timeout: 5000,
+      cwd, encoding: "utf8", timeout: 5000, windowsHide: true,
     });
     if (r.status !== 0 || !r.stdout.trim()) return "";
     return r.stdout.trim();

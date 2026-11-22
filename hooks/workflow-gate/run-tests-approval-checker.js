@@ -13,7 +13,7 @@ const REAPPROVE = "Re-approve in the session's worktree: re-run /run-tests, then
 
 function headOf(repoDir) {
   if (!repoDir) return null;
-  const r = spawnSync("git", ["-C", repoDir, "rev-parse", "--verify", "--quiet", "HEAD"], { encoding: "utf8", timeout: 2000 });
+  const r = spawnSync("git", ["-C", repoDir, "rev-parse", "--verify", "--quiet", "HEAD"], { encoding: "utf8", timeout: 2000, windowsHide: true });
   const out = r.status === 0 ? String(r.stdout || "").trim() : "";
   return HEAD_RE.test(out) ? out : null;
 }

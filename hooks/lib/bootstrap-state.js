@@ -42,9 +42,8 @@ function matchesAny(text, patterns) {
   return false;
 }
 
-// Probe the remote and classify its state.
-// Returns: { preBootstrap: boolean, reason: string, classification: string }
-//   classification values:
+// Probe the remote and classify it: { preBootstrap, reason, classification };
+// preBootstrap is true only for "empty-repo". classification values:
 //     "ok"          — remote has a default branch
 //     "empty-repo"  — remote responded but has no refs (pre-bootstrap)
 //     "network"     — host/transport failure
@@ -53,7 +52,6 @@ function matchesAny(text, patterns) {
 //     "timeout"     — spawnSync killed by timeoutMs (SIGTERM)
 //     "spawn-error" — could not spawn git at all
 //     "unknown"     — non-zero exit not matching any known pattern
-//   preBootstrap is only true for "empty-repo".
 function isRemoteInPreBootstrap(repoRoot, opts) {
   const {
     remote = 'origin',
@@ -74,7 +72,7 @@ function isRemoteInPreBootstrap(repoRoot, opts) {
           GIT_TERMINAL_PROMPT: '0',
           // /bin/true doesn't exist on Windows; 'echo' is a universal no-op credential helper.
           GIT_ASKPASS: process.platform === 'win32' ? 'echo' : '/bin/true',
-        },
+        }, windowsHide: true,
       }
     );
   } catch (e) {

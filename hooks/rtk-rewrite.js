@@ -94,7 +94,7 @@ function isRtkAuditEnabled() {
 
 function whichRtkOnPath() {
   const finder = process.platform === "win32" ? "where.exe" : "which";
-  const out = execFileSync(finder, ["rtk"], { encoding: "utf8" });
+  const out = execFileSync(finder, ["rtk"], { encoding: "utf8", windowsHide: true });
   return out.split(/\r?\n/).map((l) => l.trim()).find((l) => l.length > 0) || null;
 }
 

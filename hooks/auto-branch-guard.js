@@ -37,7 +37,7 @@ function getProtectedBranches(repoCwd) {
     const r = spawnSync("git", ["symbolic-ref", "refs/remotes/origin/HEAD"], {
       cwd: repoCwd,
       encoding: "utf8",
-      timeout: 2000,
+      timeout: 2000, windowsHide: true,
     });
     if (r.status === 0) {
       const m = (r.stdout || "").trim().match(/refs\/remotes\/origin\/(.+)$/);
@@ -50,7 +50,7 @@ function getProtectedBranches(repoCwd) {
     try {
       const r = spawnSync("git", ["show-ref", "--verify", "--quiet", `refs/heads/${candidate}`], {
         cwd: repoCwd,
-        timeout: 2000,
+        timeout: 2000, windowsHide: true,
       });
       if (r.status === 0) branches.add(candidate);
     } catch (e) {}
@@ -61,7 +61,7 @@ function getProtectedBranches(repoCwd) {
     const r = spawnSync("git", ["config", "init.defaultBranch"], {
       cwd: repoCwd,
       encoding: "utf8",
-      timeout: 2000,
+      timeout: 2000, windowsHide: true,
     });
     if (r.status === 0) {
       const v = (r.stdout || "").trim();
@@ -81,14 +81,14 @@ function getCurrentBranch(repoCwd) {
     // First: check HEAD has commits. Unborn HEAD → branching is meaningless → allow.
     const verify = spawnSync("git", ["rev-parse", "--verify", "HEAD"], {
       cwd: repoCwd,
-      timeout: 2000,
+      timeout: 2000, windowsHide: true,
     });
     if (verify.status !== 0) return null; // unborn HEAD
 
     const r = spawnSync("git", ["symbolic-ref", "--short", "HEAD"], {
       cwd: repoCwd,
       encoding: "utf8",
-      timeout: 2000,
+      timeout: 2000, windowsHide: true,
     });
     if (r.status !== 0) return null; // detached HEAD
     return (r.stdout || "").trim() || null;
@@ -111,7 +111,7 @@ function findRepoRoot(filePath) {
     const r = spawnSync("git", ["rev-parse", "--show-toplevel"], {
       cwd: dir,
       encoding: "utf8",
-      timeout: 2000,
+      timeout: 2000, windowsHide: true,
     });
     if (r.status !== 0) return null;
     const root = (r.stdout || "").trim();

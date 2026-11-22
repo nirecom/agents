@@ -164,11 +164,12 @@ function collectOutput(result, files, options) {
 // Each wrapper takes (command, args, options); args is undefined when the caller gave none.
 function spawnSync(command, args, options = {}) {
   const opened = openFiles(options);
+  const spawnOptions = { ...opened.options, windowsHide: true };
   let result = null;
   try {
     result = args === undefined
-      ? childProcess.spawnSync(command, opened.options)
-      : childProcess.spawnSync(command, args, opened.options);
+      ? childProcess.spawnSync(command, spawnOptions)
+      : childProcess.spawnSync(command, args, spawnOptions);
   } finally {
     if (result === null) releaseFiles(opened.files);
   }

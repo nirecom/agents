@@ -28,7 +28,7 @@ if (field && !["type", "host", "project"].includes(field)) {
 if (url === null) {
   try {
     url = execFileSync("git", ["-C", repoDir, "remote", "get-url", "origin"],
-      { encoding: "utf8", timeout: 5000 }).trim();
+      { encoding: "utf8", timeout: 5000, windowsHide: true }).trim();
   } catch (e) {
     url = ""; // unreadable origin → fail-open to unknown
   }
