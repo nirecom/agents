@@ -36,7 +36,7 @@ function splitAbsolute(p) {
 // The on-disk entry of <dir> naming <seg>: an exact entry wins, else the only fold match.
 function realEntryName(dir, seg) {
   // No fold: the caller's lstat already proved this exact spelling exists, so a traversable but
-  // unlistable parent (POSIX 0711) must not make the walk fail.
+  // unlistable parent (POSIX 0311) must not make the walk fail.
   if (!foldsCase()) return seg;
   const names = fs.readdirSync(dir).map((d) => (typeof d === "string" ? d : d.name));
   if (names.includes(seg)) return seg;
