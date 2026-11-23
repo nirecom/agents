@@ -132,7 +132,7 @@ const rowKey = (r) => JSON.stringify([r.level, Array.isArray(r.steps) ? r.steps 
 
 // reviewsAgainst(root, base, rows) -> {reviews, notes}: rows added or changed since base.
 function reviewsAgainst(root, base, rows) {
-  const r = spawnSync("git", ["-C", root, "show", `${base}:${TABLE_REL}`], { encoding: "utf8", timeout: 30000 });
+  const r = spawnSync("git", ["-C", root, "show", `${base}:${TABLE_REL}`], { encoding: "utf8", timeout: 30000, windowsHide: true });
   let old = null;
   try { if (r.status === 0) old = JSON.parse(r.stdout).dialogs; } catch (_e) { old = null; }
   if (!Array.isArray(old)) return { reviews: [], notes: [`base ${base}: the classification table cannot be read there; REVIEW lines skipped`] };

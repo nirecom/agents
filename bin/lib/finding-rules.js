@@ -65,7 +65,7 @@ function runHandoff(entry) {
     fs.writeFileSync(input, JSON.stringify({
       section: entry.section, body: entry.body, instance: entry.instance || null, loc: entry.loc || null,
     }));
-    const r = spawnSync(process.execPath, [bin, input], { encoding: "utf8", timeout: HANDOFF_TIMEOUT_MS });
+    const r = spawnSync(process.execPath, [bin, input], { encoding: "utf8", timeout: HANDOFF_TIMEOUT_MS, windowsHide: true });
     if (r.error || r.status !== 0) return "failed";
     return /^handoff: accepted\r?$/m.test(String(r.stdout || "")) ? "accepted" : "rejected";
   } catch (_e) {

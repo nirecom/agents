@@ -91,7 +91,7 @@ if (!result.notesWritten) {
   process.exit(1);
 }
 if (result.baseExcludeError) {
-  const ignored = spawnSync("git", ["-C", targetMainRoot, "check-ignore", "-q", `${baseRel}/`], { timeout: 10000 }).status === 0;
+  const ignored = spawnSync("git", ["-C", targetMainRoot, "check-ignore", "-q", `${baseRel}/`], { timeout: 10000, windowsHide: true }).status === 0;
   if (!ignored) {
     process.stderr.write(`base exclude append failed and git does not ignore ${baseRel}/: ${result.baseExcludeError}\n`);
     process.exit(1);

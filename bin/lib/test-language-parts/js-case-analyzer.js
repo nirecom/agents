@@ -121,7 +121,7 @@ function skipReason(lines) {
 
 // node --check parses the file without running it; its stderr is the reason.
 function syntaxCheck(file) {
-  const done = cp.spawnSync(process.execPath, ["--check", file], { encoding: "utf8", timeout: 60000 });
+  const done = cp.spawnSync(process.execPath, ["--check", file], { encoding: "utf8", timeout: 60000, windowsHide: true });
   if (done.status === 0) return [];
   throw new Error((done.stderr || done.error?.message || `node --check exited ${done.status}`).trim());
 }

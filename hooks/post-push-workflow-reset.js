@@ -57,7 +57,7 @@ try {
     });
     let head = null;
     try {
-      head = execSync("git rev-parse HEAD", { cwd: repoCwd, encoding: "utf8", timeout: 2000 }).trim();
+      head = execSync("git rev-parse HEAD", { cwd: repoCwd, encoding: "utf8", timeout: 2000, windowsHide: true }).trim();
     } catch (e) {
       head = null;
     }

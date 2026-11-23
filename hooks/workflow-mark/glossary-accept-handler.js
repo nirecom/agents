@@ -67,7 +67,7 @@ const openFindings = (rec, norm) => asArray(rec && rec.findings).filter((f) => f
 function listDrift(sid, format) {
   const plans = fwd(toWindowsPath(getWorkflowPlansDir()));
   const r = spawnSync("bash", [fwd(LEDGER_CLI), "list-drift", "--plans-dir", plans, "--session-id", sid, "--format", format],
-    { encoding: "utf8", timeout: 15000 });
+    { encoding: "utf8", timeout: 15000, windowsHide: true });
   if (r.error || r.status !== 0) return null;
   return String(r.stdout || "").split(/\r?\n/).filter(Boolean).map((l) => {
     const [discrim, term] = l.split("\t");

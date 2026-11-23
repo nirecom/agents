@@ -156,7 +156,7 @@ function main(argv) {
   // 6. Registered worktree check via the target repo's main root.
   const wtRes = spawnSync(
     "git", ["-C", registryRepo, "worktree", "list", "--porcelain"],
-    { encoding: "utf8", timeout: 5000 }
+    { encoding: "utf8", timeout: 5000, windowsHide: true }
   );
   if (wtRes.status !== 0) {
     refuse(`git worktree list failed (status ${wtRes.status}): ${(wtRes.stderr || "").trim()}`);

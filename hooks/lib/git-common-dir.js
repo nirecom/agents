@@ -11,7 +11,7 @@ const { spawnSync } = require("child_process");
 function getGitCommonDir(dir) {
   try {
     const r = spawnSync("git", ["-C", dir, "rev-parse", "--git-common-dir"], {
-      encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "pipe"],
+      encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
     });
     if (r.status !== 0) return null;
     const raw = (r.stdout || "").trim();
