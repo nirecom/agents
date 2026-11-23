@@ -3,8 +3,8 @@
 // PM command and at PM session start. Advisory and fail-open within one budget (default 2000 ms):
 //   1. the own mailbox <tag>.jsonl: ids already in seen_notifications are dropped, the rest is shown, remembered
 //      (last SEEN_NOTIFICATIONS_MAX) and removed;
-//   2. unassigned.jsonl: own entries are taken and shown, ownerless ones dropped, the rest left and counted;
-//   3. drift (opts.drift only): an assigned issue whose PM field names another PM or none;
+//   2. unassigned.jsonl: own entries are taken and shown, trusted-ownerless ones dropped, the rest left and counted;
+//   3. drift (opts.drift only): an assigned issue whose PM field names another PM or none (field absent: one line);
 //   4. meta_children: a child gone from its meta parent's sub-issues is shown as a detach once per issue.
 // runInbox(sid, {budgetMs?, drift?, origin?}) -> the text to show ("" when there is nothing). Steps 2-4 read
 // the forge only when the home origin (opts.origin when given, else the cwd's) is GitHub; otherwise
@@ -45,7 +45,7 @@ function takeUnassigned(tag, seen, shown, lines, left, after, forge) {
   for (const e of entries) {
     if (seen.has(e.id)) continue;
     const ref = C.refOfIssue(e.issue);
-    const r = forge && ref && left() > 0 ?C.ownerOf(ref, Math.min(C.OWNER_TIMEOUT_MS, left())) : { ok: false };
+    const r = forge && ref && left() > 0 ? C.decidedOwnerOf(ref, Math.min(C.OWNER_TIMEOUT_MS, left())) : { ok: false };
     if (r.ok && r.owner && C.S.sameTag(r.owner.tag, tag)) { seen.add(e.id); shown.add(lc(e.issue)); lines.push(lineOf(e)); continue; }
     if (r.ok && !r.owner) continue;
     keep.push(e);
@@ -59,10 +59,15 @@ function checkDrift(pm, lines, deadlineAt) {
   if (refs.length === 0) return;
   const r = readPmFields(refs, { deadlineAt });
   if (!r.ok) { lines.push(`${P} drift check skipped (${r.reason}); it runs at the next PM command`); return; }
+  const absent = [];
   for (const ref of refs) {
-    const v = r.values[`${ref.repo}#${ref.number}`];
+    const key = `${ref.repo}#${ref.number}`;
+    const v = r.values[key];
+    if (r.fieldAbsent && r.fieldAbsent[key]) { absent.push(key); continue; }
     if (!C.S.sameTag(v, pm.tag)) lines.push(`${P} drift: ${ref.repo}#${ref.number} is in this PM state but its PM field is ${v || "(empty)"}; rerun the PM command or fix the field`);
   }
+  // A board without the pm field is one cause, reported once instead of a drift per issue (#3135).
+  if (absent.length > 0) lines.push(`${P} drift check skipped for ${absent.join(", ")}: the board has no \`pm\` field (field absent); run /migrate-tracker to add it`);
 }
 
 // checkMeta(meta, assigned, shown, lines, deadlineAt) -> the updated meta_children, or null when unchanged/unread.
