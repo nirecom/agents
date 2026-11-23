@@ -304,3 +304,7 @@ Changes: Fixed: hooks and bin scripts that spawn git, gh, or bash no longer flas
 ### FEATURE: PR #3137 (2026-11-23)
 Background: feat(#1610, #1849): default the worktree base to <repo>/.claude/workt...
 Changes: New worktrees are now created under `<repo>/.claude/worktrees` by default, so entering a worktree no longer shows a confirmation dialog. Set `WORKTREE_BASE_DIR` to keep a custom location; existing worktrees under the old base keep working until their sessions close them.
+
+### FEATURE: PR #3140 (2026-11-23)
+Background: fix(#3135): treat a Project without the pm field as undecidable, not as no-owner, and repair it through migrate-tracker
+Changes: Fixed: PM owner lookup no longer fails with gh_exec_failed when the Project has no pm field; run /migrate once to create the field and backfill existing owners.
