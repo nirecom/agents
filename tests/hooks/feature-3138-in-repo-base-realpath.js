@@ -296,9 +296,6 @@ test("resolution-errors-fail-closed", () => {
   assert.equal(wb("isInRepoBase")(target, MAIN), true, "control: allowed without a stub");
   const eacces = child(CHILD_EACCES, [target, MAIN, BASE]);
   assert.deepEqual(eacces, { inBase: false, rel: null }, "realResolve throwing EACCES refuses");
-  const noEntry = child(CHILD_NO_ENTRY, [target, MAIN, path.join(MAIN, ".claude")]);
-  assert.ok(noEntry.threw, "a segment with no matching readdir entry throws");
-  assert.equal(noEntry.inBase, false, "and the classifier refuses");
 });
 caseEnd();
 
@@ -336,5 +333,95 @@ test("new-item-into-a-redirected-base-is-refused", linkOpt, () => {
     assert.equal(isAllowedNewItemCommand(ni(`${fwd(repo)}/.claude/worktrees/t/main`), repo), false, repo);
   }
   assert.equal(isAllowedNewItemCommand(ni(`${B}/lnk-tracked/x`), MAIN), false, "through a link inside the base");
+});
+caseEnd();
+
+// readdir is counted only during realResolve; <deny>="deny" makes every readdir throw EACCES.
+const CHILD_READDIR_COUNT = `
+const fs = require("fs"); const path = require("path"); const [root, target, deny] = process.argv.slice(1);
+const orig = fs.readdirSync; let calls = 0;
+fs.readdirSync = function (p, ...rest) {
+  calls += 1;
+  if (deny === "deny") { const e = new Error("EACCES: permission denied (stub)"); e.code = "EACCES"; throw e; }
+  return orig.call(this, p, ...rest);
+};
+const prf = require(path.join(root, "hooks/lib/path-real-fold.js"));
+calls = 0;
+let got = null, threw = null; try { got = prf.realResolve(target); } catch (e) { threw = String(e && e.code); }
+process.stdout.write(JSON.stringify({ calls, got, threw }));`;
+
+const NO_FOLD_SKIP = FOLDS ? `platform folds letter case (platform=${process.platform})` : false;
+const FOLD_SKIP = FOLDS ? platformRuleMismatch() : `platform does not fold letter case (platform=${process.platform})`;
+if (NO_FOLD_SKIP) process.stdout.write(`# skip no-fold readdir cases: ${NO_FOLD_SKIP}\n`);
+if (FOLD_SKIP) process.stdout.write(`# skip fold readdir cases: ${FOLD_SKIP}\n`);
+
+caseBegin("real-entry-name-skips-readdir-without-fold", "hooks/lib/path-real-fold.js");
+test("real-entry-name-skips-readdir-without-fold", { skip: NO_FOLD_SKIP }, () => {
+  prf("realResolve");
+  const target = path.join(SB, "nofold", "Sub", "leaf");
+  fs.mkdirSync(target, { recursive: true });
+  const got = child(CHILD_READDIR_COUNT, [target, "deny"]);
+  assert.equal(got.threw, null, "an existing path resolves although readdir would fail");
+  assert.equal(got.calls, 0, "no readdir on a non-folding platform");
+  assert.equal(got.got, fs.realpathSync.native(target), "the typed spelling is kept");
+});
+caseEnd();
+
+caseBegin("real-entry-name-reads-dir-with-fold", "hooks/lib/path-real-fold.js");
+test("real-entry-name-reads-dir-with-fold", { skip: FOLD_SKIP }, () => {
+  prf("realResolve");
+  const dir = path.join(SB, "fold-rd");
+  fs.mkdirSync(path.join(dir, "Rd-Leaf"), { recursive: true });
+  const got = child(CHILD_READDIR_COUNT, [path.join(dir, "rd-leaf"), "allow"]);
+  assert.equal(got.threw, null, `resolves: ${got.threw}`);
+  assert.ok(got.calls > 0, "readdir is consulted on a folding platform");
+  assert.equal(path.basename(got.got), "Rd-Leaf", "the on-disk spelling replaces the typed one");
+  const denied = child(CHILD_READDIR_COUNT, [path.join(dir, "rd-leaf"), "deny"]);
+  assert.equal(denied.threw, "EACCES", "a readdir failure still fails the walk where case folds");
+});
+caseEnd();
+
+caseBegin("readdir-without-a-matching-entry-throws", "hooks/lib/path-real-fold.js");
+test("readdir-without-a-matching-entry-throws", { skip: FOLD_SKIP }, () => {
+  prf("realResolve");
+  const target = `${B}/my-task/main`;
+  const noEntry = child(CHILD_NO_ENTRY, [target, MAIN, path.join(MAIN, ".claude")]);
+  assert.ok(noEntry.threw, "a segment with no matching readdir entry throws");
+  assert.equal(noEntry.inBase, false, "and the classifier refuses");
+});
+caseEnd();
+
+// A real traversable-but-unlistable parent (POSIX 0711); the probe decides whether chmod denies listing.
+const UNLISTABLE = path.join(SB, "unlistable");
+let UNLISTABLE_SKIP = NO_FOLD_SKIP;
+if (!UNLISTABLE_SKIP && typeof process.getuid === "function" && process.getuid() === 0) {
+  UNLISTABLE_SKIP = "running as root, which lists a 0711 directory anyway";
+}
+if (!UNLISTABLE_SKIP) {
+  fs.mkdirSync(path.join(UNLISTABLE, "inner"), { recursive: true });
+  try {
+    fs.chmodSync(UNLISTABLE, 0o711);
+    fs.readdirSync(UNLISTABLE);
+    UNLISTABLE_SKIP = "chmod 0711 does not deny listing on this file system";
+  } catch (e) {
+    if (e.code !== "EACCES") UNLISTABLE_SKIP = `chmod unsupported here (${e.code})`;
+  } finally {
+    fs.chmodSync(UNLISTABLE, 0o755);
+  }
+}
+if (UNLISTABLE_SKIP) process.stdout.write(`# skip unlistable-parent case: ${UNLISTABLE_SKIP}\n`);
+
+caseBegin("unlistable-parent-resolves-without-fold", "hooks/lib/path-real-fold.js");
+test("unlistable-parent-resolves-without-fold", { skip: UNLISTABLE_SKIP }, () => {
+  const realResolve = prf("realResolve");
+  const target = path.join(UNLISTABLE, "inner");
+  const expected = fs.realpathSync.native(target);
+  fs.chmodSync(UNLISTABLE, 0o711);
+  try {
+    assert.throws(() => fs.readdirSync(UNLISTABLE), { code: "EACCES" }, "fixture: the parent cannot be listed");
+    assert.equal(realResolve(target), expected, "resolved with the typed spelling, no throw");
+  } finally {
+    fs.chmodSync(UNLISTABLE, 0o755);
+  }
 });
 caseEnd();
