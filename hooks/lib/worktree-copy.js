@@ -10,6 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const { buildMatcher } = require("./worktree-include-match");
 const { IN_REPO_BASE_REL, resolveWorktreeBase, inRepoRelative } = require("./worktree-base");
+const { foldsCase } = require("./path-real-fold");
 
 // #1610: repo-relative roots never copied — the default in-repo base, plus the resolver base when
 // it lies inside this repo — so live nested worktrees never leak into a new one.
@@ -21,8 +22,10 @@ function baseExcludeRoots(mainDir) {
   return roots;
 }
 
-function underAnyRoot(rel, roots) {
-  return roots.some((root) => rel === root || rel.startsWith(root + "/"));
+function underAnyRoot(rel, roots, fold = foldsCase()) {
+  const key = (s) => (fold ? s.toLowerCase() : s);
+  const r = key(rel);
+  return roots.some((root) => r === key(root) || r.startsWith(key(root) + "/"));
 }
 
 function readPatternFile(filePath) {
@@ -183,4 +186,4 @@ function copyInclude({ targetMainRoot, worktreePath, includeFile }) {
   return result;
 }
 
-module.exports = { copyInclude };
+module.exports = { copyInclude, underAnyRoot, baseExcludeRoots };

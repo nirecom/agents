@@ -1,5 +1,5 @@
 # Tests: install/win/global-gitignore.ps1
-# Tags: installer, worktree, pwsh-required, scope:common
+# Tags: installer, worktree, feature-3138, pwsh-required, scope:common
 
 BeforeDiscovery {
     $ScriptPath = (Resolve-Path `
@@ -145,6 +145,41 @@ Describe "global-gitignore.ps1 (broad integration)" {
             $c = Get-IgnoreContent -Xdg $xdg
             Get-MarkerCount $c '# --- BEGIN agents-managed ---' | Should -Be 1
         }
+
+        # #3138: the block also ignores the in-repo worktree base, once, and a rerun changes nothing.
+        It "T16: block ignores the in-repo worktree base exactly once" -Skip:(-not $ScriptExists) {
+            $xdg = New-IsolatedXdg 'case-in-repo-base'
+            $r = Invoke-Installer -Xdg $xdg
+            $r.ExitCode | Should -Be 0
+            $c = Get-IgnoreContent -Xdg $xdg
+            Get-MarkerCount $c '.claude/worktrees/' | Should -Be 1
+            $c | Should -Match '(?m)^# \.claude/worktrees/ \(in-repo worktree base'
+        }
+
+        It "T17: second run leaves a fresh ignore file unchanged" -Skip:(-not $ScriptExists) {
+            $xdg = New-IsolatedXdg 'case-rerun-unchanged'
+            (Invoke-Installer -Xdg $xdg).ExitCode | Should -Be 0
+            $first = Get-IgnoreContent -Xdg $xdg
+            (Invoke-Installer -Xdg $xdg).ExitCode | Should -Be 0
+            $second = Get-IgnoreContent -Xdg $xdg
+            $second | Should -BeExactly $first
+            Get-MarkerCount $second '.claude/worktrees/' | Should -Be 1
+        }
+
+        # The append path writes no blank line before the block and the replace path adds one, so
+        # with user lines the file settles from the second run on; pin that fixed point.
+        It "T18: reruns over user lines settle and keep one new line" -Skip:(-not $ScriptExists) {
+            $xdg = New-IsolatedXdg 'case-rerun-user'
+            [System.IO.File]::WriteAllText((Join-Path $xdg 'git\ignore'), "*.log`n")
+            (Invoke-Installer -Xdg $xdg).ExitCode | Should -Be 0
+            (Invoke-Installer -Xdg $xdg).ExitCode | Should -Be 0
+            $second = Get-IgnoreContent -Xdg $xdg
+            (Invoke-Installer -Xdg $xdg).ExitCode | Should -Be 0
+            $third = Get-IgnoreContent -Xdg $xdg
+            $third | Should -BeExactly $second
+            Get-MarkerCount $third '.claude/worktrees/' | Should -Be 1
+            Get-MarkerCount $third '*.log' | Should -Be 1
+        }
     }
 
     Context "Edge cases" {
@@ -245,6 +280,54 @@ Describe "global-gitignore.ps1 (broad integration)" {
             } finally {
                 try { (Get-Item $p -ErrorAction SilentlyContinue).IsReadOnly = $false } catch { }
             }
+        }
+    }
+
+    # #3138: the append path (user lines, no block) must add the same single blank line before the
+    # block as the replace path, so run 1 and run 2 produce identical bytes. CRLF input only: LF
+    # input is normalised to CRLF by the replace path, an existing behaviour out of scope here.
+    Context "Append path matches replace path (CRLF)" {
+        It "T19: user line then block has exactly one blank line and runs 1-3 are byte-identical" -Skip:(-not $ScriptExists) {
+            $xdg = New-IsolatedXdg 'case-append-crlf'
+            $p = Join-Path $xdg 'git\ignore'
+            [System.IO.File]::WriteAllBytes($p, [System.Text.Encoding]::UTF8.GetBytes("*.log`r`n"))
+            $hashes = @()
+            $texts  = @()
+            foreach ($i in 1..3) {
+                (Invoke-Installer -Xdg $xdg).ExitCode | Should -Be 0
+                $hashes += (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash
+                $texts  += [System.IO.File]::ReadAllText($p)
+            }
+            $hashes[1] | Should -BeExactly $hashes[0]
+            $hashes[2] | Should -BeExactly $hashes[1]
+            $lines = $texts[0] -split "`r?`n"
+            $userIdx  = [array]::IndexOf($lines, '*.log')
+            $beginIdx = [array]::IndexOf($lines, '# --- BEGIN agents-managed ---')
+            $userIdx | Should -BeGreaterOrEqual 0
+            $beginIdx | Should -Be ($userIdx + 2)
+            $lines[$userIdx + 1] | Should -BeExactly ''
+        }
+
+        It "T20: zero-byte file is unchanged between run 1 and run 2" -Skip:(-not $ScriptExists) {
+            $xdg = New-IsolatedXdg 'case-append-empty'
+            $p = Join-Path $xdg 'git\ignore'
+            [System.IO.File]::WriteAllBytes($p, [byte[]]@())
+            (Invoke-Installer -Xdg $xdg).ExitCode | Should -Be 0
+            $h1 = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash
+            (Invoke-Installer -Xdg $xdg).ExitCode | Should -Be 0
+            $h2 = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash
+            $h2 | Should -BeExactly $h1
+        }
+
+        It "T21: user line without trailing newline is unchanged between run 1 and run 2" -Skip:(-not $ScriptExists) {
+            $xdg = New-IsolatedXdg 'case-append-nonl-crlf'
+            $p = Join-Path $xdg 'git\ignore'
+            [System.IO.File]::WriteAllBytes($p, [System.Text.Encoding]::UTF8.GetBytes('*.log'))
+            (Invoke-Installer -Xdg $xdg).ExitCode | Should -Be 0
+            $h1 = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash
+            (Invoke-Installer -Xdg $xdg).ExitCode | Should -Be 0
+            $h2 = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash
+            $h2 | Should -BeExactly $h1
         }
     }
 }

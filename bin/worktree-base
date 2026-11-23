@@ -12,10 +12,12 @@ process.exitCode = 70;
 /*
 AGENTS_NODE_GUARD
 # Usage: worktree-base [--repo <dir>]
-#   Prints WORKTREE_BASE=, MAIN_DIR= and WORKTREE_BASE_SOURCE= (explicit|default) for the
+#   Prints WORKTREE_BASE=, MAIN_DIR=, WORKTREE_BASE_SOURCE= (explicit|default) and
+#   WORKTREE_BASE_FOLD_CASE= (on|off: whether path letter case folds on this platform) for the
 #   repository holding <dir> (default: the CWD). Exit 1 with the reason on stderr when the
 #   main worktree cannot be resolved; exit 64 on a usage error.
-# The resolution is owned by hooks/lib/worktree-base.js, always the one beside this script.
+# The resolution is owned by hooks/lib/worktree-base.js and the fold rule by
+# hooks/lib/path-real-fold.js, always the ones beside this script.
 
 set -u
 
@@ -42,18 +44,21 @@ WB_REPO_ARG="$WB_REPO" node -e '
     const m = /^\/([A-Za-z])(\/|$)/.exec(p);
     return m ? m[1] + ":/" + p.slice(3) : p;
   }
-  let lib;
+  let lib, fold;
   try {
     const self = fs.realpathSync(toNative(String(process.argv[1] || "")));
-    lib = require(path.join(path.dirname(self), "..", "hooks", "lib", "worktree-base.js"));
+    const libDir = path.join(path.dirname(self), "..", "hooks", "lib");
+    lib = require(path.join(libDir, "worktree-base.js"));
+    fold = require(path.join(libDir, "path-real-fold.js"));
   } catch (e) {
-    process.stderr.write("worktree-base: cannot load hooks/lib/worktree-base.js: " + e.message + "\n");
+    process.stderr.write("worktree-base: cannot load hooks/lib/worktree-base.js or path-real-fold.js: " + e.message + "\n");
     process.exit(1);
   }
   const r = lib.resolveWorktreeBase(repo === "" ? process.cwd() : toNative(repo));
   if (!r.ok) { process.stderr.write("worktree-base: " + r.reason + "\n"); process.exit(1); }
   const fwd = (p) => String(p).replace(/\\/g, "/");
-  process.stdout.write("WORKTREE_BASE=" + fwd(r.base) + "\nMAIN_DIR=" + fwd(r.mainDir) + "\nWORKTREE_BASE_SOURCE=" + r.source + "\n");
+  process.stdout.write("WORKTREE_BASE=" + fwd(r.base) + "\nMAIN_DIR=" + fwd(r.mainDir) + "\nWORKTREE_BASE_SOURCE=" + r.source +
+    "\nWORKTREE_BASE_FOLD_CASE=" + (fold.foldsCase() ? "on" : "off") + "\n");
 ' "${BASH_SOURCE[0]}"
 # End of the #1532 node-misinvocation guard envelope -- docs/agents-repo-dev.md
 # */
