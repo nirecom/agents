@@ -19,6 +19,8 @@ $BlockContent = @(
     "WORKTREE_NOTES.md",
     "# .codegraph/ (CodeGraph index DB — holds verbatim source of the indexed repo)",
     ".codegraph/",
+    "# .claude/worktrees/ (in-repo worktree base; nested worktrees created by /worktree-start)",
+    ".claude/worktrees/",
     $BlockEnd
 )
 
@@ -86,6 +88,11 @@ if ($BeginCount -eq 1 -and $EndCount -eq 1) {
 # No existing block — append
 $Existing = (Get-Content $GitIgnorePath -Raw -Encoding UTF8) ?? ""
 if ($Existing -and -not $Existing.EndsWith("`n")) {
+    Add-Content -Path $GitIgnorePath -Value "" -Encoding UTF8
+}
+# Separate the block from user lines with one blank line, as the replace path above does,
+# so a second run leaves the file byte-identical.
+if ($Existing.Trim() -and $Existing -notmatch '\r?\n[ \t]*\r?\n$') {
     Add-Content -Path $GitIgnorePath -Value "" -Encoding UTF8
 }
 $BlockContent | Add-Content -Path $GitIgnorePath -Encoding UTF8

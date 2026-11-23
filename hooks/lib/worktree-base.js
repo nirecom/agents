@@ -8,6 +8,8 @@ const path = require("path");
 
 const { mainWorktreeOf } = require("./main-worktree");
 const { normalizeCwd } = require("./path-normalize");
+// Module object, not destructured: callers' tests stub realResolve on it.
+const prf = require("./path-real-fold");
 
 const IN_REPO_BASE_REL = ".claude/worktrees";
 
@@ -53,26 +55,38 @@ function resolveWorktreeBase(repoDir) {
   return { ok: true, base: path.join(mainDir, ...IN_REPO_BASE_REL.split("/")), mainDir, source: "default" };
 }
 
-function comparable(p) {
-  const normalized = normalizeCwd(String(p)) || String(p);
-  return path.resolve(normalized).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-}
-
-// True only strictly below <mainDir>/.claude/worktrees (the base itself excluded).
+// True only strictly below the real <mainDir>/.claude/worktrees (the base itself excluded). A base
+// a link redirects elsewhere is refused, and every resolution error refuses (fail-closed, #3138).
 function isInRepoBase(target, mainDir) {
   if (typeof target !== "string" || target === "" || typeof mainDir !== "string" || mainDir === "") return false;
-  const base = comparable(path.join(normalizeCwd(mainDir) || mainDir, ...IN_REPO_BASE_REL.split("/")));
-  return comparable(target).startsWith(base + "/");
+  try {
+    const main = normalizeCwd(mainDir) || mainDir;
+    const realMain = prf.realResolve(main);
+    const realBase = prf.realResolve(`${main}/${IN_REPO_BASE_REL}`);
+    const baseKey = prf.foldKey(realBase);
+    if (baseKey !== prf.foldKey(path.join(realMain, ...IN_REPO_BASE_REL.split("/")))) return false;
+    return prf.foldKey(prf.realResolve(target)).startsWith(baseKey + "/");
+  } catch {
+    return false;
+  }
 }
 
-// Repo-relative POSIX path of <base> when it lies strictly inside <mainDir>, else null.
+// Repo-relative POSIX path (real spelling) of <base> when it really lies strictly inside <mainDir>;
+// null when outside, when a link redirects it (lexical and real relatives disagree), or on error.
 function inRepoRelative(base, mainDir) {
   if (!base || !mainDir) return null;
-  const abs = (p) => path.resolve(normalizeCwd(String(p)) || String(p));
-  const rel = path.relative(abs(mainDir), abs(base));
-  // Segment-aware: "..wt" is a child named "..wt", not a parent escape.
-  if (rel === "" || rel === ".." || rel.startsWith(".." + path.sep) || path.isAbsolute(rel)) return null;
-  return rel.replace(/\\/g, "/");
+  try {
+    const norm = (p) => normalizeCwd(String(p)) || String(p);
+    const rel = path.relative(prf.realResolve(norm(mainDir)), prf.realResolve(norm(base)));
+    // Segment-aware: "..wt" is a child named "..wt", not a parent escape.
+    if (rel === "" || rel === ".." || rel.startsWith(".." + path.sep) || path.isAbsolute(rel)) return null;
+    const fold = (s) => (prf.foldsCase() ? s.toLowerCase() : s).replace(/\\/g, "/");
+    const lexical = path.relative(path.resolve(norm(mainDir)), path.resolve(norm(base)));
+    if (fold(lexical) !== fold(rel)) return null;
+    return rel.replace(/\\/g, "/");
+  } catch {
+    return null;
+  }
 }
 
 module.exports = { IN_REPO_BASE_REL, resolveWorktreeBase, explicitWorktreeBase, isInRepoBase, inRepoRelative };

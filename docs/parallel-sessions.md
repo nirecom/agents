@@ -36,6 +36,10 @@ All worktrees follow a two-level layout:
 
 **Explicit base inside a repo:** the main-worktree create exemption covers only `<repo>/.claude/worktrees/`. A `WORKTREE_BASE_DIR` pointing at another path inside the repo falls outside it, so creating a worktree there from the main worktree is blocked by `enforce-worktree` and needs your explicit approval (or `ENFORCE_WORKTREE=off`). Point an explicit base outside the repo.
 
+**In-repo base detection:** whether a path is inside `<repo>/.claude/worktrees/` is judged on real paths, so a symlinked or junctioned `.claude/worktrees` is treated as redirected and gets no create exemption (fail-closed; a path that cannot be resolved is refused). Letter case is folded on Windows and macOS only (`bin/worktree-base` prints `WORKTREE_BASE_FOLD_CASE=on|off`); Linux stays case-sensitive. The `.git/info/exclude` registration of the base is idempotent, and both global-gitignore installers list `.claude/worktrees/`.
+
+**Known limitation:** macOS is folded by platform, not by probing the filesystem, so on a case-sensitive APFS volume two directories differing only in case are treated as one. Likewise, when `bin/worktree-base` fails, the Linux prune of `review-* --all` scans uses a case-insensitive clause and may skip a same-named directory that differs only in case (a stderr warning is printed). Both are accepted trade-offs of the single platform rule. On Windows and macOS, a parent directory that can be traversed but not listed (for example POSIX mode 0311, execute without read permission) makes the in-repo check fail closed: the base is refused and its `.git/info/exclude` entry is not registered, because the on-disk spelling cannot be read.
+
 **Shared-base example on Windows** (set in `.env`; `EnterWorktree` then asks once per entry):
 ```
 WORKTREE_BASE_DIR=C:\src\worktrees

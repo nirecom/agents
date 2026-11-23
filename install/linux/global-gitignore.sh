@@ -27,6 +27,8 @@ _block_content() {
         "WORKTREE_NOTES.md" \
         "# .codegraph/ (CodeGraph index DB — holds verbatim source of the indexed repo)" \
         ".codegraph/" \
+        "# .claude/worktrees/ (in-repo worktree base; nested worktrees created by /worktree-start)" \
+        ".claude/worktrees/" \
         "$BLOCK_END"
 }
 

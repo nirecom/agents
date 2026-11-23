@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/enforce-worktree/main-worktree-allows/worktree-command.js, hooks/enforce-worktree/main-worktree-allows/new-item.js, hooks/enforce-worktree.js
-// Tags: feature-1610, feature-1849, enforce-worktree, worktree-add, new-item, in-repo-base, path-traversal, security, scope:issue-specific, TL2, pwsh-not-required
+// Tags: feature-1610, feature-1849, feature-3138, enforce-worktree, worktree-add, new-item, in-repo-base, path-traversal, security, scope:issue-specific, TL2, pwsh-not-required
 // TL3 gap: no live Claude Code session runs `git worktree add` / New-Item through the PreToolUse
 // chain here; the hook is driven with a synthetic payload from a fixture main checkout.
 //
@@ -15,6 +15,7 @@ const path = require("node:path");
 const { test, after } = require("node:test");
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const F = require("../lib/worktree-leftover-fixture");
+const { platformRuleMismatch } = require("./helpers/fs-case-probe");
 
 const restore = isolate();
 const { isAllowedWorktreeCommand } = require("../../hooks/enforce-worktree/main-worktree-allows/worktree-command");
@@ -52,10 +53,18 @@ caseBegin("worktree-add-into-own-in-repo-base-allowed", "hooks/enforce-worktree/
 test("worktree-add-into-own-in-repo-base-allowed", () => {
   assert.equal(isAllowedWorktreeCommand(add(IN_BASE), MAIN), true, "git worktree add <main>/.claude/worktrees/<task>/<repo>");
   assert.equal(isAllowedWorktreeCommand(`git -C "${M}" worktree add "${IN_BASE}" -b feature/my-task`, MAIN), true, "with -C <main>");
-  assert.equal(isAllowedWorktreeCommand(add(`${M}/.CLAUDE/Worktrees/my-task/main`), MAIN), true,
-    "case-insensitive compare, the same style as isPathOutsideRepo");
   assert.equal(isAllowedWorktreeCommand(add(`${fwd(OTHER)}/.claude/worktrees/t/other`), OTHER), true,
     "each repo's own base, judged against that repo's root");
+});
+caseEnd();
+
+// #3138: letter case folds only on win32 / darwin (foldsCase); the measured file system skips
+// the combinations where that platform rule and the volume disagree (fs-case-probe).
+caseBegin("worktree-add-misspelled-base-follows-platform-fold-rule", "hooks/enforce-worktree/main-worktree-allows/worktree-command.js");
+test("worktree-add-misspelled-base-follows-platform-fold-rule", { skip: platformRuleMismatch() }, () => {
+  const folds = process.platform === "win32" || process.platform === "darwin";
+  assert.equal(isAllowedWorktreeCommand(add(`${M}/.CLAUDE/Worktrees/my-task/main`), MAIN), folds,
+    "misspelled base: allowed where letter case folds, refused elsewhere");
 });
 caseEnd();
 
@@ -121,6 +130,16 @@ test("hook-allows-in-repo-base-add-and-blocks-the-rest", () => {
   assert.equal(ewRun(add(BLOCKED["base itself"])), "block", "end-to-end: the base itself");
   assert.equal(ewRun(add(BLOCKED["other .claude dir"])), "block", "end-to-end: other .claude dir");
   assert.equal(ewRun(add(BLOCKED["traversal out of the base"])), "block", "end-to-end: traversal");
+});
+caseEnd();
+
+// #3138: a relative target is resolved against the hook's CWD (MAIN) before the real-path walk,
+// and its `..` is not folded lexically.
+caseBegin("hook-judges-relative-add-targets-from-the-main-cwd", "hooks/enforce-worktree.js");
+test("hook-judges-relative-add-targets-from-the-main-cwd", () => {
+  assert.equal(ewRun(add(".claude/worktrees/my-task/main")), "allow", "relative target inside the base");
+  assert.equal(ewRun(add(".claude/worktrees/../../src/x")), "block", "relative traversal out of the base");
+  assert.equal(ewRun(add(".claude/worktrees")), "block", "relative base itself");
 });
 caseEnd();
 

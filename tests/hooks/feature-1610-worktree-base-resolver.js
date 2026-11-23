@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/lib/worktree-base.js
-// Tags: feature-1610, feature-1849, worktree-base, resolver, worktree, in-repo-base, path-traversal, config-dependent, scope:issue-specific, TL2, pwsh-not-required
+// Tags: feature-1610, feature-1849, feature-3138, worktree-base, resolver, worktree, in-repo-base, path-traversal, config-dependent, scope:issue-specific, TL2, pwsh-not-required
 // #1610 / #1849: one resolver owns the worktree base. Unset/empty WORKTREE_BASE_DIR means the
 // repo's own <main>/.claude/worktrees; an explicit value is one shared base, resolved against
 // the home directory (never the CWD) so main, linked worktree and worker all agree.
@@ -15,6 +15,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { after, test } = require("node:test");
 const F = require("../lib/worktree-leftover-fixture");
+const { platformRuleMismatch } = require("./helpers/fs-case-probe");
 
 const restoreIsolation = isolate();
 const SB = F.makeBase("f1610wb-");
@@ -177,8 +178,16 @@ test("is-in-repo-base-allows-below-base", () => {
   assert.strictEqual(inRepo(path.join(DEFAULT_BASE, "task", "main"), MAIN), true);
   assert.strictEqual(inRepo(path.join(DEFAULT_BASE, "task"), MAIN), true);
   assert.strictEqual(inRepo(DEFAULT_BASE.replace(/\\/g, "/") + "/task/main", MAIN), true, "forward slashes");
-  assert.strictEqual(inRepo(path.join(DEFAULT_BASE, "task", "main").toUpperCase(), MAIN), true, "case differs");
   assert.strictEqual(inRepo(path.join(DEFAULT_BASE, "t", "..", "t2", "main"), MAIN), true, ".. staying inside");
+});
+caseEnd();
+
+// #3138: letter case folds only on win32 / darwin (foldsCase); the measured file system skips
+// the combinations where that platform rule and the volume disagree (fs-case-probe).
+caseBegin("is-in-repo-base-case-follows-platform-fold-rule", "hooks/lib/worktree-base.js");
+test("is-in-repo-base-case-follows-platform-fold-rule", { skip: platformRuleMismatch() }, () => {
+  const folds = process.platform === "win32" || process.platform === "darwin";
+  assert.strictEqual(inRepo(path.join(DEFAULT_BASE, "task", "main").toUpperCase(), MAIN), folds, "case differs");
 });
 caseEnd();
 
