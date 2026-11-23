@@ -2,100 +2,118 @@
 #
 # bin/sweep-worktrees/orphan-dirs.sh — sourced by bin/sweep-worktrees.sh. Two
 # passes reclaim filesystem state git's worktree registry no longer knows about:
-# sweep_orphan_dirs (unregistered depth-2 dirs under WORKTREE_BASE_DIR; removal
-# delegated to hooks/cleanup-orphan-dir.js and its 4-AND safety gate) and
+# sweep_orphan_dirs (unregistered depth-2 dirs under one scanned base; removal
+# delegated to hooks/cleanup-orphan-dir.js --repo <owner> and its safety gates) and
 # sweep_stale_backups (.worktree-backup/* older than MIN_AGE_HOURS * 7). Must be
 # `source`d, not executed: it reads caller-scope variables ($TARGET_MAIN_ROOT,
-# $WORKTREE_BASE_DIR, $APPLY, $DRY_RUN, $MIN_AGE_HOURS) and
+# $WORKTREE_BASE_DIR, $APPLY, $DRY_RUN, $MIN_AGE_HOURS, the scan set) and
 # mutates the orphan_dirs_* counters.
 _ORPHAN_DIRS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+# _orphan_owner <cand_dir> <owners...> — print the one scanned repo proven to own the leaf (#1610):
+# a gitlink leftover's reverse-looked-up main checkout, else the notes `Main repo:`; either must be
+# a scanned owner of this base with the leaf's basename. Prints nothing when no owner is proven.
+_orphan_owner() {
+  local cand="$1" name claimed owner
+  shift
+  name="$(basename "$cand")"
+  if [[ -f "$cand/.git" ]]; then
+    claimed="$(node "$_ORPHAN_DIRS_SCRIPT_CHECKOUT_ROOT/bin/sweep-worktrees/leaf-owner.js" "$cand" 2>/dev/null || true)"
+    claimed="${claimed%$'\r'}"
+    for owner in "$@"; do
+      if [[ -n "$claimed" && "$(norm_path "$claimed")" == "$(norm_path "$owner")" && "$(basename "$owner")" == "$name" ]]; then
+        printf '%s' "$owner"
+        return 0
+      fi
+    done
+  fi
+  [[ -f "$cand/WORKTREE_NOTES.md" ]] || return 0
+  claimed="$( { grep -m1 -E '^Main repo:[[:space:]]*' "$cand/WORKTREE_NOTES.md" 2>/dev/null || true; } | sed -E 's/^Main repo:[[:space:]]*//' | tr -d '\r')"
+  [[ -n "$claimed" ]] || return 0
+  for owner in "$@"; do
+    if [[ "$(norm_path "$claimed")" == "$(norm_path "$owner")" && "$(basename "$owner")" == "$name" ]]; then
+      printf '%s' "$owner"
+      return 0
+    fi
+  done
+}
+
+# sweep_orphan_dirs <base_norm> — one scanned base ($WORKTREE_BASE_DIR) and its scan-set owners.
 sweep_orphan_dirs() {
-  # ── Pre-pass guard: snapshot the registry to a temp file ──────────────────
+  local base_key="$1"
+  local -a owners=()
+  local owner
+  while IFS= read -r owner; do
+    if [[ -n "$owner" ]]; then owners+=("$owner"); fi
+  done < <(scan_set_owners "$base_key")
+  [[ ${#owners[@]} -gt 0 && -d "$WORKTREE_BASE_DIR" ]] || return 0
+
+  # ── Pre-pass guard: snapshot every owner's registry to a temp file ────────
   # Not `local`: the EXIT trap below must still see it after this returns.
   registered_norm_file=$(mktemp)
-  # Function-form trap: defers expansion of $registered_norm_file to cleanup time
-  # and quotes safely even if mktemp ever returns a path containing spaces or
-  # shell metacharacters.
   cleanup_registered_files() {
     rm -f -- "$registered_norm_file" "${registered_norm_file}.raw"
   }
   trap cleanup_registered_files EXIT
-  local skip_orphan_dir_scan=0
-  if ! git -C "$TARGET_MAIN_ROOT" worktree list --porcelain > "${registered_norm_file}.raw" 2>/dev/null; then
-    printf 'WARNING: git worktree list --porcelain failed; skipping orphan-dir scan pass\n' >&2
-    skip_orphan_dir_scan=1
-  else
-    awk '/^worktree /{print substr($0,10)}' "${registered_norm_file}.raw" \
-      | while IFS= read -r r; do norm_path "$r"; printf '\n'; done > "$registered_norm_file"
-  fi
+  : > "${registered_norm_file}.raw"
+  for owner in "${owners[@]}"; do
+    if ! git -C "$owner" worktree list --porcelain >> "${registered_norm_file}.raw" 2>/dev/null; then
+      printf 'WARNING: git worktree list --porcelain failed for %s; skipping orphan-dir scan of %s\n' \
+        "$owner" "$WORKTREE_BASE_DIR" >&2
+      cleanup_registered_files
+      return 0
+    fi
+  done
+  awk '/^worktree /{print substr($0,10)}' "${registered_norm_file}.raw" \
+    | while IFS= read -r r; do norm_path "$r"; printf '\n'; done > "$registered_norm_file"
 
-  # ── Scan pass ─────────────────────────────────────────────────────────────
-  # Reuses hooks/cleanup-orphan-dir.js for the actual removal (4-AND safety gate).
-  if [[ "$skip_orphan_dir_scan" == "1" || ! -d "$WORKTREE_BASE_DIR" ]]; then
-    return 0
-  fi
-
-  local current_repo_name wt_base_norm cand_dir cand_name cand_norm
-  local notes_file recorded main_norm_fs rec_norm_fs node_out node_rc
+  local wt_base_norm cand_dir cand_name cand_norm node_out node_rc owner_of name_hit
   local -a main_root_args
-  current_repo_name="$(basename "$TARGET_MAIN_ROOT")"
   wt_base_norm="$(norm_path "$WORKTREE_BASE_DIR")"
 
   while IFS= read -r -d '' cand_dir; do
     cand_name="$(basename "$cand_dir")"
-    # Cross-repo guard: only sweep dirs whose final segment matches this repo.
-    [[ "$cand_name" == "$current_repo_name" ]] || continue
+    # Cross-repo guard: only leaves named after a scanned owner of this base.
+    name_hit=0
+    for owner in "${owners[@]}"; do
+      if [[ "$(basename "$owner")" == "$cand_name" ]]; then name_hit=1; fi
+    done
+    [[ "$name_hit" == "1" ]] || continue
     cand_norm="$(norm_path "$cand_dir")"
 
-    # Gate (4): skip if registered (already handled by main loop).
-    if grep -Fxq -- "$cand_norm" "$registered_norm_file"; then
+    # Gate (4): skip if registered, or inside a registered worktree (a native <base>/<name>).
+    if grep -Fxq -- "$cand_norm" "$registered_norm_file" \
+        || grep -Fxq -- "$(dirname "$cand_norm")" "$registered_norm_file"; then
       orphan_dirs_skipped_registered=$((orphan_dirs_skipped_registered + 1))
       continue
     fi
-    # Gate (1): containment under WORKTREE_BASE_DIR.
+    # Gate (1): containment under the scanned base.
     case "$cand_norm" in
       "$wt_base_norm"/*) ;;
       *) continue ;;
     esac
     # Gate (2): no .git directory or symlink. A gitlink file (a WE-11 leftover, #2875) goes to the
     # CLI with --expect-main-root, which removes it only once its ownership is proven.
-    main_root_args=()
     if [[ -L "$cand_dir/.git" || -d "$cand_dir/.git" ]]; then
       orphan_dirs_skipped_has_git=$((orphan_dirs_skipped_has_git + 1))
       continue
-    elif [[ -e "$cand_dir/.git" ]]; then
-      main_root_args=(--expect-main-root "$TARGET_MAIN_ROOT")
     fi
     # Gate (3): mtime check (older than --min-age-hours).
     if is_fresh "$cand_dir"; then
       orphan_dirs_skipped_young=$((orphan_dirs_skipped_young + 1))
       continue
     fi
-    # Gate (5): cross-repo ownership proof — WORKTREE_NOTES.md must carry a
-    # `Main repo:` line matching the current TARGET_MAIN_ROOT (forward-slash form).
-    # Basename match alone is not unique ownership (two unrelated repos can
-    # share `agents`/`dotfiles` basenames under different parents), so legacy
-    # notes lacking the field and missing notes files are SKIPPED, never fall
-    # through to basename match. Gate (4) "empty-or-notes-only" was removed on
-    # purpose: a partial `git worktree remove` can leave a full checkout with
-    # no .git, and that directory has proven ownership via Gate (5), so it is
-    # safe to delete via cleanup-orphan-dir.js --force-if-not-registered.
-    notes_file="$cand_dir/WORKTREE_NOTES.md"
-    if [[ ! -f "$notes_file" ]]; then
+    # Gate (5): ownership proof (_orphan_owner). Basename alone is never proof: two unrelated repos
+    # can share a name, so a leaf with no proven owner is kept and reported.
+    owner_of="$(_orphan_owner "$cand_dir" "${owners[@]}")"
+    if [[ -z "$owner_of" ]]; then
+      printf 'unowned leftover: %s\n' "$cand_dir" >&2
       orphan_dirs_skipped_repo_mismatch=$((orphan_dirs_skipped_repo_mismatch + 1))
       continue
     fi
-    recorded="$( { grep -m1 -E '^Main repo:[[:space:]]*' "$notes_file" 2>/dev/null || true; } | sed -E 's/^Main repo:[[:space:]]*//' | tr -d '\r')"
-    if [[ -z "$recorded" ]]; then
-      orphan_dirs_skipped_repo_mismatch=$((orphan_dirs_skipped_repo_mismatch + 1))
-      continue
-    fi
-    main_norm_fs="$(norm_path "$TARGET_MAIN_ROOT")"
-    rec_norm_fs="$(norm_path "$recorded")"
-    if [[ "$rec_norm_fs" != "$main_norm_fs" ]]; then
-      orphan_dirs_skipped_repo_mismatch=$((orphan_dirs_skipped_repo_mismatch + 1))
-      continue
+    main_root_args=(--repo "$owner_of")
+    if [[ -e "$cand_dir/.git" ]]; then
+      main_root_args+=(--expect-main-root "$owner_of")
     fi
 
     if [[ "$DRY_RUN" == "1" ]]; then
@@ -107,9 +125,8 @@ sweep_orphan_dirs() {
       fi
 
       node_rc=0
-      node_out="$(WORKTREE_BASE_DIR="$WORKTREE_BASE_DIR" \
-        node "$_ORPHAN_DIRS_SCRIPT_CHECKOUT_ROOT/hooks/cleanup-orphan-dir.js" \
-        --force-if-not-registered ${main_root_args[@]+"${main_root_args[@]}"} "$cand_dir" 2>&1)" || node_rc=$?
+      node_out="$(node "$_ORPHAN_DIRS_SCRIPT_CHECKOUT_ROOT/hooks/cleanup-orphan-dir.js" \
+        --force-if-not-registered "${main_root_args[@]}" "$cand_dir" 2>&1)" || node_rc=$?
       if [[ "$node_rc" -eq 0 ]]; then
         orphan_dirs_removed=$((orphan_dirs_removed + 1))
       else
@@ -118,6 +135,7 @@ sweep_orphan_dirs() {
       fi
     fi
   done < <(find "$WORKTREE_BASE_DIR" -mindepth 2 -maxdepth 2 -type d -print0 2>/dev/null)
+  cleanup_registered_files
 }
 
 # Remove stale <target-main-root>/.worktree-backup/* directories.

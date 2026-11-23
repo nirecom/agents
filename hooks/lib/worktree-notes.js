@@ -225,9 +225,13 @@ function run(input) {
     baseDir,
     copiedFiles,
     excludePattern,
+    baseExcludePattern,
     sessionId,
     siblingWorktrees,
   } = input;
+  if (baseExcludePattern && (hasTraversal(baseExcludePattern) || hasNewline(baseExcludePattern))) {
+    throw new Error(`Invalid baseExcludePattern: ${baseExcludePattern}`);
+  }
 
   if (hasTraversal(targetMainRoot)) {
     throw new Error(`Path traversal detected in targetMainRoot: ${targetMainRoot}`);
@@ -292,6 +296,8 @@ function run(input) {
     excludePath: null,
     excludeAdded: false,
     excludeSkipReason: null,
+    baseExcludeAdded: false,
+    baseExcludeError: null,
     errors: [],
   };
 
@@ -323,6 +329,16 @@ function run(input) {
     result.errors.push(`appendExclude failed: ${e.message}`);
     result.excludeAdded = false;
     result.excludeSkipReason = e.message;
+  }
+
+  // #1610: an in-repo worktree base (e.g. `.claude/worktrees/`) must never show as untracked.
+  // Its failure stays out of `errors`; the CLI decides whether git already ignores the base.
+  if (baseExcludePattern) {
+    try {
+      result.baseExcludeAdded = appendExclude({ targetMainRoot, pattern: baseExcludePattern }).excludeAdded;
+    } catch (e) {
+      result.baseExcludeError = e.message;
+    }
   }
 
   return result;

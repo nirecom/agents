@@ -107,6 +107,25 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Case 16b (#1610): --all prunes the in-repo worktree base .claude/worktrees,
+# but keeps a sibling such as .claude/worktrees-x
+# ---------------------------------------------------------------------------
+mkdir -p "$REPO16/.claude/worktrees/t/r" "$REPO16/.claude/worktrees-x"
+cp "$REPO16/.env.example" "$REPO16/.claude/worktrees/t/r/.env.example"
+cp "$REPO16/.env.example" "$REPO16/.claude/worktrees-x/.env.example"
+OUTPUT=$(cd "$REPO16" && run_with_timeout bash "$SCRIPT" --all 2>&1) || true
+if echo "$OUTPUT" | grep -qF ".claude/worktrees/"; then
+    fail "Case 16b: --all reported a file under .claude/worktrees. Output: $OUTPUT"
+else
+    pass "Case 16b: --all skips .env.example under .claude/worktrees"
+fi
+if echo "$OUTPUT" | grep -qF ".claude/worktrees-x/.env.example"; then
+    pass "Case 16b: --all keeps a sibling of the base"
+else
+    fail "Case 16b: --all dropped .claude/worktrees-x/.env.example. Output: $OUTPUT"
+fi
+
+# ---------------------------------------------------------------------------
 # Case 17: merge-base resolution failure → SKIPPED gracefully (exit 0)
 # ---------------------------------------------------------------------------
 REPO17=$(make_repo)

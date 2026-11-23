@@ -41,10 +41,6 @@ const CASES = [
   ["codegraph-dotenv", "mcp__codegraph__codegraph_explore", { query: ".env" }, null, { "block-dotenv": "deny" }, "deny"],
   ["terminal-pwsh", "runInTerminal", { command: "Get-ChildItem | Select-Object Name" }, null,
     { "block-dotenv": "approve", "block-capture-echo": "none", "preuse-auto-approve": "none" }, "approve"],
-  ["worktree-inside", "EnterWorktree", { path: path.join(fx.wtBase, "w1") }, null, { "preuse-auto-approve": "allow" }, "allow"],
-  ["worktree-outside", "EnterWorktree", { path: fx.root }, null, { "preuse-auto-approve": "none" }, "none"],
-  ["worktree-auto-approve-off", "EnterWorktree", { path: path.join(fx.wtBase, "w1") }, { AUTO_APPROVE_TOOLS: "off" },
-    { "preuse-auto-approve": "none" }, "none"],
   ["monitor", "Monitor", { command: "x" }, null, { "preuse-auto-approve": "allow" }, "allow"],
   ["monitor-auto-approve-off", "Monitor", { command: "x" }, { AUTO_APPROVE_TOOLS: "off" }, { "preuse-auto-approve": "none" }, "none"],
   ["bash-scratchpad", "Bash", { command: `bash ${spf}/a.sh` }, null,
@@ -98,12 +94,11 @@ caseEnd();
 
 caseBegin("merged-no-decision-kept", "hooks/merged-allow-deny/merge.js");
 for (const [name, toolInput, env] of [
-  ["worktree-outside", { path: fx.root }, null],
-  ["auto-approve-off", { path: path.join(fx.wtBase, "w1") }, { AUTO_APPROVE_TOOLS: "off" }],
+  ["auto-approve-off", { command: "x" }, { AUTO_APPROVE_TOOLS: "off" }],
 ]) {
   test(`merged ${name}: no decision key and no permissionDecision key`, () => {
     mergedExists();
-    const done = kit.merged(fx, "monitor-worktree", inputOf("EnterWorktree", toolInput), { env });
+    const done = kit.merged(fx, "monitor", inputOf("Monitor", toolInput), { env });
     const out = kit.parseOut(done.stdout) || {};
     assert.ok(!("decision" in out), `no decision key in ${done.stdout}`);
     assert.ok(!(out.hookSpecificOutput && "permissionDecision" in out.hookSpecificOutput), `no permissionDecision in ${done.stdout}`);
@@ -166,9 +161,9 @@ for (const [group, tools] of Object.entries(kit.GROUPS)) {
     });
   }
 }
-test("merged monitor-worktree read-error is not a deny", () => {
+test("merged monitor read-error is not a deny", () => {
   mergedExists();
-  const got = kit.classify(kit.merged(fx, "monitor-worktree", "", { readError: true }).stdout);
+  const got = kit.classify(kit.merged(fx, "monitor", "", { readError: true }).stdout);
   assert.notStrictEqual(got, "deny");
   assert.ok(got === "none" || got === "silent", `got ${got}`);
 });
@@ -301,7 +296,7 @@ test("settings.json: two merged registrations, one per group, with the group's e
 });
 test("members.js: its group and member tables match the pre-merge registrations", () => {
   const table = kit.readMembersModule();
-  assert.ok(table.groups, "members.js exports a group table keyed by primary / monitor-worktree");
+  assert.ok(table.groups, "members.js exports a group table keyed by primary / monitor");
   assert.ok(table.members, "members.js exports a member table of {name, tools}");
   for (const [group, tools] of Object.entries(kit.GROUPS)) {
     assert.deepStrictEqual(table.groups[group], [...tools].sort(), `members.js group ${group}`);

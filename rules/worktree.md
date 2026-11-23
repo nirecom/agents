@@ -25,10 +25,10 @@ See `docs/parallel-sessions.md` for the full lifecycle guide.
 
 ## Standard Path
 
-Worktrees follow a two-level layout: `<WORKTREE_BASE_DIR>/<task-name>/<repo-name>`.
+Worktrees follow a two-level layout: `<base>/<task-name>/<repo-name>`.
 
-- **WORKTREE_BASE_DIR** defaults to `~/git/worktrees`. Set it in your agents config (`.env`) to customize (e.g. `WORKTREE_BASE_DIR=C:\git\worktrees` on Windows, `WORKTREE_BASE_DIR=/home/<user>/worktrees` on POSIX).
+- **base**: unset `WORKTREE_BASE_DIR` → each repo's own `<repo>/.claude/worktrees`; set it in agents config (`.env`) for one base shared by every repo. `bin/worktree-base` owns the resolution — never rebuild the path by hand.
 - **task-name**: short identifier for the work (`[a-zA-Z0-9][a-zA-Z0-9_-]*`), shared across repos.
 - **repo-name**: the repository name (e.g. `agents`, `dotfiles`).
 
-Worktrees use a two-level path: `<WORKTREE_BASE_DIR>/<task-name>/<repo-name>`. Example: a task `my-feature` in two repos uses `worktrees/my-feature/agents/` and `worktrees/my-feature/dotfiles/`.
+Example: a task `my-feature` in `agents` uses `agents/.claude/worktrees/my-feature/agents/` by default.

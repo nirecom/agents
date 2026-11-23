@@ -13,6 +13,7 @@
 # Exits 1 when any HARD finding in diff mode. --all mode always exits 0.
 
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]}")/lib/worktree-base-prune.sh"
 
 HARD_HIT=0
 HARD_COUNT=0
@@ -305,10 +306,11 @@ collect_diff_targets() {
 }
 
 collect_all_targets() {
-  find . -type f \
+  worktree_base_prune_args
+  find . "${WT_BASE_PRUNE_ARGS[@]}" -type f \
     -not -path '*/node_modules/*' \
     -not -path '*/.git/*' \
-    -not -path '*/_archived/*' 2>/dev/null \
+    -not -path '*/_archived/*' -print 2>/dev/null \
     | grep -E "(^|/)($_BASENAME_RE)$" \
     | sort \
     || true

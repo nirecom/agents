@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
 # bin/sweep-worktrees.sh — reclaims zombie linked worktrees and their branches,
-# and scans WORKTREE_BASE_DIR for orphan directories git's worktree registry
-# does not track. Deletes by default; pass --dry-run to preview.
-# Usage: sweep-worktrees.sh [--dry-run] [--min-age-hours N] [--ci-mode]
+# and scans the worktree base of the CWD repo and of every --repo (bin/worktree-base) for orphan
+# directories git's worktree registry does not track. Deletes by default; --dry-run previews.
+# Usage: sweep-worktrees.sh [--dry-run] [--min-age-hours N] [--ci-mode] [--repo <dir>]...
 #                           [--apply] [--force] [--skip-gh-check] [--simulate-eperm]
 # Entrypoint only — flag parsing, environment checks, the registered-worktree
 # main loop, and pass sequencing; the passes live in bin/sweep-worktrees/
@@ -13,7 +13,6 @@
 set -euo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/sweep-write-mode.sh
 source "$SCRIPT_DIR/lib/sweep-write-mode.sh"
@@ -29,6 +28,8 @@ source "$SCRIPT_DIR/sweep-worktrees/gates.sh"
 source "$SCRIPT_DIR/sweep-worktrees/empty-parent.sh"
 # shellcheck source=./sweep-worktrees/orphan-dirs.sh
 source "$SCRIPT_DIR/sweep-worktrees/orphan-dirs.sh"
+# shellcheck source=./sweep-worktrees/scan-set.sh
+source "$SCRIPT_DIR/sweep-worktrees/scan-set.sh"
 # shellcheck source=./sweep-worktrees/summary.sh
 source "$SCRIPT_DIR/sweep-worktrees/summary.sh"
 
@@ -42,6 +43,7 @@ FORCE=0
 SKIP_GH_CHECK=0
 SIMULATE_EPERM=0
 SWEEP_AGE_DAYS="${SWEEP_AGE_DAYS:-30}"
+EXTRA_REPOS=()
 
 # Bounds live in bin/lib/sweep-numeric.sh. SWEEP_AGE_DAYS keeps the family's
 # *86400 bound (CPR-ORTH); --min-age-hours 0 means "no age gate".
@@ -63,7 +65,9 @@ EOF
   --sweep-age-days N    Age threshold in days for the empty-parent pass
                         (default 30; env SWEEP_AGE_DAYS).
   --ci-mode             Emit JSON summary on stdout (instead of plain text).
-  --force               Pass --force to git worktree remove, bypassing the
+  --repo <dir>          Also scan the worktree base of this repo (repeatable);
+                        a non-repo is skipped with a warning.
+  --force              Pass --force to git worktree remove, bypassing the
                         dirty-tree check (removes worktrees with uncommitted
                         or untracked files). PR-merged and freshness gates
                         still apply.
@@ -90,6 +94,7 @@ while [[ $# -gt 0 ]]; do
       validate_sweep_age_days "$SWEEP_AGE_DAYS"
       ;;
     --ci-mode) CI_MODE=1 ;;
+    --repo) shift; EXTRA_REPOS+=("${1:?--repo requires a value}") ;;
     --skip-gh-check) SKIP_GH_CHECK=1 ;;
     --simulate-eperm) SIMULATE_EPERM=1 ;;
     -h|--help) usage; exit 0 ;;
@@ -104,11 +109,6 @@ done
 
 # ─── Required environment ───────────────────────────────────────────────────
 
-if [[ -z "${WORKTREE_BASE_DIR:-}" ]]; then
-  WORKTREE_BASE_DIR="$(cd "$SCRIPT_CHECKOUT_ROOT" && "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" WORKTREE_BASE_DIR 2>/dev/null || echo "")"
-fi
-WORKTREE_BASE_DIR="${WORKTREE_BASE_DIR:-$HOME/git/worktrees}"
-
 # Sanity check: git in path
 if ! command -v git >/dev/null 2>&1; then
   printf 'ERROR: git not found in PATH\n' >&2
@@ -120,6 +120,8 @@ if [[ -z "$TARGET_MAIN_ROOT" ]]; then
   printf 'ERROR: cannot resolve the main worktree (not a git repository, or a bare or --separate-git-dir repository)\n' >&2
   exit 1
 fi
+
+scan_set_build "$TARGET_MAIN_ROOT" ${EXTRA_REPOS[@]+"${EXTRA_REPOS[@]}"} || exit 1
 
 # ─── Counters ───────────────────────────────────────────────────────────────
 
@@ -157,7 +159,9 @@ target_main_root_norm="$(norm_path "$TARGET_MAIN_ROOT")"
 # was registered at the start of the run.
 declare -A DISCOVERED_TARGET_MAIN_ROOTS=()
 declare -A REGISTERED_WT_PARENTS=()
-discover_registered_wt_parents
+for scan_base_norm in "${!SCAN_BASES[@]}"; do
+  WORKTREE_BASE_DIR="${SCAN_BASES[$scan_base_norm]}" discover_registered_wt_parents
+done
 
 current_path=""
 current_branch=""
@@ -276,11 +280,11 @@ if [[ -n "$current_path" ]]; then
   process_record "$current_path" "$current_branch"
 fi
 
-# ── Orphan-directory scan pass ──────────────────────────────────────────────
-sweep_orphan_dirs
-
-# ── Empty-parent pass (#809) ────────────────────────────────────────────────
-sweep_empty_parents
+# ── Orphan-directory and empty-parent (#809) passes, once per base ──────────
+for scan_base_norm in "${!SCAN_BASES[@]}"; do
+  WORKTREE_BASE_DIR="${SCAN_BASES[$scan_base_norm]}" sweep_orphan_dirs "$scan_base_norm"
+  WORKTREE_BASE_DIR="${SCAN_BASES[$scan_base_norm]}" sweep_empty_parents
+done
 
 # ─── Stale .worktree-backup cleanup ─────────────────────────────────────────
 

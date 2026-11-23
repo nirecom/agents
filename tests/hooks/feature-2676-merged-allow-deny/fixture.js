@@ -23,9 +23,10 @@ const MEMBERS = Object.freeze([
   { name: "block-credentials", tools: DOTENV_SET },
   { name: "bash-guard", tools: ["Bash"] },
   { name: "block-capture-echo", tools: ["Bash", "runInTerminal", "runCommands"] },
-  { name: "preuse-auto-approve", tools: ["Monitor", "EnterWorktree", "Bash", "runInTerminal", "runCommands"] },
+  { name: "preuse-auto-approve", tools: ["Monitor", "Bash", "runInTerminal", "runCommands"] },
 ]);
-const GROUPS = Object.freeze({ primary: DOTENV_SET, "monitor-worktree": ["Monitor", "EnterWorktree"] });
+// #1849: the EnterWorktree allow is gone, so the second group is Monitor alone, renamed `monitor`.
+const GROUPS = Object.freeze({ primary: DOTENV_SET, monitor: ["Monitor"] });
 // Pre-merge failure results, read off each standalone hook today ("silent" = no output at all).
 const FAILURE = Object.freeze({
   "read-error": { "block-dotenv": "deny", "block-credentials": "deny", "bash-guard": "deny",

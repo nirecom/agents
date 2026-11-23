@@ -2,6 +2,7 @@
 # Derive the worktree task name and branch type deterministically.
 # Usage: derive-worktree-name.sh [--intent <path>] [--headless <label>] [--repo-dir <dir>]
 # stdout: TASK_NAME=<name> / BRANCH_TYPE=<feature|fix|refactor|docs|chore> / REPO_NAME=<validated last path component>
+#   / WORKTREE_BASE=<resolver base> / WORKTREE_PATH=<base>/<TASK_NAME>/<REPO_NAME>
 # exit: 0 success / 1 no naming source or validation failure / 64 usage error
 # set -e not used: fallback branches catch non-zero exits from optional helpers.
 set -u
@@ -360,6 +361,17 @@ if ! scan_clean "$TASK_NAME"; then
     fi
 fi
 
+# #1610: the base comes only from the resolver (bin/worktree-base); never rebuilt here. A target
+# that is no git checkout has no base: the path keys are omitted and WS-2 stops on their absence.
+BASE_OUT="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/worktree-base" --repo "$TARGET_CHECKOUT_ROOT" 2>/dev/null)"
+WORKTREE_BASE="$(printf '%s\n' "$BASE_OUT" | sed -n 's/^WORKTREE_BASE=//p' | tr -d '\r')"
+
 printf 'TASK_NAME=%s\n' "$TASK_NAME"
 printf 'BRANCH_TYPE=%s\n' "$BRANCH_TYPE"
 printf 'REPO_NAME=%s\n' "$REPO_NAME"
+if [ -n "$WORKTREE_BASE" ]; then
+    printf 'WORKTREE_BASE=%s\n' "$WORKTREE_BASE"
+    printf 'WORKTREE_PATH=%s/%s/%s\n' "$WORKTREE_BASE" "$TASK_NAME" "$REPO_NAME"
+else
+    printf 'derive-worktree-name: no worktree base for a non-git target; WORKTREE_BASE=/WORKTREE_PATH= omitted\n' >&2
+fi

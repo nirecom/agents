@@ -121,7 +121,7 @@ node <repo-root>\bin\codegraph-lifecycle.js init --path <worktree-path>
 ```
 
 - `--path` takes the **worktree root** — the directory holding the `.git` file. Worktree paths in
-  this repo are two levels (`<WORKTREE_BASE_DIR>/<TASK_NAME>/<REPO_NAME>`), so include the
+  this repo are two levels (`<WORKTREE_BASE>/<TASK_NAME>/<REPO_NAME>`; `bin/worktree-base` prints the base), so include the
   trailing repo name. Pointing at the parent puts the index in the wrong place.
 - A bare `node bin/...` resolves only when the CWD is the agents repo root. From a worktree, use
   the absolute script path as shown. Your worktree's own checkout of the script works too — it is

@@ -19,6 +19,7 @@ SPLIT_GROUPS=(
     "gh-stub.sh"
     "empty-parent.sh"
     "validation.sh"
+    "in-repo-base.sh"
 )
 
 TOTAL_PASS=0
