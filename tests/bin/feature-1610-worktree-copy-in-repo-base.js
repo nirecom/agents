@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/lib/worktree-copy.js, bin/worker-dispatch/workers/worktree-copy.js
-// Tags: feature-1610, feature-1849, worktree-copy, worker-dispatch, in-repo-base, config-dependent, scope:issue-specific, TL2, pwsh-not-required
+// Tags: feature-1610, feature-1849, feature-3138, worktree-copy, worker-dispatch, in-repo-base, letter-case, config-dependent, scope:issue-specific, TL2, pwsh-not-required
 // TL3 gap: a real /worktree-start that copies from a main repo holding live nested worktrees.
 // #1610: the copy never takes entries under the in-repo base (.claude/worktrees, or an explicit
 // in-repo base such as <repo>/wt-alt), and the worker fails when the notes CLI exits 1.
@@ -137,5 +137,37 @@ test("worker-records-explicit-shared-base", () => {
   assert.ok(m && F.samePath(m[1].trim(), shared), `notes record the passed-through base: ${m && m[1]}`);
   const ex = fs.readFileSync(path.join(main, ".git", "info", "exclude"), "utf8");
   assert.doesNotMatch(ex, /^\/?\.claude\/worktrees\/$/m, "an out-of-repo base adds no exclude line");
+});
+caseEnd();
+
+// #3138: the exclude-root compare folds letter case when told to (fold defaults to foldsCase()).
+// fold is passed explicitly, so both branches run on every platform without touching the FS.
+const underAnyRoot = () => F.need("hooks/lib/worktree-copy.js", "underAnyRoot");
+const ROOTS = [".claude/worktrees", "wt-alt"];
+
+caseBegin("under-any-root-folds-letter-case-when-told", "hooks/lib/worktree-copy.js");
+test("under-any-root-folds-letter-case-when-told", () => {
+  const under = underAnyRoot();
+  for (const rel of [".Claude/Worktrees/t/main/.env", ".CLAUDE/WORKTREES", "WT-Alt/x/.env", ".claude/worktrees/t/.env"]) {
+    assert.equal(under(rel, ROOTS, true), true, `fold: ${rel} is under a root`);
+  }
+  assert.equal(under(".claude/worktrees/x", [".Claude/Worktrees"], true), true, "the root side folds as well");
+  for (const rel of [".Claude/Worktrees-x/.env", ".claude/settings/.env", "wt-alternative/.env", ".env"]) {
+    assert.equal(under(rel, ROOTS, true), false, `fold: ${rel} is not under a root (segment-aware)`);
+  }
+});
+caseEnd();
+
+caseBegin("under-any-root-is-exact-without-fold", "hooks/lib/worktree-copy.js");
+test("under-any-root-is-exact-without-fold", () => {
+  const under = underAnyRoot();
+  for (const rel of [".claude/worktrees/t/main/.env", ".claude/worktrees", "wt-alt/x/.env"]) {
+    assert.equal(under(rel, ROOTS, false), true, `exact: ${rel} is under a root`);
+  }
+  for (const rel of [".Claude/Worktrees/t/main/.env", "WT-Alt/x/.env", ".claude/worktrees-x/.env"]) {
+    assert.equal(under(rel, ROOTS, false), false, `exact: ${rel} is a different directory`);
+  }
+  const fold = process.platform === "win32" || process.platform === "darwin";
+  assert.equal(under(".Claude/Worktrees/t/.env", ROOTS), fold, "default follows the platform rule");
 });
 caseEnd();
