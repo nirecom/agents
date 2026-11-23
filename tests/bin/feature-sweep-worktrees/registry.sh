@@ -9,6 +9,11 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
+# _lib.sh made TMPDIR_BASE before harness.sh pinned TMPDIR into the run root, and the command
+# guard refuses git writes outside the run root; re-create it inside (the _lib trap removes it).
+rmdir "$TMPDIR_BASE" 2>/dev/null
+TMPDIR_BASE="$(make_tmp)"
+
 # ─────────────────────────────────────────────────────────────────────────────
 # T1 — no linked worktrees → zero candidates
 # ─────────────────────────────────────────────────────────────────────────────
@@ -57,8 +62,14 @@ T2_unmerged_branch_not_candidate() {
         fail "T2 unmerged_branch_not_candidate: $SWEEP not found / not executable"
         return
     fi
+    # A stub gh answers "no merged PR": without it the merged-PR lookup runs the real gh
+    # (the run-all command guard flags it), and --skip-gh-check would treat the branch as merged.
+    local stubdir="$TMPDIR_BASE/t2-stubgh"
+    mkdir -p "$stubdir"
+    printf '#!/bin/bash\necho "false"\nexit 0\n' > "$stubdir/gh"
+    chmod +x "$stubdir/gh"
     local out exit_code
-    out="$(cd "$repo" && WORKTREE_BASE_DIR="$wbase" run_with_timeout 120 bash "$SWEEP" --dry-run 2>&1)"
+    out="$(cd "$repo" && PATH="$stubdir:$PATH" WORKTREE_BASE_DIR="$wbase" run_with_timeout 120 bash "$SWEEP" --dry-run 2>&1)"
     exit_code=$?
     if [ "$exit_code" -ne 0 ]; then
         fail "T2 unmerged_branch_not_candidate: exit=$exit_code, out=$out"

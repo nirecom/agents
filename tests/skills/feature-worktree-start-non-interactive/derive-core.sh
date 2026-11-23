@@ -3,7 +3,7 @@
 # tests/skills/feature-worktree-start-non-interactive/derive-core.sh
 # Tests: skills/worktree-start/scripts/derive-worktree-name.sh
 # Tags: worktree, start, derivation, non-interactive, TL2, scope:issue-specific
-# Behavioral cases B1-B7, B15, B20, B23 against
+# Behavioral cases B1-B7, B15, B15b, B20, B23 against
 # skills/worktree-start/scripts/derive-worktree-name.sh.
 # Part of the feature-worktree-start-non-interactive suite — see the dispatcher.
 
@@ -139,7 +139,8 @@ fi
 # change the output shape or introduce a prompt. run-with-timeout turns any hang into
 # a failure instead of a stuck suite — the unit-level guarantee under TC9's WS-7
 # headless pinning rule.
-# Stdout contract is three lines since #1910: TASK_NAME=, BRANCH_TYPE=, REPO_NAME=.
+# Stdout contract for a git target is five lines since #1610: TASK_NAME=, BRANCH_TYPE=,
+# REPO_NAME= (#1910), WORKTREE_BASE= and WORKTREE_PATH=<base>/<TASK_NAME>/<REPO_NAME>.
 # REPO_NAME comes from the running worktree, so the call is pinned to $_HELPERS_SCRIPT_CHECKOUT_ROOT
 # and the expectation derived the same way (correct in any checkout name).
 B15_ERR="$FIXTURE/b15-stderr.txt"
@@ -150,6 +151,9 @@ B15_OUT="$(cd "$_HELPERS_SCRIPT_CHECKOUT_ROOT" && CONFIRM_WORKTREE=on bash "$_HE
 B15_RC=$?
 B15_LINES="$(printf '%s\n' "$B15_OUT" | grep -c '[^[:space:]]')"
 B15_RN="$(printf '%s\n' "$B15_OUT" | sed -n 's/^REPO_NAME=//p' | head -1)"
+B15_TN="$(printf '%s\n' "$B15_OUT" | sed -n 's/^TASK_NAME=//p' | head -1)"
+B15_WB="$(printf '%s\n' "$B15_OUT" | sed -n 's/^WORKTREE_BASE=//p' | head -1)"
+B15_WP="$(printf '%s\n' "$B15_OUT" | sed -n 's/^WORKTREE_PATH=//p' | head -1)"
 # safe_component()'s output domain: non-empty, not `.`/`..`, only [a-zA-Z0-9._-].
 B15_RN_OK=0
 case "$B15_RN" in
@@ -157,14 +161,27 @@ case "$B15_RN" in
     *[!a-zA-Z0-9._-]*) ;;
     *) B15_RN_OK=1 ;;
 esac
-if [ "$B15_RC" -eq 0 ] && [ "$B15_LINES" -eq 3 ] \
+if [ "$B15_RC" -eq 0 ] && [ "$B15_LINES" -eq 5 ] \
     && printf '%s\n' "$B15_OUT" | grep -qE "^TASK_NAME=confirm-pinning-probe-$TS_RE\$" \
     && printf '%s\n' "$B15_OUT" | grep -qxF 'BRANCH_TYPE=feature' \
     && [ "$B15_RN_OK" -eq 1 ] && [ "$B15_RN" = "$B15_WANT_REPO" ] \
+    && [ -n "$B15_WB" ] && [ "$B15_WP" = "$B15_WB/$B15_TN/$B15_RN" ] \
     && [ ! -s "$B15_ERR" ]; then
-    pass "B15: --headless with CONFIRM_WORKTREE=on still emits exactly three lines (incl. a validated REPO_NAME), empty stderr, no prompt"
+    pass "B15: --headless with CONFIRM_WORKTREE=on emits exactly five lines (REPO_NAME, WORKTREE_BASE, WORKTREE_PATH=<base>/<task>/<repo>), empty stderr, no prompt"
 else
-    fail "B15: expected rc=0, 3 stdout lines (confirm-pinning-probe-<ts> / feature / REPO_NAME=$B15_WANT_REPO), empty stderr (rc=$B15_RC, lines=$B15_LINES, repo_name='$B15_RN', out='$B15_OUT', err='$(cat "$B15_ERR")')"
+    fail "B15: expected rc=0, 5 stdout lines (confirm-pinning-probe-<ts> / feature / REPO_NAME=$B15_WANT_REPO / WORKTREE_BASE / WORKTREE_PATH=<base>/<task>/<repo>), empty stderr (rc=$B15_RC, lines=$B15_LINES, repo_name='$B15_RN', out='$B15_OUT', err='$(cat "$B15_ERR")')"
+fi
+
+# --- B15b [#1610]: a non-git target has no base, so the two path keys are omitted ---
+B15B_DIR="$FIXTURE/b15b-nongit"
+mkdir -p "$B15B_DIR"
+run_derive B15b --intent "$ABSENT_INTENT" --headless nongit-probe --repo-dir "$B15B_DIR"
+B15B_LINES="$(printf '%s\n' "$OUT" | grep -c '[^[:space:]]')"
+if [ "$RC" -eq 0 ] && [ "$B15B_LINES" -eq 3 ] && [ "$(repo_name)" = "b15b-nongit" ] \
+    && ! printf '%s\n' "$OUT" | grep -qE '^WORKTREE_(BASE|PATH)='; then
+    pass "B15b: a non-git --repo-dir emits exactly three lines, without WORKTREE_BASE=/WORKTREE_PATH="
+else
+    fail "B15b: expected rc=0, 3 lines, REPO_NAME=b15b-nongit, no WORKTREE_ keys (rc=$RC, lines=$B15B_LINES, out='$OUT', err='$ERR')"
 fi
 
 # --- B20 [N3]: D0 rejects an unusable repo-dir basename, and says how to fix it

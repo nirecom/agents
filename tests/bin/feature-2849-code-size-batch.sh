@@ -32,6 +32,11 @@ expect_le() {
   local name="$1" max="$2" got="$3"
   if [[ "$got" =~ ^[0-9]+$ ]] && (( got <= max )); then pass "$name"; else fail "$name" "want<=$max got=[$got]"; fi
 }
+# expect_ge name min got — got is an integer no smaller than min (proves the trace was not empty).
+expect_ge() {
+  local name="$1" min="$2" got="$3"
+  if [[ "$got" =~ ^[0-9]+$ ]] && (( got >= min )); then pass "$name"; else fail "$name" "want>=$min got=[$got]"; fi
+}
 # A constant that does not depend on the staged-file count (#2849 review C2, user decision A).
 MAX_BATCH_READS=2
 expect_contains() {
@@ -88,11 +93,15 @@ new_repo
 stage_files 1
 run_traced
 ONE_FILE_PROCS="$GIT_PROCS"
+expect_ge "1 file: the trace recorded at least one git process" 1 "$GIT_PROCS"
+expect_ge "1 file: the trace recorded the cat-file --batch read" 1 "$BATCH_READS"
 expect_le "1 file: blobs read through at most $MAX_BATCH_READS cat-file --batch" "$MAX_BATCH_READS" "$BATCH_READS"
 expect_eq "1 file: no per-file git show / cat-file blob" "0" "$SHOW_READS"
 new_repo
 stage_files 32
 run_traced
+expect_ge "32 files: the trace recorded at least one git process" 1 "$GIT_PROCS"
+expect_ge "32 files: the trace recorded the cat-file --batch read" 1 "$BATCH_READS"
 expect_le "32 files: blobs read through at most $MAX_BATCH_READS cat-file --batch" "$MAX_BATCH_READS" "$BATCH_READS"
 expect_eq "32 files: no per-file git show / cat-file blob" "0" "$SHOW_READS"
 expect_eq "32 files start as many git processes as 1 file" "$ONE_FILE_PROCS" "$GIT_PROCS"
@@ -137,6 +146,18 @@ run_traced
 expect_eq "HARD file under a path with spaces and non-ASCII: exit 1" "1" "$RC"
 expect_contains "the special path is named as is" "  HARD: dir with space/ü-file (1).js — 501 lines total" "$OUT"
 expect_le "special path: still at most $MAX_BATCH_READS cat-file --batch" "$MAX_BATCH_READS" "$BATCH_READS"
+case_end
+
+# #1610: nested worktrees live under the in-repo base .claude/worktrees; --all must prune it.
+case_begin "all-scan-prunes-in-repo-worktree-base" "bin/review-code-size"
+new_repo
+write_lines "src/own.js" 501
+write_lines ".claude/worktrees/t/r/src/nested.js" 501
+write_lines ".claude/worktrees-x/kept.js" 501
+OUT="$(cd "$REPO" && run_with_timeout 120 bash "$TOOL" --all 2>/dev/null)"
+expect_contains "--all still reports the repo's own file" "HARD: ./src/own.js" "$OUT"
+if [[ "$OUT" == *".claude/worktrees/"* ]]; then fail "--all skips files under .claude/worktrees" "got: $OUT"; else pass "--all skips files under .claude/worktrees"; fi
+expect_contains "--all keeps a sibling of the base" ".claude/worktrees-x/kept.js" "$OUT"
 case_end
 
 echo "Results: PASS=$PASS  FAIL=$FAIL  SKIP=$SKIP"

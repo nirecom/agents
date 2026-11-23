@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/cleanup-orphan-dir.js
-// Tags: feature-322, feature-2875, cleanup-orphan-dir, worktree, leftover, gitlink, expect-main-root, scan-cap, scope:issue-specific, TL2, pwsh-not-required
+// Tags: feature-322, feature-2875, cleanup-orphan-dir, worktree, leftover, gitlink, expect-main-root, scan-cap, fallback, scope:issue-specific, TL2, pwsh-not-required
 // #322 / #2875: a WE-11 leftover keeps its `.git` gitlink, so cleanup-orphan-dir refused it forever
 // and a large leftover also hit the 5000-entry scan cap. With --expect-main-root, a gitlink whose
 // ownership is proven (unregistered leftover of the caller's main repo) takes a capped-free path;
@@ -88,7 +88,9 @@ caseEnd();
 caseBegin("gitlink-leftover-refused-without-main-root", "hooks/cleanup-orphan-dir.js");
 test("gitlink-leftover-refused-without-main-root", () => {
   const dir = leftover(6000);
-  assertRefused(cleanup(["--force-if-not-registered", dir]), dir);
+  const r = cleanup(["--force-if-not-registered", "--repo", MAIN, dir]);
+  assertRefused(r, dir);
+  assert.ok(/contains a \.git entry/.test(r.err), r.err);
 });
 caseEnd();
 
@@ -112,7 +114,9 @@ test("plain-dir-over-scan-cap-still-refused", () => {
   const dir = path.join(BASE, "plain-big");
   fill(dir, 6000);
   assertRefused(cleanup(["--force-if-not-registered", "--expect-main-root", MAIN, dir]), dir);
-  assert.ok(/5000/.test(cleanup(["--force-if-not-registered", dir]).err), "the generic path keeps the cap");
+  const r = cleanup(["--force-if-not-registered", "--repo", MAIN, dir]);
+  assertRefused(r, dir);
+  assert.ok(/5000/.test(r.err), `the generic path keeps the cap: ${r.err}`);
 });
 caseEnd();
 
@@ -222,6 +226,139 @@ test("registered-worktree-missed-by-scan-refused", () => {
   const { leftoverRefusal } = require(F.rel("hooks/cleanup-orphan-dir/leftover"));
   assert.ok(/registered worktree/.test(leftoverRefusal(dir, repo) || ""), "git's list must catch what the scan missed");
   assertRefused(cleanup(["--force-if-not-registered", "--expect-main-root", repo, dir]), dir);
+});
+caseEnd();
+
+// #1610: the base comes from the resolver (default <repo>/.claude/worktrees) and the repo is
+// --repo > --expect-main-root > the CWD's main root. Config is pinned: AGENTS_MAIN_ROOT points at a
+// .env-free dir and WORKTREE_BASE_DIR is removed unless a case passes one.
+const CONF = path.join(SB, "conf-empty");
+fs.mkdirSync(CONF);
+const REPO_A = F.makeRepo(path.join(SB, "r1610", "alpha"));
+const REPO_B = F.makeRepo(path.join(SB, "r1610", "beta"));
+function cleanup1610(args, { cwd = SB, base } = {}) {
+  const env = Object.assign({}, process.env, { AGENTS_MAIN_ROOT: CONF });
+  delete env.WORKTREE_BASE_DIR;
+  if (base !== undefined) env.WORKTREE_BASE_DIR = base;
+  return F.runNode([CLI, ...args], { cwd, env, timeout: 110000 });
+}
+function plainUnder(repo, task) {
+  const dir = path.join(repo, ".claude", "worktrees", task, path.basename(repo));
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "stale.txt"), "x");
+  return dir;
+}
+
+caseBegin("default-in-repo-base-orphan-deleted-via-repo-flag", "hooks/cleanup-orphan-dir.js");
+test("default-in-repo-base-orphan-deleted-via-repo-flag", () => {
+  const dir = plainUnder(REPO_A, "t-default");
+  assertDeleted(cleanup1610(["--force-if-not-registered", "--repo", REPO_A, dir]), dir);
+});
+caseEnd();
+
+caseBegin("repo-flag-beats-expect-main-root-beats-cwd", "hooks/cleanup-orphan-dir.js");
+test("repo-flag-beats-expect-main-root-beats-cwd", () => {
+  const inA = plainUnder(REPO_A, "t-prio");
+  const r1 = cleanup1610(["--force-if-not-registered", "--repo", REPO_B, "--expect-main-root", REPO_A, inA], { cwd: REPO_A });
+  assertRefused(r1, inA);
+  assert.ok(/outside/.test(r1.err), `--repo B puts A's base out of scope: ${r1.err}`);
+  const r2 = cleanup1610(["--force-if-not-registered", "--expect-main-root", REPO_B, inA], { cwd: REPO_A });
+  assertRefused(r2, inA);
+  assert.ok(/outside/.test(r2.err), `--expect-main-root B beats the CWD (A): ${r2.err}`);
+  assertDeleted(cleanup1610(["--force-if-not-registered", "--expect-main-root", REPO_A, inA], { cwd: REPO_B }), inA);
+  const inB = plainUnder(REPO_B, "t-prio-cwd");
+  assertDeleted(cleanup1610(["--force-if-not-registered", inB], { cwd: path.join(REPO_B, ".claude") }), inB);
+});
+caseEnd();
+
+// Step 6 asks the given repo, not this checkout: a registered worktree of a non-agents repo whose
+// `.git` file is gone would otherwise pass every later check and be deleted.
+caseBegin("registration-check-targets-given-repo", "hooks/cleanup-orphan-dir.js");
+test("registration-check-targets-given-repo", () => {
+  const shared = path.join(SB, "shared-1610");
+  const dir = F.addWorktree(REPO_A, path.join(shared, "t-reg", "alpha"), "feature/t-reg");
+  fs.rmSync(path.join(dir, ".git"));
+  const r = cleanup1610(["--force-if-not-registered", "--repo", REPO_A, dir], { base: shared });
+  assertRefused(r, dir);
+  assert.ok(/registered git worktree/.test(r.err), r.err);
+  const dirB = F.addWorktree(REPO_B, path.join(REPO_B, ".claude", "worktrees", "t-reg", "beta"), "feature/t-reg-b");
+  fs.rmSync(path.join(dirB, ".git"));
+  const rB = cleanup1610(["--force-if-not-registered", dirB], { cwd: REPO_B });
+  assertRefused(rB, dirB);
+  assert.ok(/registered git worktree/.test(rB.err), rB.err);
+});
+caseEnd();
+
+caseBegin("floor-and-containment-backstops-remain", "hooks/cleanup-orphan-dir.js");
+test("floor-and-containment-backstops-remain", () => {
+  const outsideBase = path.join(REPO_A, "src", "x");
+  fs.mkdirSync(outsideBase, { recursive: true });
+  const r1 = cleanup1610(["--force-if-not-registered", "--repo", REPO_A, outsideBase]);
+  assertRefused(r1, outsideBase);
+  assert.ok(/outside/.test(r1.err), r1.err);
+  const baseItself = path.join(REPO_A, ".claude", "worktrees");
+  fs.mkdirSync(baseItself, { recursive: true });
+  assertRefused(cleanup1610(["--force-if-not-registered", "--repo", REPO_A, baseItself]), baseItself);
+  const shallowRoot = path.parse(SB).root;
+  const r3 = cleanup1610(["--force-if-not-registered", "--repo", REPO_A, outsideBase], { base: path.join(shallowRoot, "wt") });
+  assertRefused(r3, outsideBase);
+  assert.ok(/shallow/.test(r3.err), r3.err);
+});
+caseEnd();
+
+caseBegin("repo-flag-not-a-repo-refused", "hooks/cleanup-orphan-dir.js");
+test("repo-flag-not-a-repo-refused", () => {
+  const notRepo = path.join(SB, "not-a-repo");
+  const dir = path.join(notRepo, ".claude", "worktrees", "t", "x");
+  fs.mkdirSync(dir, { recursive: true });
+  const r = cleanup1610(["--force-if-not-registered", "--repo", notRepo, dir]);
+  assertRefused(r, dir);
+  assert.ok(!/flags not accepted/.test(r.err), `--repo must be a known flag: ${r.err}`);
+  assertRefused(cleanup1610(["--force-if-not-registered", dir, "--repo"]), dir);
+});
+caseEnd();
+
+// resolveScope fallback: a non-repo CWD with neither --repo nor --expect-main-root may proceed only
+// on an explicit WORKTREE_BASE_DIR; without one it refuses instead of guessing a base.
+const NON_REPO_CWD = path.join(SB, "non-repo-cwd");
+fs.mkdirSync(NON_REPO_CWD);
+
+caseBegin("non-repo-cwd-without-explicit-base-refused", "hooks/cleanup-orphan-dir.js");
+test("non-repo-cwd-without-explicit-base-refused", () => {
+  const dir = path.join(SB, "fb-unset", "wts", "t-fb", "x");
+  fs.mkdirSync(dir, { recursive: true });
+  const r = cleanup1610([dir], { cwd: NON_REPO_CWD });
+  assertRefused(r, dir);
+  assert.ok(/cannot resolve the worktree base/.test(r.err), r.err);
+});
+caseEnd();
+
+caseBegin("non-repo-cwd-with-explicit-base-deletes-leftover", "hooks/cleanup-orphan-dir.js");
+test("non-repo-cwd-with-explicit-base-deletes-leftover", () => {
+  const base = path.join(SB, "fb-explicit", "wts");
+  const dir = path.join(base, "t-fb", "x");
+  fs.mkdirSync(dir, { recursive: true });
+  const r = cleanup1610([dir], { cwd: NON_REPO_CWD, base });
+  assert.strictEqual(r.rc, 0, `stderr: ${r.err}`);
+  assert.strictEqual(JSON.parse(r.out.trim()).deleted, true);
+  assert.ok(!fs.existsSync(dir), "the unregistered empty leftover must be gone");
+  for (const kept of [path.join(base, "t-fb"), base, path.dirname(base)]) {
+    assert.ok(fs.existsSync(kept), `must survive: ${kept}`);
+  }
+});
+caseEnd();
+
+// The fallback's Step 6 asks this checkout, not the target's repo, so force (recursive delete) is refused.
+caseBegin("non-repo-cwd-explicit-base-force-refused", "hooks/cleanup-orphan-dir.js");
+test("non-repo-cwd-explicit-base-force-refused", () => {
+  const base = path.join(SB, "fb-force", "wts");
+  const dir = path.join(base, "t-fb", "x");
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "keep.txt"), "x");
+  const r = cleanup1610(["--force-if-not-registered", dir], { cwd: NON_REPO_CWD, base });
+  assertRefused(r, dir);
+  assert.ok(/needs a resolvable repo/.test(r.err), r.err);
+  assert.ok(fs.existsSync(path.join(dir, "keep.txt")), "the file inside must survive");
 });
 caseEnd();
 

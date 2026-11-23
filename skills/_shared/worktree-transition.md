@@ -7,7 +7,7 @@ This fragment owns the entry, exit, and recovery procedures; every other locatio
 
 Call the native `EnterWorktree` tool with the absolute worktree path decided at `/worktree-start` WS-3.
 When that tool is unavailable in the current execution context, start a new session with the worktree as its working directory — there is no in-session substitute.
-One confirmation dialog is shown for worktrees outside `.claude/worktrees/` — that is normal since v2.1.206; approve it.
+The default base `<repo>/.claude/worktrees` enters without a dialog; a worktree under an explicit `WORKTREE_BASE_DIR` outside it raises one upstream confirmation — approve it.
 Confirm once after entering that `git rev-parse --show-toplevel` returns the worktree path.
 
 ## Exit — before session close
@@ -25,6 +25,5 @@ Emit `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: {reason}>>` only when a wider bypass than
 
 ## Notes
 
-- The upstream confirmation dialog cannot be suppressed from this repository (issue #1610).
 - `cd` inside a Bash call never moves the session CWD — the shell is reset after every call, so it cannot establish or release a binding.
 - Entering relocates the session transcript to the worktree's project directory; the session leaves the launch directory's thread list.

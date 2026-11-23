@@ -7,6 +7,7 @@
 const { isPathOutsideRepo, rejectRceGitFlags, findFirstUnquotedAnd } = require("../shared-cmd-utils");
 const { singleInvocation, cdTailInvocation, withoutWorktreeEndSkillPrefix, gitSubcommand, gitCDirIsRepo, redirectsUnderTmp } = require("./command-shape");
 const { isAllowedNewItemCommand } = require("./new-item");
+const { isInRepoBase } = require("../../lib/worktree-base");
 
 // Returns true if cmd is `git worktree remove` with --force or -f (short form).
 // Tokenizes after "worktree remove" to avoid false positives from path components.
@@ -37,7 +38,8 @@ function addTargetPath(tokens) {
 
 /**
  * True if cmd is one `git worktree add/remove/prune` invocation whose add-target
- * path (when present) is outside repoRoot, or a New-Item/ni call ./new-item allows.
+ * path (when present) is outside repoRoot or strictly below its in-repo base
+ * (<repoRoot>/.claude/worktrees, #1610), or a New-Item/ni call ./new-item allows.
  * The only accepted second segment is the #982 worktree-start tail `&& cd <path>`
  * (cdTailInvocation), and the only accepted prefix is WORKTREE_END_SKILL=1 on git;
  * any other separator, nesting or prefix is rejected.
@@ -59,7 +61,7 @@ function isAllowedWorktreeCommand(cmd, repoRoot) {
     if (action !== "add") return false;
     // Fail-open when path is absent (e.g. git worktree add -b foo — path omitted)
     const target = addTargetPath(args);
-    return target ? isPathOutsideRepo(target, repoRoot) : true;
+    return target ? (isPathOutsideRepo(target, repoRoot) || isInRepoBase(target, repoRoot)) : true;
   }
 
   if (!split.skillPrefixed && /^(?:new-item|ni)$/i.test(seg.cmd0) && seg.cmd0Raw === seg.cmd0) {

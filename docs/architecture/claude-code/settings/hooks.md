@@ -5,7 +5,7 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
 PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and the decision time limit: [hook-timeout.md](hook-timeout.md).
 
 **Hooks**:
-- `merged-allow-deny.js` (PreToolUse, registered twice: `--matcher-group primary` and `--matcher-group monitor-worktree`) — runs `block-dotenv`, `block-credentials`, `bash-guard`, `block-capture-echo` and `preuse-auto-approve` in one process; each member judges only its own tools (`hooks/merged-allow-deny/members.js`). Contract (routing, merge order, no-decision vs approve, fail-open / fail-closed): [hook-timeout.md](hook-timeout.md) "Merged allow-deny hook".
+- `merged-allow-deny.js` (PreToolUse, registered twice: `--matcher-group primary` and `--matcher-group monitor`) — runs `block-dotenv`, `block-credentials`, `bash-guard`, `block-capture-echo` and `preuse-auto-approve` in one process; each member judges only its own tools (`hooks/merged-allow-deny/members.js`). Contract (routing, merge order, no-decision vs approve, fail-open / fail-closed): [hook-timeout.md](hook-timeout.md) "Merged allow-deny hook".
 - `scan-outbound.js` (PreToolUse, matcher: `Bash`) — scans commands for private info patterns
 - `block-dotenv.js` (merged allow-deny hook member, `primary` group tools) — blocks `.env` file access (read and write).
   Sanitizes git commit messages (`git commit` and `git -C <path> commit`) to avoid false positives

@@ -30,10 +30,10 @@ assert_eq() {
 EXPECTED="$(node "$DRIVER" --expected-matcher)"
 
 # Since #2676 block-capture-echo and preuse-auto-approve run as members of the merged
-# allow-deny hook: the primary group reaches the command tools, the monitor-worktree group
-# reaches Monitor/EnterWorktree, and each member's tool list (members.js) scopes it.
+# allow-deny hook: the primary group reaches the command tools, the monitor group
+# reaches Monitor (EnterWorktree dropped in #1849), and each member's tool list (members.js) scopes it.
 NEEDLE_PRIMARY='merged-allow-deny.js" --matcher-group primary'
-NEEDLE_MW='merged-allow-deny.js" --matcher-group monitor-worktree'
+NEEDLE_MW='merged-allow-deny.js" --matcher-group monitor'
 has_tok() { case "|$1|" in *"|$2|"*) printf 'yes' ;; *) printf 'no' ;; esac; }
 
 assert_eq "E-1a-block-capture-echo-member-tools" "$EXPECTED" \
@@ -49,15 +49,14 @@ assert_eq "E-2a-auto-approve-member-covers-command-tools" "yes" \
     "$(node "$DRIVER" --member-covers-command-tools "preuse-auto-approve")"
 assert_eq "E-2a-auto-approve-no-standalone-entry" "NOT_REGISTERED" \
     "$(node "$DRIVER" --matcher-for "preuse-auto-approve.js")"
-# The pre-existing Monitor/EnterWorktree coverage must survive the merge: the group
-# registration reaches the tool AND the member judges it.
+# The Monitor coverage must survive the merge: the group registration reaches the tool
+# AND the member judges it. EnterWorktree is reached by neither (#1849: no allow, no prompt fix).
 mw_matcher="$(node "$DRIVER" --matcher-for "$NEEDLE_MW")"
 auto_tools="$(node "$DRIVER" --member-tools "preuse-auto-approve")"
-for tool in Monitor EnterWorktree; do
-    assert_eq "E-2bc-monitor-worktree-group-has-[$tool]" "yes" "$(has_tok "$mw_matcher" "$tool")"
-    assert_eq "E-2bc-auto-approve-member-judges-[$tool]" "yes" "$(has_tok "$auto_tools" "$tool")"
-done
-assert_eq "E-2d-monitor-worktree-group-timeout" "15" \
+assert_eq "E-2bc-monitor-group-matcher-is-Monitor" "Monitor" "$mw_matcher"
+assert_eq "E-2bc-auto-approve-member-judges-[Monitor]" "yes" "$(has_tok "$auto_tools" Monitor)"
+assert_eq "E-2bc-auto-approve-member-skips-[EnterWorktree]" "no" "$(has_tok "$auto_tools" EnterWorktree)"
+assert_eq "E-2d-monitor-group-timeout" "15" \
     "$(node "$DRIVER" --timeout-for "$NEEDLE_MW")"
 
 # E-4: the SSOT file buildRemedy reads is present and non-empty.
@@ -69,7 +68,7 @@ assert_eq "E-4-ssot-file-present" "present" "$ssot_state"
 # settings from. It is exercised HERE, at TL2, because TL3 is gated off by default —
 # an extractor that only ever runs behind RUN_TL3 is an untested test dependency.
 ENTRY_DRV="$(cd "$(dirname "$0")" && pwd)/real-hook-entry.js"
-for group in primary monitor-worktree; do
+for group in primary monitor; do
     hook="merged-allow-deny.js\" --matcher-group $group"
     assert_eq "E-5a-matcher-agrees-with-settings-driver-[$group]" \
         "$(node "$DRIVER" --matcher-for "$hook")" "$(node "$ENTRY_DRV" --matcher "$hook")"

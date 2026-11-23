@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+":" //; : <<'AGENTS_NODE_GUARD'
+// #1532 node-misinvocation guard -- keep intact; never write */ in this file.
+// Why it is shaped this way, and how to edit it: docs/agents-repo-dev.md
+const msg = process.argv[1] + ": this is a bash script, not a Node program." +
+  " Re-run it as: bash " + process.argv[1] + " [args...]\n";
+for (let i = 0; i < 100; i++) {
+  try { require("fs").writeSync(2, msg); break; }
+  catch (err) { if (err.code !== "EAGAIN") break; }
+}
+process.exitCode = 70;
+/*
+AGENTS_NODE_GUARD
+# Usage: worktree-base [--repo <dir>]
+#   Prints WORKTREE_BASE=, MAIN_DIR= and WORKTREE_BASE_SOURCE= (explicit|default) for the
+#   repository holding <dir> (default: the CWD). Exit 1 with the reason on stderr when the
+#   main worktree cannot be resolved; exit 64 on a usage error.
+# The resolution is owned by hooks/lib/worktree-base.js, always the one beside this script.
+
+set -u
+
+WB_REPO=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --repo)
+      if [ $# -lt 2 ] || [ -z "$2" ]; then
+        printf 'usage: worktree-base [--repo <dir>]\n' >&2
+        exit 64
+      fi
+      WB_REPO="$2"; shift 2 ;;
+    *)
+      printf 'usage: worktree-base [--repo <dir>]\n' >&2
+      exit 64 ;;
+  esac
+done
+
+WB_REPO_ARG="$WB_REPO" node -e '
+  const fs = require("fs"); const path = require("path");
+  const repo = process.env.WB_REPO_ARG || ""; delete process.env.WB_REPO_ARG;
+  function toNative(p) {
+    if (process.platform !== "win32") return p;
+    const m = /^\/([A-Za-z])(\/|$)/.exec(p);
+    return m ? m[1] + ":/" + p.slice(3) : p;
+  }
+  let lib;
+  try {
+    const self = fs.realpathSync(toNative(String(process.argv[1] || "")));
+    lib = require(path.join(path.dirname(self), "..", "hooks", "lib", "worktree-base.js"));
+  } catch (e) {
+    process.stderr.write("worktree-base: cannot load hooks/lib/worktree-base.js: " + e.message + "\n");
+    process.exit(1);
+  }
+  const r = lib.resolveWorktreeBase(repo === "" ? process.cwd() : toNative(repo));
+  if (!r.ok) { process.stderr.write("worktree-base: " + r.reason + "\n"); process.exit(1); }
+  const fwd = (p) => String(p).replace(/\\/g, "/");
+  process.stdout.write("WORKTREE_BASE=" + fwd(r.base) + "\nMAIN_DIR=" + fwd(r.mainDir) + "\nWORKTREE_BASE_SOURCE=" + r.source + "\n");
+' "${BASH_SOURCE[0]}"
+# End of the #1532 node-misinvocation guard envelope -- docs/agents-repo-dev.md
+# */

@@ -9,6 +9,7 @@
 
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/lib/review-size.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/lib/worktree-base-prune.sh"
 
 HARD_HIT=0
 HDR="## Doc-size Review"
@@ -52,8 +53,9 @@ report_records() {
 }
 
 if [[ "$ALL_SCAN" -eq 1 ]]; then
-  review_size_check "$HDR" docs none worktree < <(find . -type f -name '*.md' \
-    -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | sed 's|^\./||' | sort | review_size_worktree_nul)
+  worktree_base_prune_args
+  review_size_check "$HDR" docs none worktree < <(find . "${WT_BASE_PRUNE_ARGS[@]}" -type f -name '*.md' \
+    -not -path '*/node_modules/*' -not -path '*/.git/*' -print 2>/dev/null | sed 's|^\./||' | sort | review_size_worktree_nul)
   echo "$HDR: PERFORMED (all-scan mode)"
   echo ""
   report_records

@@ -2,39 +2,17 @@
 # tests/skills/feature-worktree-start-non-interactive.sh
 # Tests: skills/worktree-start/SKILL.md, skills/worktree-start/scripts/derive-worktree-name.sh
 # Tags: worktree, start, prompts, skill, static, TL2, scope:issue-specific
-#
-# Issue #1910 — /worktree-start must never ask: the interactive/non-interactive
-# branch is removed and task-name/branch-type are always auto-derived by
-# skills/worktree-start/scripts/derive-worktree-name.sh (intent.md, or
-# --headless <label> for fork callers).
-
-# Dispatcher — sub-files under feature-worktree-start-non-interactive/:
-#   helpers.sh                 — fixture, run_derive, assertion helpers
-#   skill-static.sh            — TC1-TC13: static contract of SKILL.md
-#   derive-core.sh             — B1-B7,B15,B20,B23: core derivation, D0 refusal, devices
-#   derive-gh.sh               — B8,B9,B9b,B13a,B13b: D4 gh label classifier
-#   session-and-idempotency.sh — B11,B12: session resolution + WS-4/WS-6 reuse
-#   reuse-safety.sh            — B22: WS-2 reuse-safety refusals
-#   slugify-table.sh           — B14,B24: slugify/parsing/D0 basename, closes_issues[0]
-
-#   scan-gate-and-locale.sh    — B16-B18: D3a/D0 scan gates, D3b stamp, LC_ALL
-#   d6-fallback-cascade.sh     — B19: D6 rescan/prefix-drop cascade + unscanned last tier
-#   private-repo-gate.sh       — B21: private-name half of scan_clean(), cache seam, D0a
-#   self-exclusion-origin.sh   — B25: D0a keyed on resolved origin identity
-#   env-nonexposure.sh         — B26: list never enters a child env; call-site routing
-# B10 (output-shape invariant) runs once per behavioral sub-file as B10/<group>.
-
-# helpers.sh setup_fixture() declares PRIVATE_REPO_NAMES_CACHE_SET/_CACHE; without
-# it every run_derive would hit a live `gh repo list` and vary per user.
-# private-repo-gate.sh owns the cases that override it.
-
-# TL3 gap: a real /worktree-start run through the Bash tool (no AskUserQuestion),
-# and WS-2/WS-4/WS-6 as executed by the model rather than reproduced here — both
-# covered by tests/skills/TL3-skill-worktree-start-auto-naming.sh (RUN_TL3-gated).
-# With RUN_TL3 off: checked at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration + manual smoke.
+# Issue #1910 — /worktree-start never asks; derive-worktree-name.sh auto-derives the
+# task name and branch type. Dispatcher: one case per sub-file under
+# feature-worktree-start-non-interactive/ (each sub-file's header names its cases);
+# B10 (output shape) runs once per behavioral sub-file as B10/<group>.
+# TL3 gap: a real /worktree-start run and model-executed WS-2/WS-4/WS-6 are covered by
+# tests/skills/TL3-skill-worktree-start-auto-naming.sh (RUN_TL3-gated).
 
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=tests/lib/harness.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 SUB_DIR="$TESTS_DIR/feature-worktree-start-non-interactive"
 TOTAL_PASS=0
 TOTAL_FAIL=0
@@ -133,20 +111,47 @@ selftest_dispatcher() {
     rm -rf "$tmp"
 }
 
+case_begin "dispatcher-self-test" "skills/worktree-start/scripts/derive-worktree-name.sh"
 selftest_dispatcher
+case_end
 
-#          sub-file                    min PASS (current baseline)
-run_sub "$SUB_DIR/skill-static.sh"            14
-run_sub "$SUB_DIR/derive-core.sh"             41
+# Each sub-file runs as one case; the number is its min PASS (current baseline).
+case_begin "skill-static-suite" "skills/worktree-start/SKILL.md"
+run_sub "$SUB_DIR/skill-static.sh"            17
+case_end
+case_begin "derive-core-suite" "skills/worktree-start/scripts/derive-worktree-name.sh"
+run_sub "$SUB_DIR/derive-core.sh"             42
+case_end
+case_begin "derive-gh-suite" "skills/worktree-start/scripts/derive-worktree-name.sh"
 run_sub "$SUB_DIR/derive-gh.sh"               12
+case_end
+case_begin "session-and-idempotency-suite" "skills/worktree-start/scripts/derive-worktree-name.sh"
 run_sub "$SUB_DIR/session-and-idempotency.sh" 13
+case_end
+case_begin "reuse-safety-suite" "skills/worktree-start/SKILL.md"
 run_sub "$SUB_DIR/reuse-safety.sh"            30
+case_end
+case_begin "slugify-table-suite" "skills/worktree-start/scripts/derive-worktree-name.sh"
 run_sub "$SUB_DIR/slugify-table.sh"           40
+case_end
+case_begin "scan-gate-and-locale-suite" "skills/worktree-start/scripts/derive-worktree-name.sh"
 run_sub "$SUB_DIR/scan-gate-and-locale.sh"    18
+case_end
+case_begin "d6-fallback-cascade-suite" "skills/worktree-start/scripts/derive-worktree-name.sh"
 run_sub "$SUB_DIR/d6-fallback-cascade.sh"     15
+case_end
+case_begin "private-repo-gate-suite" "skills/worktree-start/scripts/derive-worktree-name.sh"
 run_sub "$SUB_DIR/private-repo-gate.sh"       25
+case_end
+case_begin "self-exclusion-origin-suite" "skills/worktree-start/scripts/derive-worktree-name.sh"
 run_sub "$SUB_DIR/self-exclusion-origin.sh"   40
+case_end
+case_begin "env-nonexposure-suite" "skills/worktree-start/scripts/derive-worktree-name.sh"
 run_sub "$SUB_DIR/env-nonexposure.sh"          8
+case_end
+case_begin "derive-worktree-path-suite" "skills/worktree-start/scripts/derive-worktree-name.sh"
+run_sub "$SUB_DIR/derive-worktree-path.sh"     7
+case_end
 
 echo ""
 echo "Results: $TOTAL_PASS passed, $TOTAL_FAIL failed"

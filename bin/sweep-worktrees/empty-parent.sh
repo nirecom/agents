@@ -1,32 +1,19 @@
 #!/bin/bash
-#
-# bin/sweep-worktrees/empty-parent.sh
-#
-# Sourced by bin/sweep-worktrees.sh. Provides two functions:
-#
-#   discover_registered_wt_parents
-#     Populates the REGISTERED_WT_PARENTS associative array with
-#     WORKTREE_BASE_DIR/<task-name> parent directories referenced by any
-#     discovered main repo's `git worktree list`. Inputs: $WORKTREE_BASE_DIR,
-#     $TARGET_MAIN_ROOT. Mutates: REGISTERED_WT_PARENTS, DISCOVERED_TARGET_MAIN_ROOTS.
-#
-#   sweep_empty_parents
-#     Reclaims depth-1 task-name parent directories under WORKTREE_BASE_DIR
-#     that are empty (no subdirectories), not registered with any discovered
-#     repo's worktree, and older than SWEEP_AGE_DAYS. Inputs: $WORKTREE_BASE_DIR,
-#     $SWEEP_AGE_DAYS, $DRY_RUN, REGISTERED_WT_PARENTS. Mutates:
-#     $empty_parents_candidates, $empty_parents_removed,
-#     $empty_parents_skipped_young, $empty_parents_skipped_nonempty,
-#     $empty_parents_skipped_registered.
-#
-# Must be `source`d, not executed directly — it mutates caller-scope variables.
+# bin/sweep-worktrees/empty-parent.sh — sourced by bin/sweep-worktrees.sh, once per scanned base
+# ($WORKTREE_BASE_DIR). discover_registered_wt_parents fills REGISTERED_WT_PARENTS with the
+# <base>/<task> parents any discovered repo (the base's scan-set owners, plus git-common-dir reverse
+# lookups) registers. sweep_empty_parents reclaims depth-1 parents that are empty, unregistered and
+# older than SWEEP_AGE_DAYS, mutating the empty_parents_* counters. Must be `source`d.
 
 discover_registered_wt_parents() {
   if [[ -z "${WORKTREE_BASE_DIR:-}" ]] || [[ ! -d "$WORKTREE_BASE_DIR" ]]; then
     return 0
   fi
   DISCOVERED_TARGET_MAIN_ROOTS["$TARGET_MAIN_ROOT"]=1
-  local wt_leaf common_dir target_main_root_cand
+  local wt_leaf common_dir target_main_root_cand owner
+  while IFS= read -r owner; do
+    if [[ -n "$owner" ]]; then DISCOVERED_TARGET_MAIN_ROOTS["$owner"]=1; fi
+  done < <(scan_set_owners "$(norm_path "$WORKTREE_BASE_DIR")")
   while IFS= read -r -d '' wt_leaf; do
     common_dir="$(git -C "$wt_leaf" rev-parse --git-common-dir 2>/dev/null || true)"
     if [[ -n "$common_dir" ]]; then

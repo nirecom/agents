@@ -2,7 +2,7 @@
 "use strict";
 // hooks/merged-allow-deny.js — PreToolUse entry of the merged allow-deny hook (#2676): block-dotenv,
 // block-credentials, bash-guard, block-capture-echo and preuse-auto-approve judged in one process.
-// settings.json registers it once per matcher group: `--matcher-group primary|monitor-worktree`.
+// settings.json registers it once per matcher group: `--matcher-group primary|monitor`.
 // Dispatch only; the members live in ./merged-allow-deny/members.js.
 
 const { runMembers } = require("./merged-allow-deny/run");

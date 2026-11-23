@@ -1,19 +1,16 @@
 #!/usr/bin/env node
-// Generate WORKTREE_NOTES.md and register it in <targetMainRoot>/.git/info/exclude.
-//
-// Usage:
-//   COPIED_JSON='<step-9-stdout>' node bin/worktree-write-notes.js \
-//     <targetMainRoot> <worktreePath> <branch> [<baseDir>] [<sessionId>]
-//
-// COPIED_JSON: full stdout JSON from worktree-copy-include.js (we read .copied).
-//              Empty / unset → treated as []. Invalid JSON → exit 1.
-// baseDir argv[5]: optional. Empty string or missing → process.env.WORKTREE_BASE_DIR || null.
-// sessionId argv[6]: optional. Empty string or missing → null (Session-ID line omitted from notes).
+// Generate WORKTREE_NOTES.md and register it in <targetMainRoot>/.git/info/exclude. Usage:
+//   COPIED_JSON='<json>' node bin/worktree-write-notes.js <targetMainRoot> <worktreePath> <branch> [<baseDir>] [<sessionId>]
+// COPIED_JSON: worktree-copy-include.js stdout (.copied); empty → []; invalid JSON → exit 1.
+// baseDir argv[5]: empty or missing → the resolver base (hooks/lib/worktree-base.js). sessionId
+// argv[6]: empty or missing → no Session-ID line. A base inside the main repo is appended to its
+// exclude; a failed append exits 1 unless git already ignores the base (then WARN, exit 0).
 
 "use strict";
 
-const fs = require("fs");
+const { spawnSync } = require("child_process");
 const lib = require("../hooks/lib/worktree-notes");
+const { resolveWorktreeBase, explicitWorktreeBase, inRepoRelative } = require("../hooks/lib/worktree-base");
 
 function die(msg) {
   process.stderr.write(msg + "\n");
@@ -59,10 +56,13 @@ if (siblingRaw.trim().length > 0) {
 
 const targetMainRoot = normalizePath(targetMainRootRaw);
 const worktreePath = normalizePath(worktreePathRaw);
-const baseDir =
-  baseDirRaw && baseDirRaw.length > 0
-    ? baseDirRaw
-    : process.env.WORKTREE_BASE_DIR || null;
+function resolverBase() {
+  const r = resolveWorktreeBase(targetMainRoot);
+  const base = r.ok ? r.base : explicitWorktreeBase();
+  return base ? normalizePath(base) : null;
+}
+const baseDir = baseDirRaw && baseDirRaw.length > 0 ? baseDirRaw : resolverBase();
+const baseRel = baseDir ? inRepoRelative(baseDir, targetMainRoot) : null;
 const sessionId = sessionIdRaw && sessionIdRaw.length > 0 ? sessionIdRaw : null;
 
 let result;
@@ -76,6 +76,7 @@ try {
     baseDir,
     copiedFiles,
     excludePattern: "WORKTREE_NOTES.md",
+    baseExcludePattern: baseRel ? `${baseRel}/` : null,
     sessionId,
     siblingWorktrees,
   });
@@ -88,5 +89,13 @@ process.stdout.write(JSON.stringify(result) + "\n");
 if (!result.notesWritten) {
   for (const err of result.errors) process.stderr.write(err + "\n");
   process.exit(1);
+}
+if (result.baseExcludeError) {
+  const ignored = spawnSync("git", ["-C", targetMainRoot, "check-ignore", "-q", `${baseRel}/`], { timeout: 10000, windowsHide: true }).status === 0;
+  if (!ignored) {
+    process.stderr.write(`base exclude append failed and git does not ignore ${baseRel}/: ${result.baseExcludeError}\n`);
+    process.exit(1);
+  }
+  process.stderr.write(`WARN: base exclude append failed (${result.baseExcludeError}); ${baseRel}/ is already ignored\n`);
 }
 process.exit(0);

@@ -139,4 +139,15 @@ run_group_a() {
   assert_eq "A-NEW-7: 350-line staged md → --staged exits 0 (WARN band)" "0" "$TOOL_RC"
   assert_contains "A-NEW-7b: 350-line staged md → --staged emits a WARN diagnostic" "WARN" "$TOOL_OUT"
   assert_contains "A-NEW-7c: 350-line WARN diagnostic names the file" "warn350.md" "$TOOL_OUT"
+
+  # A-1610: --all prunes the in-repo worktree base .claude/worktrees (#1610) but
+  # keeps a sibling such as .claude/worktrees-x and the repo's own docs.
+  repo="$(new_doc_repo)"
+  gen_md "$repo/own.md" 600
+  gen_md "$repo/.claude/worktrees/t/r/docs/nested.md" 600
+  gen_md "$repo/.claude/worktrees-x/kept.md" 600
+  run_tool "$repo" "bin/review-doc-size" --all
+  assert_contains "A-1610a: --all still reports the repo's own doc" "HARD: own.md" "$TOOL_OUT"
+  assert_not_contains "A-1610b: --all skips docs under .claude/worktrees" ".claude/worktrees/" "$TOOL_OUT"
+  assert_contains "A-1610c: --all keeps a sibling of the base" ".claude/worktrees-x/kept.md" "$TOOL_OUT"
 }
