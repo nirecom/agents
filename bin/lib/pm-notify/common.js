@@ -81,6 +81,24 @@ function ownerOf(ref, timeoutMs, entries) {
   }
 }
 
+// decidedOwnerOf(ref, timeoutMs?, entries?) -> ownerOf's answer, except that a null owner it cannot trust is
+// undecidable {ok:false, reason} (#3135): the board has no pm field (fieldAbsent), or a local active PM state
+// holds the issue or an ancestor while the field is empty. Every verb that discards on no-owner uses this gate.
+function decidedOwnerOf(ref, timeoutMs, entries) {
+  const es = entries || scan.listPmFiles();
+  const r = module.exports.ownerOf(ref, timeoutMs, es); // via exports: callers stub ownerOf there
+  if (!r || !r.ok || r.owner) return r;
+  if (r.fieldAbsent) return { ok: false, reason: "pm-field-absent" };
+  const chain = Array.isArray(r.chain) && r.chain.length > 0 ? r.chain : [ref];
+  const tags = [];
+  for (const c of chain) {
+    for (const h of scan.directHoldersOf(c, { entries: es, homeRepo: homeRepo() })) {
+      if (!tags.some((t) => S.sameTag(t, h.tag))) tags.push(h.tag);
+    }
+  }
+  return tags.length > 0 ? { ok: false, reason: `pm-field-unset-held: ${tags.join(",")}` } : r;
+}
+
 // renamedTo(tag, entries?) -> the current tag of the PM when tag is one of its retired tags, else null.
 function renamedTo(tag, entries) {
   const g = scan.generationOfTag(tag, entries);
@@ -134,5 +152,5 @@ function boxEntry(note, reason) {
 
 module.exports = {
   S, W, HOOKS, scan, io, OWNER_TIMEOUT_MS, OPEN_RESULTS, Exit, fail, isObj, parseFlags, sessionOf, homeRepo, refOf, refOfIssue,
-  issueOf, keyOf, ownerOf, renamedTo, refuseRenamed, readNotes, updateNotes, patchNote, newNote, boxEntry,
+  issueOf, keyOf, ownerOf, decidedOwnerOf, renamedTo, refuseRenamed, readNotes, updateNotes, patchNote, newNote, boxEntry,
 };

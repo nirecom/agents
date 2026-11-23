@@ -28,4 +28,6 @@ try {
   process.stderr.write(`migrate-needs: ${e.message}\n`);
   process.exit(1);
 }
+// The tracker field judge's diagnostics (#3135) are display only: stderr, never a NEEDED entry.
+for (const d of r.diagnostics || []) process.stderr.write(`migrate-needs: tracker board: ${d.kind}: ${d.message}\n`);
 process.stdout.write(`NEEDED=${r.needed.map((k) => `migrate-${k}`).join(",")}\nUNCOMMITTED=${r.uncommitted}\nUNPUSHED=${r.unpushed}\nHOST=${r.host}\nMALFORMED=${r.malformed}\n`);

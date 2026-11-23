@@ -35,6 +35,9 @@ if (sidePath && fs.existsSync(sidePath)) {
 }
 const sleep = Number(process.env.PM_FAKE_GH_SLEEP_MS || 0);
 if (sleep > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, sleep);
+// #3135 board mode ($PM_FAKE_GH_BOARD): the Projects v2 board calls are answered by ./fake-board.js.
+const board = require("./fake-board");
+board.handle(args, stdinQuery || (args.find((a) => /^query=/.test(a)) || "").slice("query=".length));
 const storePath = process.env.PM_FAKE_GH_PM_STORE;
 const readStore = () => { try { return JSON.parse(fs.readFileSync(storePath, "utf8")); } catch (_) { return {}; } };
 if (args[0] === "project" && args[1] === "item-edit") {
@@ -63,15 +66,16 @@ let map = {};
 try { map = JSON.parse(fs.readFileSync(process.env.PM_FAKE_GH_MAP, "utf8")); } catch (_) { /* empty map */ }
 
 // node(repo, n, depth) -> the GraphQL issue object with its ancestors nested under parent.
-function node(repo, n, depth) {
+function node(repo, n, depth, at) {
   const a = map[`${repo}#${n}`] || {};
   const labels = a.labels || [];
   const out = { number: n, repository: { nameWithOwner: repo }, labels: { nodes: labels.map((name) => ({ name })), totalCount: labels.length + (a.more ? 100 : 0), pageInfo: { hasNextPage: Boolean(a.more) } } };
   const p = a.parent;
-  out.parent = p && depth < NEST ? node(p.repo || repo, p.number, depth + 1) : (p ? { number: p.number } : null);
-  out.projectItems = pmItems(repo, n, a);
+  out.parent = p && depth < NEST ? node(p.repo || repo, p.number, depth + 1, at && /\bparent\b/.test(query) ? at.concat("parent") : null) : (p ? { number: p.number } : null);
+  out.projectItems = pmItems(repo, n, a, at);
   out.state = a.state || "OPEN";
-  out.subIssues = { nodes: depth < NEST ? childrenOf(repo, n).map((c) => child(c.repo, c.number, depth + 1)) : [], pageInfo: { hasNextPage: false } };
+  const subAt = (i) => (at && /\bsubIssues\b/.test(query) ? at.concat("subIssues", "nodes", i) : null);
+  out.subIssues = { nodes: depth < NEST ? childrenOf(repo, n).map((c, i) => child(c.repo, c.number, depth + 1, subAt(i))) : [], pageInfo: { hasNextPage: false } };
   return out;
 }
 
@@ -84,10 +88,10 @@ function childrenOf(repo, n) {
 }
 
 // child(repo, n, depth) -> a sub-issue node with its PM field and its own sub-issues (no parent chain).
-function child(repo, n, depth) {
+function child(repo, n, depth, at) {
   const a = map[`${repo}#${n}`] || {};
-  const kids = depth < NEST ? childrenOf(repo, n).map((c) => child(c.repo, c.number, depth + 1)) : [];
-  return { number: n, state: a.state || "OPEN", repository: { nameWithOwner: repo }, labels: { nodes: (a.labels || []).map((name) => ({ name })) }, projectItems: pmItems(repo, n, a), subIssues: { nodes: kids, pageInfo: { hasNextPage: false } } };
+  const kids = depth < NEST ? childrenOf(repo, n).map((c, i) => child(c.repo, c.number, depth + 1, at ? at.concat("subIssues", "nodes", i) : null)) : [];
+  return { number: n, state: a.state || "OPEN", repository: { nameWithOwner: repo }, labels: { nodes: (a.labels || []).map((name) => ({ name })) }, projectItems: pmItems(repo, n, a, at), subIssues: { nodes: kids, pageInfo: { hasNextPage: false } } };
 }
 
 // A map entry's noCard: true -> the issue has no card (projectItems.nodes []); noCard: K (a number) -> no card
@@ -105,14 +109,23 @@ function noCardNow(key, a) {
 }
 
 // pmItems(repo, n, entry) -> the issue's project card with the PM field value (store first, then map).
-function pmItems(repo, n, a) {
+function pmItems(repo, n, a, at) {
   if (noCardNow(`${repo}#${n}`, a)) return { nodes: [] };
   const id = `PVTI_${repo.replace("/", "_")}_${n}`;
   const store = readStore();
   const v = Object.prototype.hasOwnProperty.call(store, id) ? store[id] : (a.pm === undefined ? null : a.pm);
   const value = v === null || v === "" ? null : { text: v };
   // The card sits on a Project with a `pm` field; noPmField: true puts it on a Project without one.
-  const project = a.noPmField ? { id: "PVT_fake_other", field: null } : { id: "PVT_fake", field: { id: "PVTF_fake_pm" } };
+  let project = a.noPmField ? { id: "PVT_fake_other", field: null } : { id: "PVT_fake", field: { id: "PVTF_fake_pm" } };
+  const boardPm = board.pmFieldOf();
+  if (boardPm && project.field) project.field.id = boardPm;
+  // #3135 noPmFieldBoard: GitHub's answer for a board without `pm` (field null + NOT_FOUND or the given type).
+  if (a.noPmFieldBoard || boardPm === null) {
+    project = { id: "PVT_fake_nofield", field: null };
+    if (at && /field\(name:\s*"pm"\)/.test(query)) {
+      errors.push({ type: typeof a.noPmFieldBoard === "string" ? a.noPmFieldBoard : "NOT_FOUND", path: at.concat("projectItems", "nodes", 0, "project", "field"), message: "Could not resolve to a ProjectV2Field with the name 'pm'." });
+    }
+  }
   const items = { nodes: [{ id, fieldValueByName: value, pm: value, project }] };
   if (a.itemsMore !== undefined) items.pageInfo = { hasNextPage: Boolean(a.itemsMore) };
   return items;
@@ -132,7 +145,9 @@ for (let m = re.exec(query); m; m = re.exec(query)) {
   const n = Number(m[5]);
   const a = map[`${repo}#${n}`] || {};
   if (a.fail) failed = true;
-  data[repoAlias][m[4]] = a.missing ? null : node(repo, n, 0);
+  data[repoAlias][m[4]] = a.missing ? null : node(repo, n, 0, [repoAlias, m[4]]);
+  // #3135 missing: "<TYPE>" also answers GitHub's errors[] entry at the null alias (gh exits 1).
+  if (typeof a.missing === "string") errors.push({ type: a.missing, path: [repoAlias, m[4]], message: "fake missing issue" });
   const card = a.innerError && data[repoAlias][m[4]] && data[repoAlias][m[4]].projectItems.nodes[0];
   if (card) {
     card.project = null;

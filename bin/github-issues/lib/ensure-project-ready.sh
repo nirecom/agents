@@ -13,9 +13,6 @@ if [ -n "${_ENSURE_PROJECT_READY_SOURCED:-}" ]; then
 fi
 _ENSURE_PROJECT_READY_SOURCED=1
 
-# The PM field's name; bin/lib/pm-field/read.js PM_FIELD_NAME reads the same field.
-PM_FIELD_NAME="pm"
-
 # Reuse the canonical repo-link helper. This file is always sourced, never
 # executed, so resolve the sibling relative to BASH_SOURCE (not $0).
 _EPR_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -26,6 +23,31 @@ _EPR_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Strip a trailing CR and keep the first line of gh/jq output.
 _epr_clean() { printf '%s' "$1" | tr -d '\r' | head -1; }
+
+# _epr_field_names — sets EPR_{CONTENT_DATE,STATUS,PM}_FIELD_NAME from bin/lib/tracker-fields/expected.js,
+# the field table the tracker judge also reads (#3135). session-id keeps lib/session-id-field.sh's name
+# (its other readers source it without node); a table that names it otherwise fails here instead of drifting.
+# rc 1 + an `error:` line when the table cannot be read.
+_epr_field_names() {
+    local out line
+    local -a names=()
+    out=$(cd "$_EPR_LIB_DIR/../../lib/tracker-fields" && node expected.js --names 2>/dev/null) || out=""
+    while IFS= read -r line; do
+        line="${line%$'\r'}"
+        [ -n "$line" ] && names+=("$line")
+    done <<<"$out"
+    if [ "${#names[@]}" -ne 4 ]; then
+        echo "error: ensure-project-ready: cannot read the field names from bin/lib/tracker-fields/expected.js" >&2
+        return 1
+    fi
+    if [ "${names[2]}" != "$SESSION_ID_FIELD_NAME" ]; then
+        echo "error: ensure-project-ready: expected.js names the session-id field '${names[2]}' but session-id-field.sh names it '$SESSION_ID_FIELD_NAME'" >&2
+        return 1
+    fi
+    EPR_CONTENT_DATE_FIELD_NAME="${names[0]}"
+    EPR_STATUS_FIELD_NAME="${names[1]}"
+    PM_FIELD_NAME="${names[3]}"
+}
 
 ensure_project_ready() {
     EPR_PROJECT_ID=""
@@ -60,6 +82,7 @@ ensure_project_ready() {
         echo "error: ensure-project-ready: gh CLI not found" >&2
         return 1
     fi
+    _epr_field_names || return 1
 
     # Hard-fail: gh token must carry the `project` scope.
     if ! gh auth status 2>&1 | grep -q "'project'"; then
@@ -174,7 +197,7 @@ _epr_ensure_content_date() {
     local pid="$1"
     local fields_json existing
     fields_json=$(gh api graphql -F projectId="$pid" -f query="$_epr_field_query" 2>/dev/null) || fields_json=""
-    existing=$(printf '%s' "$fields_json" | jq -r '[.data.node.fields.nodes[]? | select(.name == "Content Date" and .dataType == "DATE") | .id] | first // ""' 2>/dev/null)
+    existing=$(printf '%s' "$fields_json" | jq -r --arg n "$EPR_CONTENT_DATE_FIELD_NAME" '[.data.node.fields.nodes[]? | select(.name == $n and .dataType == "DATE") | .id] | first // ""' 2>/dev/null)
     existing=$(_epr_clean "$existing")
     if [ -n "$existing" ]; then
         EPR_CONTENT_DATE_FIELD_ID="$existing"
@@ -182,8 +205,8 @@ _epr_ensure_content_date() {
     fi
     local created
     created=$(gh api graphql \
-        -f query='mutation($p:ID!){createProjectV2Field(input:{projectId:$p,dataType:DATE,name:"Content Date"}){projectV2Field{... on ProjectV2FieldCommon{id}}}}' \
-        -f p="$pid" 2>/dev/null) || created=""
+        -f query='mutation($p:ID!,$name:String!){createProjectV2Field(input:{projectId:$p,dataType:DATE,name:$name}){projectV2Field{... on ProjectV2FieldCommon{id}}}}' \
+        -f p="$pid" -f name="$EPR_CONTENT_DATE_FIELD_NAME" 2>/dev/null) || created=""
     created=$(printf '%s' "$created" | jq -r '.data.createProjectV2Field.projectV2Field.id // empty' 2>/dev/null)
     EPR_CONTENT_DATE_FIELD_ID=$(_epr_clean "$created")
     return 0
@@ -202,7 +225,7 @@ _epr_ensure_status_field() {
     # discovery payloads expose name/dataType/options but not always __typename.
     local status_id
     status_id=$(printf '%s' "$fields_json" \
-        | jq -r '[.data.node.fields.nodes[]? | select(.name == "Status" and (.dataType == "SINGLE_SELECT" or (.options | type) == "array")) | .id] | first // ""' 2>/dev/null)
+        | jq -r --arg n "$EPR_STATUS_FIELD_NAME" '[.data.node.fields.nodes[]? | select(.name == $n and (.dataType == "SINGLE_SELECT" or (.options | type) == "array")) | .id] | first // ""' 2>/dev/null)
     status_id=$(_epr_clean "$status_id")
 
     if [ -n "$status_id" ]; then
@@ -215,7 +238,7 @@ _epr_ensure_status_field() {
     # Create the SINGLE_SELECT field (options are added by a follow-up update).
     local create_json new_id
     create_json=$(gh api graphql \
-        -F projectId="$pid" -F name="Status" \
+        -F projectId="$pid" -f name="$EPR_STATUS_FIELD_NAME" \
         -f query='mutation($projectId:ID!,$name:String!){createProjectV2Field(input:{projectId:$projectId,name:$name,dataType:SINGLE_SELECT}){projectV2Field{...on ProjectV2SingleSelectField{id}}}}' \
         2>/dev/null) || create_json=""
     new_id=$(printf '%s' "$create_json" | jq -r '.data.createProjectV2Field.projectV2Field.id // empty' 2>/dev/null)
@@ -243,9 +266,10 @@ _epr_ensure_status_field() {
 # Parse Todo/In Progress/Done option ids from a discovery-query result.
 _epr_extract_status_options() {
     local json="$1"
-    EPR_TODO_OPTION_ID=$(_epr_clean "$(printf '%s' "$json" | jq -r '[.data.node.fields.nodes[]? | select(.name == "Status") | .options[]? | select(.name == "Todo") | .id] | first // ""' 2>/dev/null)")
-    EPR_IN_PROGRESS_OPTION_ID=$(_epr_clean "$(printf '%s' "$json" | jq -r '[.data.node.fields.nodes[]? | select(.name == "Status") | .options[]? | select(.name == "In Progress") | .id] | first // ""' 2>/dev/null)")
-    EPR_DONE_OPTION_ID=$(_epr_clean "$(printf '%s' "$json" | jq -r '[.data.node.fields.nodes[]? | select(.name == "Status") | .options[]? | select(.name == "Done") | .id] | first // ""' 2>/dev/null)")
+    local n="$EPR_STATUS_FIELD_NAME"
+    EPR_TODO_OPTION_ID=$(_epr_clean "$(printf '%s' "$json" | jq -r --arg n "$n" '[.data.node.fields.nodes[]? | select(.name == $n) | .options[]? | select(.name == "Todo") | .id] | first // ""' 2>/dev/null)")
+    EPR_IN_PROGRESS_OPTION_ID=$(_epr_clean "$(printf '%s' "$json" | jq -r --arg n "$n" '[.data.node.fields.nodes[]? | select(.name == $n) | .options[]? | select(.name == "In Progress") | .id] | first // ""' 2>/dev/null)")
+    EPR_DONE_OPTION_ID=$(_epr_clean "$(printf '%s' "$json" | jq -r --arg n "$n" '[.data.node.fields.nodes[]? | select(.name == $n) | .options[]? | select(.name == "Done") | .id] | first // ""' 2>/dev/null)")
 }
 
 # Parse Todo/In Progress/Done option ids from an updateProjectV2Field result.
