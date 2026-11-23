@@ -308,3 +308,7 @@ Changes: New worktrees are now created under `<repo>/.claude/worktrees` by defau
 ### FEATURE: PR #3140 (2026-11-23)
 Background: fix(#3135): treat a Project without the pm field as undecidable, not as no-owner, and repair it through migrate-tracker
 Changes: Fixed: PM owner lookup no longer fails with gh_exec_failed when the Project has no pm field; run /migrate once to create the field and backfill existing owners.
+
+### BUGFIX: PR #3141 (2026-11-24)
+Background: fix(#3138): detect the in-repo worktree base by realpath and fold let...
+Changes: Hardened the in-repo worktree base check: a symlinked or junctioned `.claude/worktrees` no longer gets the create exemption, and Windows/macOS letter-case differences no longer defeat the base checks. The global-gitignore installers now ignore `.claude/worktrees/`.
