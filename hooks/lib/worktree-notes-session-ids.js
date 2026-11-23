@@ -94,7 +94,7 @@ function gitOut(command) {
     return execSync(command, {
       encoding: "utf8",
       timeout: 2000,
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"], windowsHide: true,
     });
   } catch (_) {
     return null;

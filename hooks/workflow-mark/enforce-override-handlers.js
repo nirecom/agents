@@ -265,7 +265,7 @@ function handle(ctx) {
         if (!repoDir) {
           try {
             repoDir = require("child_process").execSync(
-              "git rev-parse --show-toplevel", { encoding: "utf8", timeout: 5000 }
+              "git rev-parse --show-toplevel", { encoding: "utf8", timeout: 5000, windowsHide: true }
             ).trim();
           } catch (e) { repoDir = null; }
         }

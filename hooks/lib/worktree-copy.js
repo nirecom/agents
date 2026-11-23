@@ -77,7 +77,7 @@ function copyInclude({ targetMainRoot, worktreePath, includeFile }) {
   const lsResult = spawnSync(
     "git",
     ["-C", mainDir, "ls-files", "--others", "--ignored", "--exclude-standard", "-z"],
-    { encoding: "buffer" }
+    { encoding: "buffer", windowsHide: true }
   );
 
   if (lsResult.error || lsResult.status !== 0) {

@@ -33,7 +33,7 @@ function parseArgs(argv) {
 }
 
 function git(cwd, args) {
-  return execFileSync("git", args, { cwd, encoding: "utf8", timeout: 10000, stdio: ["pipe", "pipe", "pipe"] });
+  return execFileSync("git", args, { cwd, encoding: "utf8", timeout: 10000, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
 }
 
 // Worktree-relative slash path, or null when the path lies outside the worktree.

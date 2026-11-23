@@ -54,7 +54,7 @@ function rulesVersion(opts) {
 }
 
 function gitRootOfCwd() {
-  const r = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: process.cwd(), encoding: "utf8", timeout: 5000 });
+  const r = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: process.cwd(), encoding: "utf8", timeout: 5000, windowsHide: true });
   return r.error || r.status !== 0 ? null : r.stdout.trim() || null;
 }
 
