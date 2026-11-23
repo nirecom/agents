@@ -391,18 +391,18 @@ test("readdir-without-a-matching-entry-throws", { skip: FOLD_SKIP }, () => {
 });
 caseEnd();
 
-// A real traversable-but-unlistable parent (POSIX 0711); the probe decides whether chmod denies listing.
+// A real traversable-but-unlistable parent (POSIX 0311: owner wx, no r); the probe decides whether chmod denies listing.
 const UNLISTABLE = path.join(SB, "unlistable");
 let UNLISTABLE_SKIP = NO_FOLD_SKIP;
 if (!UNLISTABLE_SKIP && typeof process.getuid === "function" && process.getuid() === 0) {
-  UNLISTABLE_SKIP = "running as root, which lists a 0711 directory anyway";
+  UNLISTABLE_SKIP = "running as root, which lists a 0311 directory anyway";
 }
 if (!UNLISTABLE_SKIP) {
   fs.mkdirSync(path.join(UNLISTABLE, "inner"), { recursive: true });
   try {
-    fs.chmodSync(UNLISTABLE, 0o711);
+    fs.chmodSync(UNLISTABLE, 0o311);
     fs.readdirSync(UNLISTABLE);
-    UNLISTABLE_SKIP = "chmod 0711 does not deny listing on this file system";
+    UNLISTABLE_SKIP = "chmod 0311 does not deny listing on this file system";
   } catch (e) {
     if (e.code !== "EACCES") UNLISTABLE_SKIP = `chmod unsupported here (${e.code})`;
   } finally {
@@ -416,7 +416,7 @@ test("unlistable-parent-resolves-without-fold", { skip: UNLISTABLE_SKIP }, () =>
   const realResolve = prf("realResolve");
   const target = path.join(UNLISTABLE, "inner");
   const expected = fs.realpathSync.native(target);
-  fs.chmodSync(UNLISTABLE, 0o711);
+  fs.chmodSync(UNLISTABLE, 0o311);
   try {
     assert.throws(() => fs.readdirSync(UNLISTABLE), { code: "EACCES" }, "fixture: the parent cannot be listed");
     assert.equal(realResolve(target), expected, "resolved with the typed spelling, no throw");
