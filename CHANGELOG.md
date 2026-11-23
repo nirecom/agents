@@ -300,3 +300,7 @@ Changes: Review loops that fall back to the Claude reviewer when codex is unavai
 ### FEATURE: PR #3134 (2026-11-22)
 Background: fix(#3127): hide console window for hook/bin child spawns and scan th...
 Changes: Fixed: hooks and bin scripts that spawn git, gh, or bash no longer flash a console window on Windows. A static test now scans every `hooks/**` and `bin/**` spawn so new gaps are caught.
+
+### FEATURE: PR #3137 (2026-11-23)
+Background: feat(#1610, #1849): default the worktree base to <repo>/.claude/workt...
+Changes: New worktrees are now created under `<repo>/.claude/worktrees` by default, so entering a worktree no longer shows a confirmation dialog. Set `WORKTREE_BASE_DIR` to keep a custom location; existing worktrees under the old base keep working until their sessions close them.
