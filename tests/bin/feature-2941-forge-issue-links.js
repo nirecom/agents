@@ -1,7 +1,7 @@
 "use strict";
 // tests/bin/feature-2941-forge-issue-links.js
 // Tests: bin/lib/forge-issue-links.js
-// Tags: TL1, scope:issue-specific, pm-session, forge, gh
+// Tags: TL1, scope:issue-specific, pm-session, forge, gh, issue-3135
 // #2941 fetchAncestorChains(refs, {deadlineAt, timeoutMs}) batches refs (50 per gh call, aliases per
 // owner/repo), shares one deadline across the chunks and tells whole-call failures apart; per-ref
 // chains are read through ancestry (feature-2941-pm-state-ancestry.js). resolveOwnerRepoFromOrigin /
@@ -150,5 +150,65 @@ test("E5 regression: a null node with NOT_FOUND is issue_not_found; with another
   assert.deepStrictEqual(nf.res.b, { ok: true, n: 2 });
   const other = classify(gh({ r0: { i0: null, i1: issue(2) } }, [{ type: "FORBIDDEN", path: ["r0", "i0"] }]));
   assert.deepStrictEqual(other.res.a, { ok: false, reason: "gh_exec_failed" });
+});
+caseEnd();
+
+// #3135: the caller may pass a predicate (4th argument of classifyGraphqlResult, spec.tolerate of
+// batchedGraphql) naming the in-node errors it accepts; the classifier itself holds no pm knowledge.
+caseBegin("classify-graphql-tolerated-inside-error", "bin/lib/forge-issue-links.js");
+const FIELD_PATH = ["r0", "i0", "projectItems", "nodes", 0, "project", "field"];
+const pmFieldAbsent = (e) => e.type === "NOT_FOUND" && Array.isArray(e.path) && e.path.slice(-2).join(".") === "project.field";
+function classifyWith(r, tolerate) {
+  const seen = [];
+  const c = L().classifyGraphqlResult(r, SLOTS, (node, key) => { seen.push(key); return { ok: true, n: node.number }; }, tolerate);
+  assert.strictEqual(c.ok, true, JSON.stringify(c));
+  return { res: c.results, seen };
+}
+test("P1 a tolerated NOT_FOUND at the card's project.field leaves the node readable", () => {
+  const { res, seen } = classifyWith(gh(both, [{ type: "NOT_FOUND", path: FIELD_PATH }]), pmFieldAbsent);
+  assert.deepStrictEqual(res.a, { ok: true, n: 1 });
+  assert.deepStrictEqual(seen.sort(), ["a", "b"]);
+});
+test("P2 the predicate gets the error object; one it refuses stays gh_exec_failed", () => {
+  const got = [];
+  const { res } = classifyWith(gh(both, [{ type: "NOT_FOUND", path: FIELD_PATH }]), (e) => { got.push(e); return false; });
+  assert.deepStrictEqual(res.a, { ok: false, reason: "gh_exec_failed" });
+  assert.ok(got.some((e) => e && e.type === "NOT_FOUND" && Array.isArray(e.path)), `the predicate never saw the error: ${JSON.stringify(got)}`);
+});
+test("P3 non-regression: without a predicate a project.field NOT_FOUND is still gh_exec_failed", () => {
+  const { res, seen } = classifyWith(gh(both, [{ type: "NOT_FOUND", path: FIELD_PATH }]));
+  assert.deepStrictEqual(res.a, { ok: false, reason: "gh_exec_failed" });
+  assert.ok(!seen.includes("a"));
+});
+test("P4 non-regression: other errors the predicate does not name keep the node failed", () => {
+  for (const e of [{ type: "FORBIDDEN", path: FIELD_PATH }, { type: "NOT_FOUND", path: ["r0", "i0", "parent"] },
+    { type: "NOT_FOUND", path: ["r0", "i0", "projectItems", "nodes", 0, "project"] }]) {
+    const { res, seen } = classifyWith(gh(both, [e]), pmFieldAbsent);
+    assert.deepStrictEqual(res.a, { ok: false, reason: "gh_exec_failed" }, JSON.stringify(e));
+    assert.ok(!seen.includes("a"), JSON.stringify(e));
+  }
+});
+test("P5 partial node: a tolerated error next to an untolerated one in the same node still fails it", () => {
+  const { res, seen } = classifyWith(gh(both, [{ type: "NOT_FOUND", path: FIELD_PATH }, { type: "FORBIDDEN", path: ["r0", "i0", "parent"] }]), pmFieldAbsent);
+  assert.deepStrictEqual(res.a, { ok: false, reason: "gh_exec_failed" });
+  assert.ok(!seen.includes("a"));
+  assert.deepStrictEqual(res.b, { ok: true, n: 2 });
+});
+test("P6 non-regression: a predicate does not touch a null node (NOT_FOUND -> issue_not_found, other -> gh_exec_failed)", () => {
+  const nf = classifyWith(gh({ r0: { i0: null, i1: issue(2) } }, [{ type: "NOT_FOUND", path: ["r0", "i0"] }]), () => true);
+  assert.deepStrictEqual(nf.res.a, { ok: false, reason: "issue_not_found" });
+  const other = classifyWith(gh({ r0: { i0: null, i1: issue(2) } }, [{ type: "FORBIDDEN", path: ["r0", "i0"] }]), () => true);
+  assert.deepStrictEqual(other.res.a, { ok: false, reason: "gh_exec_failed" });
+});
+test("P7 batchedGraphql passes spec.tolerate to the classifier (fake gh answering a board without pm)", () => {
+  G.setMap({ "o/r#3801": { noPmFieldBoard: true } });
+  try {
+    const fields = 'number projectItems(first:20){nodes{id project{id field(name:"pm"){... on ProjectV2FieldCommon{id}}}} pageInfo{hasNextPage}}';
+    const spec = (tolerate) => ({ fields, readNode: (node) => ({ ok: true, n: node.number }), tolerate });
+    const plain = L().batchedGraphql([{ number: 3801, repo: "o/r" }], spec(undefined));
+    assert.deepStrictEqual(plain.results["o/r#3801"], { ok: false, reason: "gh_exec_failed" }, JSON.stringify(plain));
+    const tol = L().batchedGraphql([{ number: 3801, repo: "o/r" }], spec(pmFieldAbsent));
+    assert.deepStrictEqual(tol.results["o/r#3801"], { ok: true, n: 3801 }, JSON.stringify(tol));
+  } finally { G.setMap({}); }
 });
 caseEnd();

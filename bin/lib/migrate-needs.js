@@ -1,6 +1,6 @@
 "use strict";
-// collect(root) — aggregates the /migrate-* needs.js judgments in tracker, issues, tests order.
-// Holds no judgment of its own. Process budget: one `git status` on every path; with the upstream
+// collect(root) — aggregates the /migrate-* needs.js judgments in tracker, issues, tests order, plus the
+// tracker board's forge judge (trackerFields). Process budget: one `git status` on every path; with the upstream
 // origin/<branch>, `git rev-list origin/<branch>..HEAD` only when ahead; otherwise (the push runs
 // without -u, so no-upstream is common) `git rev-parse` of origin/<branch>, then that rev-list; when
 // the ref is absent or HEAD is detached, `git remote get-url origin` and, when origin exists,
@@ -42,12 +42,36 @@ function collect(rootArg) {
   let origin = null;
   const originOf = () => origin || (origin = git(root, ["remote", "get-url", "origin"]));
   const unpushed = unpushedState(root, lines, originOf);
+  const tracker = trackerFields(root, needed, originOf);
+  if (tracker.needed) needed.unshift("tracker"); // tracker is first in ORDER
   let host = "";
   if (needed.some((k) => HOST_KEYS.has(k))) {
     const r = originOf();
     host = r.status === 0 ? hostOf(r.stdout, root) : "unknown";
   }
-  return { needed, uncommitted, unpushed, host, malformed: malformedOf(root) };
+  return { needed, uncommitted, unpushed, host, malformed: malformedOf(root), diagnostics: tracker.diagnostics };
+}
+
+// trackerFields(root, needed, originOf) -> {needed, diagnostics}: the tracker board's forge judge (#3135) for a
+// tracker-done GitHub repo, kept apart from the needs.js judgments (which never call the forge). It runs only
+// when this machine has an active PM (the pm field matters to PM sessions alone), so a repo without PM use
+// pays no forge call. A forge failure is an undecidable diagnostic, never NEEDED (an offline /migrate ends).
+function trackerFields(root, needed, originOf) {
+  const none = { needed: false, diagnostics: [] };
+  if (needed.includes("tracker")) return none;
+  const scan = require(path.join(__dirname, "..", "..", "hooks", "pm-session", "scan"));
+  if (scan.listActivePms(scan.listPmFiles()).length === 0) return none;
+  const r = originOf();
+  if (r.status !== 0 || hostOf(r.stdout, root) !== "github") return none;
+  const { parseOriginOwnerRepo } = require(path.join(__dirname, "..", "..", "hooks", "lib", "parse-remote-url"));
+  const repo = parseOriginOwnerRepo(String(r.stdout).trim());
+  if (!repo || !repo.ok) return none;
+  try {
+    const j = require(path.join(__dirname, "tracker-fields", "judge")).judgeRepo(repo.ownerRepo);
+    return { needed: j.needed, diagnostics: j.diagnostics };
+  } catch (e) {
+    return { needed: false, diagnostics: [{ kind: "undecidable", message: `the tracker field judge failed (${e.message})` }] };
+  }
 }
 
 function malformedOf(root) {

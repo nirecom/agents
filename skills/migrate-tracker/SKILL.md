@@ -24,7 +24,9 @@ Initialize a target repo's issue tracker: sync its label set, create/link its bo
 MT-1. Resolve the target. Called from `/migrate`: take `ROOT` / `HOST` as given and ask nothing. Otherwise AskUserQuestion (`metadata.source=migrate-tracker.target-select`):
 - `current`: `ROOT` = `git rev-parse --show-toplevel` of the CWD; `TARGET_REPO` from its origin.
 - `other`: ask for `OWNER/REPO` (GitLab also takes `GROUP/.../PROJECT`, which needs the local checkout) and its local checkout path, or "no local checkout" (then `ROOT` stays unset).
-- When `ROOT` is set, run `node "$AGENTS_MAIN_ROOT/skills/migrate-tracker/scripts/needs.js" --root "<ROOT>"`; exit 0 means already done — report success and end.
+- When `ROOT` is set, run `node "$AGENTS_MAIN_ROOT/skills/migrate-tracker/scripts/needs.js" --root "<ROOT>"`; exit 0 means already done — run MT-1a, then end.
+
+MT-1a. Already done: run `run-issue-setup.sh --step repair --repo "$TARGET_REPO" --root "<ROOT>"` (plus `--dry-run`); on a non-zero exit show its stderr and report failure, else report success with its stderr diagnostics; then end.
 
 MT-2. Sync labels (no confirmation — automatic): run `run-issue-setup.sh --step labels --repo "$TARGET_REPO"` (add `--root "<ROOT>"` whenever `ROOT` is set, in every step).
 
@@ -34,13 +36,13 @@ MT-4. When the board is absent or incomplete, AskUserQuestion (`metadata.source=
 - `create`: run `run-issue-setup.sh --step ensure-project --repo "$TARGET_REPO"`; on a non-zero exit, show its stderr and end without MT-5 (the next `/migrate` asks again).
 - `skip`: tell the user a manual link is required and that the next session's `/migrate` asks again; end without MT-5.
 
-MT-5. Record done (only when `ROOT` is set): run `run-issue-setup.sh --step record-done --repo "$TARGET_REPO" --root "<ROOT>"` (plus `--no-push` / `--dry-run`). It re-checks the board and commits `.agents.json`; rc=2 means `ROOT`'s origin is not `TARGET_REPO`, rc=1 means no complete board — nothing is written in either case.
+MT-5. Repair, then record done (only when `ROOT` is set): first run MT-1a's repair call (a non-zero exit ends here without recording done), then run `run-issue-setup.sh --step record-done --repo "$TARGET_REPO" --root "<ROOT>"` (plus `--no-push` / `--dry-run`). It re-checks the board and commits `.agents.json`; rc=2 means `ROOT`'s origin is not `TARGET_REPO`, rc=1 means no complete board — nothing is written in either case.
 
 MT-6. Report the outcome. A skip or "no local checkout" is not done: say the next `/migrate` will ask again.
 
 ## Dry run
 
-- With `--dry-run`, pass `--dry-run` to every `run-issue-setup.sh` call; labels, ensure-project and record-done then only print their plan lines.
+- With `--dry-run`, pass `--dry-run` to every `run-issue-setup.sh` call; labels, ensure-project, repair and record-done then only print their plan lines.
 - With `--dry-run`, run MT-4 without AskUserQuestion: an absent board shows the ensure-project plan line. <!-- askuser-none -->
 - Report the plan lines as what a real run would do; nothing is synced, created, written or committed.
 

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # run-issue-setup.sh — orchestration backend for the /migrate-tracker skill.
-# Usage: run-issue-setup.sh --step labels|check-project|ensure-project|record-done [--root DIR] [--no-push]
+# Usage: run-issue-setup.sh --step labels|check-project|ensure-project|repair|record-done [--root DIR] [--no-push]
 #   [--dry-run] --repo OWNER/REPO | GROUP/.../PROJECT (GitLab, with --root). A --root host of unknown:
 #   for self-managed GitLab set GITLAB_HOSTNAME in the agents .env or the target repo's .env.local.
 #   labels / check-project / ensure-project: sync labels, check (rc=0 present, rc=1 absent) or
 #     create the board. With --root on a gitlab origin they go through glab (gitlab-tracker.sh).
 #   record-done: needs --root whose origin path is --repo (else exit 2); re-checks the board (absent or
 #     incomplete → exit 1, nothing written); then sets migrate.tracker done and commits .agents.json (--no-push).
-#   --dry-run: labels / ensure-project / record-done print what they would do and exit 0.
+#   repair: a tracker-done board's field repair (scripts/repair.js, #3135). --dry-run: all but check-project only print.
 # --step / --repo / --root are validated before any dispatch, so a bad value reaches no command.
 set -uo pipefail
 
@@ -57,10 +57,10 @@ done
 
 # Validate --step BEFORE any dispatch (unknown/missing → fail closed).
 if [ "$STEP_SET" -ne 1 ] || [ -z "$STEP" ]; then
-    echo "Error: --step required (labels|check-project|ensure-project|record-done)" >&2; exit 2
+    echo "Error: --step required (labels|check-project|ensure-project|repair|record-done)" >&2; exit 2
 fi
 case "$STEP" in
-    labels|check-project|ensure-project|record-done) ;;
+    labels|check-project|ensure-project|repair|record-done) ;;
     *) echo "Error: unknown --step value: $STEP" >&2; exit 2 ;;
 esac
 
@@ -144,6 +144,7 @@ dry_run_plan() {
     case "$STEP" in
         labels) echo "[dry-run] would sync the labels of $REPO ($HOST) from $LABELS_YML" ;;
         ensure-project) echo "[dry-run] would create or link the issue board of $REPO ($HOST)" ;;
+        repair) echo "[dry-run] would judge the board fields of $REPO ($HOST), then prepare and backfill them as needed" ;;
         record-done)
             root_matches_repo || return 2
             echo "[dry-run] would set migrate.tracker done in $ROOT/.agents.json, then commit$push it" ;;
@@ -171,6 +172,20 @@ case "$STEP" in
     record-done)
         record_done
         exit $?
+        ;;
+    repair)
+        if [ "$HOST" != github ]; then
+            echo "info: repair: the tracker field judge covers GitHub boards only; nothing to repair on $HOST" >&2
+            exit 0
+        fi
+        repair_js="$SCRIPT_DIR/repair.js"
+        command -v cygpath >/dev/null 2>&1 && repair_js="$(cygpath -m "$repair_js")"
+        # Run from --root so a PM issue stored without a repo resolves against the target's origin.
+        if ! (cd "${ROOT:-.}" && node "$repair_js" --repo "$REPO"); then
+            echo "Error: the tracker board repair failed for $REPO" >&2
+            exit 1
+        fi
+        exit 0
         ;;
     ensure-project)
         if [ "$HOST" = gitlab ]; then
