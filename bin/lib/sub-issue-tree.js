@@ -8,12 +8,12 @@
 // a descendant's failed PM read (pm-field-ambiguous, pm-field-truncated) fails its root the same way.
 
 const { batchedGraphql, refKey } = require("./forge-issue-links");
-const { pmReadOf } = require("./pm-field/read");
+const { pmReadOf, itemsOf, pmFieldAbsentError } = require("./pm-field/read");
 
 const SUB_DEPTH = 3;
 const SUB_PAGE = 20;
 const DEFAULT_MAX_CALLS = 4;
-const ITEMS = 'projectItems(first:10){nodes{id pm: fieldValueByName(name:"pm"){... on ProjectV2ItemFieldTextValue{text}} project{id field(name:"pm"){... on ProjectV2FieldCommon{id}}}} pageInfo{hasNextPage}}';
+const ITEMS = itemsOf(10);
 
 function subFields(depth) {
   const own = `number state repository{nameWithOwner} ${ITEMS}`;
@@ -65,7 +65,7 @@ function fetchSubIssueTree(refs, opts) {
       for (const p of pending) state.get(p.owner).failed = state.get(p.owner).failed || "sub-issue-depth-cap";
       break;
     }
-    const r = batchedGraphql(pending.map((p) => p.ref), { fields: subFields(0), readNode: (node) => ({ ok: true, node }) }, o);
+    const r = batchedGraphql(pending.map((p) => p.ref), { fields: subFields(0), readNode: (node) => ({ ok: true, node }), tolerate: pmFieldAbsentError }, o);
     if (!r.ok) return r;
     const next = [];
     for (const p of pending) {

@@ -8,7 +8,8 @@ const path = require("node:path");
 const P = require("../../lib/pm-state-fixture");
 
 const KEYS = ["PATH", "PM_FAKE_GH_LOG", "PM_FAKE_GH_MAP", "PM_FAKE_GH_MODE", "PM_FAKE_GH_SLEEP_MS", "PM_FAKE_GH_SIDE",
-  "PM_FAKE_GH_PM_STORE", "PM_FAKE_GH_EDIT_SLEEP_MS", "PM_FAKE_GH_EDIT_PID_FILE", "PM_FAKE_GH_EDIT_MODE"];
+  "PM_FAKE_GH_PM_STORE", "PM_FAKE_GH_EDIT_SLEEP_MS", "PM_FAKE_GH_EDIT_PID_FILE", "PM_FAKE_GH_EDIT_MODE",
+  "PM_FAKE_GH_BOARD", "PM_FAKE_GH_BOARD_FAIL"];
 
 // ghEnv(prefix) -> {tmp, setMap(map), calls(), queries(), mode(m), sleep(ms), side(file, patch), restore(),
 // pmStore(), setPmStore(obj), editSleep(ms), editMode(m), editPidFile}; side arms a one-shot write the next

@@ -106,8 +106,9 @@ const inside = (errPath, slotPath) => Array.isArray(errPath) && errPath.length >
 // gh exits 1 when one aliased node of a batch is missing yet still prints `data`; only a slot an
 // errors[].type NOT_FOUND covers is issue_not_found, a slot another error covers is gh_exec_failed, and
 // every other slot is read. No data on a non-zero exit is a whole-call gh_exec_failed (network, auth).
-// A slot with any error inside its node (a partial node) is gh_exec_failed, never read.
-function classifyGraphqlResult(r, slots, readNode) {
+// A slot with any error inside its node (a partial node) is gh_exec_failed, never read, unless the
+// caller's tolerate(error) accepts every such error (#3135: the caller names them; this module knows no field).
+function classifyGraphqlResult(r, slots, readNode, tolerate) {
   if (r.error || r.signal) return { ok: false, reason: "timeout" };
   let body;
   try { body = JSON.parse(String(r.stdout || "").trim()); } catch { body = null; }
@@ -118,7 +119,8 @@ function classifyGraphqlResult(r, slots, readNode) {
   for (const s of slots) {
     const node = nodeAt(data, s.path);
     if (node && typeof node === "object") {
-      results[s.key] = errors.some((e) => inside(e.path, s.path)) ? { ok: false, reason: "gh_exec_failed" } : readNode(node, s.key);
+      const failed = errors.some((e) => inside(e.path, s.path) && !(typeof tolerate === "function" && tolerate(e)));
+      results[s.key] = failed ? { ok: false, reason: "gh_exec_failed" } : readNode(node, s.key);
       continue;
     }
     const errs = errors.filter((e) => covers(e.path, s.path));
@@ -128,7 +130,7 @@ function classifyGraphqlResult(r, slots, readNode) {
   return { ok: true, results };
 }
 
-// batchedGraphql(refs, {fields, readNode, keyOf?}, {deadlineAt?, timeoutMs?}) -> {ok:true, results: {[key]:
+// batchedGraphql(refs, {fields, readNode, keyOf?, tolerate?}, {deadlineAt?, timeoutMs?}) -> {ok:true, results: {[key]:
 // readNode(node, key) | {ok:false, reason}}} or a whole-call {ok:false, reason: "gh_exec_failed"|"timeout"|
 // "parse_failed"}. key is keyOf(repo, N) (default refKey). Refs go 50 per gh call; one deadlineAt covers
 // every call (none left -> timeout without calling gh); without it each call gets timeoutMs (15 s).
@@ -153,7 +155,7 @@ function batchedGraphql(refs, spec, opts) {
     const { query, slots } = buildQuery(list.slice(i, i + CHUNK_SIZE), spec.fields);
     const [cmd, args, spawnOpts] = buildGhSpawn(["api", "graphql", "--input", "-"]);
     const r = spawnSync(cmd, args, Object.assign({}, spawnOpts, { input: JSON.stringify({ query }), timeout: timeoutMs }));
-    const c = classifyGraphqlResult(r, slots, spec.readNode);
+    const c = classifyGraphqlResult(r, slots, spec.readNode, spec.tolerate);
     if (!c.ok) return c;
     Object.assign(results, c.results);
   }

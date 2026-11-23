@@ -2,7 +2,7 @@
 // `bin/pm-notify next` (#2942): hands out the next pending or undelivered notification of the calling session.
 // The owner is looked up again on every try (owner, 2000 ms), so a resend reaches the current PM. A note tied to
 // a forge state (reopen: OPEN, merge: CLOSED) is dropped once that state no longer holds; a note with no owner
-// is dropped; an undecidable one stays undelivered with its reason. When the owner differs from the first owner
+// is dropped; an undecidable one (an untrusted null owner included, C.decidedOwnerOf) stays undelivered with its reason. When the owner differs from the first owner
 // record (a detach done outside the workflow), a detach note for the first owner is added.
 // Prints `SEND` with ID/TAG/SESSION/ISSUE/POINT and marks the note sending, or prints nothing when none is left.
 // A note still `sending` (handed out, never settled: an interrupted send) is handed out again; the PM drops the
@@ -35,7 +35,7 @@ function targetOf(note, ref, ctx) {
     if (!st) return { undecidable: "forge-state-unread" };
     if (st !== bound) return { drop: `forge-state-changed: ${st}` };
   }
-  const r = C.ownerOf(ref, C.OWNER_TIMEOUT_MS, ctx.entries);
+  const r = C.decidedOwnerOf(ref, C.OWNER_TIMEOUT_MS, ctx.entries);
   if (!r.ok) return { undecidable: r.reason };
   const tag = r.owner ? r.owner.tag : null;
   const out = r.owner ? { send: { tag, session: r.owner.session_id } } : { drop: "no-owner" };

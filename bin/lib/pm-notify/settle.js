@@ -17,7 +17,7 @@ function boxOf(note, entries) {
   if (g && C.S.sameTag(g.pm.tag, tag)) return { name: g.pm.tag };
   if (g && note.to_tag) return { name: g.pm.tag };
   const ref = C.refOfIssue(note.issue);
-  const r = ref ? C.ownerOf(ref, C.OWNER_TIMEOUT_MS, entries) : { ok: false, reason: "issue-unreadable" };
+  const r = ref ? C.decidedOwnerOf(ref, C.OWNER_TIMEOUT_MS, entries) : { ok: false, reason: "issue-unreadable" };
   if (r.ok && r.owner) return { name: r.owner.tag };
   return { name: "unassigned", reason: r.ok ? `no-owner (was ${tag || "none"})` : r.reason };
 }

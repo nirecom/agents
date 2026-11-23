@@ -32,7 +32,7 @@ function ask(refs) {
   return refs.map((ref) => {
     const left = deadline - Date.now();
     if (left <= 0) return { ref, r: { ok: false, reason: "timeout" } };
-    return { ref, r: C.ownerOf(ref, Math.min(C.OWNER_TIMEOUT_MS, left), entries) };
+    return { ref, r: C.decidedOwnerOf(ref, Math.min(C.OWNER_TIMEOUT_MS, left), entries) };
   });
 }
 
