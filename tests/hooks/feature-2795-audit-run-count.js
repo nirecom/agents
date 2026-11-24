@@ -158,3 +158,44 @@ test("schema: audit_run_counts must be an object of non-negative integers", () =
   }
 });
 caseEnd();
+
+// #3144 C2 (S2-7): armCore opts.findings — the destination / fallback record lands in the arm's own commit.
+const NOTE = { categories: ["workflow"], severity: "notice", detail: "fixture route record", reporter: "route:pm-dest" };
+const findingsOf = (sid) => { const s = F.supState(sid); return (s && s.audit && Array.isArray(s.audit.findings)) ? s.audit.findings : []; };
+const ledgerLen = (sid) => { const s = F.supState(sid); return (s && s.audit && Array.isArray(s.audit.ledger)) ? s.audit.ledger.length : 0; };
+
+caseBegin("C2 armCore findings are written with a new run and name its run id", "hooks/lib/supervisor-state-writer/audit-run.js");
+test("C2 armCore findings: a new run carries its findings, each detail naming the run id", () => {
+  const sid = F.nextSid("f1");
+  const r = AR.armAuditRun(sid, { tr_ids: ["TR2"], cause: "pre-confirm:outline", count_tr: "TR2", findings: [NOTE] });
+  assert.ok(r.ok, `arm failed: ${show(r)}`);
+  const mine = findingsOf(sid).filter((f) => f.reporter === "route:pm-dest");
+  assert.strictEqual(mine.length, 1, show(findingsOf(sid)));
+  assert.ok(mine[0].detail.includes(r.audit_run_id), `detail names ${r.audit_run_id}: ${show(mine[0])}`);
+  assert.ok(typeof mine[0].timestamp === "string" && mine[0].timestamp !== "", "timestamp stamped");
+  assert.strictEqual(F.supState(sid).audit.audit_run_id, r.audit_run_id, "finding and run are in one state");
+});
+caseEnd();
+
+caseBegin("C2 armCore rejects an invalid finding without arming or counting", "hooks/lib/supervisor-state-writer/audit-run.js");
+test("C2 armCore findings: one invalid finding -> ok:false, no ledger entry, no count, no finding", () => {
+  for (const bad of [{ categories: ["workflow"], severity: "bogus", detail: "x", reporter: "route:pm-dest" }, { detail: "no severity" }, "not-an-object"]) {
+    const sid = F.nextSid("f2");
+    const r = AR.armAuditRun(sid, { tr_ids: ["TR2"], cause: "pre-confirm:outline", count_tr: "TR2", findings: [NOTE, bad] });
+    assert.strictEqual(r.ok, false, `invalid finding ${show(bad)} must fail the arm: ${show(r)}`);
+    assert.strictEqual(ledgerLen(sid), 0, "no ledger entry");
+    assert.strictEqual(((counts(sid) || {}).TR2) || 0, 0, "no count");
+    assert.strictEqual(findingsOf(sid).length, 0, "no finding written");
+  }
+});
+caseEnd();
+
+caseBegin("C2 armCore in-flight return adds no findings", "hooks/lib/supervisor-state-writer/audit-run.js");
+test("C2 armCore findings: the idempotent in-flight return writes no finding", () => {
+  const sid = F.nextSid("f3");
+  const first = AR.armAuditRun(sid, { tr_ids: ["TR2"], cause: "pre-confirm:outline", count_tr: "TR2" });
+  const again = AR.armAuditRun(sid, { tr_ids: ["TR2"], cause: "pre-confirm:outline", count_tr: "TR2", findings: [NOTE] });
+  assert.strictEqual(again.audit_run_id, first.audit_run_id);
+  assert.strictEqual(findingsOf(sid).filter((f) => f.reporter === "route:pm-dest").length, 0, show(findingsOf(sid)));
+});
+caseEnd();

@@ -1,7 +1,7 @@
 "use strict";
 // tests/hooks/feature-2853-pre-confirm-audit-deny.js
 // Tests: hooks/confirm-checkpoint/pre-confirm-audit-deny.js
-// Tags: scope:issue-specific, TL2, pre-confirm-audit, confirm-checkpoint, supervisor-audit, fail-closed
+// Tags: scope:issue-specific, TL2, pre-confirm-audit, confirm-checkpoint, supervisor-audit, fail-closed, pm-review
 // #2853: auditDenyReason(sid, stage) decides, in-process, whether a plan CONFIRM may reach the receipt
 // check. Skips: a non-plan stage, WORKFLOW_OFF, a session with no workflow state file. Everything else
 // that cannot prove a settled (or accepted) audit denies — no sid, cap reached, a judgment that throws.
@@ -191,5 +191,16 @@ test("D12 a below-cap BLOCK acceptance does not carry over an outline edit: deny
     const r = auditDenyReason(sid, "outline");
     check("D12 after the edit: CONFIRM_OUTLINE [pre-confirm-audit] deny, not settled",
       isAuditDeny(r) && r.includes("CONFIRM_OUTLINE") && r.includes("not settled"), r);
+}));
+caseEnd();
+// #3144 C5: the deny text no longer assumes the supervisor-audit; it names the three audit-wait routes.
+caseBegin("D13 the unsettled deny names every audit-wait route (supervisor-audit, assigned PM, ask)", "hooks/confirm-checkpoint/pre-confirm-audit-deny.js");
+test("D13 the unsettled deny names every audit-wait route (supervisor-audit, assigned PM, ask)", checked(() => {
+    const r = auditDenyReason(session(), "intent");
+    check("D13 control: unsettled deny", isAuditDeny(r) && r.includes("not settled"), r);
+    check("D13 follows GATE_ACTION and GATE_HINT", typeof r === "string" && r.includes("follow its GATE_ACTION and GATE_HINT"), r);
+    for (const route of ["launches the supervisor-audit subagent", "sends the review request to the assigned PM", "asks the user for the destination"]) {
+      check(`D13 names the route: ${route}`, typeof r === "string" && r.includes(route), r);
+    }
 }));
 caseEnd();

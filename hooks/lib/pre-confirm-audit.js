@@ -178,22 +178,36 @@ function auditAdmits(j, action, isCap) {
   return "close";
 }
 
-// armStage(sid, step, ctx) -> the armAuditRun result. Never arms past the cap, and returns the
+// armStage(sid, step, ctx, opts?) -> the armAuditRun result. Never arms past the cap, and returns the
 // in-flight run as-is when it already judges the current plan, so a rerun gate counts nothing.
-function armStage(sid, step, ctx) {
+// #3144 S2-2/S2-3/S2-4 opts: force skips that reuse (a new counted run replaces the in-flight one); dest
+// (a PM session id) / fallback record the route as a finding in the arm's own commit. A forced arm at
+// the cap releases the stage's in-flight run (released: true), so the gate re-judges into the cap procedure.
+function armStage(sid, step, ctx, opts) {
+  const o = opts || {};
   const trigger = requireTrigger(step);
   const tr = trigger.tr_id;
   const scope = planScope(sid, ctx);
   const { subKeys } = currentKeys(trigger, scope);
   const audit = readAudit(sid);
   const inFlight = currentInFlightRun(audit, trigger, subKeys);
-  if (inFlight) return { ok: true, audit_run_id: inFlight.id, run_id: inFlight.id, reused: true };
-  if (countOf(audit, tr) >= AUDIT_RUN_CAP) return { ok: false, audit_run_id: null, run_id: null, reason: "cap-reached" };
-  const { armAuditRun } = require("./supervisor-state-writer/audit-run");
-  return armAuditRun(sid, {
+  if (inFlight && o.force !== true) return { ok: true, audit_run_id: inFlight.id, run_id: inFlight.id, reused: true };
+  const AR = require("./supervisor-state-writer/audit-run");
+  if (countOf(audit, tr) >= AUDIT_RUN_CAP) {
+    const released = inFlight ? AR.releaseUnsettledRun(sid, inFlight.id).released === true : false;
+    return { ok: false, audit_run_id: null, run_id: null, reason: "cap-reached", released };
+  }
+  const W = require("./pm-review-writer");
+  const findings = [];
+  if (o.dest !== undefined && o.dest !== null) {
+    if (typeof o.dest !== "string" || !W.SID_RE.test(o.dest)) return { ok: false, audit_run_id: null, run_id: null, reason: "invalid-dest" };
+    findings.push(W.destFinding(null, o.dest));
+  }
+  if (o.fallback === true) findings.push(W.fallbackFinding(null));
+  return AR.armAuditRun(sid, {
     tr_ids: [tr], cause: triggers.preConfirmCause(step), count_tr: tr,
     cwd: (ctx && ctx.cwd) || undefined, plans_dir: scope.plansDir, plan_session_id: scope.planSessionId,
-    launch_shown: true, supersede_unsettled: true,
+    launch_shown: true, supersede_unsettled: true, findings,
   });
 }
 
@@ -218,7 +232,21 @@ function formatLaunch(runId, step) {
   ].join(" ");
 }
 
+// formatPmRequest(runId, step, pm) -> the audit-wait instruction of the PM route (#3144 S2-2): the run goes
+// to the assigned PM as a Review request; no supervisor-audit launch, no approval request.
+function formatPmRequest(runId, step, pm) {
+  const t = triggerForPlanStep(step);
+  const label = t ? `${step} (${t.tr_id})` : String(step);
+  const safe = (s) => String(s == null ? "" : s).replace(/[^A-Za-z0-9_.:-]/g, "");
+  return [
+    `[EM Supervisor] ${label} pre-confirm audit armed: ${safeRunId(runId)}, for the assigned PM ${safe(pm && pm.tag)} ${safe(pm && pm.session_id)}.`,
+    `Send run ${safeRunId(runId)} to that PM as skills/_shared/pm-pre-pr-contact.md ## Review request says,`,
+    "and once its verdict is recorded rerun next-step --gate and follow its GATE_ACTION.",
+    "Do not ask the user for approval and do not emit the completion sentinel yet.",
+  ].join(" ");
+}
+
 module.exports = {
-  AUDIT_RUN_CAP, CAP_CONFIRM_VERDICTS, triggerForPlanStep, judgeStage, armStage, acceptedOnError, formatLaunch,
+  AUDIT_RUN_CAP, CAP_CONFIRM_VERDICTS, triggerForPlanStep, judgeStage, armStage, acceptedOnError, formatLaunch, formatPmRequest,
   lastStageRun, isCapConfirmAcceptable, auditAdmits,
 };

@@ -40,6 +40,7 @@ const glossaryAcceptHandler = require("./workflow-mark/glossary-accept-handler")
 const workflowAbortHandler = require("./workflow-mark/workflow-abort-handler");
 const enforceOverrideHandlers = require("./workflow-mark/enforce-override-handlers");
 const supervisorBlockOverrideHandler = require("./workflow-mark/supervisor-block-override-handler");
+const pmReviewAcceptedHandler = require("./workflow-mark/pm-review-accepted-handler");
 const resetHandler = require("./workflow-mark/reset-handler");
 
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
@@ -62,7 +63,7 @@ const HANDLERS = [
   // review-tests-handler must run BEFORE mark-step-handler so the dedicated
   // REVIEW_TESTS_COMPLETE / REVIEW_TESTS_WARNINGS sentinels reach their owner.
   reviewTestsHandler, runTestsAcceptHandler, runTestsBaselineUnobservedHandler, glossaryAcceptHandler, workflowAbortHandler, markStepHandler,
-  enforceOverrideHandlers, supervisorBlockOverrideHandler, resetHandler,
+  enforceOverrideHandlers, supervisorBlockOverrideHandler, pmReviewAcceptedHandler, resetHandler,
 ];
 
 if (require.main === module) {

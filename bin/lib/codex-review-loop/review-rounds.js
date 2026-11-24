@@ -8,7 +8,11 @@ const NON_APPROVED_VERDICT = {
   "detail-plan": "NEEDS_REVISION",
   "security-plan": "NEEDS_REVISION",
   "test-review": "NEEDS_REVISION",
+  "pm-review": "NOT_OK",
 };
+// The pm-review round cap (#3144 S3-4) — mirrors the pm-review column of the same Parameters table.
+const PM_REVIEW_CAP = 2;
+const PM_REVIEW_MAX_EXTENSIONS = 1;
 
 const isNonApproved = (verdict, format) => verdict === "NEEDS_REVISION" || verdict === NON_APPROVED_VERDICT[format];
 
@@ -147,6 +151,6 @@ function olderInput(rows, ledgerText, fp) {
 }
 
 module.exports = {
-  NON_APPROVED_VERDICT, isNonApproved, classify, summarizeRows, summarize,
+  NON_APPROVED_VERDICT, PM_REVIEW_CAP, PM_REVIEW_MAX_EXTENSIONS, isNonApproved, classify, summarizeRows, summarize,
   deriveExtensions, olderInput,
 };

@@ -167,6 +167,10 @@ const ISSUE_CLOSE_VERIFIED_END_LOOKSLIKE_RE =
 // settings.json `ask`; irreversible, so it has no END form.
 const RE_WORKFLOW_ABORT_ACCEPTED_DQ = /^echo "<<WORKFLOW_ABORT_ACCEPTED: ([^>]+)>>"$/;
 const LOOKSLIKE_WORKFLOW_ABORT_ACCEPTED = /^echo "<<WORKFLOW_ABORT_ACCEPTED([: ].*)?>>"\s*$/;
+// The user's choice of the supervisor-audit over the assigned PM's review (#3144 S2-4): a plan form
+// (<step> <reason>) and a PR form (PR#<n> <reason>). Human-only via settings.json `ask`.
+const PM_REVIEW_ACCEPTED_RE_DQ = /^echo "<<WORKFLOW_PM_REVIEW_ACCEPTED: (intent|outline|detail|PR#[0-9]+) ([^>]+)>>"$/;
+const PM_REVIEW_ACCEPTED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_PM_REVIEW_ACCEPTED([: ].*)?>>"\s*$/;
 
 function isSentinel(cmd) {
   return (
@@ -240,7 +244,8 @@ function isSentinel(cmd) {
     ISSUE_CLOSE_VERIFIED_END_RE_DQ.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_END_LOOKSLIKE_RE.test(cmd) ||
     RE_WORKFLOW_ABORT_ACCEPTED_DQ.test(cmd) ||
-    LOOKSLIKE_WORKFLOW_ABORT_ACCEPTED.test(cmd)
+    LOOKSLIKE_WORKFLOW_ABORT_ACCEPTED.test(cmd) ||
+    PM_REVIEW_ACCEPTED_RE_DQ.test(cmd) || PM_REVIEW_ACCEPTED_LOOKSLIKE_RE.test(cmd)
   );
 }
 
@@ -285,7 +290,8 @@ function isStrictSentinel(cmd) {
     SUPERVISOR_BLOCK_ACCEPTED_RETIRED_RE_DQ.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_RE_DQ.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_END_RE_DQ.test(cmd) ||
-    RE_WORKFLOW_ABORT_ACCEPTED_DQ.test(cmd)
+    RE_WORKFLOW_ABORT_ACCEPTED_DQ.test(cmd) ||
+    PM_REVIEW_ACCEPTED_RE_DQ.test(cmd)
   );
 }
 
@@ -363,4 +369,5 @@ module.exports = {
   ISSUE_CLOSE_VERIFIED_END_LOOKSLIKE_RE,
   RE_WORKFLOW_ABORT_ACCEPTED_DQ,
   LOOKSLIKE_WORKFLOW_ABORT_ACCEPTED,
+  PM_REVIEW_ACCEPTED_RE_DQ, PM_REVIEW_ACCEPTED_LOOKSLIKE_RE,
 };

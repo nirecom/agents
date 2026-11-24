@@ -110,6 +110,7 @@ const {
   parseDetailFilesToModify,
 } = require("./workflow-gate/supervisor-check");
 const { checkUserVerifiedAudit } = require("./workflow-gate/user-verified-audit");
+const { checkUserVerifiedPmReview } = require("./workflow-gate/user-verified-pm-review");
 const { runEarlyGate } = require("./workflow-gate/early-gate");
 // Called through the module object so a test preload can replace judgeRelease.
 const releaseJudge = require("./workflow-gate/release-channel-judge");
@@ -260,6 +261,10 @@ if (require.main === module) {
           "Emit the sentinel in a separate Bash call before the merge."
         );
       }
+
+      // #3144 S4-1: with an assigned PM, the PM's OK (or the user's row) for the current HEAD and PR
+      // comes first; it blocks or passes on to the TR5 audit, never approves on its own.
+      checkUserVerifiedPmReview(sessionId, freshnessCwd, { approveFn: approve, blockFn: blockWithoutError });
 
       // #2256 S5-b/c: TR5 user_verification audit gate — authoritative when
       // supervisor state resolves (arms/holds via blockWithoutError, or approves),

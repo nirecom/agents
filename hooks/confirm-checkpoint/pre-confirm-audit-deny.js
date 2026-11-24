@@ -64,7 +64,8 @@ function auditDenyReason(sid, stepArg) {
   switch (j.state) {
     case "unsettled":
       return `[pre-confirm-audit] ${label} denied: the ${step} audit of the current plan is not settled. ` +
-        "Rerun next-step --gate and follow its GATE_ACTION (launch the supervisor-audit subagent on audit-wait), " +
+        "Rerun next-step --gate and follow its GATE_ACTION and GATE_HINT (audit-wait launches the supervisor-audit subagent, " +
+        "sends the review request to the assigned PM, or asks the user for the destination), " +
         "then present the plan again.";
     case "settled-block":
       return `[pre-confirm-audit] ${label} denied: audit ${j.runId} returned BLOCK for the current plan. ` +

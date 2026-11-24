@@ -29,13 +29,15 @@ const CONTRACT = [
   { h2: "Workflow session", h3: "After Final Report", recipient: "workflow", timing: "after-final-report" },
 ];
 const TIMING_KEYS = ["session-start", "issue-start", "before-companions", "before-plan-confirm", "before-user-verification", "after-final-report"];
-const INTERIM_ISSUES = [2943, 2944, 2991, 3056, 3057, 3118];
+// #3144 replaced the [interim: #2991] lines with the Review request mechanism.
+const INTERIM_ISSUES = [2943, 2944, 3056, 3057, 3118];
 const mark = (c) => `BODY-${c.recipient}-${c.timing}`;
 const byKey = (recipient, timing) => CONTRACT.find((c) => c.recipient === recipient && c.timing === timing);
-// The session-start bundles: pm -> its one section; workflow -> the three sections the plan names.
+// The session-start bundles: pm -> its one section; workflow -> issue-start only (#3144: the two review
+// timings are fetched through --timing at their checkpoint).
 const BUNDLE = {
   pm: [byKey("pm", "session-start")],
-  workflow: [byKey("workflow", "issue-start"), byKey("workflow", "before-plan-confirm"), byKey("workflow", "before-user-verification")],
+  workflow: [byKey("workflow", "issue-start")],
 };
 
 // fixtureMd({drop, body}) -> an SSOT-shaped md whose every section carries its own BODY marker line;
