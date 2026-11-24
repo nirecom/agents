@@ -52,6 +52,7 @@ Run when the `audit-wait` hint of `next-step --gate` names it (plan confirmation
 - **RR-2.** Send by PPC-2 and PPC-3 with a pointer-only body: the issue number whose `## Changes` section the PM reads itself, the trigger, and the audit run id from the gate hint, the plan file path from `bin/plan-link --step <step>` and this session's transcript path (plan) or the PR URL, round and HEAD SHA (user_verified).
   - For user_verified, first run `node "$AGENTS_MAIN_ROOT/bin/review-rounds" append --session <this session id> --format pm-review --request --pm-sid <PM full id from PPC-1> --pr <n>`, and send the round and HEAD that row recorded; on exit 6 (cap) send nothing and go to RR-6.
 - **RR-3.** Right after sending, start the PPC-4 timer with this send's msg-id (the seconds are PPC-4's, never copied). A verified ack does not stop it: rerun `next-step --gate` within that wait until the verdict is recorded (plan: the run is settled; user_verified: the last requested round has the PM's row). No verdict when the timer ends, or an ack that fails `verify`, means "no answer".
+
 ## Review request: no answer and findings
 
 Continues `## Review request` (RR-1 to RR-3).
