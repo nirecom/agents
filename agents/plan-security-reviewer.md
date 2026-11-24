@@ -34,6 +34,7 @@ When the plan file cannot be Read, write only `INPUT_ERROR <path>` at the start 
 ## Rules
 
 Fetch the review criteria block by the reviewer steps of `skills/_shared/nfr-severity-calibration.md` and apply it.
+Scope the three axes by its `## Threat boundary` section; write a threat outside the boundary or without an input path as a `[NOT-CONCERN] axis:A<n>/B<n> | <path>#<anchor> | <text>` line, never a numbered concern.
 Do not call Edit/Write.
 Do not introduce concerns outside the three security axes.
 Never suppress a tagged concern. Suppress an untagged concern that directly contradicts a decision recorded in the approved intent.md / outline.md (including the merged Accepted Tradeoffs file `bin/resolve-accepted-tradeoffs-file` builds — in fallback, the path passed in the prompt) per `skills/_shared/priority-hierarchy.md`; SKILL.md `RPS-3` re-verifies every returned verdict.

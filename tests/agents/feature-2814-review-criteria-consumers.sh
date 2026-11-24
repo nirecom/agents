@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/agents/feature-2814-review-criteria-consumers.sh
 # Tests: skills/_shared/nfr-severity-calibration.md, agents/detail-reviewer.md, agents/outline-reviewer.md, agents/plan-security-reviewer.md, agents/test-reviewer.md, agents/security-scanner.md, skills/_shared/severity.md, skills/issue-create/SKILL.md, skills/_shared/test-design.md, skills/review-tests/SKILL.md, rules/mid-workflow-findings.md, rules/github-issues.md, .github/labels.yml, bin/github-issues/issue-create.sh, skills/_shared/codex-review-loop/upstream-inconsistency-pause.md, agents/supervisor-audit.md, agents/supervisor-audit/course-correction-lookup.md
-# Tags: TL1, static, review-criteria, severity, upstream-inconsistency, course-correction, issue-2814, scope:issue-specific, pwsh-not-required
+# Tags: TL1, static, review-criteria, severity, upstream-inconsistency, course-correction, issue-2814, issue-2020, threat-boundary, scope:issue-specific, pwsh-not-required
 # #2814 reopen T1/T2/T7 (static part): the CC reviewers fetch the review criteria block through
 # the calibration doc; severity has one definition (skills/_shared/severity.md) that every former
 # definer references; the pause procedure looks up course-correction records before asking.
@@ -61,6 +61,16 @@ case_begin "old-tier-wording-removed" "skills/_shared/test-design.md"
 ck "test-design: no 'critical:' tier" "no" "$(has skills/_shared/test-design.md 'critical:')"
 ck "review-tests: no 'critical and high'" "no" "$(has skills/review-tests/SKILL.md 'critical and high')"
 ck "review-tests: no '\`high\`-tier gap'" "no" "$(has skills/review-tests/SKILL.md '`high`-tier gap')"
+case_end
+
+# #2020: the two CC fallback security reviewers point at the threat boundary section
+# next to their axes and follow its #2020 marker form; the wording itself is the agents' to choose.
+case_begin "security-reviewers-reference-the-threat-boundary" "agents/plan-security-reviewer.md"
+for a in plan-security-reviewer security-scanner; do
+  ck "$a: references the Threat boundary section" "yes" "$(has "agents/$a.md" 'Threat boundary')"
+  ck "$a: names the [NOT-CONCERN] marker form" "yes" "$(has "agents/$a.md" '[NOT-CONCERN]')"
+  ck "$a: still fetches the criteria block (precondition)" "yes" "$(has "agents/$a.md" 'skills/_shared/nfr-severity-calibration.md')"
+done
 case_end
 
 PAUSE="skills/_shared/codex-review-loop/upstream-inconsistency-pause.md"

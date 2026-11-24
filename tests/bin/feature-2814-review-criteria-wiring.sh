@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2814-review-criteria-wiring.sh
 # Tests: bin/review-plan-codex, bin/review-code-codex, bin/lib/review-plan-codex/prompts.sh, bin/lib/codex-core.sh, bin/lib/codex-review-criteria.sh
-# Tags: TL2, codex, review, review-criteria, severity, prompt, fail-closed, issue-2814, scope:issue-specific, pwsh-not-required
+# Tags: TL2, codex, review, review-criteria, severity, prompt, fail-closed, issue-2814, issue-2020, threat-boundary, scope:issue-specific, pwsh-not-required
 # #2814 reopen T1 / R1-6: every codex review prompt (4 plan formats x round 1/2, and the code
 # diff review) carries the [REVIEW CRITERIA] and [SEVERITY DEFINITION] blocks; the code review
 # no longer asks for "the safest and simplest" approach; without --project-root the blocks stay
@@ -27,6 +27,11 @@ yn() { if "$@"; then printf yes; else printf no; fi; }
 called() { if [ -s "$1" ]; then printf called; else printf no-call; fi; }
 has_line() { if grep -q -x -F -- "$2" "$1" 2>/dev/null; then printf yes; else printf no; fi; }
 has_text() { if grep -q -F -- "$2" "$1" 2>/dev/null; then printf yes; else printf no; fi; }
+# tb_in_criteria <cap> — yes when a "Threat boundary" heading sits inside the criteria block (#2020).
+tb_in_criteria() {
+  if awk '$0=="[REVIEW CRITERIA START]"{f=1;next} $0=="[REVIEW CRITERIA END]"{f=0} f' "$1" 2>/dev/null | tr -d '\r' \
+    | grep -qE '^#+ Threat boundary'; then printf yes; else printf no; fi
+}
 
 MOCK_BIN="$WR_ROOT/mock-bin"
 mkdir -p "$MOCK_BIN"
@@ -107,8 +112,12 @@ for fmt in $FORMATS; do
     ck "$fmt r$round: [SEVERITY DEFINITION START] is in the prompt" "yes" "$(has_line "$cap" '[SEVERITY DEFINITION START]')"
     ck "$fmt r$round: [SEVERITY DEFINITION END] is in the prompt" "yes" "$(has_line "$cap" '[SEVERITY DEFINITION END]')"
     ck "$fmt r$round: the plan body still reaches codex" "yes" "$(has_text "$cap" 'Change the loop.')"
+    ck "$fmt r$round: the Threat boundary section rides inside the criteria block" "yes" "$(tb_in_criteria "$cap")"
   done
 done
+sp="$WR_ROOT/prompt-security-plan-r1.txt"
+ck "security-plan r1: the axes point at the Threat boundary outside the criteria block too (#2020)" "yes" \
+  "$(if [ "$(grep -c 'Threat boundary' "$sp" 2>/dev/null)" -ge 2 ]; then echo yes; else echo no; fi)"
 case_end
 
 CODE_CAP="$WR_ROOT/prompt-code.txt"
@@ -123,6 +132,7 @@ dfs="$(grep -n -m1 -F '[DIFF START]' "$CODE_CAP" 2>/dev/null | cut -d: -f1)"
 ck "code: the severity definition closes (precondition)" "yes" "$(yn [ "${rce:-0}" -gt 0 ])"
 ck "code: the criteria blocks precede the diff" "yes" "$(yn [ "${rce:-0}" -lt "${dfs:-0}" ])"
 ck "code: the diff still reaches codex" "yes" "$(has_text "$CODE_CAP" 'changed line for review')"
+ck "code: the Threat boundary section rides inside the criteria block (#2020)" "yes" "$(tb_in_criteria "$CODE_CAP")"
 case_end
 
 case_begin "code-prompt-no-safest-and-simplest" "bin/review-code-codex"
@@ -212,6 +222,27 @@ fails_closed() {
     "$(printf '%s\n' "$RUN_OUT" | grep -c -E '^## Codex Review: FAILED .*review criteria unavailable')"
   ck "$label code: codex is never called" "no-call" "$(called "$cap")"
 }
+
+# tb_version <cap> — the 'Version: v<N>' line of the Threat boundary section inside the criteria block (#2020).
+tb_version() {
+  awk '$0=="[REVIEW CRITERIA START]"{f=1;next} $0=="[REVIEW CRITERIA END]"{f=0} f' "$1" 2>/dev/null | tr -d '\r' \
+    | awk '/^#+ Threat boundary$/{s=1;next} /^#+ /{s=0} s' | grep -m1 -xE 'Version: v[0-9]+'
+}
+case_begin "boundary-version-reaches-every-prompt-path" "bin/lib/codex-core.sh"
+# path | captured prompt — the code review, prompts.sh (plan formats), prompts-review-only.sh
+while IFS='|' read -r label cap; do
+  cap="$WR_ROOT/$cap"
+  ck "version $label: the prompt is captured (precondition)" "called" "$(called "$cap")"
+  ck "version $label: '## Threat boundary' rides inside the criteria block" "yes" "$(tb_in_criteria "$cap")"
+  ck "version $label: the section's 'Version: v1' line reaches codex" "Version: v1" "$(tb_version "$cap")"
+done <<'TABLE'
+review-code-codex|prompt-code.txt
+prompts.sh detail-plan|prompt-detail-plan-r1.txt
+prompts.sh outline-plan r2|prompt-outline-plan-r2.txt
+prompts-review-only security-plan|prompt-security-plan-r1.txt
+prompts-review-only test-review|prompt-test-review-r1.txt
+TABLE
+case_end
 
 case_begin "missing-criteria-fails-closed" "bin/lib/codex-review-criteria.sh"
 ck "tree: the criteria file is absent (precondition)" "absent" "$([ -e "$TREE/skills/_shared/review-criteria.md" ] && printf present || printf absent)"

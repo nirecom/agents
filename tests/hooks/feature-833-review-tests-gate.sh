@@ -357,8 +357,8 @@ echo "=== Section B: REVIEW_TESTS_COMPLETE sentinel handling ==="
 SID_B3="b3-$$"; PAIR_B3="$(setup_linked_worktree "secB-wt3")"; WT_B3="${PAIR_B3#*|}"
 stage_test_file "$WT_B3" "tests/example.sh" "echo test B3"; TOKEN_B3="$(compute_token "$WT_B3")"
 write_state "$SID_B3" "$(state_json_custom "$SID_B3" "feature/secB-wt3" review_tests pending)"
-glossary_check_record "$SID_B3" "." review_tests; SENTINEL_B3="echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint=$TOKEN_B3>>\""
-run_mark "$WT_B3" "$(build_mark_json "$SENTINEL_B3" "$SID_B3" 0 "$WT_B3")"; STATUS_B3="$(read_state_step "$SID_B3" review_tests)"
+glossary_check_record "$SID_B3" "$WT_B3" review_tests; SENTINEL_B3="echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint=$TOKEN_B3>>\""  # the hook judges drift in its cwd: both run in the fixture
+(cd "$WT_B3" && run_mark "$WT_B3" "$(build_mark_json "$SENTINEL_B3" "$SID_B3" 0 "$WT_B3")"); STATUS_B3="$(read_state_step "$SID_B3" review_tests)"
 RECORDED_MANIFEST_B3="$(read_step_field "$SID_B3" review_tests review_scope_manifest)"
 if [ "$STATUS_B3" = "complete" ] && [ "$RECORDED_MANIFEST_B3" != "MISSING" ]; then
     pass "B3. REVIEW_TESTS_COMPLETE marks review_tests=complete + records review_scope_manifest"
@@ -370,9 +370,9 @@ fi
 SID_B4="b4-$$"; PAIR_B4="$(setup_linked_worktree "secB-wt4")"; WT_B4="${PAIR_B4#*|}"
 stage_test_file "$WT_B4" "tests/example.sh" "echo test B4"; TOKEN_B4="$(compute_token "$WT_B4")"
 write_state "$SID_B4" "$(state_json_custom "$SID_B4" "feature/secB-wt4" review_tests pending)"
-glossary_check_record "$SID_B4" "." review_tests  # #2529: pinned to the hook's cwd (not the worktree) so the record is not stale
+glossary_check_record "$SID_B4" "$WT_B4" review_tests  # #2529: same cwd as the hook (B3)
 SENTINEL_B4="echo \"<<WORKFLOW_REVIEW_TESTS_WARNINGS: fingerprint=$TOKEN_B4 warnings=3>>\""
-run_mark "$WT_B4" "$(build_mark_json "$SENTINEL_B4" "$SID_B4" 0 "$WT_B4")" >/dev/null
+(cd "$WT_B4" && run_mark "$WT_B4" "$(build_mark_json "$SENTINEL_B4" "$SID_B4" 0 "$WT_B4")") >/dev/null
 STATUS_B4="$(read_state_step "$SID_B4" review_tests)"
 WARNINGS_B4="$(read_step_field "$SID_B4" review_tests warnings_summary)"
 if [ "$STATUS_B4" = "complete" ] && [ "$WARNINGS_B4" != "MISSING" ]; then

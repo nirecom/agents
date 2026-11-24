@@ -39,4 +39,4 @@ function readIssueBodyViaForge(issue, repo) {
   return body;
 }
 
-module.exports = { originResult, readIssueBodyViaForge };
+module.exports = { MARKER_RE, originResult, readIssueBodyViaForge };

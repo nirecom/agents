@@ -9,6 +9,14 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
   Which answerer each level gets is set separately; today `low` may go to Jev and `high` always goes to the user.
 - **Related**: [architecture/jev.md](../architecture/jev.md)
 
+### boundary baseline
+- **Definition**: boundary version vN を測るときに比較の基準とする vN-1 の統計。版を上げた時点で新しい boundary baseline に移る。run-tests-baseline と衝突するため、単独の baseline という語は使わない。
+- **Related**: [architecture/claude-code/review-threat-metrics.md](../architecture/claude-code/review-threat-metrics.md)
+
+### boundary version
+- **Definition**: threat boundary の版。`## Threat boundary` 節に `Version: vN` として明示的に宣言する。v0 は threat boundary が存在しなかった期間を指す。threat boundary の意味を変える編集のたびに上げる。
+- **Related**: [skills/_shared/review-criteria.md](../../skills/_shared/review-criteria.md)
+
 ### comparison side
 - **Definition**: `bin/run-tests-baseline` は、失敗した test file を branch と merge base でそれぞれ単独に再実行し、2 つの結果を比べる。comparison side は、この比較の片方（branch side か merge base side）を指す。
 - **Related**: [architecture/claude-code/run-tests-baseline-decide-shadow.md](../architecture/claude-code/run-tests-baseline-decide-shadow.md)
@@ -16,6 +24,10 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 ### comparison side result
 - **Definition**: 1 つの comparison side で test file 1 本を単独に再実行した結果の事実。verdict、termination、終了コード、hit の種別を持つ。comparison side ごとの読み方（中断、ambiguous など）は持たない。
 - **Related**: [architecture/claude-code/run-tests-baseline-decide-shadow.md](../architecture/claude-code/run-tests-baseline-decide-shadow.md)
+
+### concern journal
+- **Definition**: reviewer が出した全指摘を、収束した分も threat boundary の外とした分も含めて消さずに残す append-only の記録 (`<fmt>-concern-journal.tsv`)。各行に boundary version を持つ。
+- **Related**: [skills/_shared/concern-ledger.md](../../skills/_shared/concern-ledger.md)
 
 ### delivery operation
 
@@ -72,6 +84,14 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Definition**: One of the three workflow steps intent, outline, and detail; an earlier plan step takes priority over a later one.
 - **Related**: [skills/_shared/priority-hierarchy.md](../../skills/_shared/priority-hierarchy.md)
 
+### post boundary
+- **Definition**: #2020 の title にある threat model の境界 (threat boundary) のもとで出たレビュー結果。boundary version v1 以降のいずれかの版に属する。
+- **Related**: [architecture/claude-code/review-threat-metrics.md](../architecture/claude-code/review-threat-metrics.md)
+
+### pre boundary
+- **Definition**: #2020 の title にある threat model の境界 (threat boundary) が導入される前、つまり boundary version v0 の期間のレビュー結果。
+- **Related**: [architecture/claude-code/review-threat-metrics.md](../architecture/claude-code/review-threat-metrics.md)
+
 ### pre-commit section marker
 
 - **Definition**: A fixed-form output line by which pre-commit marks entering a section of its checks.
@@ -90,6 +110,10 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 ### prose context
 - **Definition**: Any context the glossary drift check does not treat as an identifier context; it is matched against prose terms, accepting only plurals and heading-line capitalization as the same term.
 - **Related**: [architecture/claude-code/glossary-check/matching-rules.md](../architecture/claude-code/glossary-check/matching-rules.md)
+
+### rejected concern record
+- **Definition**: `*-concern-carrier.md` に残る REJECTED 行。reviewer が出し、収束時に却下された concern の本文と却下理由を残す。ファイル名は変えない。
+- **Related**: [skills/_shared/concern-ledger.md](../../skills/_shared/concern-ledger.md)
 
 ### review criteria
 - **Definition**: The review rules shared by the four plan review formats, code review, and the CC fallback reviewers: scope, coverage, the reporting minimum, severity definitions, and NFR (non-functional requirement) compliance, kept in one place.
@@ -149,6 +173,10 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 ### test case reader
 - **Definition**: The per-language part that reads one test file and returns one record per case (name, target, line range, malformed reason); the sweep, the checks, and the retire judgment get these records through the common window, which adds each case's deps.
 - **Related**: [architecture/claude-code/test-language-registry.md](../architecture/claude-code/test-language-registry.md)
+
+### threat boundary
+- **Definition**: review criteria に置く既定の threat model 境界。どの脅威の起点をスコープ内・スコープ外とするか、指摘に求める経路、対策の向きを定め、codex と CC fallback reviewer の両方に同じ内容で届く。
+- **Related**: [skills/_shared/review-criteria.md](../../skills/_shared/review-criteria.md)
 
 ### user course correction
 - **Definition**: A user statement of a fact missing from, or contradicting, an approved earlier plan that redirects the work; a CLI copies it from the transcript into a record kept outside the plan body, so the approval hash does not change.

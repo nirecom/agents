@@ -40,6 +40,7 @@ Evaluate all three axes as part of whether the plan makes what the upstream plan
 - Axis 1 — Information Leakage (OWASP ASVS V8 Data Protection, V6 Stored Cryptography): hardcoded secrets, sensitive data in logs/errors/stack traces, .env gitignored, PII at rest, secrets in build/temp artifacts.
 - Axis 2 — Third-Party Access (OWASP MCP Top 10, LLM Top 10 LLM03 Supply Chain): least-privilege MCP/tool permissions, pinned dependency versions, validated agent/LLM action outputs, untrusted tool descriptions/return values, tool poisoning (MCP04), rug pull (MCP09), return-value injection (MCP05).
 - Axis 3 — External Access (OWASP WSTG, CWE Top 25): boundary input validation, CWE-78 OS command injection, CWE-22 path traversal, CWE-89 SQL injection, CWE-601 open redirect, LLM01 prompt injection, base64 auto-decode.
+Scope every axis by the '## Threat boundary' section of the review criteria: tag each security concern with its axis:A/B, and give a threat outside the boundary or without an input path a [NOT-CONCERN] marker line instead of a numbered concern.
 ${CONTEXT_ROLES:+When an upstream section is present: ${RPC_TAG_SENTENCE}
 }
 Approve only when no RISK items remain.

@@ -10,6 +10,24 @@
 _RWC_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/safe-state-path.sh"
 # shellcheck source=bin/lib/safe-state-path.sh
 source "$_RWC_LIB" || { echo "review-wrapper-control: cannot load $_RWC_LIB" >&2; exit 4; }
+# #2020 P2b: bj_export_hash_out <forwarded args> / bj_post_wrapper <rc> around the loop call.
+# The journal only observes, so a tree without boundary-journal.sh still reviews: the stubs only
+# capture and replay the loop's streams, journal nothing and return 0 whatever the arguments.
+# shellcheck source=bin/lib/codex-review-loop/boundary-journal.sh
+if ! source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/boundary-journal.sh" 2>/dev/null; then
+  echo "review-wrapper-control: WARN: boundary-journal.sh not loaded; the concern journal is skipped" >&2
+  bj_export_hash_out() {
+    unset BJ_JOURNAL_BUFFER BJ_LOOP_FORMAT
+    BJ_OUT_FILE="$(mktemp)" && BJ_ERR_FILE="$(mktemp)" \
+      || { echo "review-wrapper-control: cannot create the loop capture files (HALT, exit 4)" >&2; exit 4; }
+  }
+  bj_post_wrapper() {
+    cat "$BJ_OUT_FILE" 2>/dev/null || true
+    cat "$BJ_ERR_FILE" >&2 2>/dev/null || true
+    rm -f "$BJ_OUT_FILE" "$BJ_ERR_FILE"
+    return 0
+  }
+fi
 
 # rwc_resolve <loop-format> <label> — exit 4 (HALT) when the control dir is unusable;
 # nothing is ever written to PLANS_DIR instead.
