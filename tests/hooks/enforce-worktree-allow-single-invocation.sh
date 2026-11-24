@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/enforce-worktree-allow-single-invocation.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows/command-shape.js, hooks/enforce-worktree/main-worktree-allows/standard.js, hooks/enforce-worktree/main-worktree-allows/worktree-command.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree/main-worktree-allows/supervisor-bin.js, hooks/enforce-worktree.js
-# Tags: hook, worktree, enforce, security, allow-predicate, command-ir, scope:issue-specific
+# Tags: hook, worktree, enforce, security, allow-predicate, command-ir, scope:issue-specific, reflog
 # Every main-worktree allow predicate accepts one invocation only (#2589, commit 2):
 # a canonical shape passes, and the same shape with chaining, substitution, process
 # substitution, heredoc, group, a stray redirect, or a non-leading position does not.
@@ -25,15 +25,11 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 ROOT_NODE="$(np "$SCRIPT_CHECKOUT_ROOT")"
 GUARD_JS="$ROOT_NODE/hooks/enforce-worktree.js"
 
-expect_eq() {
-    local name="$1" got="$2" want="$3"
-    if [ "$got" = "$want" ]; then pass "$name"; else fail "$name" "want=$want got=$got"; fi
-}
+expect_eq() { if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "want=$3 got=$2"; fi; }
 
 fixture_repo() {
     local dir="$1"
-    mkdir -p "$dir"
-    git -C "$dir" init -q -b main
+    git init -q -b main "$dir"
     git -C "$dir" config core.hooksPath /dev/null
     git -C "$dir" config user.email "test@example.com"
     git -C "$dir" config user.name "Test"
@@ -51,21 +47,26 @@ REPO="$(np "$REPO_RAW")"
 # SOLO: no linked worktree (cleanup gate), upstream origin/main, one outgoing
 # commit touching notes.md only (push-all-excluded).
 ORIGIN_RAW="$TMPDIR_BASE/origin.git"
-git init -q --bare "$ORIGIN_RAW"
+git init -q --bare -b main "$ORIGIN_RAW"
 git -C "$ORIGIN_RAW" config core.hooksPath /dev/null
 SOLO_RAW="$TMPDIR_BASE/solo"
 fixture_repo "$SOLO_RAW"
 git -C "$SOLO_RAW" remote add origin "$ORIGIN_RAW"
 git -C "$SOLO_RAW" push -q -u origin main >/dev/null 2>&1
+# #3151 merge gate: an empty commit lands on the remote and SOLO fetches it fast-forward,
+# so origin/main@{1} is an ancestor of origin/main (SOLO is now diverged by one each way).
+git -C "$ORIGIN_RAW" update-ref refs/heads/main "$(git -C "$ORIGIN_RAW" -c user.name=Test -c user.email=test@example.com commit-tree -p main -m peer 'main^{tree}')"
+git -C "$SOLO_RAW" fetch -q origin
+# SOLO1: a fresh clone — one reflog entry, origin/main@{1} unresolvable (#3151 fail-closed).
+SOLO1_RAW="$TMPDIR_BASE/solo1"; git clone -q -c core.hooksPath=/dev/null "$ORIGIN_RAW" "$SOLO1_RAW"
 echo note > "$SOLO_RAW/notes.md"
 git -C "$SOLO_RAW" add notes.md
 git -C "$SOLO_RAW" commit -q --no-verify -m notes
-SOLO="$(np "$SOLO_RAW")"
 
 EXT="$(np "$TMPDIR_BASE")/ext-wt"
 
 # ── Table evaluator: one node process per table ─────────────────────────────
-# pred rows : want :: fn[#exclude] :: REPO|SOLO|- :: cmd   (want=gen expands VARIANTS)
+# pred rows : want :: fn[#exclude] :: REPO|SOLO|SOLO1|- :: cmd   (want=gen expands VARIANTS)
 # shape rows: want :: fn :: cmd
 # Placeholders: @ROOT@ @AMR@ @REPO@ @SOLO@ @EXT@ @NL@. A missing module reads "ERROR: ...".
 EVAL_JS='
@@ -82,7 +83,7 @@ function pred(spec, repoKey, cmd) {
   const mod = fn === "isAllowedSupervisorBinTool" ? sup : std;
   if (mod instanceof Error) return "ERROR: " + mod.message;
   if (typeof mod[fn] !== "function") return "ERROR: " + fn + " not exported";
-  const args = [cmd, repoKey === "SOLO" ? E.T_SOLO : repoKey === "REPO" ? E.T_REPO : null];
+  const args = [cmd, { SOLO: E.T_SOLO, SOLO1: E.T_SOLO1, REPO: E.T_REPO }[repoKey] || null];
   if (fn === "isAllowedPushAllExcluded") args.push([ex || "notes.md"]);
   try { return String(mod[fn](...args)); } catch (e) { return "ERROR: threw " + first(e); }
 }
@@ -133,7 +134,7 @@ process.stdout.write(out.concat(["#ROWS\t" + out.length]).join("\n") + "\n");
 
 run_table() {
     local kind="$1" out label want got rows=0 declared=""
-    out="$(run_with_timeout 100 env "T_REPO=$REPO" "T_SOLO=$SOLO" "T_EXT=$EXT" \
+    out="$(run_with_timeout 100 env "T_REPO=$REPO" "T_SOLO=$(np "$SOLO_RAW")" "T_SOLO1=$(np "$SOLO1_RAW")" "T_EXT=$EXT" \
         node -e "$EVAL_JS" "$ROOT_NODE" "$kind" 2>&1)" || { fail "table-$kind" "evaluator failed: ${out:0:300}"; return; }
     while IFS=$'\t' read -r label want got; do
         case "$label" in "") continue ;; "#ROWS") declared="$want"; continue ;; esac
@@ -197,6 +198,7 @@ gen   :: isAllowedMainWorktreeCleanup :: SOLO :: git stash
 true  :: isAllowedMainWorktreeCleanup :: SOLO :: git restore --staged README.md
 true  :: isAllowedMainWorktreeCleanup :: SOLO :: git checkout -- README.md
 true  :: isAllowedMainWorktreeCleanup :: SOLO :: git merge --no-edit origin/main
+false :: isAllowedMainWorktreeCleanup :: SOLO1 :: git merge --no-edit origin/main
 false :: isAllowedMainWorktreeCleanup :: REPO :: git stash
 gen   :: isAllowedPushAllExcluded     :: SOLO :: git push
 false :: isAllowedPushAllExcluded#other.md :: SOLO :: git push

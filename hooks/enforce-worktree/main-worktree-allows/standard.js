@@ -172,7 +172,23 @@ function isAllowedPushAllExcluded(cmd, repoRoot, excludePatterns) {
   } catch (e) { return false; }
 }
 
-const MID_OP_SUBCOMMANDS = new Set(["merge", "rebase", "cherry-pick", "revert"]);
+/**
+ * True only when the remote-tracking ref's last update was a fast-forward:
+ * `git merge-base --is-ancestor <ref>@{1} <ref>` exits 0. A forced update
+ * (exit 1), a missing or expired reflog, or any git error/timeout is false.
+ */
+function lastFetchWasFastForward(repoRoot, ref) {
+  if (typeof ref !== "string" || !/^origin\/[A-Za-z0-9._/-]+$/.test(ref)) return false;
+  if (ref.includes("..") || ref.includes("//") || ref.endsWith("/") || ref.endsWith(".")) return false;
+  try {
+    const r = spawnSync("git", ["merge-base", "--is-ancestor", `${ref}@{1}`, ref], {
+      cwd: repoRoot, encoding: "utf8", timeout: 2000,
+    });
+    return r.status === 0;
+  } catch { return false; }
+}
+
+const MID_OP_SUBCOMMANDS =new Set(["merge", "rebase", "cherry-pick", "revert"]);
 const MID_OP_ACTIONS = new Set(["--abort", "--continue", "--skip"]);
 
 /**
@@ -233,6 +249,8 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
     // C1: operand must match the current branch's upstream on origin (fail-closed).
     const upstream = resolveUpstream(repoRoot, "origin");
     if (!upstream || upstream !== ("origin/" + m[1])) return false;
+    // #3151: after a remote history rewrite the merge re-introduces the old history (rules/ops.md).
+    if (!lastFetchWasFastForward(repoRoot, upstream)) return false;
     // No linked-worktree count gate: merge is symmetric with the ff-only
     // pull/merge predicate, which also bypasses it. Git refuses to overwrite
     // files checked out in a linked worktree during a merge.
