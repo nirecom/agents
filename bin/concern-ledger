@@ -22,6 +22,13 @@ if ! . "$SELF_DIR/lib/concern-ledger.sh"; then
         "$SELF_DIR/lib/concern-ledger.sh" >&2
     exit 5
 fi
+# shellcheck source=bin/lib/codex-review-loop/boundary-journal.sh
+# The journal only observes (#2020): without it, stage keeps every row and journal exits 5.
+if ! . "$SELF_DIR/lib/codex-review-loop/boundary-journal.sh" 2>/dev/null; then
+    bj_stage_filter() { return 0; }
+    bj_journal_report() { printf 'concern-ledger: boundary-journal.sh not loaded; nothing journaled\n' >&2; return 5; }
+    bj_flush_buffer() { rm -f "$3"; printf 'concern-ledger: boundary-journal.sh not loaded; buffer discarded\n' >&2; return 5; }
+fi
 
 usage() {
     cat >&2 <<'EOF'
@@ -43,6 +50,10 @@ usage: concern-ledger <subcommand> [options]
                   --round N --cap C [--max-extensions N] [--extensions-used N]
   check-finalized --plans-dir D --session-id S --format F [--round N]
   check-staged    --plans-dir D --session-id S --format F --round N
+  journal         --session S --format F --round N --producer P --reviewer codex|cc-fallback
+                  --rows concern|marker|all --from-report FILE [--criteria-hash H]
+                  [--boundary-version v<N>] [--buffer B]
+  journal-flush   --session S --format F --buffer B --rc 0-9
 EOF
     exit 2
 }
@@ -52,11 +63,18 @@ SUB="${1:-}"; [ -n "$SUB" ] || usage; shift || true
 PLANS=""; SID=""; FORMAT=""; ROUND=""; PRODUCER=""; REPORT=""; EXEC=""
 PARSER="anchored"; MODE=""; REASON=""; CAP=""; MAXEXT="0"; USED="0"
 LEDGER_ARG=""; DELTA_ARG=""; APATH=""; AANCHOR=""; ACAT=""; REJECT_ID=""
+REVIEWER=""; ROWS=""; CRIT_HASH="unknown"; BUFFER=""; FLUSH_RC=""; BOUNDARY_VER="unknown"
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --plans-dir) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; PLANS="${2:-}"; shift 2 ;;
-        --session-id) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; SID="${2:-}"; shift 2 ;;
+        --reviewer) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; REVIEWER="${2:-}"; shift 2 ;;
+        --rows) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; ROWS="${2:-}"; shift 2 ;;
+        --criteria-hash) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; CRIT_HASH="${2:-}"; shift 2 ;;
+        --boundary-version) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; BOUNDARY_VER="${2:-}"; shift 2 ;;
+        --buffer) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; BUFFER="${2:-}"; shift 2 ;;
+        --rc) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; FLUSH_RC="${2:-}"; shift 2 ;;
+        --session-id|--session) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; SID="${2:-}"; shift 2 ;;
         --format) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; FORMAT="${2:-}"; shift 2 ;;
         --round) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; ROUND="${2:-}"; shift 2 ;;
         --producer) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; PRODUCER="${2:-}"; shift 2 ;;
@@ -118,6 +136,32 @@ validate_report() {
     fi
 }
 
+# validate_journal — the #2020 journal subcommand's closed values; exit 2 before any write.
+validate_journal() {
+    need "$SID" --session; need "$FORMAT" --format; need "$ROUND" --round
+    need "$PRODUCER" --producer; need "$REPORT" --from-report
+    case "$REVIEWER" in codex|cc-fallback) ;; *) printf 'concern-ledger: --reviewer must be codex or cc-fallback\n' >&2; exit 2 ;; esac
+    case "$ROWS" in concern|marker|all) ;; *) printf 'concern-ledger: --rows must be concern, marker or all\n' >&2; exit 2 ;; esac
+    [[ "$CRIT_HASH" =~ ^[A-Za-z0-9._-]{1,64}$ ]] || { printf 'concern-ledger: invalid --criteria-hash\n' >&2; exit 2; }
+    [[ "$BOUNDARY_VER" =~ ^(v[0-9]+|unknown)$ ]] || { printf 'concern-ledger: --boundary-version must be v<N> or unknown\n' >&2; exit 2; }
+    _cl_reject_bad_tokens journal "$FORMAT" "$PRODUCER" || exit 2
+    [ -f "$REPORT" ] || { printf 'concern-ledger: --from-report does not exist: %s\n' "$REPORT" >&2; exit 2; }
+}
+
+# validate_flush — journal-flush: a one-digit wrapper exit code and a buffer to flush.
+validate_flush() {
+    need "$SID" --session; need "$FORMAT" --format; need "$BUFFER" --buffer
+    [[ "$FLUSH_RC" =~ ^[0-9]$ ]] || { printf 'concern-ledger: --rc must be one digit 0-9 (got: %s)\n' "$FLUSH_RC" >&2; exit 2; }
+    _cl_reject_bad_tokens journal-flush "$FORMAT" || exit 2
+}
+
+# check_buffer — a --buffer must be a per-call buffer (.bj-buf-*) directly under the control dir.
+check_buffer() {
+    [ -n "$BUFFER" ] || return 0
+    case "${BUFFER##*/}" in .bj-buf-*) ;; *) printf 'concern-ledger: --buffer must be a .bj-buf-* file\n' >&2; exit 2 ;; esac
+    [ "${BUFFER%/*}" = "$CTL" ] || { printf 'concern-ledger: --buffer must be under the session control dir\n' >&2; exit 2; }
+}
+
 # validate_args <sub> — check required args before dispatch; runs outside any
 # subshell so exit 2 reaches the caller (#2057).
 validate_args() {
@@ -131,6 +175,8 @@ validate_args() {
         stage)    need_addr; need "$ROUND" --round; need "$PRODUCER" --producer; need "$REPORT" --from-report ;;
         check-staged) need_addr; need "$ROUND" --round; validate_glob_tokens check-staged ;;
         finalize) need_addr; need "$ROUND" --round; [ -n "$PLANS" ] || PLANS="${WORKFLOW_PLANS_DIR:-}"; need "$PLANS" --plans-dir ;;
+        journal)  validate_journal ;;
+        journal-flush) validate_flush ;;
         *) printf 'concern-ledger: unknown subcommand: %s\n' "$1" >&2; usage ;;
     esac
     validate_round
@@ -261,6 +307,11 @@ case "$SUB" in
             [ -z "$EXEC" ] && EXEC="PERFORMED"
         fi
         STAGE_RC=0
+        # #2020 P1: journal the round's new rows and keep out-of-boundary security rows out.
+        _cl_reject_bad_tokens stage "$FORMAT" "$ROUND" "$PRODUCER" || { rm -rf "$TMPD"; exit 2; }
+        if [ -n "$CTL" ] && ! bj_stage_filter "$NORM" "$CTL" "$SID" "$FORMAT" "$ROUND" "$PRODUCER"; then
+            rm -rf "$TMPD"; exit 5
+        fi
         if [ -n "$CTL" ]; then STAGE_DIR="$CTL"; STAGE_PFX=""; else STAGE_DIR="$PLANS"; STAGE_PFX="${SID}-"; fi
         CL_STAGE_PREFIX="$STAGE_PFX" cl_stage "$STAGE_DIR" "$FORMAT" "$ROUND" "$PRODUCER" \
             "$EXEC" "$PARSE" "$NORM" >/dev/null || STAGE_RC=$?
@@ -310,6 +361,14 @@ case "$SUB" in
             fi
             exit 5
         fi
+        ;;
+    journal)
+        check_buffer
+        bj_journal_report "$CTL" "$SID" "$FORMAT" "$ROUND" "$PRODUCER" "$REVIEWER" "$ROWS" "$REPORT" "$CRIT_HASH" "$BOUNDARY_VER" "$BUFFER" || exit 5
+        ;;
+    journal-flush)
+        check_buffer
+        bj_flush_buffer "$CTL" "$FORMAT" "$BUFFER" "$FLUSH_RC" || exit 5
         ;;
     check-finalized)
         JSONP="$(cl_json_path "$PLANS" "$SID" "$FORMAT")"

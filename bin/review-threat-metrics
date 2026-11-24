@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# bin/review-threat-metrics — #2020 metrics of the threat boundary: pre boundary (v0 carrier rows +
+# filed issues, classified and cached once), post boundary (rows attributed to a boundary version
+# through the concern journal; self tags vs the classifier).
+# usage: review-threat-metrics `pre-boundary`|`post-boundary` [--json] [--seed N]
+#        [--repo OWNER/REPO] [--plans-dir DIR] [--out FILE]
+set -euo pipefail
+exec node "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/review-threat-metrics/cli.js" "$@"

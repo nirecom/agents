@@ -26,7 +26,7 @@ worker-main.json worker-main-1.json worker-main-1.dispatched
 SAMPLES
 for fmt in outline-plan detail-plan test-review security-code security-plan review-security-shared; do
   for sfx in round-number.txt last-round.txt terminal.txt unresolved-concerns.json concern-ledger.txt \
-             concern-ledger-cycle1.txt concern-ledger-cap-snapshot.txt concern-carrier.md round-1-delta-codex.txt; do
+             concern-ledger-cycle1.txt concern-ledger-cap-snapshot.txt concern-carrier.md round-1-delta-codex.txt concern-journal.tsv; do
     printf '%s\n' "${fmt}-${sfx}" >> "$T/samples.txt"
   done
   printf '%s\n' "codex-context.${fmt}.built" >> "$T/samples.txt"

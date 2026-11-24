@@ -9,6 +9,7 @@
     { "kind": "unresolved-concerns", "source": "%FORMAT%-unresolved-concerns\\.json", "retention": "non-plan" },
     { "kind": "concern-ledger", "source": "%FORMAT%-concern-ledger(?:-cycle[0-9]+|-cap-snapshot)?\\.txt", "retention": "non-plan" },
     { "kind": "concern-carrier", "source": "%FORMAT%-concern-carrier\\.md", "retention": "non-plan" },
+    { "kind": "concern-journal", "source": "%FORMAT%-(?:concern-journal\\.tsv|journal-pending\\.[0-9]+\\.txt|criteria-hash\\.[0-9]+\\.txt)", "retention": "non-plan" },
     { "kind": "upstream-return", "source": "%FORMAT%-(?:review-cycle\\.txt|upstream-(?:seen|decisions|return)\\.tsv)", "retention": "non-plan" },
     { "kind": "review-rounds", "source": "%FORMAT%-review-rounds(?:\\.jsonl|\\.jsonl\\.lock|-unrecorded\\.jsonl|-inflight-[0-9a-f]+\\.json|-gap-accepted\\.jsonl)", "retention": "non-plan" },
     { "kind": "terminal-ledger", "source": "%FORMAT%-terminal-ledger\\.txt", "retention": "non-plan" },
@@ -66,7 +67,8 @@
     { "kind": "refactor-prompts-scan", "source": "refactor-prompts-scan\\.json", "retention": "non-plan" },
     { "kind": "note", "source": "note-[a-z0-9]+(?:-[a-z0-9]+)*\\.(?:md|txt|json|tsv)", "retention": "non-plan" },
     { "kind": "user-requested", "source": "user-requested-[a-z0-9]+(?:-[a-z0-9]+)*\\.(?:md|txt|json|tsv)", "retention": "user-requested", "note": "Usage rule (only when the user explicitly asks for a separate file): docs/architecture/claude-code/state-dirs.md, Artifacts table." },
-    { "kind": "sweep-plans-approved-sessions", "source": "sweep-plans-approved-sessions\\.txt", "retention": "non-plan" }
+    { "kind": "sweep-plans-approved-sessions", "source": "sweep-plans-approved-sessions\\.txt", "retention": "non-plan" },
+    { "kind": "review-threat-metrics-cache", "source": "threat-metrics-(?:v0-cache\\.json|subset-cache\\.jsonl)", "retention": "non-plan", "note": "Session-less: the plans-dir-wide classifier caches of bin/review-threat-metrics (#2020), review-threat-metrics-v0-cache.json (written once per classifierId) and review-threat-metrics-subset-cache.jsonl (append-only); the name parses as prefix \"review\" + this remainder. sweep-plans groups no such prefix, so the v0 cache is never swept." }
   ],
   "sourceLintExceptions": [
     { "file": "bin/review-plan-codex", "pattern": "\\{EFF_SESSION_ID\\}-plan\\.jsonl$", "reason": "caller-supplied --log-dir outside the session control dir (standalone runs); the control-dir branch uses plan.jsonl" }

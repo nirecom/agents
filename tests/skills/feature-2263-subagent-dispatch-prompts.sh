@@ -78,6 +78,17 @@ ck "budget: every table row in the four parts executed (a short count means an e
   "$ROWS_EXPECTED" "$ROWS"
 case_end
 
+# #2020: the security-scanner JSON input carries boundary_version_echo, and the input contract tells
+# the scanner to end its report with a '## Boundary Version' section holding 'BOUNDARY_VERSION:'.
+case_begin "security-scanner-input-contract-boundary-version-echo" "agents/security-scanner.md"
+SCAN_IC="$(awk '/^## Input contract[[:space:]]*$/ { on = 1; next } on && /^## / { exit } on { print }' \
+  "$SCRIPT_CHECKOUT_ROOT/agents/security-scanner.md" 2>/dev/null)"
+for tok in 'boundary_version_echo' '## Boundary Version' 'BOUNDARY_VERSION:'; do
+  ck "security-scanner Input contract names '$tok'" "yes" \
+    "$(printf '%s\n' "$SCAN_IC" | grep -qF -- "$tok" && printf yes || printf no)"
+done
+case_end
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 [ "$FAIL" -eq 0 ]

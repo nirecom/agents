@@ -73,8 +73,8 @@ mk_agents() {
     printf '# core principles stub\n' > "$dir/rules/core-principles.md"
     cp "$AGENTS_WORKTREE/bin/run-codex-review-loop" "$dir/bin/run-codex-review-loop"
     cp "$AGENTS_WORKTREE/bin/concern-ledger" "$dir/bin/concern-ledger"
-    cp "$AGENTS_WORKTREE/bin/review-loop-verdict" "$dir/bin/review-loop-verdict"
-    cp -r "$AGENTS_WORKTREE/bin/lib/." "$dir/bin/lib/"
+    cp "$AGENTS_WORKTREE/bin/review-loop-verdict" "$AGENTS_WORKTREE/bin/review-rounds" "$dir/bin/"  # review-rounds: the wrapper's review-record preflight (#2938)
+    cp -r "$AGENTS_WORKTREE/bin/lib/." "$dir/bin/lib/"; cp -r "$AGENTS_WORKTREE/hooks" "$dir/"  # hooks/: review-rounds' state-io
     chmod +x "$dir/bin/run-codex-review-loop" "$dir/bin/concern-ledger" \
         "$dir/bin/review-loop-verdict"
     cat > "$dir/bin/build-codex-context" <<'EOF'

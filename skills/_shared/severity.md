@@ -8,7 +8,7 @@ Keep this definition project-neutral: never write a project's NFR content or exa
 HIGH is the same criterion as the `severity:high` label.
 
 - A primary feature becomes unusable, or data is lost.
-- Security is breached within the threat scope PROJECT_NFR assumes: a confidential-information leak, an external attack vector, or prompt injection. A threat outside that scope is not a concern.
+- Security is breached within the threat boundary: a confidential-information leak, an external attack vector, or prompt injection. The default boundary is `## Threat boundary` of `skills/_shared/review-criteria.md`, and PROJECT_NFR adds to or removes from it; a threat outside the boundary is not a concern.
 - Progress stops with no workaround, or the change cannot be released.
 
 An issue label needs a confirmed instance, not a theoretical or deferred risk; in a review, a concern that meets the Reporting minimum of the review criteria counts as confirmed.

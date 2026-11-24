@@ -97,7 +97,7 @@ run_round() {
     : > "$out"; : > "$err"
 
     bash "$CLI" stage --plans-dir "$PLANS" --session-id "$SID" --format "$FMT" \
-        --round 1 --producer review-code-codex --from-report "$report" \
+        --round 1 --producer review-plan-codex --from-report "$report" \
         >>"$out" 2>>"$err"
     bash "$CLI" reduce --plans-dir "$PLANS" --session-id "$SID" --format "$FMT" \
         --round 1 >>"$out" 2>>"$err"
@@ -109,7 +109,7 @@ run_round() {
 }
 
 # The five persisted-or-emitted surfaces, each read back from where it lives.
-sl_delta()  { cat "$WORKFLOW_STATE_DIR/$SID.control/$FMT-round-1-delta-review-code-codex.txt" 2>/dev/null; }
+sl_delta()  { cat "$WORKFLOW_STATE_DIR/$SID.control/$FMT-round-1-delta-review-plan-codex.txt" 2>/dev/null; }
 sl_ledger() { cat "$WORKFLOW_STATE_DIR/$SID.control/$FMT-concern-ledger.txt" 2>/dev/null; }
 sl_json()   { cat "$WORKFLOW_STATE_DIR/$SID.control/$FMT-unresolved-concerns.json" 2>/dev/null; }
 sl_prior()  {

@@ -102,6 +102,11 @@ _cl_delta_section() {
     '
 }
 
+# cl_is_marker_line <line> — 0 for a #2020 I4 '[NOT-CONCERN] axis:A?/B? | path#anchor | text' marker.
+cl_is_marker_line() {
+    [[ "$1" =~ ^\[NOT-CONCERN\][[:space:]]+axis:A[0-6]/B[0-3][[:space:]]*\|[[:space:]]*[^|#[:space:]][^|#]*#[^|]*\|[[:space:]]*[^[:space:]] ]]
+}
+
 # _cl_emit_anchored <line> <producer> <out> — 0 when the line is well formed.
 _cl_emit_anchored() {
     local line="$1" prod="$2" out="$3"
@@ -142,6 +147,7 @@ cl_parse_anchored() {
             [ -z "$t" ] && continue
             nonblank=$((nonblank + 1))
             if [ "$t" = "(none)" ]; then none=1; continue; fi
+            cl_is_marker_line "$t" && continue
             cand+=("$line")
         done <<< "$sect"
         if [ "$nonblank" -eq 0 ]; then printf 'PARTIAL\n'; return 0; fi

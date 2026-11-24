@@ -65,8 +65,10 @@ if [[ -s "$RISK_FILE" ]]; then
 fi
 rwc_input_fp_args "$CUR_FP"
 RC=0
+bj_export_hash_out ${RWC_FWD_ARGS[@]+"${RWC_FWD_ARGS[@]}"}
 "$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" ${RWC_FP_ARGS[@]+"${RWC_FP_ARGS[@]}"} \
-  ${RWC_FWD_ARGS[@]+"${RWC_FWD_ARGS[@]}"} || RC=$?
+  ${RWC_FWD_ARGS[@]+"${RWC_FWD_ARGS[@]}"} > "$BJ_OUT_FILE" 2> "$BJ_ERR_FILE" || RC=$?
+bj_post_wrapper "$RC"
 # Only exit 6 arms: outline/detail escalate 2/3/7 to the user without a re-invoke guard.
 (( RC == 6 )) && rwc_arm_terminal 6 "$CUR_FP"
 exit "$RC"

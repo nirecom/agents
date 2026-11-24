@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2814-review-criteria-block.sh
 # Tests: bin/lib/codex-review-criteria.sh, bin/review-criteria-block, bin/lib/codex-core.sh, skills/_shared/review-criteria.md, skills/_shared/severity.md
-# Tags: TL2, codex, review, review-criteria, severity, nfr, prompt, fail-closed, issue-2814, scope:issue-specific, pwsh-not-required
+# Tags: TL2, codex, review, review-criteria, severity, nfr, prompt, fail-closed, issue-2814, scope:issue-specific, pwsh-not-required, issue-2020, threat-boundary, criteria-hash
 # #2814 reopen R1 (T2, T10): codex_core_review_criteria_block emits [REVIEW CRITERIA], then
 # [SEVERITY DEFINITION], then the PROJECT NFR block; example blocks are stripped before delivery
 # (CRLF tag lines too); a malformed example block or a missing file fails closed; the CLI is
@@ -217,6 +217,116 @@ while IFS= read -r sent; do
   hits="$(cd "$REAL" && grep -rlF -- "$sent" skills agents rules bin .github 2>/dev/null | tr -d '\r' | sort | paste -sd ' ' -)"
   ck "high: only severity.md says '${sent:0:60}'" "skills/_shared/severity.md" "$hits"
 done < "$HIGH_SENT"
+case_end
+
+# #2020: the Threat boundary section survives the example strip; line 1 of REVIEW_CRITERIA_HASH_OUT
+# carries the sha256 prefix (12 hex) of the delivered bytes.
+sha12() { sha256sum "$1" 2>/dev/null | cut -c1-12; }
+rd() { [ -f "$1" ] && sed -n 1p "$1" | tr -d '\r\n'; }
+
+case_begin "threat-boundary-delivered" "skills/_shared/review-criteria.md"
+fn "$REAL" codex_core_review_criteria_block ""
+between "$OUT" '[REVIEW CRITERIA START]' '[REVIEW CRITERIA END]' > "$RC_ROOT/tb-crit.txt"
+ck "boundary: the delivered criteria carry '## Threat boundary' once" "1" "$(grep -c -x -F '## Threat boundary' "$RC_ROOT/tb-crit.txt")"
+# axis-A class | its handling cell (I4: in = A1/A4/A5, out = A2/A3/A6, no-path = A0)
+for pair in A0:no-path A1:in A2:out A3:out A4:in A5:in A6:out; do
+  a="${pair%%:*}"; h="${pair#*:}"
+  ck "boundary: the axis-A table row $a is handled '$h'" "1" \
+    "$(grep -cE "^\|[[:space:]]*${a}[[:space:]]*\|.*\|[[:space:]]*${h}[[:space:]]*\|[[:space:]]*\$" "$RC_ROOT/tb-crit.txt")"
+done
+for b in B0 B1 B2 B3; do
+  ck "boundary: axis B names $b" "yes" "$(yn grep -qE "(^|[^A-Za-z0-9])$b([^0-9]|\$)" "$RC_ROOT/tb-crit.txt")"
+done
+for tok in '[NOT-CONCERN]' 'axis:' 'cat:' 'security' 'APPROVED'; do
+  ck "boundary: the section states the '$tok' format or rule" "yes" \
+    "$(yn grep -qF -- "$tok" <(awk '/^## Threat boundary$/{f=1;next} /^## /{f=0} f' "$RC_ROOT/tb-crit.txt"))"
+done
+case_end
+
+case_begin "hash-out-env-keeps-bytes" "bin/lib/codex-review-criteria.sh"
+fn "$REAL" codex_core_review_criteria_block ""
+cp "$OUT" "$RC_ROOT/plain.txt"
+HO="$RC_ROOT/hash-out.txt"; rm -f "$HO"
+export REVIEW_CRITERIA_HASH_OUT="$HO"
+fn "$REAL" codex_core_review_criteria_block ""
+unset REVIEW_CRITERIA_HASH_OUT
+ck "hash out: exits 0" "0" "$FN_RC"
+ck "hash out: stdout is byte-equal to the call without the env" "same" "$(same "$RC_ROOT/plain.txt" "$OUT")"
+ck "hash out: the file holds 12 hex" "yes" "$(yn grep -sqxE '[0-9a-f]{12}' "$HO")"
+ck "hash out: the value is the sha256 prefix of the delivered block" "$(sha12 "$OUT")" "$(rd "$HO")"
+rm -f "$HO"
+fn "$REAL" codex_core_review_criteria_block ""
+ck "hash out: without the env no hash file appears" "no" "$(yn [ -e "$HO" ])"
+case_end
+
+case_begin "hash-out-nonce-files-isolated" "bin/lib/codex-review-criteria.sh"
+for t in real tree; do rm -f "$RC_ROOT/h-$t.txt"; done
+( export REVIEW_CRITERIA_HASH_OUT="$RC_ROOT/h-real.txt"
+  AGENTS_MAIN_ROOT="$CFG" run_with_timeout 60 bash -c '. "$1/bin/lib/codex-core.sh" >/dev/null 2>&1 && codex_core_review_criteria_block ""' _ "$REAL" > "$RC_ROOT/o-real.txt" 2>/dev/null ) &
+( export REVIEW_CRITERIA_HASH_OUT="$RC_ROOT/h-tree.txt"
+  AGENTS_MAIN_ROOT="$CFG" run_with_timeout 60 bash -c '. "$1/bin/lib/codex-core.sh" >/dev/null 2>&1 && codex_core_review_criteria_block ""' _ "$TREE" > "$RC_ROOT/o-tree.txt" 2>/dev/null ) &
+wait
+ck "nonce: the two blocks differ (precondition)" "differs" "$(same "$RC_ROOT/o-real.txt" "$RC_ROOT/o-tree.txt")"
+for t in real tree; do
+  got_h="$(rd "$RC_ROOT/h-$t.txt")"; want_h="$(sha12 "$RC_ROOT/o-$t.txt")"
+  ck "nonce: the $t file holds its own block's hash" "yes" \
+    "$(if [ -n "$got_h" ] && [ "$got_h" = "$want_h" ]; then echo yes; else echo no; fi)"
+done
+case_end
+
+# #2020: the boundary version. The block declares `Version: v<N>` under `## Threat boundary`, and
+# REVIEW_CRITERIA_HASH_OUT carries it as line 2 (line 1 stays the hash).
+tb_section() { awk '/^## Threat boundary$/{f=1;next} /^## /{f=0} f' "$1"; }
+
+case_begin "boundary-version-delivered-and-recorded" "bin/lib/codex-review-criteria.sh"
+fn "$REAL" codex_core_review_criteria_block ""
+between "$OUT" '[REVIEW CRITERIA START]' '[REVIEW CRITERIA END]' > "$RC_ROOT/v-crit.txt"
+ck "version: the delivered Threat boundary section carries 'Version: v1'" "1" "$(tb_section "$RC_ROOT/v-crit.txt" | grep -c -x -F 'Version: v1')"
+HO="$RC_ROOT/hash-out-v.txt"; rm -f "$HO"
+export REVIEW_CRITERIA_HASH_OUT="$HO"
+fn "$REAL" codex_core_review_criteria_block ""
+unset REVIEW_CRITERIA_HASH_OUT
+ck "version: hash out line 1 is still the block hash" "$(sha12 "$OUT")" "$(sed -n 1p "$HO" 2>/dev/null | tr -d '\r')"
+ck "version: hash out line 2 is the boundary version" "v1" "$(sed -n 2p "$HO" 2>/dev/null | tr -d '\r')"
+case_end
+
+# The pin: sha256 of the delivered Threat boundary body minus its Version line, keyed by the version.
+# A meaning change bumps Version and re-pins; a wording-only edit keeps Version and re-pins.
+BOUNDARY_PIN="v1=49c92030153c1001273303c990a914910d80d4364efd8c11d56e70924cc4a88f"
+case_begin "boundary-body-pinned-to-version" "skills/_shared/review-criteria.md"
+fn "$REAL" codex_core_review_criteria_block ""
+between "$OUT" '[REVIEW CRITERIA START]' '[REVIEW CRITERIA END]' | tb_section /dev/stdin > "$RC_ROOT/pin-sec.txt"
+ck "pin: the Threat boundary section is delivered (precondition)" "yes" "$(yn [ -s "$RC_ROOT/pin-sec.txt" ])"
+pin_ver="$(grep -m1 -xE 'Version: v[0-9]+' "$RC_ROOT/pin-sec.txt" | sed 's/^Version: //')"
+pin_hash="$(grep -vxE 'Version: v[0-9]+' "$RC_ROOT/pin-sec.txt" | sha256sum | cut -c1-64)"
+if [ "${pin_ver:-none}=$pin_hash" = "$BOUNDARY_PIN" ]; then
+  pass "pin: the Threat boundary body matches the pin of its version"
+else
+  fail "pin: the Threat boundary body matches the pin of its version" \
+    "pin=$BOUNDARY_PIN got=${pin_ver:-none}=$pin_hash — the section changed: bump 'Version:' in skills/_shared/review-criteria.md when the meaning changed, then (either way) update BOUNDARY_PIN in this test"
+fi
+case_end
+
+# #2020: a review whose PROJECT NFR could not be read is refused (rc 1), never sent without it; the
+# side record's line 3 says whether an NFR block was delivered. TREE gets an env-effective-kv stub.
+case_begin "nfr-fetch-failure-refuses-and-line3-records-delivery" "bin/lib/codex-review-criteria.sh"
+EEK="$TREE/bin/env-effective-kv"; HO3="$RC_ROOT/hash-out-nfr.txt"
+printf '#!/usr/bin/env bash\nexit 3\n' > "$EEK"
+rm -f "$HO3"; export REVIEW_CRITERIA_HASH_OUT="$HO3"
+fn "$TREE" codex_core_review_criteria_block "$PROJ"
+ck "nfr fail: the block returns 1" "1" "$FN_RC"
+ck "nfr fail: no block on stdout" "0" "$(wc -c < "$OUT" | tr -d ' ')"
+ck "nfr fail: one stderr line names the PROJECT_NFR failure" "1" "$(grep -c -F 'PROJECT_NFR could not be read' "$ERR")"
+ck "nfr fail: no side record is written" "no" "$(yn [ -e "$HO3" ])"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "small single-user"\n' > "$EEK"
+fn "$TREE" codex_core_review_criteria_block "$PROJ"
+ck "nfr ok: exits 0" "0" "$FN_RC"
+ck "nfr ok: line 3 is nfr:present" "nfr:present" "$(sed -n 3p "$HO3" 2>/dev/null | tr -d '\r')"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$EEK"
+fn "$TREE" codex_core_review_criteria_block "$PROJ"
+ck "nfr empty: exits 0" "0" "$FN_RC"
+ck "nfr empty: line 3 is nfr:absent" "nfr:absent" "$(sed -n 3p "$HO3" 2>/dev/null | tr -d '\r')"
+unset REVIEW_CRITERIA_HASH_OUT; rm -f "$EEK"
 case_end
 
 echo ""

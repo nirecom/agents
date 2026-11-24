@@ -146,13 +146,20 @@ _codex_core_utf8_trim_incomplete_tail() {
 # an exported PROJECT_NFR is an injection vector, not configuration. Delimiters
 # and codex-output fences smuggled inside are neutralised.
 codex_core_project_nfr_block() {
+  _codex_core_project_nfr_fetch "${1:-}" || return 0
+}
+
+# _codex_core_project_nfr_fetch <project-root> — the body of codex_core_project_nfr_block; rc 2
+# when bin/env-effective-kv fails, so the criteria block (#2020) can refuse a review whose NFR was
+# lost instead of sending it without one.
+_codex_core_project_nfr_fetch() {
   local root="${1:-}"
   [ -n "$root" ] || return 0
   local _dir _eek nfr
   _dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
   _eek="$_dir/../env-effective-kv"
   [ -f "$_eek" ] || return 0
-  nfr="$(bash "$_eek" --repo-root "$root" --key PROJECT_NFR 2>/dev/null)" || return 0
+  nfr="$(bash "$_eek" --repo-root "$root" --key PROJECT_NFR 2>/dev/null)" || return 2
   [ -n "$nfr" ] || return 0
   nfr="${nfr//\[PROJECT NFR START\]/(PROJECT NFR START)}"
   nfr="${nfr//\[PROJECT NFR END\]/(PROJECT NFR END)}"

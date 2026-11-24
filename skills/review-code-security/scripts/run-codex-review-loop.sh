@@ -108,6 +108,9 @@ done
 # security-scanner fallback re-run) are forwarded verbatim; the loop owns their semantics.
 rwc_input_fp_args "$CUR_FP"
 RC=0
-"$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" ${RWC_FP_ARGS[@]+"${RWC_FP_ARGS[@]}"} "$@" || RC=$?
+bj_export_hash_out "$@"
+"$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" ${RWC_FP_ARGS[@]+"${RWC_FP_ARGS[@]}"} "$@" \
+  > "$BJ_OUT_FILE" 2> "$BJ_ERR_FILE" || RC=$?
+bj_post_wrapper "$RC"
 arm_terminal_guard "$RC" || true
 exit "$RC"

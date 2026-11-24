@@ -17,7 +17,12 @@ All paths derive from (`<session-id>`, `<format>`) — no caller passes one in. 
 | `<CTL>/<format>-unresolved-concerns.json` | Finalize artifact, schema `unresolved-concerns/v1` |
 | `<PLANS_DIR>/<session-id>-<format>-finalize-diagnostic.txt` | Why a finalize failed |
 | `<CTL>/<format>-concern-carrier.md` | DISCRIM-keyed carrier: open re-derived + rejected preserved, for `CTX_CONCERNS_LOG` |
+| `<CTL>/<format>-concern-journal.tsv` | Append-only concern journal of the threat boundary; owner `bin/lib/codex-review-loop/boundary-journal.sh` |
 | `<first-sid CTL>/<FORMAT>-review-rounds.jsonl` | Step-wide review record, one row per committed round, keyed by the loop `FORMAT`; owner `bin/review-rounds` |
+
+Journal rows: the `bj_journal_lines` comment owns the columns; column 16 is the boundary version (a legacy 15-column row reads as `unknown`, a `cc-fallback` row whose echo does not match the wrapper's record is `unknown`), a missing axis tag is `untagged`, and rows reach the journal only through the per-call buffer the wrapper flushes on an exit code whose Verdict column in `skills/_shared/codex-review-loop/exit-codes.md` counts the round.
+The round's side record carries the boundary hash (line 1), version (line 2) and whether the project NFR block reached codex (line 3, `nfr:present` | `nfr:absent`); only `nfr:present` lets an `nfr:in`-tagged out-of-boundary row stay a concern (tag semantics: `## Threat boundary` of `review-criteria.md`).
+A flush that cannot append parks the buffer as pending and replays it once on the next flush; a buffer that can be neither appended nor parked stays in place, and a sweep never removes a buffer whose writer pid is still alive — no failure path drops rows.
 
 Formats in use: `outline-plan`, `detail-plan`, `security-plan`, `test-review`, `review-security-shared`.
 
@@ -88,6 +93,7 @@ A producer is a reviewer or scanner whose findings enter the ledger. Each writes
 - `<ref>` is the `C<N>` this finding already carries, or `-` when it is new.
 - `<anchor>` is the enclosing function, heading, or symbol — stable across edits that shift line numbers.
 - Zero findings → the single line `(none)`. An omitted section is not "nothing found".
+- The numbered format carries the category above as a `cat:<category>` TEXT prefix (missing or out of vocabulary → `other`); the `axis:` prefix and `[NOT-CONCERN]` marker lines follow the `## Threat boundary` section of `skills/_shared/review-criteria.md`.
 
 `stage --from-report` rejects empty files — an empty report is indistinguishable from a failure to produce one. When a round has zero open concerns, the caller writes the sentinel line `<!-- concern-ledger: no open concerns in round <N> -->` to the report before staging; the parser skips this line as 0 records.
 
@@ -174,5 +180,7 @@ Callers treat a failed finalize as terminal: `bin/run-codex-review-loop` returns
 | `tally` | `open_high=… open_medium=… open_low=… reopened=… resolved=… rejected=…` |
 | `finalize --mode M --reason R --round N` | Write the unresolved-concerns artifact |
 | `check-finalized` | Verify that artifact; exit 1 when it cannot be trusted |
+| `journal --session SID --format F --round N --producer P --reviewer codex\|cc-fallback --rows concern\|marker\|all --from-report FILE [--criteria-hash H] [--boundary-version v<N>\|unknown] [--buffer B]` | Append a report's rows to the concern journal, or to buffer `B` when given; addressed by `--session`, not `--plans-dir`; exit 5 when it cannot append |
+| `journal-flush --session SID --format F --buffer B --rc 0-9` | Move a buffer's rows into the journal when wrapper exit code `--rc` counts the round, else drop them |
 
 Exit codes: 0 ok, 2 usage, 4 refused for a `[glossary-drift]` or `[upstream-inconsistency]` concern, 5 finalize could not produce the artifact. `render-concerns-log` additionally uses exit 3 for "no ledger / nothing to carry" (benign) and exit 5 for a true render/merge failure.

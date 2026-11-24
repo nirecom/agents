@@ -1,5 +1,5 @@
 # Tests: bin/review-plan-codex
-# Tags: codex, review, prompt-body, scope:issue-specific
+# Tags: codex, review, prompt-body, issue-2020, threat-boundary, scope:issue-specific
 # GROUP G: Prompt body content assertions (cases 29-32, G1).
 # Asserts security axes, checklist references and the #2154 deferred/N-A
 # wording against grep results on bin/review-plan-codex and its prompt modules — never against
@@ -35,6 +35,15 @@ PROMPT_LIB_DIR="$AGENTS_WORKTREE/bin/lib/review-plan-codex"
     pass "30: security-plan prompt (prompts-review-only.sh) references 'CWE-78 OS command injection'"
   else
     fail "30: security-plan prompt (prompts-review-only.sh) missing 'CWE-78 OS command injection'"
+  fi
+}
+
+# Case 30b (#2020): the security-plan axes point at the criteria's Threat boundary section
+{
+  if sed -n '/^rpc_prompt_security_plan()/,/^}/p' "$REVIEW_ONLY_SRC" 2>/dev/null | grep -q 'Threat boundary'; then
+    pass "30b: security-plan prompt (prompts-review-only.sh) references the 'Threat boundary' section"
+  else
+    fail "30b: security-plan prompt (prompts-review-only.sh) missing a reference to the 'Threat boundary' section"
   fi
 }
 
