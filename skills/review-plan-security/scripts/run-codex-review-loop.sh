@@ -94,7 +94,9 @@ done
 # a model-written file turn HIGH_UNRESOLVED into ESCALATE past the exit-6 accept (#2434).
 rwc_input_fp_args "$CUR_FP"
 RC=0
+bj_export_hash_out ${RWC_FWD_ARGS[@]+"${RWC_FWD_ARGS[@]}"}
 "$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" ${RWC_FP_ARGS[@]+"${RWC_FP_ARGS[@]}"} \
-  ${RWC_FWD_ARGS[@]+"${RWC_FWD_ARGS[@]}"} || RC=$?
+  ${RWC_FWD_ARGS[@]+"${RWC_FWD_ARGS[@]}"} > "$BJ_OUT_FILE" 2> "$BJ_ERR_FILE" || RC=$?
+bj_post_wrapper "$RC"
 arm_terminal_guard "$RC" || true
 exit "$RC"

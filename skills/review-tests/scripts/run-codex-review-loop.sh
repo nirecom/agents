@@ -224,8 +224,13 @@ if ! rwc_clear_unreviewed "$CC_SID"; then
   exit 4
 fi
 rwc_input_fp_args "$CUR_FP"
+bj_export_hash_out ${RWC_FWD_ARGS[@]+"${RWC_FWD_ARGS[@]}"}
 "$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" ${RWC_FP_ARGS[@]+"${RWC_FP_ARGS[@]}"} \
-  ${RWC_FWD_ARGS[@]+"${RWC_FWD_ARGS[@]}"} | tee "$REVIEW_OUT" || RC=${PIPESTATUS[0]}
+  ${RWC_FWD_ARGS[@]+"${RWC_FWD_ARGS[@]}"} > "$BJ_OUT_FILE" 2> "$BJ_ERR_FILE" || RC=$?
+# A copy the detector can read after bj_post_wrapper removes the capture; a failed copy is an
+# unreadable output, which the detector HALTs on. The round gate reads the loop's RC, not the HALT.
+cp "$BJ_OUT_FILE" "$REVIEW_OUT" || rm -f "$REVIEW_OUT"
+bj_post_wrapper "$RC"
 DETECT_RC=0
 bash "$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-review-loop/detect-input-error.sh" "$REVIEW_OUT" || DETECT_RC=$?
 rm -f "$REVIEW_OUT"

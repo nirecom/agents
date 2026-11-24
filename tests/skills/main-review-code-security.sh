@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: skills/review-code-security/SKILL.md
-# Tags: scan, filter, outbound, hook, frontmatter, scope:common
+# Tags: scan, filter, outbound, hook, frontmatter, threat-boundary, scope:common
 # Structural tests for skills/review-code-security/SKILL.md
 set -euo pipefail
 
@@ -77,6 +77,17 @@ for axis in "Axis 1: Information Leakage" "Axis 2: Third-Party Access" "Axis 3: 
         fail "missing '### $axis' header"
     fi
 done
+case_end
+
+case_begin "patterns-by-axis-references-threat-boundary" "skills/review-code-security/SKILL.md"
+# --- #2020: the opening of ## Patterns by Axis (before the first ### axis) points at the
+# review criteria's Threat boundary section ---
+PBA_HEAD="$(awk '/^## Patterns by Axis/{f=1; next} f && /^##/{exit} f' "$SKILL" 2>/dev/null || true)"
+if [ -n "$PBA_HEAD" ] && printf '%s\n' "$PBA_HEAD" | grep -qF 'Threat boundary'; then
+    pass "Patterns by Axis opens with a Threat boundary reference"
+else
+    fail "Patterns by Axis has no Threat boundary reference before its first axis"
+fi
 case_end
 
 case_begin "owasp-cwe-citations" "skills/review-code-security/SKILL.md"
@@ -195,6 +206,16 @@ if [ -f "$SKILL" ] && grep -qF 'WORKFLOW_MARK_STEP_review_security_complete' "$S
     pass "Completion section contains review_security_complete sentinel"
 else
     fail "Completion section missing review_security_complete sentinel"
+fi
+case_end
+
+case_begin "scanner-prompt-carries-boundary-version-echo" "skills/review-code-security/SKILL.md"
+# --- #2020: the security-scanner launch sets boundary_version_echo in the scanner's JSON prompt, so
+# the scanner echoes the boundary version its report was written against ---
+if [ -f "$SKILL" ] && grep -qF 'boundary_version_echo' "$SKILL"; then
+    pass "SKILL.md sets boundary_version_echo in the security-scanner JSON prompt"
+else
+    fail "SKILL.md does not set boundary_version_echo in the security-scanner JSON prompt"
 fi
 case_end
 

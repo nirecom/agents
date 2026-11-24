@@ -18,12 +18,12 @@ Classify a gap by the test-gap item of `skills/_shared/severity.md`; Read it fir
   - File/config: re-running doesn't duplicate entries (e.g., same line appended twice to `.bashrc`), template generation produces identical output
   - Cleanup: deletion/uninstall of already-removed targets doesn't error
 
-- **Security cases**: Verify that security boundaries hold under adversarial input
-  Source: OWASP ASVS V8 (Data Protection), OWASP WSTG (Input Validation), CWE Top 25
-  - Secret leakage: secrets never appear in output, logs, temp files, or error messages (OWASP ASVS V8)
-  - Input injection: malicious CLI args, file paths, and shell metacharacters are rejected or sanitized (OWASP WSTG, CWE-78 OS Command Injection, CWE-22 Path Traversal)
-  - Permission: operations respect access control boundaries — unprivileged callers are denied (OWASP ASVS V4 Access Control)
-  - Prompt injection: LLM/agent inputs from untrusted sources do not override system instructions or trigger unintended tool calls (OWASP LLM Top 10 LLM01, MCP Top 10 MCP06)
+- **Security cases**: Verify that the threat boundary holds under adversarial input; test the paths it handles `in` (`## Threat boundary` of `skills/_shared/review-criteria.md`)
+  Source: OWASP Top 10 for LLM Applications 2025 (LLM01–LLM10), OWASP Top 10 for Agentic Applications (ASI)
+  - Secret leakage: secrets never appear in output, logs, temp files, or error messages (LLM02 Sensitive Information Disclosure)
+  - Input injection: untrusted or agent-written CLI args, file paths, and shell metacharacters are rejected or quoted before a command consumes them (LLM05 Improper Output Handling; CWE-78, CWE-22)
+  - Permission: an operation stays within the functionality, permissions and autonomy the task needs; a high-impact action waits for a human (LLM06 Excessive Agency)
+  - Prompt injection: inputs from untrusted sources do not override system instructions or trigger unintended tool calls (LLM01 Prompt Injection, ASI01)
   - Security idempotency: re-running security-relevant operations (e.g., permission grants, secret rotation) does not escalate privileges or leave duplicate entries (extension of Idempotency cases)
 - **Classifier / guard cases**: when the unit yields one of several verdicts (allow/block, read/write, match/miss), cover every verdict — not only the one the change targets. The non-targeted verdict on sanctioned input is the CPR-ORTH symmetric counterpart of the targeted-reject case; omitting it ships false-positive over-blocking (origin: #1425).
 - **Config-dependent branches**: when behavior branches on an env/config value (e.g. `CONFIRM_*`, feature flags), the test must set that value explicitly for every branch under test, never rely on the ambient `.env`'s current value — an unpinned value silently flips the verdict under test (origin: #1133 CONFIRM_DETAIL=off masked a guard-refusal assertion).

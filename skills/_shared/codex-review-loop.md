@@ -54,6 +54,7 @@ Exit 3 = codex CLI unusable → the CC REVIEWER_AGENT fallback is one counted, c
 4. Run the stage wrapper with `--prestaged-report <that file> --prestaged-producer <REVIEWER_AGENT> --prestaged-exec PERFORMED`, and handle its exit code by the table below (`INPUT_ERROR <path>` → exit 4).
 Every REVIEWER_AGENT (and `security-scanner`) launch passes `model:` = the `model=` line of `node "$AGENTS_MAIN_ROOT/bin/resolve-role-model" --role reviewer`.
 Every such prompt carries the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section; the `security-scanner` JSON prompt carries it under the `dispatch_directive` key.
+Every REVIEWER_AGENT prompt also says to write, as the last line after `<!-- end-codex-output -->`, `BOUNDARY_VERSION: <the Version: value of the fetched block's ## Threat boundary section>`; the `security-scanner` JSON prompt sets the `boundary_version_echo` key instead (#2020: an echo that does not match the wrapper's record journals the round as `unknown`).
 Exit 4 = HALT — same as Contract B; no fallback.
 
 ## FORMAT vs LEDGER_FORMAT
