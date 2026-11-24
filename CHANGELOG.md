@@ -312,3 +312,7 @@ Changes: Fixed: PM owner lookup no longer fails with gh_exec_failed when the Pro
 ### BUGFIX: PR #3141 (2026-11-24)
 Background: fix(#3138): detect the in-repo worktree base by realpath and fold let...
 Changes: Hardened the in-repo worktree base check: a symlinked or junctioned `.claude/worktrees` no longer gets the create exemption, and Windows/macOS letter-case differences no longer defeat the base checks. The global-gitignore installers now ignore `.claude/worktrees/`.
+
+### FEATURE: PR #3148 (2026-11-24)
+Background: feat(#2020): declare the threat-model boundary to codex reviews and measure its effect
+Changes: Security reviews now follow an explicit threat boundary: threats outside it, or with no input path, are reported as `[NOT-CONCERN]` markers rather than blocking concerns. New `bin/review-threat-metrics` compares review results before and after each boundary version.
