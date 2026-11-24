@@ -1,7 +1,7 @@
 "use strict";
 // tests/hooks/feature-2853-pre-confirm-audit.js
-// Tests: hooks/lib/pre-confirm-audit.js, bin/workflow/lib/next-step/gate-mode.js, hooks/lib/audit-triggers.js, hooks/supervisor-guard/collect-audit-triggers.js
-// Tags: scope:issue-specific, TL1, TL2, supervisor-audit, pre-confirm-audit, next-step-gate, audit-triggers, confirm-gate
+// Tests: hooks/lib/pre-confirm-audit.js, bin/workflow/lib/next-step/gate-mode.js, hooks/lib/audit-triggers.js, hooks/supervisor-guard/collect-audit-triggers.js, bin/workflow/lib/next-step/pm-audit-route.js, hooks/workflow-mark/pm-review-accepted-handler.js
+// Tags: scope:issue-specific, TL1, TL2, supervisor-audit, pre-confirm-audit, next-step-gate, audit-triggers, confirm-gate, pm-session
 // #2853: TR1-3 leave the step-completion edge table; the plan stage's `next-step --gate` arms the
 // stage's audit (audit-wait) and answers from its verdict on the current plan (ask / proceed,
 // audit-block) before the CONFIRM dialog. (a)-(j) run the real gate CLI on fixture state (TL2);
@@ -275,4 +275,25 @@ test("step4 (t) an armed, unsettled run on the current plan: judgeStage unsettle
 caseEnd();
 caseBegin("step4 (u) rerunning the gate on an in-flight run reuses it: same run id, nothing armed or counted", "bin/workflow/lib/next-step/gate-mode.js");
 test("step4 (u) rerunning the gate on an in-flight run reuses it: same run id, nothing armed or counted", checked(() => IF.u(check)));
+caseEnd();
+
+// #3144 C2: the destination is decided before the arm; the cases live in ./feature-2853-pre-confirm-audit/pm-route-cases.js.
+const PR = require("./feature-2853-pre-confirm-audit/pm-route-cases");
+caseBegin("3144 R1 route hints: subagent, pm (destination finding, no launch line), ask (nothing armed)", "bin/workflow/lib/next-step/pm-audit-route.js");
+test("3144 R1 route hints: subagent, pm (destination finding, no launch line), ask (nothing armed)", checked(() => PR.routes(check)));
+caseEnd();
+caseBegin("3144 R2 the owner lookup runs only in the arm branch", "bin/workflow/lib/next-step/gate-mode.js");
+test("3144 R2 the owner lookup runs only in the arm branch", checked(() => PR.lookupScope(check)));
+caseEnd();
+caseBegin("3144 R3 an in-flight run without a current destination is replaced; a current one is reused", "bin/workflow/lib/next-step/gate-mode.js");
+test("3144 R3 an in-flight run without a current destination is replaced; a current one is reused", checked(() => PR.replace(check)));
+caseEnd();
+caseBegin("3144 R4 at the run cap the pm route replaces nothing and enters the cap procedure", "bin/workflow/lib/next-step/gate-mode.js");
+test("3144 R4 at the run cap the pm route replaces nothing and enters the cap procedure", checked(() => PR.capNoReplace(check)));
+caseEnd();
+caseBegin("3144 R5 --audit-route pm[:<tag>] counts runs, releases at the cap, refuses a non-candidate", "bin/workflow/lib/next-step/gate-mode.js");
+test("3144 R5 --audit-route pm[:<tag>] counts runs, releases at the cap, refuses a non-candidate", checked(() => PR.auditRoute(check)));
+caseEnd();
+caseBegin("3144 R6 WORKFLOW_PM_REVIEW_ACCEPTED (plan form) arms a counted fallback run", "hooks/workflow-mark/pm-review-accepted-handler.js");
+test("3144 R6 WORKFLOW_PM_REVIEW_ACCEPTED (plan form) arms a counted fallback run", checked(() => PR.sentinel(check)));
 caseEnd();

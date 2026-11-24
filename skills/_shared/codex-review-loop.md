@@ -26,19 +26,21 @@ ACCEPTED_TRADEOFFS_FILE is resolved by `bin/resolve-accepted-tradeoffs-file` fro
 
 ## Parameters (review-only formats)
 
-| Parameter | security-plan | test-review |
-|---|---|---|
-| FORMAT | `security-plan` | `test-review` |
-| RAW_FILE | `<PLANS_DIR>/<session-id>-security-plan-codex-round-<N>-raw.md` | `<PLANS_DIR>/<session-id>-test-review-codex-round-<N>-raw.md` |
-| CONCERNS_LOG | `<PLANS_DIR>/<session-id>-security-plan-concerns-log.md` | `<PLANS_DIR>/<session-id>-test-review-concerns-log.md` |
-| DEBUG_LOG | `<PLANS_DIR>/<session-id>-security-plan-debug.log` | `<PLANS_DIR>/<session-id>-test-review-debug.log` |
-| CAP | 2 | 2 |
-| MAX_EXTENSIONS | 1 | 1 |
-| PLANNER_AGENT | (none — review-only) | (none — review-only) |
-| PLANNER_MODEL | (none — review-only) | (none — review-only) |
-| REVIEWER_AGENT | `plan-security-reviewer` | `test-reviewer` |
-| ACCEPTED_TRADEOFFS_FILE | merged file of `outline` → `intent` | merged file of `detail` → `outline` → `intent` |
-| NON_APPROVED_VERDICT | `NEEDS_REVISION` | `NEEDS_REVISION` |
+| Parameter | security-plan | test-review | pm-review |
+|---|---|---|---|
+| FORMAT | `security-plan` | `test-review` | `pm-review` |
+| RAW_FILE | `<PLANS_DIR>/<session-id>-security-plan-codex-round-<N>-raw.md` | `<PLANS_DIR>/<session-id>-test-review-codex-round-<N>-raw.md` | (none — the PM's peer-ack) |
+| CONCERNS_LOG | `<PLANS_DIR>/<session-id>-security-plan-concerns-log.md` | `<PLANS_DIR>/<session-id>-test-review-concerns-log.md` | (none) |
+| DEBUG_LOG | `<PLANS_DIR>/<session-id>-security-plan-debug.log` | `<PLANS_DIR>/<session-id>-test-review-debug.log` | (none) |
+| CAP | 2 | 2 | 2 |
+| MAX_EXTENSIONS | 1 | 1 | 1 |
+| PLANNER_AGENT | (none — review-only) | (none — review-only) | (none — review-only) |
+| PLANNER_MODEL | (none — review-only) | (none — review-only) | (none — review-only) |
+| REVIEWER_AGENT | `plan-security-reviewer` | `test-reviewer` | the assigned PM session (pm-pre-pr-contact.md `## Review request`) |
+| ACCEPTED_TRADEOFFS_FILE | merged file of `outline` → `intent` | merged file of `detail` → `outline` → `intent` | (none) |
+| NON_APPROVED_VERDICT | `NEEDS_REVISION` | `NEEDS_REVISION` | `NOT_OK` |
+
+`pm-review` is not a codex loop: its rounds are the request rows of `bin/review-rounds append --format pm-review`, and a PM's `--high` NOT_OK at round CAP is written as `AUTO_EXTEND`.
 
 ## Round-continuing review-only formats
 

@@ -91,8 +91,9 @@ const DUTIES = [
   ["workflow", "issue-start", "does not trust a role=pm header alone", /role=pm[^\n]*assigned PM/],
   ["workflow", "issue-start", "contacts the assigned PM before PR creation", /pm-pre-pr-contact\.md/],
   ["workflow", "before-companions", "consults the PM before presenting companions", /consult the assigned PM[^\n]*companion/i],
-  ["workflow", "before-plan-confirm", "emits the plan confirmation only after the PM's OK", /review the plan[^\n]*only after the PM's OK/i],
-  ["workflow", "before-user-verification", "emits USER_VERIFIED only after the PM's OK", /USER_VERIFIED[^\n]*only after the PM's OK/],
+  // #3144: the PM review runs through the audit-wait hint / get-release-approval and pm-pre-pr-contact.md `## Review request`.
+  ["workflow", "before-plan-confirm", "follows the audit-wait hint into the Review request", /audit-wait[^\n]*## Review request/],
+  ["workflow", "before-user-verification", "lets get-release-approval run the Review request", /get-release-approval[^\n]*## Review request/],
   ["workflow", "after-final-report", "reports completion to the assigned PM", /report completion to (?:the|each) assigned PM/i],
 ];
 

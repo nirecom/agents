@@ -22,9 +22,10 @@ const CONTRACT = Object.freeze([
 ]);
 
 // session-start is a bundle per recipient; pml2 joins no bundle until #3056 enables it.
+// The two review timings leave the workflow bundle (#3144): `## Review request` RR-1 fetches each at its checkpoint.
 const BUNDLES = Object.freeze({
   pm: ["session-start"],
-  workflow: ["issue-start", "before-plan-confirm", "before-user-verification"],
+  workflow: ["issue-start"],
 });
 
 const TIMINGS = Object.freeze(["session-start", ...new Set(CONTRACT.filter((c) => c.timing !== "session-start").map((c) => c.timing))]);

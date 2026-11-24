@@ -67,10 +67,9 @@ function auditError(action, deps, runId, why) {
 
 // decideAuditGate(row, action, deps) -> {action, hint, reason, runId, verdict}: the plan stage's
 // pre-confirm audit branch, pure over deps {sid, step, ctx, judgeStage, armStage, acceptedOnError,
-// isCapConfirmAcceptable}.
+// isCapConfirmAcceptable, decideArm?, rejudge?}.
 // Only an unsettled stage arms; every failure closes the gate unless the stage's last run is accepted.
 function decideAuditGate(row, action, deps) {
-  const { describeAcceptanceCommand } = require("../../../../hooks/lib/null-freshness/acceptance");
   const step = (deps && deps.step) || (row && row.step);
   const sid = deps && deps.sid;
   let j;
@@ -84,6 +83,13 @@ function decideAuditGate(row, action, deps) {
     }
     return auditError(action, deps, acc.runId, e && e.message);
   }
+  return classify(j, action, deps, step, sid, true);
+}
+
+// classify: the judgment j turned into the gate answer. armAllowed is false only on the one re-judgment
+// after a cap release (#3144 S2-3), so the classification never loops back into an arm.
+function classify(j, action, deps, step, sid, armAllowed) {
+  const { describeAcceptanceCommand } = require("../../../../hooks/lib/null-freshness/acceptance");
   const base = { runId: j.runId || null, verdict: j.verdict || null, reason: "pre-confirm-audit:" + j.state };
   const PCA = require("../../../../hooks/lib/pre-confirm-audit");
   const cls = PCA.auditAdmits(j, action, deps.isCapConfirmAcceptable);
@@ -105,11 +111,8 @@ function decideAuditGate(row, action, deps) {
     return Object.assign(base, { action, hint: HINTS[action] });
   }
   if (cls === "arm") {
-    let arm;
-    try { arm = deps.armStage(sid, step, deps.ctx) || {}; } catch (e) { return auditError(action, deps, j.runId, e && e.message); }
-    const runId = arm.audit_run_id || arm.run_id;
-    if (arm.ok !== true || !runId) return auditError(action, deps, j.runId, "arm refused: " + (arm.reason || "unknown"));
-    return Object.assign(base, { action: "audit-wait", runId, hint: HINTS["audit-wait"] + " " + PCA.formatLaunch(runId, step) });
+    if (!armAllowed) return auditError(action, deps, j.runId, "the stage is unsettled after the cap release");
+    return armBranch(base, j, action, deps, step, sid);
   }
   if (j.state === "settled-block") {
     const { summary, summaryNote } = summaryFields(j.summary);
@@ -121,6 +124,36 @@ function decideAuditGate(row, action, deps) {
       "audit run cap, so no new audit is armed; the last run is " + (j.runId || "none") + ". " + describeAcceptanceCommand(j.runId) });
   }
   return auditError(action, deps, j.runId, "unknown audit state " + j.state);
+}
+
+// armBranch: an unsettled stage. #3144 S2: deps.decideArm (the gate's pm-audit-route) decides the
+// destination before arming; without it (the pure TL1 deps) the stage arms for the subagent as before.
+function armBranch(base, j, action, deps, step, sid) {
+  const PCA = require("../../../../hooks/lib/pre-confirm-audit");
+  let d;
+  try {
+    d = deps.decideArm ? deps.decideArm(sid, step, deps.ctx, j) : { route: "subagent", arm: deps.armStage(sid, step, deps.ctx) || {} };
+  } catch (e) { return auditError(action, deps, j.runId, e && e.message); }
+  if (d.released) {
+    // At the cap the arm released the in-flight run: one re-judgment (no loop) enters the cap procedure.
+    let j2;
+    try { j2 = deps.rejudge(sid, step, deps.ctx) || {}; } catch (e) { return auditError(action, deps, j.runId, e && e.message); }
+    const out = classify(j2, action, deps, step, sid, false);
+    return Object.assign(out, { reason: out.reason + ", pm-route:released" });
+  }
+  const tag = d.route ? ", pm-route:" + d.route : "";
+  if (d.route === "ask") {
+    const AR = require("./pm-audit-route");
+    return Object.assign(base, { action: "audit-wait", runId: null, reason: base.reason + tag, hint: AR.askHint(step, d.reason, d.pms) });
+  }
+  const arm = d.arm || {};
+  const runId = arm.audit_run_id || arm.run_id;
+  if (arm.ok !== true || !runId) {
+    const err = auditError(action, deps, j.runId, "arm refused: " + (arm.reason || "unknown"));
+    return Object.assign(err, { reason: err.reason + tag });
+  }
+  const hint = d.route === "pm" ? PCA.formatPmRequest(runId, step, d.pm) : HINTS["audit-wait"] + " " + PCA.formatLaunch(runId, step);
+  return Object.assign(base, { action: "audit-wait", runId, reason: base.reason + tag, hint });
 }
 
 function clean(s) {
@@ -234,6 +267,8 @@ function auditBranch(sid, step, row, action, audit) {
       judgeStage: () => { if (audit.judgeError !== undefined) throw new Error(audit.judgeError); return audit.j; },
       acceptedOnError: () => { if ("accError" in audit) throw new Error(audit.accError); return audit.acc; },
       armStage: PCA.armStage, isCapConfirmAcceptable: PCA.isCapConfirmAcceptable,
+      // #3144 S2: the destination (and so the owner lookup) is decided only here, in the arm branch.
+      decideArm: require("./pm-audit-route").decideArm, rejudge: PCA.judgeStage,
     });
   } catch (e) {
     return auditError(action, null, null, e && e.message);

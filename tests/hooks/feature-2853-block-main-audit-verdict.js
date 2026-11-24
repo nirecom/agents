@@ -160,3 +160,14 @@ test("B8 regex boundaries of the verdict-CLI path and the --set-audit-verdict fl
   }
 }));
 caseEnd();
+// #3144: the PM-route exception, the pm-review rows and the subagent on a PM-route run.
+const PM = require("./feature-2853-block-main-audit-verdict/pm-cases");
+caseBegin("C1 P1 the destination PM alone may write a pending pre-confirm verdict", "hooks/block-main-audit-verdict.js");
+test("C1 P1 the destination PM alone may write a pending pre-confirm verdict", checked(() => PM.pmAuditCases(expect)));
+caseEnd();
+caseBegin("C1 P2 pm-review request and verdict rows of bin/review-rounds", "hooks/block-main-audit-verdict.js");
+test("C1 P2 pm-review request and verdict rows of bin/review-rounds", checked(() => PM.pmReviewCases(expect)));
+caseEnd();
+caseBegin("C2 P3 the supervisor-audit subagent and a PM-route run", "hooks/block-main-audit-verdict.js");
+test("C2 P3 the supervisor-audit subagent and a PM-route run", checked(() => PM.subagentRouteCases(expect)));
+caseEnd();

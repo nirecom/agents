@@ -175,6 +175,29 @@ procedure is [skills/_shared/pm-pre-pr-contact.md](../../skills/_shared/pm-pre-p
   `RESULT=mismatch` (`EXTRA=` / `MISSING=`, or `REASON=owner-differs`) and `RESULT=undecidable`
   go to the user. An `owner` hit with no recorded header still counts as an assigned PM.
 
+### Review request (#3144)
+
+The same procedure file carries `## Review request`: the assigned PM reviews the plan at each
+plan-stage confirmation and the PR before `USER_VERIFIED`, in place of the supervisor-audit subagent.
+
+- Plan stages ride the pre-confirm audit run: the gate routes `audit-wait` to the PM and the PM
+  writes the run's verdict (`supervisor-audit-ledger.md` "PM route").
+- The PR review is a round of the pm-review record (`review-rounds` format `pm-review`, the
+  control dir's `pm-review-review-rounds.jsonl`). Before sending, the workflow session writes a
+  request row (`source=request:<PM sid>`, verdict `REQUESTED`, `run_id=pr:<n>`, the HEAD SHA as
+  fingerprint); the PM answers with one row per round (`source=pm`, `OK` / `NOT_OK`, `--high`
+  turning a capped `NOT_OK` into the one `AUTO_EXTEND`). Rounds stop at the cap of 2 plus one
+  extension; a refused request row goes to the user.
+- The user's `WORKFLOW_PM_REVIEW_ACCEPTED: PR#<n>` (ask-gated) writes a `source=user` row, or
+  `user-pr-unconfirmed` when the forge does not answer and the last request named that PR; the
+  TR5 audit then runs as before.
+- `hooks/workflow-gate/user-verified-pm-review.js` passes `USER_VERIFIED` only on the PM's `OK`
+  in the last requested round or the user's row, each tied to the current HEAD and PR; a forge
+  that does not answer passes only the `user-pr-unconfirmed` row. A web merge emits no
+  `USER_VERIFIED`, so there `/get-release-approval` GA-1 (PM review) is the only enforcement.
+- The wait reuses the PPC-4 timer from the actual send; one resend, then the user decides. No
+  automatic fallback to the subagent.
+
 ## 8. PM notification points
 
 Why: the PM must learn of changes to its issues without polling each session. Each notification

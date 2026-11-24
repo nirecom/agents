@@ -123,7 +123,10 @@ order; the approval hash is untouched. `hooks/lib/pre-confirm-audit.js` owns the
   ([marker-bypass-contract.md](marker-bypass-contract.md)).
 - **No workflow state.** The checkpoint skips the audit check for a session with no workflow state file, which cannot arm a run, and records a `notice` finding so the skip stays visible; a state file that exists but fails to read or judge stays fail-closed.
 - **Verdict summary is data.** A settled WARN / BLOCK's (or a cap-reached `ask`'s) summary comes from untrusted plan and transcript text, so `--gate` prints it on its own `GATE_AUDIT_SUMMARY` line (quotes stripped, whitespace collapsed, 400 characters at most) and never inside the verbatim-followed `GATE_HINT`.
-- **Verdict writer.** Only a subagent may write a verdict: `hooks/block-main-audit-verdict.js` blocks the main conversation from calling `bin/supervisor-write-audit-verdict` or `--set-audit-verdict`, so the main conversation's only exit is the ask-gated acceptance sentinel, or for a TR1–TR3 stage past its cap, the CONFIRM Allow.
+- **Verdict writer.** Only a subagent or the assigned PM may write a verdict: `hooks/block-main-audit-verdict.js` blocks the main conversation from calling `bin/supervisor-write-audit-verdict` or `--set-audit-verdict`, so the main conversation's only exit is the ask-gated acceptance sentinel, or for a TR1–TR3 stage past its cap, the CONFIRM Allow.
+- **PM route (#3144).** With an assigned PM, `audit-wait` sends the run to that PM (`skills/_shared/pm-pre-pr-contact.md` `## Review request`) instead of the subagent; two assigned PMs, or an owner the forge cannot decide, return an ask hint and arm nothing.
+  The arm records the destination as a `route:pm-dest` finding, and `WORKFLOW_PM_REVIEW_ACCEPTED` arms a new counted run with a `user:pm-review-fallback` finding, both in the arm's own commit, so no run exists without its route.
+  The PM writes from its own session with `--audit-run-id`; `hooks/lib/pm-review-writer.js` accepts it only for the run's recorded destination, when that PM is still a decided owner (an undecidable owner refuses the write), and never on a fallback run. The CLI stamps its findings with reporter `pm:<PM sid>`, and those reporters are reserved: a subagent's finding that claims one is restamped `supervisor-audit`.
 
 ### Declared-files snapshot (#2448)
 

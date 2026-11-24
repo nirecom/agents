@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/workflow-mark/supervisor-block-override-handler.js, hooks/block-subagent-sentinels.js, hooks/lib/sentinel-patterns.js, settings.json
-// Tags: TL2, supervisor, block-override, sentinel, permissions, subagent, scope:issue-specific, dup-group-keep:size-hard-limit
+// Tags: TL2, supervisor, block-override, sentinel, permissions, subagent, scope:issue-specific, dup-group-keep:size-hard-limit, pm-review
 // #2597 — WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED is renamed WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED: the retired
 // name records nothing and points at the new one (A-new1), and a subagent can emit neither (A-new2).
 // Split from feature-2709-approval-bypass-closure.js, which sits at the 500-line hard limit.
@@ -99,5 +99,43 @@ test("A-new2: a subagent emitting the new or the retired name is blocked; the ma
     }
     assert.strictEqual(subagentHook(`echo "<<${name}>>"`, "agent-1"), "block", `subagent bare ${name}`);
   }
+});
+caseEnd();
+
+// #3144 S2-4 / S4-2: the user's choice of the supervisor-audit over the assigned PM's review is a new ask-gated
+// sentinel with a plan form (<step> <reason>) and a PR form (PR#<n> <reason>).
+const PMR = "WORKFLOW_PM_REVIEW_ACCEPTED";
+const PMR_REASON = "the PM did not answer twice; the user chose the supervisor-audit";
+caseBegin("3144-pm-review-accepted-pattern", "hooks/lib/sentinel-patterns.js");
+test("3144: WORKFLOW_PM_REVIEW_ACCEPTED is strict for the plan and PR forms only", () => {
+  const sp = mod("hooks/lib/sentinel-patterns.js");
+  for (const target of ["intent", "outline", "detail", "PR#12"]) {
+    const cmd = echo(PMR, `${target} ${PMR_REASON}`);
+    assert.strictEqual(sp.isStrictSentinel(cmd), true, `strict: ${cmd}`);
+    assert.strictEqual(sp.isSentinel(cmd), true, `reaches the handler: ${cmd}`);
+  }
+  for (const body of ["bogus-step reason", "PR#abc reason", "PR#12;id reason", "outline", "PR#12"]) {
+    assert.strictEqual(sp.isStrictSentinel(echo(PMR, body)), false, `not strict: ${body}`);
+  }
+  assert.strictEqual(sp.isSentinel(echo(PMR, "PR#abc reason")), true, "a look-alike still counts as a sentinel (subagent block)");
+});
+caseEnd();
+
+caseBegin("3144-pm-review-accepted-ask-row", "settings.json");
+test("3144: settings.json asks before WORKFLOW_PM_REVIEW_ACCEPTED runs", () => {
+  const perms = JSON.parse(fs.readFileSync(path.join(ROOT, "settings.json"), "utf8")).permissions || {};
+  assert.ok((perms.ask || []).includes(`Bash(echo "<<${PMR}: *>>")`), "the ask row is present");
+  assert.ok(!(perms.allow || []).some((r) => r.includes(PMR)), "no allow row lets it skip the dialog");
+});
+caseEnd();
+
+caseBegin("3144-pm-review-accepted-subagent-block", "hooks/block-subagent-sentinels.js");
+test("3144: a subagent cannot emit WORKFLOW_PM_REVIEW_ACCEPTED; the main conversation can", () => {
+  for (const body of [`outline ${PMR_REASON}`, `PR#12 ${PMR_REASON}`]) {
+    const cmd = echo(PMR, body);
+    assert.strictEqual(subagentHook(cmd, "agent-1"), "block", `subagent: ${cmd}`);
+    assert.strictEqual(subagentHook(cmd, null), "approve", `main conversation: ${cmd}`);
+  }
+  assert.strictEqual(subagentHook(`echo "<<${PMR}>>"`, "agent-1"), "block", "subagent bare form");
 });
 caseEnd();

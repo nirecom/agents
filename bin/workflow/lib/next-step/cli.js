@@ -13,7 +13,7 @@ const {
 
 function printUsage() {
   process.stdout.write(
-    "Usage: next-step [--session <sid>] [--list | --gate [--scope-change-approved]]\n" +
+    "Usage: next-step [--session <sid>] [--list | --gate [--scope-change-approved] [--audit-route pm[:<tag>]]]\n" +
     "\n" +
     "Deterministic workflow next-step advisor. Reads session state and emits the next\n" +
     "workflow step as four KEY=value lines on stdout (ACTION, NEXT_SKILL,\n" +
@@ -46,6 +46,9 @@ function printUsage() {
     "  --scope-change-approved\n" +
     "                    With --gate only (else exit 64): the user approved the detail\n" +
     "                    scope change, so an OFF detail gate resolves to proceed.\n" +
+    "  --audit-route pm[:<tag>]\n" +
+    "                    With --gate only (else exit 64): send the plan stage audit to\n" +
+    "                    the assigned PM the user chose (a current candidate only).\n" +
     "  --jev-cache-only  On ACTION=invoke, print a JEV_ADVICE line only from the cache;\n" +
     "                    never query Jev (hooks always pass it).\n" +
     "  -h, --help        Show this help.\n" +
@@ -57,7 +60,7 @@ function printUsage() {
 function parseArgs(argv) {
   const out = {
     list: false, session: undefined, reset: undefined, mark: undefined,
-    advance: false, next: false, gate: false, scopeChangeApproved: false, jevCacheOnly: false,
+    advance: false, next: false, gate: false, scopeChangeApproved: false, jevCacheOnly: false, auditRoute: undefined,
     advanceStep: undefined, advanceStatus: undefined, skipReason: undefined,
     // Diagnostic only: the literal token the caller typed for the status, so a
     // refusal can name the spelling in front of them.
@@ -139,6 +142,9 @@ function parseArgs(argv) {
       out.gate = true;
     } else if (a === "--scope-change-approved") {
       out.scopeChangeApproved = true;
+    } else if (a === "--audit-route") {
+      out.auditRoute = needValue(i, "--audit-route");
+      i++;
     } else if (a === "--advance") {
       out.advance = true;
     } else if (a === "--next") {
@@ -184,6 +190,8 @@ function parseArgs(argv) {
   const advice = require("./wait-on-invoke");
   advice.setCacheOnly(out.jevCacheOnly);
   advice.setSessionArg(out.session);
+  // #3144 S2-3: the gate reads the user's route choice the way wait-on-invoke reads its flags above.
+  require("./pm-audit-route").setRequestedRoute(out.auditRoute);
   return out;
 }
 
@@ -193,6 +201,7 @@ function validateGateArgs(out) {
     process.exit(64);
   };
   if (out.scopeChangeApproved && !out.gate) usageError("--scope-change-approved is only meaningful with --gate");
+  if (out.auditRoute !== undefined && !out.gate) usageError("--audit-route is only meaningful with --gate");
   if (out.gate && (out.list || out.reset !== undefined || out.mark !== undefined || out.advance)) {
     usageError("--gate cannot be combined with --list / --reset / --mark / --advance");
   }

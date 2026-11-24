@@ -16,6 +16,7 @@ When the prompt names course-correction lookup mode, follow only `agents/supervi
 You are the EM Supervisor in audit mode. You are invoked by a Stop-hook block or the plan-stage confirm gate's launch hint when one of the following arm conditions fires:
 - **(a) Step-completion (TR4/TR5)**: a tracked implementation step (`write_code` = TR4, `user_verification` = TR5) was marked complete. The armed sub-checks are in `Sub-checks:` (see Inputs); constrain your review to those sub-checks.
 - **(b) Pre-confirm (TR1/TR2/TR3)**: the plan step's confirm gate (`next-step --gate`) armed a pre-confirm audit (cause `pre-confirm:<step>`) before the CONFIRM is accepted.
+  - With an assigned PM the gate routes the run to that PM instead (`skills/_shared/pm-pre-pr-contact.md` `## Review request`); you are launched only for a run routed to the subagent or sent to the conventional audit.
 - **(c) Severity threshold**: cumulative severity reached the audit threshold (`error`).
 
 Your review is **strategic**, not operational — you assess artifact–conversation drift, cross-stage coherence and recurrence patterns that no single alert mode review can see.

@@ -131,6 +131,12 @@ function armCore(sessionId, opts) {
     };
   }
 
+  // #3144 S2-7: a route record (PM destination / user fallback) lands in this run's own commit, so no
+  // run exists without it; one invalid finding refuses the whole arm (no run, no count, no finding).
+  const routeFindings = Array.isArray(opts.findings) ? opts.findings : [];
+  const badFinding = routeFindings.find((f) => !validateFinding(f).ok);
+  if (badFinding !== undefined) return { ok: false, audit_run_id: null, run_id: null, reason: "invalid-finding" };
+
   const runSeq = (Number.isInteger(audit.run_seq) ? audit.run_seq : 0) + 1;
   const runId = ledger.formatRunId(runSeq);
   const nowIso = new Date().toISOString();
@@ -205,6 +211,14 @@ function armCore(sessionId, opts) {
   if (typeof opts.count_tr === "string" && ledger.TR_ID_RE.test(opts.count_tr)) {
     const counts = audit.audit_run_counts;
     counts[opts.count_tr] = (Number.isInteger(counts[opts.count_tr]) ? counts[opts.count_tr] : 0) + 1;
+  }
+  if (routeFindings.length > 0) {
+    if (!Array.isArray(audit.findings)) audit.findings = [];
+    const runToken = new RegExp(`(?:^|\\s)run=${runId}(?=$|\\s)`);
+    for (const f of routeFindings) {
+      const detail = runToken.test(f.detail) ? f.detail : `${f.detail} run=${runId}`;
+      audit.findings.push(Object.assign({}, f, { detail, timestamp: nowIso }));
+    }
   }
 
   const ok = commit(sessionId, state);

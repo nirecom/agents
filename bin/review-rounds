@@ -3,17 +3,21 @@
 // bin/review-rounds — CLI of the step-wide review record (#2938 D5). Dispatch only: the record
 // lives in bin/lib/codex-review-loop/review-rounds-store.js, classification in review-rounds.js.
 // Exit: 0 ok, 2 usage / rejected value, 3 cannot derive (derive-ext), 4 HALT, 5 row parked (append;
-// append --no-park parks nothing and is 4).
+// append --no-park parks nothing and is 4), 6 pm-review round cap reached (append --request writes nothing).
 
 const fs = require("fs");
 const path = require("path");
+const { spawnSync } = require("child_process");
 const LIB = path.join(__dirname, "lib", "codex-review-loop");
 const store = require(path.join(LIB, "review-rounds-store"));
 const rounds = require(path.join(LIB, "review-rounds"));
 const { readInterval } = require(path.join(LIB, "state-interval"));
+const PMW = () => require(path.join(__dirname, "..", "hooks", "lib", "pm-review-writer"));
 
 // Flags that take no value.
-const SWITCHES = new Set(["no-park"]);
+const SWITCHES = new Set(["no-park", "request", "high"]);
+const EXIT_PM_REVIEW_CAP = 6;
+const PM_VERDICTS = ["OK", "NOT_OK"];
 
 function parse(argv) {
   const o = {};
@@ -37,8 +41,46 @@ const int = (v, name) => {
 const optInt = (v, name) => (v === undefined || v === "" ? null : int(v, name));
 const base = (o) => ({ sid: o.session, format: o.format });
 
+// pm-review rows (#3144 S1-4): the CLI decides counter_round and source; a caller's value is never used.
+// The caller is this process's session (CLAUDE_CODE_SESSION_ID); the judge runs before the lock and again
+// under it (skipIf), so a row two writers race for is written once.
+function pmReviewAppend(o) {
+  const W = PMW();
+  const caller = process.env.CLAUDE_CODE_SESSION_ID || ""; // session-id-ssot: waived (cli-entry-point) — the writing session is the caller, not --session
+  const refused = (code, reason) => { throw new store.StoreError(code, `pm-review append refused: ${reason}`); };
+  const rowBase = { sid: o.session, format: W.FORMAT, exit: null, state_sid: o.session, untilSeq: null };
+  if (o.request === true) {
+    const j = W.judgeRequestWrite({ callerSid: caller, targetSid: o.session, pmSid: o["pm-sid"], pr: o.pr === undefined ? "" : o.pr });
+    if (!j.ok) refused(/^cap-reached/.test(j.reason) ? EXIT_PM_REVIEW_CAP : 2, j.reason);
+    const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: process.cwd(), encoding: "utf8", timeout: 10000 });
+    const fp = head.status === 0 ? String(head.stdout).trim() : "";
+    if (!W.FP_RE.test(fp)) refused(2, "the HEAD SHA of the current directory cannot be read");
+    const row = store.appendRow(Object.assign(rowBase, {
+      counter_round: j.round, verdict: W.VERDICT_REQUESTED, source: W.SOURCE_REQUEST_PREFIX + j.pmSid,
+      run_id: W.PR_RUN_PREFIX + Number(o.pr), fingerprint: fp, writer_sid: caller,
+      skipIf: (parsed) => { const n = W.nextRoundAllowed(parsed.filter(Boolean)); return n.ok && n.round + 1 === j.round ? null : { skipped: n.reason || "round-moved" }; },
+    }));
+    if (row.skipped) refused(EXIT_PM_REVIEW_CAP, row.skipped);
+    return `counter_round=${row.counter_round}`;
+  }
+  if (!PM_VERDICTS.includes(o.verdict)) refused(2, `--verdict must be one of ${PM_VERDICTS.join("|")}`);
+  const target = { round: o.round, fingerprint: o.fingerprint, pr: o.pr };
+  const j = W.judgePmWrite({ callerSid: caller, targetSid: o.session, kind: W.FORMAT, target });
+  if (!j.ok) refused(2, j.reason);
+  const round = Number(o.round);
+  const verdict = o.verdict === "NOT_OK" && o.high === true && round === rounds.PM_REVIEW_CAP ? W.VERDICT_AUTO_EXTEND : o.verdict;
+  const row = store.appendRow(Object.assign(rowBase, {
+    counter_round: round, verdict, source: W.SOURCE_PM, run_id: W.PR_RUN_PREFIX + Number(o.pr), fingerprint: o.fingerprint,
+    writer_sid: caller,
+    skipIf: (parsed) => { const s = W.roundState(parsed.filter(Boolean)); return s.round === round && s.request && !s.pmRow && !s.userRow ? null : { skipped: "round-moved" }; },
+  }));
+  if (row.skipped) refused(2, row.skipped);
+  return `counter_round=${row.counter_round} verdict=${row.verdict}`;
+}
+
 const COMMANDS = {
   append: (o) => {
+    if (o.format === "pm-review") return pmReviewAppend(o);
     need(o, "counter-round", "exit", "verdict", "source", "run-id");
     store.appendFromWrapper(Object.assign(base(o), {
       counter_round: int(o["counter-round"], "counter-round"), exit: int(o.exit, "exit"), verdict: o.verdict,

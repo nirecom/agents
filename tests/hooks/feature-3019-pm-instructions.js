@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
-// Tests: hooks/lib/pm-instructions.js, hooks/lib/pm-instructions/sections.js, hooks/lib/pm-instructions/role.js, hooks/lib/pm-instructions/render.js, bin/pm-instructions, bin/lib/pm-instructions/cli.js, hooks/session-start.js, hooks/post-compact.js, skills/_shared/pm-supervisor-duties.md, skills/workflow-init/SKILL.md, skills/clarify-intent/SKILL.md, skills/resume-session/SKILL.md, skills/session-close/SKILL.md, skills/pm-init/SKILL.md, skills/pm-add/SKILL.md, skills/pm-remove/SKILL.md
-// Tags: TL2, scope:issue-specific, hooks, pm-session, pm-instructions, session-start, post-compact, cli, fail-open, truncation, utf8, pm-field, issue-2942
+// Tests: hooks/lib/pm-instructions.js, hooks/lib/pm-instructions/sections.js, hooks/lib/pm-instructions/role.js, hooks/lib/pm-instructions/render.js, bin/pm-instructions, bin/lib/pm-instructions/cli.js, hooks/session-start.js, hooks/post-compact.js, skills/_shared/pm-supervisor-duties.md, skills/workflow-init/SKILL.md, skills/clarify-intent/SKILL.md, skills/resume-session/SKILL.md, skills/session-close/SKILL.md, skills/pm-init/SKILL.md, skills/pm-add/SKILL.md, skills/pm-remove/SKILL.md, skills/_shared/pm-pre-pr-contact.md
+// Tags: TL2, scope:issue-specific, hooks, pm-session, pm-instructions, session-start, post-compact, cli, fail-open, truncation, utf8, pm-field, issue-2942, pm-review
 // #3019: PM supervisor duties are read from one SSOT md and injected by role (PM state; a workflow's owner from the #2942 PM field) at
 // SessionStart / PostCompact and through bin/pm-instructions at the skill-step timings.
 // Dispatch only; the cases live in ./feature-3019-pm-instructions/ (Pattern A).
@@ -22,6 +22,7 @@ const RR = require("./feature-3019-pm-instructions/role-repo-cases");
 const D = require("./feature-3019-pm-instructions/render-cases");
 const L = require("./feature-3019-pm-instructions/cli-cases");
 const H = require("./feature-3019-pm-instructions/hook-cases");
+const PR = require("./feature-3019-pm-instructions/pm-review-cases");
 
 const restore = isolate();
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pm-instr-3019-"));
@@ -121,4 +122,16 @@ caseEnd();
 
 caseBegin("hook-home-repo", "hooks/lib/pm-instructions/inject.js");
 H.hookHomeRepo(S);
+caseEnd();
+
+caseBegin("3144-review-timings-unbundled", "hooks/lib/pm-instructions/sections.js");
+PR.bundle(S);
+caseEnd();
+
+caseBegin("3144-duties-review-request", "skills/_shared/pm-supervisor-duties.md");
+PR.duties();
+caseEnd();
+
+caseBegin("3144-contact-review-request-rr5", "skills/_shared/pm-pre-pr-contact.md");
+PR.contact();
 caseEnd();

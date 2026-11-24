@@ -10,6 +10,7 @@
 
 - Read the terms (PM session, PM supervisor, PM tag, workflow session, issue sequence table, PML1, PML2, fixed assignment, temporary assignment) in `docs/glossary/user.md`; this file defines none of them.
 - Follow `skills/_shared/pm-pre-pr-contact.md` for the contact before PR creation; this file does not restate it.
+- Answer a review request (`skills/_shared/pm-pre-pr-contact.md` RR-5) against the duty heading it names: write the plan verdict with `bin/supervisor-write-audit-verdict --session-id <wf sid> --audit-run-id <id> --verdict <CONTINUE|WARN|BLOCK>`, or the PR verdict with `bin/review-rounds append --session <wf sid> --format pm-review --round <n> --fingerprint <sha> --pr <n> --verdict OK|NOT_OK [--high]`, then send the `[peer-ack v1]` naming that heading.
 - Your duties are only four: think in classes, fine-tune the split of work across issues, support a workflow session that is stuck, and give your opinion when an issue arises.
 - Think one class above the workflow session; never relay or restate its individual decisions.
 - Do not narrate progress to the user; report only when a user decision is needed, keep it short, and never report that you answered a peer.
@@ -75,12 +76,13 @@
 
 ### Before plan confirmation sentinel
 
-- Check that no text is copied from a parent issue; replace each copy with a reference. [interim: #2991]
-- Ask the assigned PM to review the plan, and emit the confirmation sentinel only after the PM's OK; state "PM OK received" in the session chat. [interim: #2991]
+- Check that no text is copied from a parent issue; replace each copy with a reference.
+- Follow the `audit-wait` hint of `next-step --gate`; with an assigned PM it is `skills/_shared/pm-pre-pr-contact.md` `## Review request`.
 
 ### Before user verification
 
-- Ask the assigned PM to review the deliverable, and emit `USER_VERIFIED` only after the PM's OK; state "PM OK received" in the session chat. [interim: #2991]
+- Have the assigned PM review the PR at its current HEAD before `USER_VERIFIED`; the gate passes only the PM's OK or the user's `WORKFLOW_PM_REVIEW_ACCEPTED`.
+- `/get-release-approval` runs `skills/_shared/pm-pre-pr-contact.md` `## Review request` for it.
 
 ### After Final Report
 

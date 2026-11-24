@@ -80,6 +80,33 @@ if (!AUDIT_VERDICT_VALUES.includes(verdict)) {
 
 const summary = args["verdict-summary"] === undefined ? null : args["verdict-summary"];
 
+// #3144 S1-3: a caller whose own session differs from --session-id is the assigned PM writing the
+// verdict of a pre-confirm run (PM route); hooks/lib/pm-review-writer.js re-judges it here so the CLI
+// never trusts the hook alone. No caller session, or the same one, is the supervisor-audit route.
+const callerSid = process.env.CLAUDE_CODE_SESSION_ID || null; // session-id-ssot: waived (cli-entry-point) — the writing session, not the audited one
+const pmRoute = callerSid !== null && callerSid !== sid;
+const PM_REPORTER_RE = /^(pm:|route:|user:pm-review-fallback)/;
+if (pmRoute) {
+  if (!runId) usage("the PM route requires --audit-run-id");
+  const j = require("../hooks/lib/pm-review-writer").judgePmWrite({ callerSid, targetSid: sid, kind: "audit", runId });
+  if (!j.ok) {
+    console.error(`[supervisor-write-audit-verdict] ERROR: the PM verdict is refused (${j.reason})`);
+    console.log(JSON.stringify({ accepted: false, reason: "pm-route-refused", detail: j.reason }));
+    process.exit(1);
+  }
+}
+
+// stampFindings(list) -> the findings with the reporter this route may claim: pm:<caller> on the PM route
+// plus one notice naming the run and the verdict; otherwise any route-shaped reporter is reset (S1-3).
+function stampFindings(list) {
+  if (!pmRoute) return list.map((f) => (typeof f.reporter === "string" && PM_REPORTER_RE.test(f.reporter) ? Object.assign({}, f, { reporter: "supervisor-audit" }) : f));
+  const reporter = `pm:${callerSid}`;
+  return list.map((f) => Object.assign({}, f, { reporter })).concat([{
+    categories: ["workflow"], severity: "notice", reporter,
+    detail: `pm-review verdict ${verdict} on run=${runId} written by the assigned PM session ${callerSid}`,
+  }]);
+}
+
 // #2430: an accepted WARN/BLOCK leaves a handoff breadcrumb (CONTINUE records
 // nothing). A lost breadcrumb never changes the exit code or stdout.
 function breadcrumb() {
@@ -110,7 +137,7 @@ if (!runId) {
   process.exit(ok === true ? 0 : 1);
 }
 
-const findings = args["findings-jsonl"] ? parseFindingsJsonl(args["findings-jsonl"]) : [];
+const findings = stampFindings(args["findings-jsonl"] ? parseFindingsJsonl(args["findings-jsonl"]) : []);
 
 const result = finalizeAuditRun(sid, {
   audit_run_id: runId,
