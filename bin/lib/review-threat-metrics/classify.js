@@ -45,7 +45,7 @@ function callClaude(p) {
   const argv = ["-p", "--output-format", "json", "--model", MODEL,
     "--setting-sources", "project", "--settings", "{\"disableAllHooks\":true}"];
   const r = spawnSync("bash", ["-c", "exec \"$0\" \"$@\"", bin, ...argv],
-    { input: p, env, encoding: "utf8", timeout: 170000, maxBuffer: 64 * 1024 * 1024 });
+    { input: p, env, encoding: "utf8", timeout: 170000, maxBuffer: 64 * 1024 * 1024, windowsHide: true });
   if (r.status !== 0) return null;
   try {
     const o = JSON.parse(r.stdout);

@@ -8,7 +8,7 @@ const { ROOT, bodyOf } = require("./common");
 // gh(args) — runs in this repo, so a {owner}/{repo} endpoint resolves whatever the caller's cwd is.
 function gh(args) {
   const [cmd, a, opts] = buildGhSpawn(["api", ...args]);
-  const r = spawnSync(cmd, a, { ...opts, cwd: ROOT, maxBuffer: 256 * 1024 * 1024 });
+  const r = spawnSync(cmd, a, { ...opts, cwd: ROOT, maxBuffer: 256 * 1024 * 1024, windowsHide: true });
   if (r.status !== 0) throw new Error(`gh api ${args.join(" ")} failed: ${(r.stderr || r.error || "").toString().slice(0, 300)}`);
   return r.stdout || "";
 }
