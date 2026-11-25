@@ -47,7 +47,7 @@ For `gh issue`/`pr` writes, the repo whose visibility governs the scan is the **
 | RFC 1918 IPv4 | `10.x.x.x`, `172.16-31.x.x`, `192.168.x.x` | `192.168.1.1`, `10.0.0.1` |
 | Email addresses | `user@domain.tld` | `user@example.com` |
 | MAC addresses | `XX:XX:XX:XX:XX:XX` / `XX-XX-XX-XX-XX-XX` | `aa:bb:cc:dd:ee:ff` |
-| Absolute local paths | `/Users/<name>`, `/home/<name>`, `C:\Users\<name>` — matched case-insensitively, with `\`, `/`, `¥` or msys `/c/Users/<name>` as the separator | `/Users/john/docs`, `c:/users/john` |
+| Absolute local paths | `/Users/<name>`, `/home/<name>`, `C:\Users\<name>` — the capitalized `Users` form is matched anywhere; other case spellings only at a line start, after a boundary character or a drive marker. Separators: `\`, `/`, `¥` or msys `/c/Users/<name>`; a non-path look-alike such as `api.github.com/users/<name>` is not matched | `/Users/john/docs`, `c:/users/john` |
 | Hard secrets | AWS/Anthropic/OpenAI/GitHub/Slack/Google/HuggingFace/Groq/Replicate/Cohere API keys, PEM private keys | `AKIA...`, `sk-ant-api03-...`, `ghp_...`, `-----BEGIN RSA PRIVATE KEY-----` |
 | Hidden Unicode (Trojan Source) | Zero-width: U+200B, U+200C, U+200D, U+FEFF. Bidi overrides: U+202D, U+202E, U+2066–2069 | CVE-2021-42574 |
 | Blocklist patterns | User-defined in `.private-info-blocklist` (repo root); prefix `warn:` for soft-block | Hostnames, domain names; `warn:` suspicious combinations |
