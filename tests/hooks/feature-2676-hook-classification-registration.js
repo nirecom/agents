@@ -1,7 +1,7 @@
 "use strict";
 // Tests: docs/architecture/claude-code/settings/hook-timeout.md, settings.json, hooks/scan-outbound.js, hooks/workflow-gate.js, hooks/enforce-worktree.js, hooks/confirm-forge-target-ownership.js, hooks/check-cross-platform.js
 // Tags: TL1, TL2, hooks, pretooluse, allow-deny-hook, non-allow-deny-hook, decision-time-limit, settings, docs, scope:issue-specific, subprocess, scan-outbound, workflow-gate, enforce-worktree, settings-registration, block-case-markers
-// Serial: spawns every PreToolUse hook and real git commits; ~100 s alone, exceeds the 180 s file limit under parallel load
+// Serial: spawns every PreToolUse hook and real git commits; ~16 s alone (median of 5), kept serial because it spawns real git commits
 // #2676 / #2540 Step 6 (split from feature-2676-hook-classification.js): scan-outbound and
 // workflow-gate launched by the command string settings.json registers, deciding as before and
 // answering "ask" at a shrunken limit.

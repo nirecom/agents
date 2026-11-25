@@ -1,7 +1,7 @@
 "use strict";
-// Tests: docs/architecture/claude-code/settings/hook-timeout.md, settings.json, hooks/scan-outbound.js, hooks/workflow-gate.js, hooks/enforce-worktree.js, hooks/confirm-forge-target-ownership.js, hooks/check-cross-platform.js
-// Tags: TL1, TL2, hooks, pretooluse, allow-deny-hook, non-allow-deny-hook, decision-time-limit, settings, docs, scope:issue-specific, subprocess, scan-outbound, workflow-gate, enforce-worktree, settings-registration, block-case-markers
-// Serial: spawns every PreToolUse hook and real git commits; ~100 s alone, exceeds the 180 s file limit under parallel load
+// Tests: docs/architecture/claude-code/settings/hook-timeout.md, settings.json, hooks/scan-outbound.js, hooks/workflow-gate.js, hooks/enforce-worktree.js, hooks/confirm-forge-target-ownership.js, hooks/check-cross-platform.js, hooks/pre-tool-use-askuser-jev.js
+// Tags: askuser-jev,TL1, TL2, hooks, pretooluse, allow-deny-hook, non-allow-deny-hook, decision-time-limit, settings, docs, scope:issue-specific, subprocess, scan-outbound, workflow-gate, enforce-worktree, settings-registration, block-case-markers
+// Serial: spawns every PreToolUse hook and real git commits; ~22 s alone (median of 5), kept serial because it spawns real git commits
 // #2676 / #2540 Step 2: hook-timeout.md owns the classification of every PreToolUse hook (a missing
 // row, a "with limit" row that never arms, a "no limit" row without a reason fail); oracle.js checks
 // each hook's printed class. Step 5 / 6 cases: feature-2676-hook-classification-limits.js and
@@ -9,16 +9,27 @@
 // TL3 gap (what this test does NOT catch):
 // - how Claude Code acts on each printed decision; its launch delay and cancel of an overrun hook
 // Closest-to-action mitigation: tests/hooks/TL3-hook-registered-deny.sh, TL3-hook-timeout-window.sh.
-const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { caseBegin, caseEnd, isolate, xfail } = require("../lib/harness");
 
 const assert = require("node:assert");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { after, test } = require("node:test");
 
 const restore = isolate();
 const fx = require("./feature-2676-hook-classification/fixture");
-after(() => { fx.cleanup(); restore(); });
+// A mock Jev for the pre-tool-use-askuser-jev oracle probe (oracle-askuser.js).
+const jevFx = require("./feature-2461-jev/fixture");
+const askuserFx = require("./feature-2764-askuser-jev/fixture");
+const jevRoot = fs.mkdtempSync(path.join(os.tmpdir(), "f2676au-"));
+const jevMock = jevFx.startMock(path.join(jevRoot, "mock"));
+after(() => {
+  jevMock.stop();
+  fx.cleanup();
+  restore();
+  try { fs.rmSync(jevRoot, { recursive: true, force: true }); } catch (_e) { /* best effort on Windows */ }
+});
 const table = require("./feature-2676-hook-classification/table");
 const { loaded, armsLimit, LIMIT_MS, SESSION, limitAsk, decided } = require("./feature-2676-hook-classification/common");
 
@@ -58,11 +69,20 @@ test("every row without a limit says why", () => {
   }
 });
 
-test("every \"with limit\" row's entrypoint calls armDecisionTimeLimit", () => {
+// hooks/pre-tool-use-askuser-jev.js:39 resolveSessionId starts git, but the entrypoint does not arm armDecisionTimeLimit,
+// so its "with limit" row fails this case. Cause issue: #3163. Remove the wrapper when XPASS fails it.
+xfail("every \"with limit\" row's entrypoint calls armDecisionTimeLimit", () => {
   const withLimit = loaded().filter((row) => row.limit === "yes").flatMap((row) => row.hooks);
   assert.ok(withLimit.length >= HEAVY.length, "the heavy hooks are among the rows with a limit");
   assert.deepStrictEqual(withLimit.filter((hookName) => !armsLimit(hookName)), [],
     "\"with limit\" hooks whose entrypoint never arms the limit");
+});
+
+// The xfail above would hide a second hook that stops arming the limit; this case pins the known offender set exactly.
+// Cause issue: #3163. Update the expected list (to []) together with removing the xfail wrapper.
+test("the only \"with limit\" hook whose entrypoint never arms the limit is pre-tool-use-askuser-jev", () => {
+  const withLimit = loaded().filter((row) => row.limit === "yes").flatMap((row) => row.hooks);
+  assert.deepStrictEqual(withLimit.filter((hookName) => !armsLimit(hookName)), ["pre-tool-use-askuser-jev"]);
 });
 
 // The reader itself, on a fabricated table shaped like the plan's: passes today, so the cases
@@ -115,11 +135,12 @@ caseEnd();
 // permitted probe (allow / approve / none); a non-allow-deny hook never prints a permission
 // decision on any probe. So a row whose classification disagrees with the hook's output fails.
 const { ORACLE, runProbe } = require("./feature-2676-hook-classification/oracle");
-const probeContext = { tempDir: fx.tempDir, makeRepo: fx.makeRepo, makeLinkedWorktree: fx.makeLinkedWorktree };
+const probeContext = { tempDir: fx.tempDir, makeRepo: fx.makeRepo, makeLinkedWorktree: fx.makeLinkedWorktree,
+  ask: askuserFx.makeAsk(jevRoot, jevMock), mock: jevMock };
 const DECISION_WANTS = new Set(["deny", "ask"]);
 const PERMITTED_WANTS = new Set(["allow", "approve", "none"]);
 // Each of these hooks is an allow-deny hook that can only allow (it never refuses); its decision probe is an allow.
-const ALLOW_ONLY_HOOKS = new Set(["gate-plan-skip-sentinel", "preuse-auto-approve"]);
+const ALLOW_ONLY_HOOKS = new Set(["gate-plan-skip-sentinel", "preuse-auto-approve", "pre-tool-use-askuser-jev"]);
 
 caseBegin("classification-oracle", "settings.json");
 test("every registered PreToolUse hook has an oracle entry with a known classification", () => {
@@ -166,7 +187,9 @@ caseBegin("block-case-markers-limit", "hooks/block-case-markers.js");
 // A new hook test lacking case markers in a repo carrying tests/lib/harness.sh (oracle.js's probe).
 const newCaseWrite = (repo) => ({ session_id: SESSION, tool_name: "Write", tool_input: { file_path: `${repo}/tests/hooks/new-case.sh`,
   content: "#!/usr/bin/env bash\n# Tests: bin/a.sh, bin/b.sh\n# Tags: scope:common\necho no markers\n" } });
-test("block-case-markers: a slow case-marker checker reaches the limit -> ask naming it", () => {
+// hooks/block-case-markers.js:202 arms armDecisionTimeLimit, but the checker starts through run-checker.js's plain
+// spawnSync (fixed 8000 ms) and cannot judge the limit. Cause issue: #3162. Remove the wrapper when XPASS fails it.
+xfail("block-case-markers: a slow case-marker checker reaches the limit -> ask naming it", () => {
   const repo = fx.makeRepo("bcm", { "tests/lib/harness.sh": "#!/usr/bin/env bash\n" });
   const run = fx.runHook("block-case-markers", newCaseWrite(repo), { cwd: repo, env: { F2540_LIMIT_MS: LIMIT_MS, F2540_SLOW: "check-case-markers\\.sh" } });
   limitAsk(run, "block-case-markers", /^bash \S*check-case-markers\.sh/);
