@@ -14,8 +14,8 @@ const fs = require("fs");
 const path = require("path");
 const { extractJsonObjects } = require(path.join(__dirname, "..", "..", "lib", "last-json-object.js"));
 
-// The grammar the REVIEWER may answer in. Five verdicts, each with one shape.
-const VERDICTS = ["none", "reopen", "sub-of", "make-parent", "sibling"];
+// The grammar the REVIEWER may answer in. Six verdicts, each with one shape.
+const VERDICTS = ["none", "reopen", "sub-of", "make-parent", "sibling", "fix-in-session"];
 // The grammar a survey ARTIFACT may be written in. `bulk-sub-of` is a Phase-4 route
 // (N children under one known parent, --skip-survey) that no reviewer can express and
 // no survey ever proposes — but the artifact still records it, so refusing to parse it
@@ -30,12 +30,13 @@ const SCHEMA_VERSION = 3;
 // SSOT for `same_fix` (does ONE fix resolve both the proposal and the issue the verdict names?):
 // a pure function of the verdict, so both producers copy it rather than re-judge it. Prose twin:
 // skills/_shared/issue-verdict-cascade.md (drift-checked by feat-1912-verdict-criterion-drift.sh).
-// Only `reopen` is true: every parent-attaching verdict names a meta parent that is never
-// implemented against, so attaching resolves nothing (IC-C1 asks the one-fix question first).
+// Only `reopen` and `fix-in-session` are true: every parent-attaching verdict names a meta parent
+// that is never implemented against, so attaching resolves nothing (IC-C1 asks the one-fix question first).
 // Different axis from the confirm gate's G1, which asks how destructive the action is.
 const SAME_FIX_BY_VERDICT = {
   none: false,
   reopen: true,
+  "fix-in-session": true,
   "sub-of": false,
   "bulk-sub-of": false,
   "make-parent": false,
@@ -108,8 +109,10 @@ function validateArtifact(a) {
   if (!Array.isArray(a.candidates)) {
     return { ok: false, reason: "survey artifact candidates must be an array" };
   }
-  if (a.candidates.length > CANDIDATE_MAX) {
-    return { ok: false, reason: "survey artifact carries " + a.candidates.length + " candidates (ceiling is " + CANDIDATE_MAX + ")" };
+  // The closes_issues issues ride outside the search cap (#3145), so only search candidates count.
+  const searchCount = a.candidates.filter((c) => !c || c.closes_session !== true).length;
+  if (searchCount > CANDIDATE_MAX) {
+    return { ok: false, reason: "survey artifact carries " + searchCount + " search candidates (ceiling is " + CANDIDATE_MAX + ")" };
   }
   const seen = new Set();
   for (const c of a.candidates) {
@@ -143,6 +146,9 @@ function validateArtifact(a) {
     }
     if (typeof c.parent_is_meta !== "boolean") return { ok: false, reason: "candidate #" + c.number + ": parent_is_meta must be a boolean" };
     if (typeof c.has_sub_issues !== "boolean") return { ok: false, reason: "candidate #" + c.number + ": has_sub_issues must be a boolean" };
+    if (c.closes_session !== undefined && typeof c.closes_session !== "boolean") {
+      return { ok: false, reason: "candidate #" + c.number + ": closes_session must be a boolean when present" };
+    }
     // `unresolved` means the relation lookup did not answer. Relation facts that
     // arrive anyway are self-contradictory, and reading them would resurrect the
     // exact "unknown treated as known" the cascade forbids.
@@ -282,6 +288,13 @@ function validate(artifact, rawText) {
       if (hasDuplicates(related)) return { ok: false, reason: "sibling: related contains duplicates" };
       if (!related.every(inCand)) return { ok: false, reason: "sibling: related must all be surveyed candidates" };
       if (children.length) return { ok: false, reason: "sibling: children must be empty" };
+      break;
+    case "fix-in-session":
+      // Hands the proposal back to the session whose PR closes the target issue.
+      if (!Number.isInteger(target) || !byNumber.has(target) || byNumber.get(target).closes_session !== true) {
+        return { ok: false, reason: "fix-in-session: target must be a surveyed candidate with closes_session true" };
+      }
+      if (children.length || related.length) return { ok: false, reason: "fix-in-session: children and related must be empty" };
       break;
     default:
       return { ok: false, reason: "unknown verdict" };

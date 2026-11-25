@@ -23,6 +23,7 @@ const {
 const { firstLine, isProtectedBranch, readCheckoutEnv, resolveGateEnv, runGate, runGit, runScript } = require("./gate");
 const { pushToRemote } = require("./push");
 const { resumeFromEmptyStage } = require("./resume");
+const { thisPrGate } = require("./this-pr-gate");
 const { tryWriteLog } = require("../../worker-log");
 
 const MAX_LISTED_FILES = 5;
@@ -102,7 +103,7 @@ function run(payload, ctx) {
       finish,
       probeBootstrap: () => isEmptyRemote(ctx, payload, log),
       pushTail: (prefix) => pushTail(payload, ctx, gateEnv, log, finish, prefix),
-      ensurePr: () => (prPathApplies(payload, ctx, log) ? ensurePullRequest(payload, ctx, log) : null),
+      ensurePr: () => thisPrGate(payload, ctx, log, "pr") || (prPathApplies(payload, ctx, log) ? ensurePullRequest(payload, ctx, log) : null),
     });
   }
 
@@ -183,6 +184,9 @@ function pushTail(payload, ctx, gateEnv, log, finish, resumePrefix) {
   const branch = payload.branch;
   const done = (status, summary) => finish(status, resumePrefix ? `${resumePrefix} — ${summary}` : summary);
   const what = resumePrefix ? "unpushed commit(s) found" : "commit created";
+  // #3145 S7: an unsettled this-pr finding withholds the push (and so the PR) on every route.
+  const held = thisPrGate(payload, ctx, log, "push");
+  if (held) return done(held.status, held.summary);
 
   // Step 5 — an empty remote has no default branch to push against; that
   // bootstrap push belongs to /merge-to-main, not here.

@@ -30,11 +30,10 @@ DISPATCH_NODE="$(node_path "$DISPATCH")"
 # on the lines that already exist, so this number is the assertion, not a note.
 CP2_BASELINE_LINES=120
 
-# The twelve outcomes (up_to_date added by #2527, commit_timeout by #2762) and the class each is recorded
+# The thirteen outcomes (up_to_date added by #2527, commit_timeout by #2762, this_pr_open by #3145) and the class each is recorded
 # under: a blocked run is a D-class "why the session stopped here", a landed push
 # is an E-class artifact the next session can look up.
-OUTCOME_TABLE='
-branch_mismatch blocked
+OUTCOME_TABLE='branch_mismatch blocked
 staging_incomplete blocked
 staging_check_failed blocked
 gate_blocked blocked
@@ -42,6 +41,7 @@ push_failed blocked
 conflict blocked
 bootstrap_pending blocked
 commit_timeout blocked
+this_pr_open blocked
 pushed landed
 pr_created landed
 pr_reused landed

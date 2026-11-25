@@ -171,6 +171,10 @@ const LOOKSLIKE_WORKFLOW_ABORT_ACCEPTED = /^echo "<<WORKFLOW_ABORT_ACCEPTED([: ]
 // (<step> <reason>) and a PR form (PR#<n> <reason>). Human-only via settings.json `ask`.
 const PM_REVIEW_ACCEPTED_RE_DQ = /^echo "<<WORKFLOW_PM_REVIEW_ACCEPTED: (intent|outline|detail|PR#[0-9]+) ([^>]+)>>"$/;
 const PM_REVIEW_ACCEPTED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_PM_REVIEW_ACCEPTED([: ].*)?>>"\s*$/;
+// The user settles one open this-pr finding (#3145): writes `user-accepted: <reason>` on that key.
+// Human-only via settings.json `ask`; the reason excludes shell metacharacters and line breaks.
+const THIS_PR_FINDING_ACCEPTED_RE_DQ = /^echo "<<WORKFLOW_THIS_PR_FINDING_ACCEPTED: key=([0-9a-f]{8}) ([^>()\x60;|&\r\n]+)>>"$/;
+const THIS_PR_FINDING_ACCEPTED_LOOKSLIKE = /^echo "<<WORKFLOW_THIS_PR_FINDING_ACCEPTED([: ].*)?>>"\s*$/;
 
 function isSentinel(cmd) {
   return (
@@ -245,7 +249,8 @@ function isSentinel(cmd) {
     ISSUE_CLOSE_VERIFIED_END_LOOKSLIKE_RE.test(cmd) ||
     RE_WORKFLOW_ABORT_ACCEPTED_DQ.test(cmd) ||
     LOOKSLIKE_WORKFLOW_ABORT_ACCEPTED.test(cmd) ||
-    PM_REVIEW_ACCEPTED_RE_DQ.test(cmd) || PM_REVIEW_ACCEPTED_LOOKSLIKE_RE.test(cmd)
+    PM_REVIEW_ACCEPTED_RE_DQ.test(cmd) || PM_REVIEW_ACCEPTED_LOOKSLIKE_RE.test(cmd) ||
+    THIS_PR_FINDING_ACCEPTED_RE_DQ.test(cmd) || THIS_PR_FINDING_ACCEPTED_LOOKSLIKE.test(cmd)
   );
 }
 
@@ -291,7 +296,8 @@ function isStrictSentinel(cmd) {
     ISSUE_CLOSE_VERIFIED_RE_DQ.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_END_RE_DQ.test(cmd) ||
     RE_WORKFLOW_ABORT_ACCEPTED_DQ.test(cmd) ||
-    PM_REVIEW_ACCEPTED_RE_DQ.test(cmd)
+    PM_REVIEW_ACCEPTED_RE_DQ.test(cmd) ||
+    THIS_PR_FINDING_ACCEPTED_RE_DQ.test(cmd)
   );
 }
 
@@ -370,4 +376,5 @@ module.exports = {
   RE_WORKFLOW_ABORT_ACCEPTED_DQ,
   LOOKSLIKE_WORKFLOW_ABORT_ACCEPTED,
   PM_REVIEW_ACCEPTED_RE_DQ, PM_REVIEW_ACCEPTED_LOOKSLIKE_RE,
+  THIS_PR_FINDING_ACCEPTED_RE_DQ, THIS_PR_FINDING_ACCEPTED_LOOKSLIKE,
 };

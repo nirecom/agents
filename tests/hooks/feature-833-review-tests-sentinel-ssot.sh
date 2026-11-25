@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/lib/sentinel-patterns.js, hooks/workflow-gate/review-tests-evidence.js
-# Tags: workflow, sentinel, ssot, review-tests, token, fingerprint, scope:issue-specific
+# Tags: workflow, sentinel, ssot, review-tests, token, fingerprint, scope:issue-specific, this-pr-finding-accepted
 # SSOT tests for the review_tests sentinel family (#833): regex constants shared by
 # workflow-mark.js and workflow-gate.js, plus review-scope fingerprint computation.
 # Pre-implementation expectation: all tests FAIL until write-code lands.
@@ -381,7 +381,7 @@ assert_eq "T15.isStrictSentinel(reason-with->)" "NO" "$(eval_is_strict 'echo "<<
 MUTATION_PROBE="$SCRIPT_CHECKOUT_ROOT/bin/mutation-probe.sh"
 T17_ROOT="$TMPDIR_BASE/t17-probe"
 mkdir -p "$T17_ROOT/bin" "$T17_ROOT/hooks/lib" && cp "$MUTATION_PROBE" "$T17_ROOT/bin/" && cp "$SENTINEL_PATTERNS" "$T17_ROOT/hooks/lib/"
-printf '%s\n' 'const sp=require(process.argv[2]),q=String.fromCharCode(34);let n=0,bad=0;for(const[k,re]of Object.entries(sp)){const m=/^(.+?)_(RE_DQ|LOOKSLIKE_RE)$/.exec(k)||/^RE_(.+)_(DQ)$/.exec(k)||/^LOOKSLIKE_(.+)$/.exec(k);if(!m||!(re instanceof RegExp))continue;const dq=m[2]==="RE_DQ"||m[2]==="DQ",st=m[1].replace(/^WORKFLOW_/,"").replace(/_RETIRED$/,"").replace(/^RESET_FROM$/,"RESET_FROM_x").replace(/^MARKER$/,"MARK_STEP_x_complete"),p=!dq||/^(CLARIFY_INTENT_COMPLETE|MARK_STEP_)/.test(st)?"":st==="GLOSSARY_ACCEPTED"?": term=t — r":st.startsWith("SUPERVISOR_")?": run-1 r":": r",s="echo "+q+"<<WORKFLOW_"+st+p+">>"+q;n++;if(!re.test(s)||!(dq?sp.isStrictSentinel(s):sp.isSentinel(s))){bad++;console.error("MISS "+k);}}process.exit(n>0&&bad===0?0:1);' > "$T17_ROOT/oracle.js"
+printf '%s\n' 'const sp=require(process.argv[2]),q=String.fromCharCode(34);let n=0,bad=0;for(const[k,re]of Object.entries(sp)){const m=/^(.+?)_(RE_DQ|LOOKSLIKE_RE)$/.exec(k)||/^RE_(.+)_(DQ)$/.exec(k)||/^LOOKSLIKE_(.+)$/.exec(k);if(!m||!(re instanceof RegExp))continue;const dq=m[2]==="RE_DQ"||m[2]==="DQ",st=m[1].replace(/^WORKFLOW_/,"").replace(/_RETIRED$/,"").replace(/^RESET_FROM$/,"RESET_FROM_x").replace(/^MARKER$/,"MARK_STEP_x_complete"),p=!dq||/^(CLARIFY_INTENT_COMPLETE|MARK_STEP_)/.test(st)?"":st==="GLOSSARY_ACCEPTED"?": term=t — r":st==="THIS_PR_FINDING_ACCEPTED"?": key=0a1b2c3d r":st.startsWith("SUPERVISOR_")?": run-1 r":": r",s="echo "+q+"<<WORKFLOW_"+st+p+">>"+q;n++;if(!re.test(s)||!(dq?sp.isStrictSentinel(s):sp.isSentinel(s))){bad++;console.error("MISS "+k);}}process.exit(n>0&&bad===0?0:1);' > "$T17_ROOT/oracle.js"
 t17_cmd="node $(printf '%q' "$T17_ROOT/oracle.js") $(printf '%q' "$T17_ROOT/hooks/lib/sentinel-patterns.js")"
 t17_real_before=$(cksum < "$SENTINEL_PATTERNS")
 oracle_out=$(bash -c "$t17_cmd" 2>&1); oracle_rc=$?

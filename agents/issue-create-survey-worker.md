@@ -1,6 +1,6 @@
 ---
 name: issue-create-survey-worker
-description: 3-pass GitHub issue dedupe survey. Classifies verdict (none/reopen/sub-of/make-parent/sibling) and writes a JSON artifact. Read-only — no issue creation, no comments.
+description: 3-pass GitHub issue dedupe survey. Classifies verdict (none/reopen/sub-of/make-parent/sibling/fix-in-session) and writes a JSON artifact. Read-only — no issue creation, no comments.
 tools: Bash, Read, Write
 model: sonnet
 ---
@@ -15,6 +15,7 @@ Receive a JSON object with:
 - `background`: issue background text
 - `changes`: description of changes
 - `severity`, `body` (optional): the claimed severity and the full issue body; copy them into `proposal` verbatim and never use them for the verdict.
+- `closes_issues` (optional): the issue numbers the calling session's PR closes.
 - `agents_main_root`: absolute path to the agents main worktree
 - `artifact_dir`: absolute path to `PLANS_DIR` resolved by the caller via `bin/workflow-plans-dir`; write all output files here
 - `dispatch_directive` (optional): a directive from the dispatcher — follow it; your Output contract still fixes the reply.
@@ -28,9 +29,10 @@ Receive a JSON object with:
    - Pass 2 — recent-open: `gh issue list --state open --paginate --search "created:>=<date-30-days-ago>"` and `gh issue list --state open --limit 50 --search "<st1> <st2> <st3>"`. Deduplicate against Pass 1.
    - Pass 3 — closed: `gh issue list --state closed --limit 50 --search "<kw1> <kw2> <kw3>"` and `gh issue list --state closed --limit 50 --search "<st1> <st2> <st3>"`.
 
-   Zero results across all three passes → `status: no_candidates`.
+   Zero results across all three passes and no `closes_issues` → `status: no_candidates`.
 
 3. Deduplicate candidates across passes; inspect up to 25 unique candidates via `gh issue view <N> --json number,title,body,state,labels`.
+   Inspect every `closes_issues` issue the same way, outside the 25 search slots, and set `closes_session: true` on it (a search hit that is also a `closes_issues` issue counts once, as `closes_session: true`).
 
 4. Run `bash "$agents_main_root/bin/github-issues/candidate-relations.sh" <owner/repo> <N,M,...>` once; keep its stdout array and its exit code (0 → `batched`, 3 → `partial`, 4 → `unavailable`).
 
@@ -39,8 +41,8 @@ Receive a JSON object with:
    Take `same_fix` from that file's `same_fix` table — it is fixed by the verdict, never judged separately.
 
 6. Write verdict JSON (schema v3) to `$artifact_dir/<session_id or timestamp>-issue-create-survey.json`. Every key below is always present — never omit a key, write the default instead (`target`: `null`; `children` / `related` / `relation_errors`: `[]`).
-   `{ "schema_version": 3, "proposal": { "title": "...", "background": "...", "changes": "..." }, "verdict": "none|reopen|sub-of|make-parent|sibling", "same_fix": true_or_false, "target": null_or_integer, "children": [], "related": [], "reason": "<one sentence>", "relations_mode": "batched|partial|unavailable", "relation_errors": [], "candidates": [ { "number": N, "title": "...", "state": "open|closed", "labels": [], "body": "...", "relation_status": "resolved|unresolved", "parent_number": null_or_integer, "parent_is_meta": false, "has_sub_issues": false } ] }`
-   `proposal` carries the Input contract values verbatim, plus `severity` / `body` when given. `target` is a candidate number, or a candidate's parent number for IC-C2. `relation_errors` lists the unresolved candidate numbers. `candidates` lists all issues inspected (up to 25) merged with the relation array from step 4.
+   `{ "schema_version": 3, "proposal": { "title": "...", "background": "...", "changes": "..." }, "verdict": "none|reopen|sub-of|make-parent|sibling|fix-in-session", "same_fix": true_or_false, "target": null_or_integer, "children": [], "related": [], "reason": "<one sentence>", "relations_mode": "batched|partial|unavailable", "relation_errors": [], "candidates": [ { "number": N, "title": "...", "state": "open|closed", "labels": [], "body": "...", "relation_status": "resolved|unresolved", "parent_number": null_or_integer, "parent_is_meta": false, "has_sub_issues": false, "closes_session": false } ] }`
+   `proposal` carries the Input contract values verbatim, plus `severity` / `body` when given. `target` is a candidate number, or a candidate's parent number for IC-C2. `relation_errors` lists the unresolved candidate numbers. `candidates` lists all issues inspected (up to 25 search candidates plus every `closes_issues` issue) merged with the relation array from step 4.
    Lowercase each candidate's `state` — `gh` returns `OPEN`/`CLOSED`, the canonical form is `open`/`closed`.
 
 7. Immediately restrict the file to its owner: `chmod 600 <artifact_path>` (failure is non-fatal). It holds full issue bodies from a possibly private repo, in a directory shared by every session.

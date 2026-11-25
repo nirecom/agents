@@ -29,6 +29,7 @@ On `staging_incomplete` or `staging_check_failed`: surface summary + artifact_pa
 On `commit_timeout`: the worker stopped git commit at its time limit; the summary states what it found afterwards (HEAD unchanged / advanced / unknown, index.lock left or not) — report that, never assume nothing was committed. Surface summary + artifact_path, record blocked, and stop. Never delete index.lock yourself.
 On `gate_blocked`: surface the summary verbatim, record blocked, complete the workflow step it names, and re-run the caller. Never retry by another route.
 On `push_failed` or `conflict`: surface summary + artifact_path, record blocked, and stop.
+On `this_pr_open`: the summary states what is already pushed; surface it verbatim (it lists the exits per key), record blocked, and stop without completing `<STEP>`.
 On `bootstrap_pending` (the remote has no default branch): nothing was pushed; record blocked; the caller's own step decides what follows.
 On `pushed` (no PR — direct path or a non-GitHub/GitLab remote): report the branch and record landed.
 On `pr_created` or `pr_reused`: extract the PR URL from the summary and record landed.

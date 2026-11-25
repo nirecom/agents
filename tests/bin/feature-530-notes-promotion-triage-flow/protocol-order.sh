@@ -115,14 +115,14 @@ o1_call_sequence() {
     protocol_pass "$dir/WORKTREE_NOTES.md" "$notes" 1
 
     ops="$(trace_ops)"
-    # list, the hand-off, the notice, the HIGH pair, the final-list ask, the one picked pair, two discards,
-    # then the declined finalList entry.
-    local want="list handoff notice create annotate ask create annotate dispose dispose dispose"
+    # list, the hand-off, the notice, the HIGH pair, the final-list ask, the one picked pair, four discards
+    # (LOW / not-defect on either scope, #3145), then the two declined finalList entries.
+    local want="list handoff notice create annotate ask create annotate dispose dispose dispose dispose dispose dispose"
     [ "$ops" = "$want" ] || missing="$missing sequence=[$ops]"
-    # Only the HIGH entry and the user's pick reach /issue-create; LOW / not-defect / this-pr never do.
+    # Only the HIGH entry and the user's pick reach /issue-create; LOW / not-defect and declined entries never do.
     [ "$(grep '^create|' "$TRACE" | sed 's/^create|[0-9]*|--title //' | tr '\n' ';')" = 'crash on save;slow index rebuild;' ] \
         || missing="$missing created=[$(grep '^create|' "$TRACE" | tr '\n' ';')]"
-    grep -q '^ask|2$' "$TRACE" || missing="$missing finalList-prompt-missing-both-entries"
+    grep -q '^ask|3$' "$TRACE" || missing="$missing finalList-prompt-missing-all-three-entries"
     grep 'maybe cache lookups' "$dir/WORKTREE_NOTES.md" | grep -q '<!-- disposed: discard -->' \
         || missing="$missing declined-entry-unmarked"
 
@@ -151,7 +151,7 @@ o1_call_sequence() {
     fi
 
     if [ -z "$missing" ]; then
-        pass "O1: the traced pass runs list → handoff → notice → HIGH create/annotate → ask → picked create/annotate → dispose×3 (discard + declined), filing no LOW / not-defect entry"
+        pass "O1: the traced pass runs list → handoff → notice → HIGH create/annotate → ask → picked create/annotate → dispose×6 (4 discard + 2 declined), filing no LOW / not-defect entry"
     else
         fail "O1: protocol call order wrong" "$missing (trace=$(tr '\n' ';' < "$TRACE"))"
     fi

@@ -74,6 +74,18 @@ function isMainWorktree(notesDir) {
   return path.resolve(notesDir) === path.resolve(targetMainRoot);
 }
 
+// HEAD at authoring time: the base point a this-pr `disposed: fixed` is verified against (#3145 S10).
+// null when git fails, so the entry is written without base and verification uses the merge-base.
+function headSha(notesDir) {
+  try {
+    const r = spawnSync("git", ["-C", notesDir, "rev-parse", "HEAD"], { encoding: "utf8", windowsHide: true, timeout: 5000 });
+    const sha = String((r && r.stdout) || "").trim();
+    return r && r.status === 0 && /^[0-9a-f]{40}$/.test(sha) ? sha : null;
+  } catch {
+    return null;
+  }
+}
+
 function targetSectionForLabels(labels) {
   for (const l of labels) {
     if (l === "type:incident") return "BugsFound";
@@ -233,6 +245,11 @@ function main() {
     : bodyAlreadyPresent(text, section, title);
   if (text.length > 0 && present) {
     return 0;
+  }
+
+  if (triage !== null && triage.prScope === "this-pr") {
+    const base = headSha(path.dirname(resolved));
+    if (base !== null) triage.base = base;
   }
 
   const eol = detectEol(text);
