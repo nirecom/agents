@@ -1,7 +1,7 @@
 "use strict";
 // tests/lib/plan-sync-turn-fixture.js
 // Tests: tests/lib/plan-sync-turn-fixture.js
-// Tags: scope:issue-specific, shared-lib, plan-sync, fixture, turn-commit
+// Tags: scope:issue-specific, shared-lib, plan-sync, fixture, turn-commit, scan-outbound
 // #2768 shared scaffolding for tests/hooks/feature-2768-*: one temp root, isolated git config, empty
 // AGENTS_MAIN_ROOT and transcript base, neutral cwd, a `code` stub, and tests/lib/git-ssh-stub.sh as the
 // ssh command, logging each call and serving a local bare repo (no network). Fixture facts are
@@ -87,7 +87,16 @@ const newTurn = (sid) => ({ sid, turnId: crypto.randomBytes(16).toString("hex") 
 const planName = (sid, stage) => `${sid}-${stage}.md`;
 
 function ps() { return require(path.join(ROOT, "hooks", "lib", "plan-sync")); }
-const allowLocal = { isAllowedRemoteUrl: (u) => ps().isAllowedRemoteUrl(u) || path.isAbsolute(u) };
+// #3150: every in-process sync scans with a scanner copy outside git that reads a clean synthetic
+// list, never the real lists; PSF_SCAN_ENTRY names another copy (as in tests/lib/plan-sync-fixture.sh).
+const SCAN = require("../bin/feature-2507-scan-outbound-node/sandbox");
+const SCAN_BOX = SCAN.createSandbox();
+SCAN.setLists(SCAN_BOX, { blocklist: "f3150-fixture-never-present-token\n", allowlist: null });
+const scanEntry = process.env.PSF_SCAN_ENTRY || path.join(SCAN_BOX, "bin", "scan-outbound.sh");
+const allowLocal = { isAllowedRemoteUrl: (u) => ps().isAllowedRemoteUrl(u) || path.isAbsolute(u), scanEntry };
+// A child-process hook (runNode / hookWrite) gets no deps.scanEntry; this preload (see its header) points its gate at SCAN_BOX.
+process.env.PS_SCAN_BOX = SCAN_BOX;
+process.env.NODE_OPTIONS = `--require "${slash(path.join(ROOT, "tests", "lib", "plan-sync-scan-preload.js"))}"`;
 
 // A git project whose origin is on <host>: the project-host record of a plan written for it.
 const projects = {};
@@ -276,7 +285,7 @@ function guard(name, fn) {
 }
 function finish() {
   console.log(failures === 0 ? `ALL PASS (${passes})` : `${failures} FAILED, ${passes} passed`);
-  try { process.chdir(os.tmpdir()); fs.rmSync(TMP, { recursive: true, force: true }); } catch (_) { /* best effort */ }
+  try { process.chdir(os.tmpdir()); fs.rmSync(TMP, { recursive: true, force: true }); SCAN.removeSandbox(SCAN_BOX); } catch (_) { /* best effort */ }
 }
 const failureCount = () => failures;
 

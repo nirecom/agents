@@ -19,6 +19,7 @@ const { extractAssembleDest } = require("./lib/assemble-cmd-parse");
 const { isEditWriteTool, isCommandTool, collectEditWritePaths, commandListOf } = require("./lib/write-tools");
 
 const { readHookInput } = require("./lib/read-stdin");
+const { scanLines, scanNote } = require("./show-plan-link/scan-breadcrumb");
 
 const RUN_HINT = 'node "$AGENTS_MAIN_ROOT/bin/plan-sync-init"';
 // One budget per invocation, kept below the 30 s hook timeout in settings.json.
@@ -54,7 +55,9 @@ function formatBreadcrumb(result, absPath) {
   const r = result || {};
   if (r.status === "pushed" && r.url) return `[plan-file] ${r.url}`;
   const lines = [`[plan-file] ${absPath}`];
-  if (r.status === "pushed") lines.push("[plan-sync] pushed no-blob-url");
+  const scan = scanLines(r, absPath);
+  if (scan) lines.push(...scan);
+  else if (r.status === "pushed") lines.push("[plan-sync] pushed no-blob-url");
   else if (r.status === "off") lines.push("[plan-sync] off PLAN_SYNC_REMOTE_URL=");
   else if (r.status === "not-provisioned" || r.status === "failed") {
     lines.push(`[plan-sync] ${r.reason || r.status} ${RUN_HINT}`);
@@ -283,7 +286,8 @@ function emitForArtifacts(filePaths, input, opts) {
     const { renderModelContext } = require("./lib/plan-link");
     const { withConvLang } = require("./lib/conv-lang");
     const notes = runs.map((r) => explanationKey(r.result))
-      .filter((k) => Object.prototype.hasOwnProperty.call(EXPLANATIONS, k)).map((k) => EXPLANATIONS[k]);
+      .filter((k) => Object.prototype.hasOwnProperty.call(EXPLANATIONS, k)).map((k) => EXPLANATIONS[k])
+      .concat(runs.map((r) => scanNote(r.result, r.absPath)).filter(Boolean));
     const deadline = start + budgetMs;
     let sid = null;
     try { sid = sessionOf(input || {}); } catch (_) { sid = null; }

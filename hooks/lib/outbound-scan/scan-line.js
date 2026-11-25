@@ -25,12 +25,34 @@ const IPV4 = [
 const EMAIL = builtin(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+${BS}.[a-zA-Z]{2,}`);
 const MAC = builtin("([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}");
 const NAME = "[a-zA-Z][a-zA-Z0-9_.-]*";
-const PATHS = [
-  `${SL}Users${SL}${NAME}`,
-  `${SL}home${SL}${NAME}`,
-  `[A-Z]:${BS}${BS}Users${BS}${BS}${NAME}`,
-  `[A-Z]:${SL}Users${SL}${NAME}`,
-].map(builtin);
+const YEN = String.fromCharCode(0xa5);
+const SEP = `(${SL}|${BS}${BS}|${YEN})`;
+const BACK_SEP = `(${BS}${BS}|${YEN})`;
+// users: a drive form ("C:" + backslash / yen) or a drive-less form; home: slash only, any case.
+const USERS_PATH = builtin(`([A-Za-z]:${BACK_SEP}+|${SEP}+)[Uu][Ss][Ee][Rr][Ss]${SEP}+${NAME}`);
+const HOME_PATH = builtin(`${SL}[Hh][Oo][Mm][Ee]${SL}${NAME}`);
+const BOUNDARY = new Set([" ", "\t", '"', "'", "=", "("]);
+const isLetter = (c) => c !== undefined && /^[A-Za-z]$/.test(c);
+
+// A drive-less users match counts only after line start, a boundary char, or a drive marker
+// ("C:" or msys "/c"), so URL and API paths such as host/users/<name> stay clean.
+function atBoundary(s, i) {
+  if (i === 0 || isLetter(s[i]) || BOUNDARY.has(s[i - 1])) return true;
+  const prev = s[i - 1];
+  const prev2 = s[i - 2];
+  return (prev === ":" && isLetter(prev2)) || (isLetter(prev) && prev2 === SL);
+}
+
+function usersPath(line) {
+  for (let from = 0; from < line.length;) {
+    const m = leftmostLongest(USERS_PATH, line.slice(from));
+    if (!m) return null;
+    const at = from + m.index;
+    if (atBoundary(line, at)) return m.text;
+    from = at + 1;
+  }
+  return null;
+}
 const LINUXBREW = builtin(["", "home", "linuxbrew"].join(SL));
 const MSYS = builtin(`(^|[^[:alnum:]_${SL}])${SL}[a-z]${SL}[[:alnum:]_.-]`);
 const WSL = builtin(`(^|[^[:alnum:]_${SL}])${SL}mnt${SL}[a-z]${SL}[[:alnum:]_.-]`);
@@ -102,11 +124,8 @@ function compileScanner(lists, hardSecrets) {
     if (email !== null) report("email", "builtin", email, email);
     const mac = longest(MAC, line);
     if (mac !== null) report("MAC", "builtin", mac, mac);
-    const pathRe = PATHS.find((re) => re.test(line));
-    if (pathRe && !LINUXBREW.test(line)) {
-      const p = longest(pathRe, line);
-      report("path", "builtin", p, p);
-    }
+    const p = LINUXBREW.test(line) ? null : usersPath(line) ?? longest(HOME_PATH, line);
+    if (p !== null) report("path", "builtin", p, p);
     const drive = stripPlaceholders(line);
     const msys = longest(MSYS, drive);
     if (msys !== null) report("msys-path", "builtin", msys, line);

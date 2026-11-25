@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2513-plan-sync-lib.sh
 # Tests: hooks/lib/plan-sync.js, hooks/lib/plans-artifact-registry.js
-# Tags: plan-sync, plans, git, lib, registry, TL2, scope:issue-specific, flow, provision, non-ff, visibility, gh-stub, symlink, security, hardlink, toctou, stale-tip, gitlab, host-equivalence
+# Tags: plan-sync, plans, git, lib, registry, TL2, scope:issue-specific, flow, provision, non-ff, visibility, gh-stub, symlink, security, hardlink, toctou, stale-tip, gitlab, host-equivalence, scan-outbound
 # #2513 plan-sync lib unit tests (detail.md S1-6): URL helpers, allowlist, .gitignore,
 # registry contract, checkProvisioned verdicts, syncPlanFile non-push statuses, provision /
 # sync / non-ff / visibility / non-regular-target / stale-tip flows.
@@ -24,6 +24,10 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 psf_setup || { fail "setup" "psf_setup failed"; exit 1; }
 psf_tag_unimplemented_fails
 trap psf_cleanup EXIT
+# Every in-process sync scans with a clean synthetic-list scanner copy, never the real lists (#3150).
+export PSF_SCAN_ENTRY
+PSF_SCAN_ENTRY="$(psf_scan_sandbox "$PSF_ROOT/scan-clean" "f3150-fixture-never-present-token")" \
+  || { fail "setup" "psf_scan_sandbox failed"; exit 1; }
 PLANS="$WORKFLOW_PLANS_DIR"
 URL_TABLE="$(psf_np "$SCRIPT_CHECKOUT_ROOT/tests/fixtures/session-sync-remote-url-table.txt")"
 
