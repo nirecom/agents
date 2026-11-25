@@ -324,3 +324,7 @@ Changes: Plan-stage pre-confirm audit and the pre-release review are routed to t
 ### FEATURE: PR #3154 (2026-11-25)
 Background: fix(#3151): refuse the diverged-main merge shortcut when the remote h...
 Changes: Recovery of a diverged main worktree now refuses the merge shortcut when the remote history was force-updated, and points to rebase --onto instead.
+
+### FEATURE: PR #3156 (2026-11-25)
+Background: fix(#3147): judge a git write redirected by --git-dir/--work-tree/GIT...
+Changes: Fixed: enforce-worktree no longer lets a linked worktree write to the main repo by redirecting git with `--git-dir`, `--work-tree`, `-c core.worktree`, `--config-env`, or `GIT_DIR` / `GIT_WORK_TREE`; unresolvable redirects are blocked.
