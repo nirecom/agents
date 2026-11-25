@@ -113,7 +113,7 @@ function parseGitGlobalOptions(command) {
  * value unresolvable). gitArgv MUST be the token array after cmd0 (excludes "git").
  */
 function extractGitScopeFlagsFromArgv(gitArgv) {
-  const result = { workTree: null, cIn: null, gitDir: null, sawScopeFlag: false };
+  const result = { workTree: null, cIn: null, gitDir: null, sawScopeFlag: false, cList: [], worktreeConfig: null };
   if (!Array.isArray(gitArgv)) return result;
   let i = 0;
   while (i < gitArgv.length) {
@@ -137,10 +137,23 @@ function extractGitScopeFlagsFromArgv(gitArgv) {
       i += 1;
     }
     if (key === "--work-tree") { result.workTree = value; result.sawScopeFlag = true; }
-    else if (key === "-C") { result.cIn = value; result.sawScopeFlag = true; }
+    else if (key === "-C") { result.cIn = value; result.sawScopeFlag = true; result.cList.push(value); }
     else if (key === "--git-dir") { result.gitDir = value; result.sawScopeFlag = true; }
+    else if (key === "-c" || key === "--config-env") {
+      const wc = worktreeConfigOf(key, value);
+      if (wc) result.worktreeConfig = wc;
+    }
   }
   return result;
+}
+
+// `-c` splits at the first `=` (config keys hold none); `--config-env` at the last, as git does.
+function worktreeConfigOf(key, value) {
+  if (typeof value !== "string") return null;
+  const eq = key === "-c" ? value.indexOf("=") : value.lastIndexOf("=");
+  if (eq <= 0 || value.slice(0, eq).toLowerCase() !== "core.worktree") return null;
+  const rhs = value.slice(eq + 1);
+  return key === "-c" ? { form: "c", value: rhs } : { form: "config-env", envvar: rhs };
 }
 
 /**
