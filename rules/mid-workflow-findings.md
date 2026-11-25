@@ -11,10 +11,13 @@ When you discover a bug unrelated to the current task, a related follow-up, or a
 Capture the finding at once in `<worktree>/WORKTREE_NOTES.md`; a finding that exists only in this session's context is lost when the session ends.
 Whether it is filed is decided by the triage rules (`skills/_shared/notes-promotion.md`), not by you at capture time.
 
-Give every finding exactly one of three dispositions:
-- fix in this PR — after the fixing commit, record `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-triage.js" dispose "<worktree>/WORKTREE_NOTES.md" <lineNumber> fixed`;
-- Known limits — an unfixed `this-pr` finding goes to the PR body's `## Known limits` at promotion;
+Give every finding exactly one of two dispositions:
+- fix in this PR — record it with `--pr-scope this-pr --loc "<path:line>"`, change that file, then `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-triage.js" dispose "<worktree>/WORKTREE_NOTES.md" key=<key> fixed`;
 - file — an `other` finding is filed by the promotion rules; implement it in a separate session via `/workflow-init <N>`.
+
+An unsettled `this-pr` finding blocks `write_code` completion, push, and release until one of three exits settles it.
+Exits: fix it as above; `T rescope "<notes>" key=<key>` then `/issue-create --finding-key <key>`; or the sentinel `echo "<<WORKFLOW_THIS_PR_FINDING_ACCEPTED: key=<key> <reason>>>"`.
+`T` is `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-triage.js"`; the refusal message lists each open key with its exits.
 
 Mid-workflow issues are NOT added to the current session's `closes_issues` (1 session = 1 issue).
 A finding that blocks the current work: ask the user with AskUserQuestion, dialog `mid-workflow-findings.blocking-file`, then run `/issue-create` from the linked worktree on approval.

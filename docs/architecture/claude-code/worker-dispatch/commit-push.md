@@ -19,6 +19,7 @@ child-process contract (`envScope`, `input`, anchors) lives in
 | `commit-push/push.js` | step 7 — push attempts and the rebase ladder |
 | `commit-push/pr.js` | step 9 — the idempotent PR step and the outbound scan |
 | `commit-push/commit-timeout.js` | step 4 — the commit timeout limit and the `commit_timeout` report |
+| `commit-push/this-pr-gate.js` | before step 5 — the `this_pr_open` hold on push and PR |
 
 ## The ten steps
 
@@ -46,6 +47,14 @@ commit and push THIS worktree's staged changes under another branch's name, or
 claim a safe name while the checkout is on `main` and walk past
 `isProtectedBranch()` entirely. A probe that cannot answer is a mismatch, not a
 pass — this runs before the first mutation, so failing closed costs nothing.
+
+Between steps 4 and 5 the worker holds the push, and so the PR, while
+`WORKTREE_NOTES.md` at `worktree_path` carries an unsettled this-pr finding
+(#3145): it reports `this_pr_open` and the commit stays local. A this-pr finding
+belongs to this PR, so a reviewer must never see the PR without its fix. The
+empty-stage resume with nothing left to push meets the same hold before the PR
+step. The hold fails closed: an unusable `worktree_path` or unreadable notes
+also hold, because an unread notes file cannot prove there is nothing open.
 
 Step 10 is best-effort in the other direction: a refused log write must not turn
 a completed push into a reported failure. `fsguard` routes the bytes through

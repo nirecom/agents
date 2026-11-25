@@ -2,8 +2,8 @@
 // tests/bin/feature-2019-finding-rules-triage.js
 // Tests: bin/lib/finding-rules.js, bin/worktree-notes-triage.js
 // Tags: TL2, bin, worktree-notes, triage, finding-rules, classify, handoff, dispose, final-list, overflow, fail-closed, table-driven, scope:issue-specific, pwsh-not-required
-// #2019 S3: classify() turns every rule-table row into auto-high / final-list / dispose-in-pr /
-// discard / test-failure-handoff; `list` groups the undisposed entries (finalList sorted by loc,
+// #2019 S3: classify() turns every rule-table row into auto-high / final-list / discard /
+// test-failure-handoff (#3145 dropped dispose-in-pr; pr-scope no longer classifies); `list` groups the undisposed entries (finalList sorted by loc,
 // loc-less last, 16 + overflow, `{}` when nothing is pending); `handoff` runs the #2488 receiver
 // contract (accepted / missing / failed / rejected); `dispose` writes the terminal marker once.
 // Assumption: the receiver path is overridable through FINDING_HANDOFF_BIN and is run as `node <bin> <json-path>`.
@@ -44,6 +44,20 @@ function notesFile(lines) {
   fs.writeFileSync(p, `# Worktree Notes\n\n${lines.join("\n")}\n`);
   return p;
 }
+// gitNotesFile(lines): notes at the root of a temp git repo on `main` with one untracked change,
+// so a loc-less this-pr `dispose fixed` passes the #3145 fixed-evidence check (merge-base fallback).
+function gitNotesFile(lines) {
+  const p = notesFile(lines);
+  const dir = path.dirname(p);
+  const g = (args) => spawnSync("git", ["-C", dir, ...args], { encoding: "utf8", timeout: 30000 });
+  g(["init", "-q", "-b", "main"]);
+  g(["config", "core.hooksPath", "/dev/null"]);
+  fs.writeFileSync(path.join(dir, "README"), "base\n");
+  g(["add", "README"]);
+  g(["-c", "user.email=t@example.com", "-c", "user.name=t", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "base"]);
+  fs.writeFileSync(path.join(dir, "changed.js"), "fix\n");
+  return p;
+}
 function triage(args, handoffBin) {
   const env = Object.assign({}, process.env, { FINDING_HANDOFF_BIN: handoffBin || MISSING_BIN });
   delete env.CLAUDE_CODE_SESSION_ID;
@@ -64,11 +78,11 @@ test("classify-rule-table: every row of the intent's rule table", () => {
     ["HIGH this-pr, no instance", { severity: "high", prScope: "this-pr" }, false, "auto-high"],
     ["MEDIUM + instance, other", { severity: "medium", instance: "i", prScope: "other" }, false, "final-list"],
     ["MEDIUM + instance, this-pr", { severity: "medium", instance: "i", prScope: "this-pr" }, false, "final-list"],
-    ["MEDIUM no instance, this-pr", { severity: "medium", prScope: "this-pr" }, false, "dispose-in-pr"],
+    ["MEDIUM no instance, this-pr", { severity: "medium", prScope: "this-pr" }, false, "final-list"],
     ["MEDIUM no instance, other", { severity: "medium", prScope: "other" }, false, "final-list"],
-    ["LOW this-pr", { severity: "low", prScope: "this-pr" }, false, "dispose-in-pr"],
+    ["LOW this-pr", { severity: "low", prScope: "this-pr" }, false, "discard"],
     ["LOW other", { severity: "low", prScope: "other" }, false, "discard"],
-    ["not-defect this-pr", { severity: "not-defect", prScope: "this-pr" }, false, "dispose-in-pr"],
+    ["not-defect this-pr", { severity: "not-defect", prScope: "this-pr" }, false, "discard"],
     ["not-defect other", { severity: "not-defect", prScope: "other" }, false, "discard"],
     ["test-failure + receiver", { severity: "medium", instance: "i", testFailure: true, prScope: "other" }, true, "test-failure-handoff"],
     ["test-failure HIGH + receiver", { severity: "high", instance: "i", testFailure: true, prScope: "other" }, true, "test-failure-handoff"],
@@ -102,13 +116,13 @@ test("list-groups-and-shape: six groups, element fields, terminal entries exclud
   const r = triage(["list", p]);
   assert.strictEqual(r.status, 0, r.stderr);
   const out = JSON.parse(r.stdout);
-  for (const k of ["autoHigh", "finalList", "overflow", "disposeInPr", "discard", "testFailureHandoff"]) assert.ok(Array.isArray(out[k]), `${k} is an array`);
+  for (const k of ["autoHigh", "finalList", "overflow", "discard", "testFailureHandoff"]) assert.ok(Array.isArray(out[k]), `${k} is an array`);
+  assert.ok(!("disposeInPr" in out), "no disposeInPr group (#3145)");
   const bodies = (k) => out[k].map((e) => e.body);
   assert.deepStrictEqual(bodies("autoHigh"), ["High one"], "autoHigh");
-  assert.deepStrictEqual(bodies("disposeInPr"), ["Fix here"], "disposeInPr");
   assert.deepStrictEqual(bodies("discard"), ["Drop me"], "discard");
   assert.deepStrictEqual(bodies("testFailureHandoff"), [], "no receiver -> testFailureHandoff empty");
-  assert.deepStrictEqual(bodies("finalList").sort(), ["Flaky", "Pick me", "Weird one"], "finalList (unknown severity reads MEDIUM, no instance, other)");
+  assert.deepStrictEqual(bodies("finalList").sort(), ["Fix here", "Flaky", "Pick me", "Weird one"], "finalList (MEDIUM this-pr and unknown severity read final-list)");
   const all = Object.values(out).flat().map((e) => e.body);
   assert.ok(!all.includes("Done") && !all.includes("Filed"), "disposed and promoted entries are excluded");
   const pick = out.finalList.find((e) => e.body === "Pick me");
@@ -195,8 +209,8 @@ caseEnd();
 
 caseBegin("dispose-terminal-marker", "bin/worktree-notes-triage.js");
 test("dispose-terminal-marker: write once, re-run no-op, never on a promoted entry", () => {
-  for (const kind of ["fixed", "known-limits", "discard"]) {
-    const p = notesFile(["## BugsFound", line("D", { sev: "low", scope: "this-pr" })]);
+  for (const kind of ["fixed", "discard"]) {
+    const p = gitNotesFile(["## BugsFound", line("D", { sev: "low", scope: "this-pr" })]);
     const n = String(lineNo(p, "D"));
     assert.strictEqual(triage(["dispose", p, n, kind]).status, 0, `${kind}: exit 0`);
     assert.ok(rawLine(p, "D").endsWith(` <!-- disposed: ${kind} -->`), `${kind}: terminal marker at the end`);
@@ -213,6 +227,7 @@ test("dispose-terminal-marker: write once, re-run no-op, never on a promoted ent
   const qBefore = fs.readFileSync(q, "utf8");
   assert.notStrictEqual(triage(["dispose", q, String(lineNo(q, "Q")), "handed-off"]).status, 0, "handed-off is not a dispose kind");
   assert.notStrictEqual(triage(["dispose", q, String(lineNo(q, "Q")), "bogus"]).status, 0, "unknown kind refused");
+  assert.notStrictEqual(triage(["dispose", q, String(lineNo(q, "Q")), "known-limits"]).status, 0, "known-limits is no longer a dispose kind (#3145)");
   assert.strictEqual(fs.readFileSync(q, "utf8"), qBefore, "a refused dispose writes nothing");
 });
 caseEnd();

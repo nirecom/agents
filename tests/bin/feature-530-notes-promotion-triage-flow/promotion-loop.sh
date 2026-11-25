@@ -48,7 +48,7 @@ l1_full_loop() {
     out="$(FINDING_HANDOFF_BIN="$HANDOFF_OK" run_with_timeout 30 node "$TRIAGE_BIN" list "$notes" 2>/dev/null)"
     got="$(json_groups "$out")"
     # (a) one entry per class lands in its group; finalList is loc-sorted, the loc-less entry last.
-    [ "$got" = 'autoHigh=crash on save;finalList=slow index rebuild|maybe cache lookups;overflow=;disposeInPr=intended behaviour|rename helper|tidy log wording;discard=style preference|typo in comment;testFailureHandoff=flaky parser test' ] \
+    [ "$got" = 'autoHigh=crash on save;finalList=slow index rebuild|rename helper|maybe cache lookups;overflow=;discard=intended behaviour|style preference|tidy log wording|typo in comment;testFailureHandoff=flaky parser test' ] \
         || missing="$missing groups=[$got]"
     # The pass: every autoHigh entry is filed; the user picks the FIRST finalList entry only; discard is
     # disposed, then every unselected finalList entry is disposed as discard (declined, NP-7).
@@ -68,14 +68,14 @@ l1_full_loop() {
     grep -Eq 'tidy log|typo in|style pref|intended beh|rename helper|maybe cache|rotate the staging|flaky parser' "$STUB_LOG" \
         && missing="$missing filed-outside-the-rules"
     for num in $nums; do grep -q "<!-- promoted: #$num -->" "$dir/WORKTREE_NOTES.md" || missing="$missing marker-#$num-missing"; done
-    [ "$(grep -c '<!-- disposed: discard -->' "$dir/WORKTREE_NOTES.md")" = "3" ] || missing="$missing discard-markers"
+    [ "$(grep -c '<!-- disposed: discard -->' "$dir/WORKTREE_NOTES.md")" = "6" ] || missing="$missing discard-markers"
     grep 'maybe cache lookups' "$dir/WORKTREE_NOTES.md" | grep -q '<!-- disposed: discard -->' \
         || missing="$missing declined-entry-unmarked"
-    grep -E 'tidy log|intended beh|rename helper' "$dir/WORKTREE_NOTES.md" | grep -q '<!-- \(promoted\|disposed\)' \
-        && missing="$missing unfiled-entry-marked"
-    # (d) the re-list keeps only disposeInPr and the hand-off; the declined entry no longer reappears.
+    [ "$(grep -E 'tidy log|intended beh|rename helper' "$dir/WORKTREE_NOTES.md" | grep -c '<!-- disposed: discard -->')" = "3" ] \
+        || missing="$missing this-pr-entries-not-discarded"
+    # (d) the re-list keeps only the hand-off; the declined and this-pr entries no longer reappear.
     got="$(json_groups "$(FINDING_HANDOFF_BIN="$HANDOFF_OK" run_with_timeout 30 node "$TRIAGE_BIN" list "$notes" 2>/dev/null)")"
-    [ "$got" = 'autoHigh=;finalList=;overflow=;disposeInPr=intended behaviour|rename helper|tidy log wording;discard=;testFailureHandoff=flaky parser test' ] \
+    [ "$got" = 'autoHigh=;finalList=;overflow=;discard=;testFailureHandoff=flaky parser test' ] \
         || missing="$missing relist=[$got]"
     if [ -z "$missing" ]; then
         pass "L1: the pass files the HIGH entry and the user-selected finalList entry only, disposes discard and the declined finalList entry, and files no LOW / not-defect entry"
@@ -111,7 +111,7 @@ l1b_overflow_stays_unmarked() {
     grep -q 'spill entry' "$STUB_LOG" && missing="$missing overflow-entry-filed"
     # The re-list offers the overflow entry, which is still pending ([issue-TBD]).
     got="$(json_groups "$(FINDING_HANDOFF_BIN="$HANDOFF_OK" run_with_timeout 30 node "$TRIAGE_BIN" list "$notes" 2>/dev/null)")"
-    [ "$got" = 'autoHigh=;finalList=spill entry;overflow=;disposeInPr=;discard=;testFailureHandoff=' ] || missing="$missing relist=[$got]"
+    [ "$got" = 'autoHigh=;finalList=spill entry;overflow=;discard=;testFailureHandoff=' ] || missing="$missing relist=[$got]"
     if [ -z "$missing" ]; then
         pass "L1b: an overflow entry gets no marker in the pass and is still pending on the re-list, while the declined finalList entries are disposed"
     else
@@ -133,7 +133,7 @@ l2_marked_entries_skipped() {
     # The re-list is the unresolved-work queue: the promoted entry drops out of every group.
     out="$(FINDING_HANDOFF_BIN="$HANDOFF_OK" run_with_timeout 30 node "$TRIAGE_BIN" list "$notes" 2>/dev/null)"
     got="$(json_groups "$out")"
-    [ "$got" = 'autoHigh=;finalList=slow index rebuild|maybe cache lookups;overflow=;disposeInPr=intended behaviour|rename helper|tidy log wording;discard=style preference|typo in comment;testFailureHandoff=flaky parser test' ] || missing="$missing relist=[$got]"
+    [ "$got" = 'autoHigh=;finalList=slow index rebuild|rename helper|maybe cache lookups;overflow=;discard=intended behaviour|style preference|tidy log wording|typo in comment;testFailureHandoff=flaky parser test' ] || missing="$missing relist=[$got]"
     # The re-run pass files autoHigh (now empty) and the user's pick (the first finalList row) only.
     while IFS=$'\t' read -r line b; do issue-create --title "$b" >/dev/null 2>&1; done < <(group_rows "$out" autoHigh; group_rows "$out" finalList | head -n 1)
     [ "$(cut -f2- "$STUB_LOG" | sed 's/^--title //' | tr '\n' ';')" = 'slow index rebuild;' ] || missing="$missing filed=[$(cut -f2- "$STUB_LOG" | tr '\n' ';')]"

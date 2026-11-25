@@ -90,7 +90,7 @@ NOTES_BODY_EMPTY=$'# Worktree Notes\nBranch: feature/np-empty\nCreated: 2026-08-
 
 # write_triage_notes <dir> [session-id] -> node path. #2019: one entry per rule-table class —
 # HIGH (auto-high), MEDIUM+instance and MEDIUM/other (final-list), test-failure (handoff),
-# LOW / MEDIUM / not-defect on this-pr (dispose-in-pr), LOW / not-defect on other (discard).
+# MEDIUM on this-pr (final-list), LOW / not-defect on either scope (discard; #3145 dropped dispose-in-pr).
 write_triage_notes() {
     local o='<!-- pr-scope: other -->' t='<!-- pr-scope: this-pr -->'; mkdir -p "$1"
     printf '%s\n' '# Worktree Notes' 'Branch: feature/np' 'Created: 2026-08-01' "Session-ID: ${2:-sess-np}" '' '## BugsFound' \
@@ -189,7 +189,7 @@ json_at() {
 # json_groups <json> -> "autoHigh=b|b;finalList=...;..." in contract order. finalList/overflow keep list
 # order (loc-sorted); the other groups are sorted by body, since their order is not part of the contract.
 json_groups() {
-    node -e 'try{const g=JSON.parse(process.argv[1]);process.stdout.write(["autoHigh","finalList","overflow","disposeInPr","discard","testFailureHandoff"].map(k=>{const b=(Array.isArray(g[k])?g[k]:[]).map(e=>e.body);return k+"="+(/List|overflow/.test(k)?b:b.sort()).join("|")}).join(";"))}catch(e){process.stdout.write("ERR")}' -- "$1" 2>/dev/null
+    node -e 'try{const g=JSON.parse(process.argv[1]);process.stdout.write(["autoHigh","finalList","overflow","discard","testFailureHandoff"].map(k=>{const b=(Array.isArray(g[k])?g[k]:[]).map(e=>e.body);return k+"="+(/List|overflow/.test(k)?b:b.sort()).join("|")}).join(";"))}catch(e){process.stdout.write("ERR")}' -- "$1" 2>/dev/null
 }
 # group_rows <json> <group> -> one "lineNumber<TAB>body" line per entry of that group, in list order
 group_rows() {

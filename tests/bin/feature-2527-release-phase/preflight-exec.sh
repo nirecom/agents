@@ -2,7 +2,7 @@
 # preflight-exec.sh — #2527: get-release-approval GA-2 preflight run as a real subprocess.
 # Tests: skills/get-release-approval/scripts/preflight.sh, bin/check-verification-gate.sh, bin/session-close-detect-route.js, bin/confirm-off
 # Tags: scope:issue-specific, workflow, release-phase, user-verified, preflight, gh-stub, glab-stub, fail-closed
-# TL2: spawns preflight.sh from outside a fixture repo (--repo), with a fixture state file for the
+# TL2: spawns preflight.sh inside the fixture repo (--repo), with a fixture state file for the
 # delivery path, node-copy gh / glab stubs (fake-forge.js), and RUN_TL4 pinned per case in the
 # process env (get-config-var: process env wins over .env).
 set -uo pipefail
@@ -20,10 +20,12 @@ GH_URL="https://github.com/example/repo.git"
 GL_URL="https://gitlab.com/example/repo.git"
 unset RUN_TL4 AGENTS_BASH_MAJOR_OVERRIDE
 
-# pf <args...> — preflight stdout plus RC=<exit>, run from $RP_TMP (not the repo); stderr to pf.err.
+# pf <args...> — preflight stdout plus RC=<exit>, run inside the session's repo (state cwd = $RP_REPO,
+# set by mk_state): #3145 `check --session` resolves the notes from the process cwd and blocks a
+# non-git cwd as repo-unresolved. The repo has no WORKTREE_NOTES.md, so the this-pr check is absent.
 pf() {
   local out rc
-  out="$(cd "$RP_TMP" && run_with_timeout 120 bash "$PREFLIGHT_SH" "$@" 2>"$RP_TMP/pf.err")"
+  out="$(cd "$RP_REPO" && run_with_timeout 120 bash "$PREFLIGHT_SH" "$@" 2>"$RP_TMP/pf.err")"
   rc=$?
   printf '%s\nRC=%s\n' "$out" "$rc"
 }

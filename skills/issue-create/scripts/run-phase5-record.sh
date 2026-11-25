@@ -1,12 +1,12 @@
 #!/bin/bash
 # run-phase5-record.sh — Phase 5: record created issue(s) to WORKTREE_NOTES.md
 # Usage: bash run-phase5-record.sh <verdict> <notes_path|auto> <title> [<manifest>]
-#          [--input-file <path>] [--remove-manifest]
+#          [--input-file <path>] [--remove-manifest] [--finding-key <K>]
+# --finding-key (non-bulk) annotates the rescoped entry, else pointer + `finding-key unsettled:`.
 # `auto` resolves WORKTREE_NOTES.md from the git toplevel, and --input-file
 # replaces the stdin pipe, so a prompt can issue this as one command (#2132).
 # --remove-manifest (bulk-sub-of only) deletes a *-bulk-dispatch-*.tsv manifest
 # after recording, unless a row fell back to the Phase 1 title (#3013).
-# Stdin: Phase 4 dispatch stdout (URL lines) when --input-file is absent
 # Exit:  0 always (non-fatal script — failures logged to stderr and skipped)
 set -euo pipefail
 
@@ -19,10 +19,12 @@ shift $(( $# < 4 ? $# : 4 ))
 
 INPUT_FILE=""
 REMOVE_MANIFEST=0
+FINDING_KEY=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --input-file) INPUT_FILE="${2:?--input-file requires a value}"; shift 2 ;;
         --remove-manifest) REMOVE_MANIFEST=1; shift ;;
+        --finding-key) FINDING_KEY="${2:?--finding-key requires a value}"; shift 2 ;;
         *) echo "run-phase5-record.sh: unknown argument: $1" >&2; exit 0 ;;
     esac
 done
@@ -109,6 +111,24 @@ else
     N="$(echo "$DISPATCH_OUTPUT" | tail -n 1 | tr -d '\r' | grep -oE '[0-9]+$' || true)"
     if [[ -z "$N" ]]; then
         echo "run-phase5-record.sh: warning: could not extract issue number from dispatch output (non-fatal)" >&2
+        exit 0
+    fi
+    if [[ -n "$FINDING_KEY" ]]; then
+        TRIAGE_JS="$SCRIPT_CHECKOUT_ROOT/bin/worktree-notes-triage.js"
+        if node "$TRIAGE_JS" annotate "$NOTES_PATH" "key=$FINDING_KEY" "$N" >/dev/null; then
+            exit 0
+        fi
+        REASON="$(node -e '
+const { triageEntries } = require(process.argv[1] + "/bin/worktree-notes-triage/groups");
+const { findingKey } = require(process.argv[1] + "/hooks/lib/finding-approval");
+const n = triageEntries(require("fs").readFileSync(process.argv[2], "utf8"))
+  .filter((e) => findingKey(e.section, e.body) === process.argv[3]).length;
+process.stdout.write(n === 0 ? "not-found" : n > 1 ? "ambiguous" : "write-failed");
+' "$SCRIPT_CHECKOUT_ROOT" "$NOTES_PATH" "$FINDING_KEY" 2>/dev/null)" || REASON="write-failed"
+        node "$SCRIPT_CHECKOUT_ROOT/bin/worktree-notes-append.js" \
+            --notes-path "$NOTES_PATH" --issue-number "$N" --title "$TITLE" --label type:task \
+            || echo "run-phase5-record.sh: warning: worktree-notes-append.js failed for issue #$N (non-fatal)" >&2
+        echo "finding-key unsettled: key=$FINDING_KEY issue=#$N reason=$REASON settle: node \"$TRIAGE_JS\" annotate \"$NOTES_PATH\" <lineNumber|key=$FINDING_KEY> $N"
         exit 0
     fi
     node "$SCRIPT_CHECKOUT_ROOT/bin/worktree-notes-append.js" \

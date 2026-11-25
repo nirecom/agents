@@ -1,7 +1,7 @@
 "use strict";
 // tests/bin/feature-2903-notes-append-user-ack.js
 // Tests: bin/worktree-notes-append.js, bin/worktree-notes-append/args.js
-// Tags: worktree-notes, append-cli, user-acknowledged, severity, pr-scope, mode-b, table-driven, scope:issue-specific, TL2
+// Tags: worktree-notes, append-cli, user-acknowledged, severity, pr-scope, mode-b, table-driven, base-marker, temp-repo, scope:issue-specific, TL2
 // #2903 introduced `--user-acknowledged`; #2019 retired it for `--severity high|medium|low|not-defect`
 // + `--pr-scope this-pr|other` (required for BugsFound / RelatedTasks / NextTasks). What carries over
 // from #2903: ManualReminders and Mode A take no triage flags, and Mode B stays body-keyed idempotent.
@@ -84,5 +84,41 @@ test("append: idempotency is body-keyed across marker values", () => {
     assert.strictEqual(append(notes, [...base, ...second]).status, 0, `${name}: second append is a no-op success`);
     assert.strictEqual(read(notes), before, `${name}: file unchanged (no duplicate, no marker update)`);
   }
+});
+caseEnd();
+
+caseBegin("append: base marker only on this-pr, omitted when git fails (#3145)", "bin/worktree-notes-append.js");
+test("append: base marker only on this-pr, omitted when git fails (#3145)", () => {
+  const git = (dir, args) => {
+    const r = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8", timeout: 30000 });
+    assert.strictEqual(r.status, 0, `git ${args.join(" ")}: ${r.stderr}`);
+    return r.stdout.trim();
+  };
+  const repoNotes = () => {
+    const notes = freshNotes();
+    const dir = path.dirname(notes);
+    git(dir, ["init", "-q"]);
+    git(dir, ["config", "core.hooksPath", "/dev/null"]);
+    fs.writeFileSync(path.join(dir, "a.js"), "a\n");
+    git(dir, ["add", "a.js"]);
+    git(dir, ["-c", "user.email=t@example.invalid", "-c", "user.name=t", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "c0"]);
+    return { notes, head: git(dir, ["rev-parse", "HEAD"]) };
+  };
+  const add = (notes, scope) => append(notes, ["--section", "BugsFound", "--severity", "medium", "--pr-scope", scope, "--title", "X"]);
+  const thisPr = repoNotes();
+  assert.strictEqual(add(thisPr.notes, "this-pr").status, 0, "this-pr in a repo: exit 0");
+  assert.strictEqual(read(thisPr.notes), `${HEAD}## BugsFound\n- X <!-- severity: medium --> <!-- pr-scope: this-pr --> <!-- base: ${thisPr.head} -->\n`, "this-pr carries base = HEAD");
+  const other = repoNotes();
+  assert.strictEqual(add(other.notes, "other").status, 0, "other in a repo: exit 0");
+  assert.strictEqual(read(other.notes), `${HEAD}## BugsFound\n- X <!-- severity: medium --> <!-- pr-scope: other -->\n`, "other carries no base");
+  const noGit = freshNotes();   // the ceiling stops discovery at TMP, so `git rev-parse HEAD` fails there
+  const savedCeiling = process.env.GIT_CEILING_DIRECTORIES;
+  process.env.GIT_CEILING_DIRECTORIES = TMP;
+  let r;
+  try { r = add(noGit, "this-pr"); } finally {
+    if (savedCeiling === undefined) delete process.env.GIT_CEILING_DIRECTORIES; else process.env.GIT_CEILING_DIRECTORIES = savedCeiling;
+  }
+  assert.strictEqual(r.status, 0, `git failure still appends: ${r.stderr}`);
+  assert.strictEqual(read(noGit), `${HEAD}## BugsFound\n- X <!-- severity: medium --> <!-- pr-scope: this-pr -->\n`, "base omitted when git fails");
 });
 caseEnd();

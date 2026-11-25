@@ -151,6 +151,7 @@ out.candidates = (Array.isArray(artifact.candidates) ? artifact.candidates : [])
   parent_number: c.parent_number === undefined ? null : c.parent_number,
   parent_is_meta: c.parent_is_meta === undefined ? false : c.parent_is_meta,
   has_sub_issues: c.has_sub_issues === undefined ? false : c.has_sub_issues,
+  closes_session: c.closes_session === true,
 }));
 // The top-level fields always hold the survey: a reviewer with less evidence never
 // overrides it; a disagreement is settled by the user from review{} (#2225).
@@ -253,7 +254,8 @@ chmod 600 "$PROMPT_FILE" "$REVIEW_RAW_FILE" "$CODEX_ERR_FILE" 2>/dev/null || tru
     echo "Also decide whether the proposal is worth filing at all."
     echo "Also answer same_fix — take it from the same_fix table in the cascade below; it is fixed by the verdict, never judged separately."
     echo ""
-    echo "Allowed verdicts: none | reopen | sub-of | make-parent | sibling"
+    echo "Allowed verdicts: none | reopen | sub-of | make-parent | sibling | fix-in-session"
+    echo "fix-in-session is allowed only with a target whose closes_session is yes."
     echo "Every issue number you name must appear in the candidate list below."
     echo "End your output with a line reading exactly FINAL_VERDICT_JSON: followed by ONE JSON object and nothing else:"
     echo '{"verdict":"<one of the above>","target":<number|null>,"children":[<numbers>],"related":[<numbers>],"worth_filing":true|false,"same_fix":true|false,"severity":"HIGH|MEDIUM|LOW|not-a-defect","reason":"<one sentence, max 500 chars>"}'
@@ -332,6 +334,7 @@ for (const c of list) {
     // reviewer would be graded on evidence it never saw.
     "  relation_status: " + (defang(c.relation_status) || "unknown") + "\n" +
     "  has_sub_issues: " + (c.has_sub_issues ? "yes" : "no") + "\n" +
+    "  closes_session: " + (c.closes_session === true ? "yes" : "no") + "\n" +
     "  body: " + defang(String(c.body || "").slice(0, 2000)) + "\n"
   );
 }

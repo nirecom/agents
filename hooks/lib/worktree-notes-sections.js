@@ -1,9 +1,9 @@
 "use strict";
 
 // Parse and annotate WORKTREE_NOTES.md entries (triage, append and render-final-report consumers).
-// Canonical entry tail, fixed order (#2019): severity, instance?, loc?, test-failure?, pr-scope,
-// handoff-rejected?, then one terminal marker (promoted | disposed). composeEntryMarkers is the only
-// writer of that order. Recognition is strict: a non-canonical line reads as severity medium,
+// Canonical entry tail, fixed order (#2019, #3145): severity, instance?, loc?, test-failure?, pr-scope,
+// base?, rescoped-from?, handoff-rejected?, then one terminal marker (promoted | disposed |
+// user-accepted). composeEntryMarkers is the only writer of that order. Recognition is strict: a non-canonical line reads as severity medium,
 // pr-scope other; legacy `none` reads as not-defect and a retired user-acknowledged marker is skipped.
 // Stripping is lenient, so no raw marker leaks into rendered output. Contract: skills/_shared/notes-promotion.md.
 
@@ -11,20 +11,24 @@ const PROMOTED_MARKER_RE = / <!-- promoted: #(\d+) -->$/;
 const SEVERITY_MARKER_RE = /^- ((?:(?!<!--).)*?) <!-- severity: (high|medium|low|not-defect|none) -->(.*)$/;
 // The retired #2903 marker; a legacy line carrying it is read with the marker stripped.
 const USER_ACK_MARKER_RE = /^ <!-- user-acknowledged: (?:true|false) -->/;
-const TERMINAL_MARKER_RE = / <!-- (?:promoted: #(\d+)|disposed: (fixed|known-limits|discard|handed-off)) -->$/;
-const TAIL_MARKERS_RE = /^(?: <!-- instance: ((?:(?!-->|<!--).)+?) -->)?(?: <!-- loc: ((?:(?!-->|<!--).)+?) -->)?( <!-- test-failure -->)?(?: <!-- pr-scope: (this-pr|other) -->)?( <!-- handoff-rejected -->)?$/;
+const TERMINAL_MARKER_RE = / <!-- (?:promoted: #(\d+)|disposed: (fixed|known-limits|discard|handed-off)|user-accepted: ([^<>\r\n]{1,120})) -->$/;
+const TAIL_MARKERS_RE = /^(?: <!-- instance: ((?:(?!-->|<!--).)+?) -->)?(?: <!-- loc: ((?:(?!-->|<!--).)+?) -->)?( <!-- test-failure -->)?(?: <!-- pr-scope: (this-pr|other) -->)?(?: <!-- base: ([0-9a-f]{40}) -->)?( <!-- rescoped-from: this-pr -->)?( <!-- handoff-rejected -->)?$/;
+const USER_ACCEPTED_REASON_MAX = 120;
 const TRAILING_MARKER_RE = / <!--[^<>]*-->$/;
 
 const SEVERITIES = Object.freeze(["high", "medium", "low", "not-defect"]);
 const PR_SCOPES = Object.freeze(["this-pr", "other"]);
 const DISPOSED_KINDS = Object.freeze(["fixed", "known-limits", "discard", "handed-off"]);
 
-function composeEntryMarkers({ severity, instance, loc, testFailure, prScope }) {
+function composeEntryMarkers({ severity, instance, loc, testFailure, prScope, base, rescopedFrom }) {
   let out = ` <!-- severity: ${severity} -->`;
   if (instance) out += ` <!-- instance: ${instance} -->`;
   if (loc) out += ` <!-- loc: ${loc} -->`;
   if (testFailure) out += " <!-- test-failure -->";
-  return `${out} <!-- pr-scope: ${prScope} -->`;
+  out += ` <!-- pr-scope: ${prScope} -->`;
+  if (base) out += ` <!-- base: ${base} -->`;
+  if (rescopedFrom) out += ` <!-- rescoped-from: ${rescopedFrom} -->`;
+  return out;
 }
 
 function extractSection(text, heading) {
@@ -68,7 +72,9 @@ function parseCanonical(line) {
     loc: t[2] === undefined ? null : t[2],
     testFailure: t[3] !== undefined,
     prScope: t[4] === undefined ? "other" : t[4],
-    handoffRejected: t[5] !== undefined,
+    base: t[5] === undefined ? null : t[5],
+    rescopedFrom: t[6] === undefined ? null : "this-pr",
+    handoffRejected: t[7] !== undefined,
   };
 }
 
@@ -77,12 +83,14 @@ function parseEntryLine(line) {
   const terminal = TERMINAL_MARKER_RE.exec(line);
   const c = parseCanonical(line) || {
     body: entryBody(line), severity: "medium", instance: null, loc: null,
-    testFailure: false, prScope: "other", handoffRejected: false,
+    testFailure: false, prScope: "other", base: null, rescopedFrom: null, handoffRejected: false,
   };
+  const userAccepted = terminal !== null && terminal[3] !== undefined ? terminal[3] : null;
   return Object.assign(c, {
-    hasMarker: promoted !== null,
+    hasMarker: promoted !== null || userAccepted !== null,
     promotedNumber: promoted ? parseInt(promoted[1], 10) : null,
     disposed: terminal !== null && terminal[2] !== undefined ? terminal[2] : null,
+    userAccepted,
   });
 }
 
@@ -154,6 +162,43 @@ function markEntryHandoffRejected(text, lineNumber) {
   });
 }
 
+// Recompose a canonical line from its parsed fields; a non-canonical line is left unchanged.
+function recompose(line, change) {
+  const c = parseCanonical(line);
+  if (c === null) return line;
+  const terminal = TERMINAL_MARKER_RE.exec(line);
+  const next = change(Object.assign({}, c), terminal === null ? "" : terminal[0]);
+  const rejected = next.handoffRejected ? " <!-- handoff-rejected -->" : "";
+  return `- ${next.body}${composeEntryMarkers(next)}${rejected}${next.terminal}`;
+}
+
+// A rescope away from this-pr withdraws a `disposed: fixed` claim; other terminals are kept.
+function markEntryRescoped(text, lineNumber) {
+  return editLine(text, lineNumber, (l) => recompose(l, (c, terminal) => Object.assign(c, {
+    prScope: "other", rescopedFrom: "this-pr", terminal: terminal === " <!-- disposed: fixed -->" ? "" : terminal,
+  })));
+}
+
+function markEntryUnrescoped(text, lineNumber) {
+  return editLine(text, lineNumber, (l) => recompose(l, (c, terminal) => (c.rescopedFrom === null
+    ? Object.assign(c, { terminal })
+    : Object.assign(c, { prScope: "this-pr", rescopedFrom: null, terminal }))));
+}
+
+function sanitizeAcceptedReason(reason) {
+  return String(reason === undefined || reason === null ? "" : reason)
+    .replace(/[\r\n]+/g, " ").replace(/[<>]/g, "").trim().slice(0, USER_ACCEPTED_REASON_MAX).trim();
+}
+
+// user-accepted replaces any terminal marker; an empty reason after sanitizing writes nothing.
+function markEntryUserAccepted(text, lineNumber, reason) {
+  const clean = sanitizeAcceptedReason(reason);
+  if (clean === "") return text;
+  return editLine(text, lineNumber, (l) => recompose(l, (c) => Object.assign(c, {
+    terminal: ` <!-- user-accepted: ${clean} -->`,
+  })));
+}
+
 module.exports = {
   PROMOTED_MARKER_RE,
   SEVERITY_MARKER_RE,
@@ -172,4 +217,8 @@ module.exports = {
   markEntryPromoted,
   markEntryDisposed,
   markEntryHandoffRejected,
+  markEntryRescoped,
+  markEntryUnrescoped,
+  markEntryUserAccepted,
+  sanitizeAcceptedReason,
 };

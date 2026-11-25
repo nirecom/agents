@@ -18,6 +18,7 @@ same time**? Yes for even one candidate → decide `reopen`.
 Differences in surface framing, wording, or scope description are never grounds for non-match.
 Symptom similarity alone must never carry a `reopen`: when the underlying causes differ, two separate fixes are needed, so fall through to the later rules.
 `target` = the matching candidate's number. `children` / `related` are empty.
+When the matching candidate carries `closes_session: true`, decide `fix-in-session` instead of `reopen` with that candidate as `target`; when several match, prefer a `closes_session: true` candidate.
 
 ## IC-C2 — sub-of (attach to an existing meta parent)
 
@@ -53,13 +54,15 @@ validator's machine-readable map carries it for the survey artifact.
 | verdict | same_fix |
 |---|---|
 | `reopen` | `true` |
+| `fix-in-session` | `true` |
 | `sub-of` | `false` |
 | `make-parent` | `false` |
 | `sibling` | `false` |
 | `none` | `false` |
 
-`reopen` is the only `true`: IC-C1 asks the one-fix question of every candidate, so any
-verdict below it was reached because the answer was no for all of them.
+`reopen` and `fix-in-session` are the only `true`: both are IC-C1 answers, and IC-C1 asks the
+one-fix question of every candidate, so any verdict below it was reached because the answer
+was no for all of them.
 
 Both parent-attaching verdicts are `false` because the issue they name is a meta parent,
 a container never implemented against. `make-parent` creates one and its grouped children

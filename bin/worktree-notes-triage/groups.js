@@ -15,7 +15,6 @@ const FINAL_LIST_CAP = 16;
 const GROUP_OF_CLASS = Object.freeze({
   "auto-high": "autoHigh",
   "final-list": "finalList",
-  "dispose-in-pr": "disposeInPr",
   discard: "discard",
   "test-failure-handoff": "testFailureHandoff",
 });
@@ -55,7 +54,7 @@ function byLoc(a, b) {
 function groupEntries(text, handoffAvailable) {
   const pending = triageEntries(text).filter((e) => !isTerminal(e));
   if (pending.length === 0) return {};
-  const groups = { autoHigh: [], finalList: [], overflow: [], disposeInPr: [], discard: [], testFailureHandoff: [] };
+  const groups = { autoHigh: [], finalList: [], overflow: [], discard: [], testFailureHandoff: [] };
   for (const e of pending) groups[GROUP_OF_CLASS[classify(e, { handoffAvailable })]].push(listElement(e));
   const ordered = groups.finalList.slice().sort(byLoc);
   groups.finalList = ordered.slice(0, FINAL_LIST_CAP);

@@ -25,17 +25,24 @@ function handoffAvailable() {
   try { return fs.statSync(handoffBin()).isFile(); } catch (_e) { return false; }
 }
 
-// entry: {severity, instance, testFailure, prScope, handoffRejected} as worktree-notes-sections parses it.
+// entry: {severity, instance, testFailure, handoffRejected} as worktree-notes-sections parses it.
+// pr-scope does not change the class (#3145): a this-pr finding is settled by openThisPrReason's exits.
 function classify(entry, { handoffAvailable: available }) {
   if (entry.testFailure && available && !entry.handoffRejected) return "test-failure-handoff";
-  const thisPr = entry.prScope === "this-pr";
   if (entry.severity === "high") return "auto-high";
-  if (entry.severity === "medium") {
-    if (entry.instance) return "final-list";
-    return thisPr ? "dispose-in-pr" : "final-list";
-  }
-  if (entry.severity === "low" || entry.severity === "not-defect") return thisPr ? "dispose-in-pr" : "discard";
+  if (entry.severity === "low" || entry.severity === "not-defect") return "discard";
   return "final-list";
+}
+
+// Why a this-pr finding still blocks write_code / push / release, or null when it is settled.
+function openThisPrReason(entry, { fixedVerified }) {
+  if (entry.userAccepted) return null;
+  if (entry.prScope === "this-pr") {
+    if (entry.disposed !== "fixed") return "this-pr-unfixed";
+    return fixedVerified ? null : "fixed-unverified";
+  }
+  if (entry.rescopedFrom === "this-pr" && !Number.isInteger(entry.promotedNumber)) return "rescoped-unfiled";
+  return null;
 }
 
 // The reviewer's severity in the notes vocabulary, or null when the review cannot be judged.
@@ -81,6 +88,7 @@ module.exports = {
   handoffBin,
   handoffAvailable,
   classify,
+  openThisPrReason,
   reviewSeverity,
   reviewerAgrees,
   runHandoff,

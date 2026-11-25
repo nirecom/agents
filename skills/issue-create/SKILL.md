@@ -62,8 +62,8 @@ IC-2. Parse `closes_issues` with one standalone call (pass the path as a script
    proceed to Phase 1.
 
 IC-3. When `CLOSES` is non-empty, emit a notice:
-   - **Interactive:** "This issue is created now and is NOT added to the current session's
-     `closes_issues` (#N, ...); only its implementation belongs to a separate session.
+   - **Interactive:** "A goal of `closes_issues` (#N, ...) returns to this session as a this-pr
+     entry (`fix-in-session`); anything else is filed now, and its implementation belongs to a separate session.
      Fallback: write to `<worktree>/WORKTREE_NOTES.md` — see
      `rules/mid-workflow-findings.md`." Then proceed to Phase 1.
    - **Non-interactive:** print the same notice to stderr. Proceed to Phase 1.
@@ -79,6 +79,7 @@ Four phases: **Gather → Survey → Confirm → Dispatch**.
 
 Collect title and canonical-schema body from the user.
 A `/issue-create` the user types is approved by its own typed-command record, which G0 (Phase 3) consumes; never ask whether to file it.
+Write `Changes` so the done state reads from it; never add a separate DoD field.
 
 Required body schema for `type:task` (enforced by `bin/github-issues/issue-create.sh` exit 3):
 
@@ -107,6 +108,7 @@ Skip this phase when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub 
 2a. Pre-resolve in main: `session_id` (from `$CLAUDE_CODE_SESSION_ID`), `agents_main_root` (absolute), `artifact_dir` (`PLANS_DIR` resolved by calling `bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"` directly at this callsite — do NOT reuse any variable from IC-1).
 2b. Invoke the `issue-create-survey-worker` subagent via the Agent tool (`subagent_type`) with `title`, `background`, `changes` from Phase 1 input, plus `severity` (the claimed level, when one is claimed) and the full `body` — G0's claim, on every route (`--severity` / `--body` for make-empty-verdict.sh).
     Set the JSON prompt's `dispatch_directive` key to the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section.
+    Pass the IC-2 numbers as `closes_issues` when IC-2 produced any; omit the key otherwise.
 2c. `status: failed` → stop and report error.
 2d. `status: no_candidates` → write the artifact by the form above with verdict `none` and proceed to Phase 3 with `verdict: none`.
 2e. `status: complete` → read verdict JSON from `artifact_path`.
@@ -115,6 +117,7 @@ Skip this phase when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub 
 
 3a. Review the survey verdict: `bash "$AGENTS_MAIN_ROOT/bin/github-issues/review-survey-verdict-codex.sh" --artifact <survey-artifact> --out <final-artifact>`.
 3b. Of `<final-artifact>` read only `verdict` / `target` / `children` / `related` / `reason` / `review.status` / `review.worth_filing` / `review.verdict` / `review.target` / `review.children` / `review.related`. Phase 4 dispatches on these, not on the Phase 2 values.
+    When `verdict` (or `review.verdict`) is `fix-in-session`: run `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/run-fix-in-session.sh" <final-artifact> auto --closes <IC-2 numbers> --title "<Phase 1 title>" [--severity S] [--finding-key K]`, report its output lines verbatim, run 3c, and stop — never file, never ask.
 3c. Delete the Phase 2 survey artifact (`rm -f <survey-artifact>`) when Phase 3 ends (before Phase 4, or on a stop), never before 3d: G0 reads the claim from it via `review.artifact_path`. It is the only file holding full candidate bodies. Skip silently if absent.
 3d. Classify the gate: `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/eval-confirm-gate.sh" <final-artifact> [--finding-key <key>]` — stdout is `confirm: yes|no`, `reasons: <G-list>`, the info line `worth_filing: true|false|unknown`, and `defer: yes` when G0 defers — a HIGH claim the reviewer could not judge, with no approval record to consume (an unconsumed approval record is the user's decision and passes G0 instead): then stop without filing and leave the finding in the notes.
 3e. `confirm: no` → proceed to Phase 4 without asking.
@@ -174,7 +177,8 @@ After a dispatch with exit 0 on `reopen`, `make-parent` or `bulk-sub-of`, send t
 
 Runs for all Phase 4 verdicts (none|reopen|sub-of|make-parent|sibling|bulk-sub-of).
 Write Phase 4's stdout to `<PLANS_DIR>/<session-id>-issue-create-dispatch.txt` with the Write tool, then issue one standalone call: `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/run-phase5-record.sh" "<VERDICT>" auto "<Phase 1 title>" "<manifest path>" --input-file "<PLANS_DIR>/<session-id>-issue-create-dispatch.txt"` (`auto` resolves WORKTREE_NOTES.md itself; the manifest arg is the Phase 4 value, used only for `bulk-sub-of`, pass `""` otherwise).
-For `bulk-sub-of`, append `--remove-manifest` only when the Phase 4 dispatch exited 0.
+For `bulk-sub-of`, append `--remove-manifest` only when the Phase 4 dispatch exited 0; on a non-zero exit the manifest is kept for retry.
+When invoked with `--finding-key K`, append `--finding-key K`; relay any `finding-key unsettled:` line to the user verbatim.
 Failure is non-fatal — the script logs a stderr warning and continues.
 
 ## Label policy
@@ -189,11 +193,7 @@ Failure is non-fatal — the script logs a stderr warning and continues.
 
 ## Behavioral notes
 
-- **Projects v2**: the linked Projects v2 (owner, number, node id) is auto-resolved from the git remote via `bin/github-issues/lib/resolve-project.sh` (#641). No hardcoded defaults — repos without a linked Projects v2 skip the attach step with a warning. Result is cached per `owner/repo` at `${WORKFLOW_STATE_DIR}/cache/project-resolve.tsv`. Attach failure is non-fatal — warnings on stderr; re-run `gh project item-add` manually to recover.
-- **Content Date field**: when the resolved project has a field named "Content Date" of type `DATE`, the script sets it to the issue's creation date (`YYYY-MM-DD`). The field id is discovered alongside the project node — no env var override needed. Projects without a Content Date field skip the step silently.
-- **Sub-issue API**: dispatcher uses `POST /repos/{owner}/{repo}/issues/{N}/sub_issues` with `sub_issue_id` = child's integer databaseId (fetched via `gh api graphql -f query='{ repository(owner: "OWNER", name: "REPO") { issue(number: N) { databaseId } } }' --jq '.data.repository.issue.databaseId'`), passed via `-F` (integer type).
-- **make-parent partial failure**: if a child attach fails mid-loop, both the parent and the proposal are already created — their URLs are still emitted, and `make-parent` exits non-zero with retry instructions on stderr. No atomic semantics (GitHub has no transactions).
-- **bulk-sub-of partial failure**: if any child create or attach fails, successfully created URLs are still output and recorded; the dispatcher writes retry info to stderr and exits non-zero, and the manifest is kept (not removed) so the rows not yet created can be identified; never re-run the whole manifest (created rows would duplicate). No atomic semantics (GitHub has no transactions).
+- **Dispatch internals** (Projects v2 attach, Content Date, sub-issue API, `make-parent` / `bulk-sub-of` partial failure): `docs/architecture/issue-create-dispatch.md`.
 - **Origin marker**: `issue-create.sh` appends the filing session's `<!-- origin-session: <id> -->` line to the body; never add it by hand (`docs/architecture/cross-session-messaging.md` §3).
 - **Untrusted content**: title/body are passed as separate `gh` arguments — no shell expansion. Do not interpolate unvalidated input into `--title`.
 - **Schema enforcement (#443)**: `bin/github-issues/issue-create.sh` exits 3 when `Background` or `Changes` is missing. `ISSUE_CREATE_SKIP_SCHEMA=1` is an emergency escape hatch only — the sanctioned path is to add the missing fields. Incident issues (`type:incident`) bypass this skill entirely per Scope.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/install/feature-2280-settings-deny-anchor.sh
 # Tests: settings.json
-# Tags: settings, permissions, deny, ssot, scope:issue-specific, pwsh-not-required, TL2, ask, unrunnable, sentinel, glossary, workflow-abort, regression-2920
+# Tags: settings, permissions, deny, ssot, scope:issue-specific, pwsh-not-required, TL2, ask, unrunnable, sentinel, glossary, workflow-abort, regression-2920, this-pr-finding-accepted, regression-3145
 #
 # Run wrapped: bin/run-with-timeout.sh 120 bash tests/install/feature-2280-settings-deny-anchor.sh
 #
@@ -355,6 +355,39 @@ t_abort_accepted_ask() {
 }
 t_abort_accepted_ask
 
+# #3145: the this-pr finding accept sentinel settles an unsettled this-pr finding in place of a fix,
+# so it is the AV class too -- ask always, never allow, never deny.
+TP_RULE='Bash(echo "<<WORKFLOW_THIS_PR_FINDING_ACCEPTED: *>>")'
+TP_CMD='echo "<<WORKFLOW_THIS_PR_FINDING_ACCEPTED: key=0a1b2c3d user accepts leaving it as is>>"'
+t_this_pr_finding_accepted_ask() {
+    local tp=() tmp_np
+    dp_node_path "$TMPROOT"; tmp_np="$DP_NODE_PATH/tp"
+    mkdir -p "$TMPROOT/tp"
+    dp_node_path "$SETTINGS"
+    mapfile -d '' -t tp < <(node -e "$UA_SPLIT_JS" "$DP_NODE_PATH" "$tmp_np" "$TP_RULE")
+    if (( ${#tp[@]} != 1 )) || [[ "${tp[0]}" == ERROR:* ]]; then
+        echo "FAIL: harness -- this-pr-finding-accepted split returned [${tp[*]}]"; exit 1
+    fi
+    ROWS=$((ROWS + 1))
+    assert_eq "AV1-TP: permissions.ask carries the exact WORKFLOW_THIS_PR_FINDING_ACCEPTED sentinel rule" "true" "${tp[0]}"
+    dp_req tp-allow "$tmp_np/ua-allow-as-deny.json" "$TP_CMD"
+    dp_req tp-ask "$tmp_np/ua-ask-as-deny.json" "$TP_CMD"
+    dp_req tp-deny "$SETTINGS" "$TP_CMD"
+    dp_run "this-pr-finding-accepted"
+    ROWS=$((ROWS + 1))
+    dp_get tp-allow
+    assert_eq "AV2-TP: no permissions.allow Bash rule auto-approves the this-pr finding accept sentinel (hits: ${DENY_HITS:-none})" \
+        "NO-MATCH" "$DENY_VERDICT"
+    ROWS=$((ROWS + 1))
+    dp_get tp-ask
+    assert_eq "AV3-TP: the permissions.ask rule matches the this-pr finding accept sentinel command" "MATCHED" "$DENY_VERDICT"
+    ROWS=$((ROWS + 1))
+    dp_get tp-deny
+    assert_eq "AV4-TP: no permissions.deny rule blocks the this-pr finding accept sentinel (hits: ${DENY_HITS:-none})" \
+        "NO-MATCH" "$DENY_VERDICT"
+}
+t_this_pr_finding_accepted_ask
+
 # EXECUTED-ROW BUDGET. Every table increments ROWS; a drifted delimiter or an early return
 # in front of a loop would otherwise leave a file that counts only its failures reporting green.
 # crosscheck 14 (one verdict row each; the allow-module agreement row retired with #2264) + robustness 13 (12 + E4b shape pin) + regression table 80 (61 prior +
@@ -363,8 +396,8 @@ t_abort_accepted_ask
 # covers every retained push floor row, incl. the positional `*-f` / `*-f *`; PEND under ANCHORED=0) +
 # bug-reproduction-evidence 1 + row_is_well_formed selftest 4 + retired read-only allow 5 (#2403) + unrunnable-accept ask 3 (#2501) +
 # baseline-accept retired 3 (#2688) + glossary-accept ask 4 (#2529) + 2617 over-match 49 (#2617; OV7 adds 4 positional `*-f *` MATCHED rows)
-# + abort-accepted ask 4 (#2920) + baseline-unobserved-accept ask 3 (#3067).
-ROWS_EXPECTED=264
+# + abort-accepted ask 4 (#2920) + baseline-unobserved-accept ask 3 (#3067) + this-pr-finding-accepted ask 4 (#3145).
+ROWS_EXPECTED=268
 assert_eq "T-budget: every table executed its full row count" "$ROWS_EXPECTED" "$ROWS"
 
 echo ""

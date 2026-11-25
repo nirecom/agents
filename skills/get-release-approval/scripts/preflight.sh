@@ -41,6 +41,18 @@ GATE_OUT="$(cd "$TARGET_CHECKOUT_ROOT" && bash "$SCRIPT_CHECKOUT_ROOT/bin/check-
 printf 'GATE_RC=%s\n' "$GATE_RC"
 if [[ -n "$GATE_OUT" ]]; then printf '%s\n' "$GATE_OUT"; fi
 
+# #3145: no route releases while a this-pr finding is unsettled. The notes resolve from the
+# session state checked against $PWD (never --repo); exit 2 = open, anything else non-zero fails closed.
+TP_RC=0
+TP_OUT="$(node "$SCRIPT_CHECKOUT_ROOT/bin/worktree-notes-triage.js" check --session "$SID" 2>&1)" || TP_RC=$?
+if [[ "$TP_RC" -eq 2 ]]; then
+  printf '%s\n' "$TP_OUT" | sed 's/^/THIS_PR_OPEN: /'
+  finish blocked "this-pr findings are unsettled — settle them per the THIS_PR_OPEN lines, then re-run"
+fi
+if [[ "$TP_RC" -ne 0 ]]; then
+  finish blocked "this-pr findings could not be checked (rc=$TP_RC): $(printf '%s' "$TP_OUT" | head -n 1)"
+fi
+
 # Fail closed: only an exact known route line decides; a CLI failure or anything else blocks.
 ROUTE_LINE="$(node "$SCRIPT_CHECKOUT_ROOT/bin/session-close-detect-route.js" --session "$SID" 2>/dev/null)" \
   || finish blocked "delivery path could not be resolved (route CLI failed)"

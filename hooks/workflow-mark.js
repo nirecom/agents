@@ -38,6 +38,7 @@ const runTestsAcceptHandler = require("./workflow-mark/run-tests-accept-handler"
 const runTestsBaselineUnobservedHandler = require("./workflow-mark/run-tests-baseline-unobserved-handler");
 const glossaryAcceptHandler = require("./workflow-mark/glossary-accept-handler");
 const workflowAbortHandler = require("./workflow-mark/workflow-abort-handler");
+const thisPrAcceptHandler = require("./workflow-mark/this-pr-accept-handler");
 const enforceOverrideHandlers = require("./workflow-mark/enforce-override-handlers");
 const supervisorBlockOverrideHandler = require("./workflow-mark/supervisor-block-override-handler");
 const pmReviewAcceptedHandler = require("./workflow-mark/pm-review-accepted-handler");
@@ -62,7 +63,9 @@ const HANDLERS = [
   confirmApprovalHandler, userVerifiedHandler,
   // review-tests-handler must run BEFORE mark-step-handler so the dedicated
   // REVIEW_TESTS_COMPLETE / REVIEW_TESTS_WARNINGS sentinels reach their owner.
-  reviewTestsHandler, runTestsAcceptHandler, runTestsBaselineUnobservedHandler, glossaryAcceptHandler, workflowAbortHandler, markStepHandler,
+  // this-pr-accept before mark-step: a chained "ACCEPTED && MARK_STEP write_code" settles the key first.
+  reviewTestsHandler, runTestsAcceptHandler, runTestsBaselineUnobservedHandler, glossaryAcceptHandler, workflowAbortHandler,
+  thisPrAcceptHandler, markStepHandler,
   enforceOverrideHandlers, supervisorBlockOverrideHandler, pmReviewAcceptedHandler, resetHandler,
 ];
 

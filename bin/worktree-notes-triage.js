@@ -2,26 +2,29 @@
 "use strict";
 
 // CLI for triaging WORKTREE_NOTES.md entries before worktree cleanup.
-// Usage: node bin/worktree-notes-triage.js <list|annotate|handoff|dispose|resolve> ...
-//   list <absolute-path> — the pending entries grouped by rule-table class (#2019); see
-//     bin/worktree-notes-triage/groups.js. `{}` when nothing is pending.
-//   annotate <absolute-path> <lineNumber> <issueNumber> — appends ` <!-- promoted: #<issueNumber> -->`.
-//   handoff <absolute-path> <lineNumber> — runs the #2488 receiver (bin/lib/finding-rules.js):
-//     accepted → `disposed: handed-off`; otherwise `handoff-rejected` plus `handoff:`/`class:` lines.
-//   dispose <absolute-path> <lineNumber> fixed|known-limits|discard — writes the terminal marker once.
-//   resolve --caller <callsite> [...] — see bin/worktree-notes-triage/resolve.js.
-// Every write is atomic (tmp + rename).
+// Subcommands (usage() lists the argument forms):
+//   list — pending entries grouped by rule-table class (#2019, worktree-notes-triage/groups.js).
+//   annotate — appends ` <!-- promoted: #<issueNumber> -->`.
+//   handoff — runs the #2488 receiver: accepted → `disposed: handed-off`, else `handoff-rejected`.
+//   dispose fixed|discard — writes the terminal marker once; a this-pr fixed must be backed by a
+//     change to its loc (bin/lib/fixed-evidence.js), else exit 2 and no write.
+//   resolve — worktree-notes-triage/resolve.js; open-this-pr / check / rescope / unrescope — scope.js.
+// <ref> is a 1-indexed line number or key=<8hex> (findingKey). Every write is atomic (tmp + rename).
 
 const fs = require("fs");
 const path = require("path");
 const {
   markEntryPromoted, markEntryDisposed, markEntryHandoffRejected, PROMOTED_MARKER_RE,
 } = require("../hooks/lib/worktree-notes-sections");
+const { writeNotesAtomic } = require("../hooks/lib/worktree-notes-write");
+const { findingKey } = require("../hooks/lib/finding-approval");
 const rules = require("./lib/finding-rules");
+const { fixedEvidence, defaultGitRunner } = require("./lib/fixed-evidence");
 const { triageEntries, isTerminal, groupEntries } = require("./worktree-notes-triage/groups");
 const { runResolve } = require("./worktree-notes-triage/resolve");
+const { SCOPE_COMMANDS, runScope } = require("./worktree-notes-triage/scope");
 
-const DISPOSE_KINDS = ["fixed", "known-limits", "discard"];
+const DISPOSE_KINDS = ["fixed", "discard"];
 
 function err(msg) {
   process.stderr.write(`[worktree-notes-triage] ${msg}\n`);
@@ -31,10 +34,13 @@ function usage() {
   process.stderr.write(
     "Usage:\n" +
       "  worktree-notes-triage.js list <absolute-path>\n" +
-      "  worktree-notes-triage.js annotate <absolute-path> <lineNumber> <issueNumber>\n" +
+      "  worktree-notes-triage.js annotate <absolute-path> <lineNumber|key=<8hex>> <issueNumber>\n" +
       "  worktree-notes-triage.js handoff <absolute-path> <lineNumber>\n" +
-      "  worktree-notes-triage.js dispose <absolute-path> <lineNumber> fixed|known-limits|discard\n" +
-      "  worktree-notes-triage.js resolve --caller <worktree-end|session-close|issue-close-finalize> [...]\n"
+      "  worktree-notes-triage.js dispose <absolute-path> <lineNumber|key=<8hex>> fixed|discard\n" +
+      "  worktree-notes-triage.js resolve --caller <worktree-end|session-close|issue-close-finalize> [...]\n" +
+      "  worktree-notes-triage.js open-this-pr <absolute-path>\n" +
+      "  worktree-notes-triage.js check <absolute-path> | check --session <session-id>\n" +
+      "  worktree-notes-triage.js rescope|unrescope <absolute-path> <lineNumber|key=<8hex>>\n"
   );
 }
 
@@ -87,18 +93,7 @@ function readNotes(rawPath) {
   }
 }
 
-function writeAtomic(resolved, text) {
-  const tmp = `${resolved}.tmp`;
-  try {
-    fs.writeFileSync(tmp, text, "utf8");
-    fs.renameSync(tmp, resolved);
-    return true;
-  } catch (e) {
-    try { fs.unlinkSync(tmp); } catch { /* ignore cleanup error */ }
-    err(`atomic write failed: ${e.message}`);
-    return false;
-  }
-}
+const writeAtomic = (resolved, text) => writeNotesAtomic(resolved, text, err);
 
 function parseLineNumber(arg) {
   if (!/^\d+$/.test(String(arg || "")) || parseInt(arg, 10) < 1) {
@@ -106,6 +101,23 @@ function parseLineNumber(arg) {
     return null;
   }
   return parseInt(arg, 10);
+}
+
+// A line number, or the one triage entry whose findingKey is the key=<8hex> ref; null after stderr.
+function resolveEntryRef(text, ref) {
+  const s = String(ref || "");
+  if (!s.startsWith("key=")) return parseLineNumber(s);
+  const m = /^key=([0-9a-f]{8})$/.exec(s);
+  if (m === null) {
+    err(`key ref must be key=<8 lowercase hex>, got: ${s}`);
+    return null;
+  }
+  const hits = triageEntries(text).filter((e) => findingKey(e.section, e.body) === m[1]);
+  if (hits.length !== 1) {
+    err(`key=${m[1]} matches ${hits.length} entries; use the line number`);
+    return null;
+  }
+  return hits[0].lineNumber;
 }
 
 // The triage entry at lineNumber, or null after the reason went to stderr.
@@ -122,9 +134,7 @@ function cmdList(rawPath) {
   return 0;
 }
 
-function cmdAnnotate(rawPath, lineNumberArg, issueNumberArg) {
-  const lineNumber = parseLineNumber(lineNumberArg);
-  if (lineNumber === null) return 1;
+function cmdAnnotate(rawPath, refArg, issueNumberArg) {
   if (!/^\d+$/.test(String(issueNumberArg || "")) || parseInt(issueNumberArg, 10) < 1) {
     err(`issueNumber must be a positive integer, got: ${issueNumberArg}`);
     return 1;
@@ -132,6 +142,8 @@ function cmdAnnotate(rawPath, lineNumberArg, issueNumberArg) {
   const issueNumber = parseInt(issueNumberArg, 10);
   const notes = readNotes(rawPath);
   if (!notes) return 1;
+  const lineNumber = resolveEntryRef(notes.text, refArg);
+  if (lineNumber === null) return 1;
 
   // Refuse an out-of-range or non-entry line BEFORE any write: markEntryPromoted returns the
   // text unchanged in those cases, which would otherwise look like success.
@@ -179,19 +191,26 @@ function cmdHandoff(rawPath, lineNumberArg) {
   return 0;
 }
 
-function cmdDispose(rawPath, lineNumberArg, kind) {
+function cmdDispose(rawPath, refArg, kind) {
   if (!DISPOSE_KINDS.includes(kind)) {
     err(`dispose kind must be one of ${DISPOSE_KINDS.join("|")}, got: ${kind}`);
     return 1;
   }
-  const lineNumber = parseLineNumber(lineNumberArg);
-  if (lineNumber === null) return 1;
   const notes = readNotes(rawPath);
   if (!notes) return 1;
+  const lineNumber = resolveEntryRef(notes.text, refArg);
+  if (lineNumber === null) return 1;
   const entry = entryAt(notes.text, lineNumber);
   if (!entry) return 1;
   // Re-run safe: a promoted or disposed entry already has its terminal marker.
   if (isTerminal(entry)) return 0;
+  if (kind === "fixed" && entry.prScope === "this-pr") {
+    const ev = fixedEvidence(entry, defaultGitRunner(path.dirname(notes.resolved)));
+    if (!ev.ok) {
+      err(`dispose fixed refused: fixed-unverified: ${ev.reason}${ev.path ? ` ${ev.path}` : ""} — change that path first, or settle the finding another way (check <path> lists the exits)`);
+      return 2;
+    }
+  }
   return writeAtomic(notes.resolved, markEntryDisposed(notes.text, lineNumber, kind)) ? 0 : 1;
 }
 
@@ -206,6 +225,9 @@ function main() {
   if (cmd === "handoff") return cmdHandoff(filePath, rest[0]);
   if (cmd === "dispose") return cmdDispose(filePath, rest[0], rest[1]);
   if (cmd === "resolve") return runResolve(process.argv.slice(3));
+  if (SCOPE_COMMANDS.includes(cmd)) {
+    return runScope({ validatePath, readNotes, resolveEntryRef, write: writeAtomic, err }, cmd, process.argv.slice(3));
+  }
   err(`unknown subcommand: ${cmd}`);
   usage();
   return 1;

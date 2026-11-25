@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/feat-1763-review-codex-launch.sh
 # Tests: bin/github-issues/review-survey-verdict-codex.sh
-# Tags: issue-create, verdict, review, codex, web-search, toggle-removal, prompt-contract, scope:issue-specific, pwsh-not-required, TL2, input-size-guard, exit-127, verdict-disputed, issue-2225, severity, proposal-sha256, issue-2019
+# Tags: issue-create, verdict, review, codex, web-search, toggle-removal, prompt-contract, scope:issue-specific, pwsh-not-required, TL2, input-size-guard, exit-127, verdict-disputed, issue-2225, severity, proposal-sha256, issue-2019, issue-3145, fix-in-session
 # TL3 gap: real `codex exec` + `-c tools.web_search=true` reaching the network (codex is a
 #   recording mock); whether real search queries obey the leak-prevention instruction.
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
@@ -299,6 +299,33 @@ else
     else
         fail "S4-prompt-requests-independent-severity" "the review prompt must ask the reviewer to judge severity and show the severity field in the output shape"
     fi
+fi
+
+echo ""
+echo "=== F1 (#3145): closes_session reaches the codex prompt and the final candidate projection ==="
+# fix-in-session is legal only on a target whose closes_session is yes, so the reviewer must SEE the
+# flag per candidate, the prompt must offer the verdict, and write_final must carry the flag forward
+# (a dropped flag downstream reads as "not this session's issue").
+if [ "$RS_PRESENT" != "yes" ]; then
+    red "F1-prompt-offers-fix-in-session"; red "F1-prompt-candidate-closes-session"; red "F1-final-projection-closes-session"
+else
+    ART_PLAIN="$ART"; ART="$WORK/survey-fis.json"
+    node -e 'const fs = require("fs"); const a = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+      a.candidates[0].closes_session = true; fs.writeFileSync(process.argv[2], JSON.stringify(a));' \
+      "$(node_path "$ART_PLAIN")" "$(node_path "$ART")"
+    REVIEW_OUT='{"verdict":"fix-in-session","target":10,"children":[],"related":[],"reason":"this session closes #10","worth_filing":true,"same_fix":true}' run_review F1
+    ART="$ART_PLAIN"
+    grep -qF 'Allowed verdicts: none | reopen | sub-of | make-parent | sibling | fix-in-session' "$PROMPT" \
+        && grep -qF 'fix-in-session is allowed only with a target whose closes_session is yes' "$PROMPT" \
+        && pass "F1-prompt-offers-fix-in-session" \
+        || fail "F1-prompt-offers-fix-in-session" "the prompt must list fix-in-session and restrict it to a closes_session target"
+    got="$(awk '/^#10 /{c=10} /^#11 /{c=11} /^  closes_session: /{print c "=" $2}' "$PROMPT" | tr '\n' ' ')"
+    [ "$got" = "10=yes 11=no " ] && pass "F1-prompt-candidate-closes-session" \
+        || fail "F1-prompt-candidate-closes-session" "each candidate row must carry closes_session yes/no (got: '$got')"
+    got="$LAST|$(node -e 'try { const a = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+      process.stdout.write(a.candidates.map((c) => c.number + "=" + c.closes_session).join(",")); } catch (e) { process.stdout.write("UNREADABLE"); }' "$(node_path "$FINAL")" 2>/dev/null)|$(review_field "$FINAL" verdict)"
+    [ "$got" = "review_result: disputed|10=true,11=false|fix-in-session" ] && pass "F1-final-projection-closes-session" \
+        || fail "F1-final-projection-closes-session" "want review_result: disputed|10=true,11=false|fix-in-session (got: $got)"
 fi
 
 echo ""; echo "Results: $PASS passed, $FAIL failed"

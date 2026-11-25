@@ -27,6 +27,7 @@ const { CONDITION_SCHEMAS } = require("./skip-signal-resolver/condition-schemas"
 const { resolveTrustedRepoDir } = require("./record-step-verdict/trusted-repo-dir");
 const { checkReleaseCompletion } = require("./record-step-verdict/release-steps");
 const { checkRunTestsCompletion } = require("./record-step-verdict/run-tests-evidence");
+const { checkWriteCodeThisPr, THIS_PR_GATES } = require("./record-step-verdict/this-pr-open");
 
 // ---- exported discriminators ----------------------------------------------
 
@@ -290,6 +291,9 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
     const ev = checkRunTestsCompletion(sessionId, st);
     return ev.ok ? { ok: true, code: 0, message: "", already: true } : fail(2, `record-step-verdict: ${ev.message}`, ev.kind);
   }
+  // #3145 S4: an unsettled this-pr finding holds write_code open; reset / recorded-verdict are not judged.
+  const thisPr = step === "write_code" && status === "complete" && THIS_PR_GATES.includes(gate) ? checkWriteCodeThisPr(sessionId) : null;
+  if (thisPr) return fail(2, `record-step-verdict: ${thisPr.message}`, thisPr.kind);
 
   // Idempotent repeat — ADVANCE GATE ONLY. Returning before the write is what
   // keeps a re-issued --advance from re-firing the workflow_init downstream reset

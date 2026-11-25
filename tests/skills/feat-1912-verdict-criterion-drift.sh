@@ -3,19 +3,12 @@
 # Tests: skills/_shared/issue-verdict-cascade.md, bin/github-issues/lib/validate-review-verdict.js, agents/issue-create-survey-worker.md, bin/github-issues/review-survey-verdict-codex.sh
 # Tags: issue-create, verdict, cascade, same-fix, ssot, drift, prompt-assembly, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):
-# - Whether a real `codex exec` and a real survey subagent actually DECIDE by the
-#   embedded cascade. A prompt that carries the table proves reach, not obedience;
-#   only a real-model run could show drift in the answer itself, and #1912 accepted
-#   that residual risk explicitly rather than building a model-dependent test.
-# - Whether the DEPLOYED copy under $HOME/.claude matches the worktree copy. This file
-#   reads the worktree.
+# - Whether a real codex exec / survey subagent DECIDES by the embedded cascade (reach, not obedience; #1912 accepted it).
+# - Whether the deployed $HOME/.claude copy matches this worktree copy.
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
-#
-# `same_fix` lives in three places that must agree: the cascade SSOT table, the
-# validator's map, and the assembled reviewer prompt. This file pins the agreement.
-# The comparison is a SUBSET one: `bulk-sub-of` is in the JS map (artifact grammar)
-# but must NOT be in the cascade table (review grammar), so equality would never hold.
+# same_fix lives in the cascade table, the validator map and the reviewer prompt; this file pins their
+# agreement as a SUBSET (bulk-sub-of is in the JS map only, never in the review-grammar table).
 
 set -u
 
@@ -70,7 +63,7 @@ table_rows() {
       }' "$1" | LC_ALL=C sort
 }
 
-echo "=== P: the cascade table and SAME_FIX_BY_VERDICT agree (5-verdict subset) ==="
+echo "=== P: the cascade table and SAME_FIX_BY_VERDICT agree (6-verdict subset; #3145 adds fix-in-session) ==="
 
 CASCADE_ROWS="$WORK/cascade-rows.txt"
 JS_ROWS="$WORK/js-rows.txt"
@@ -104,19 +97,19 @@ CROWS=$(count_lines "$CASCADE_ROWS")
 JROWS=$(count_lines "$JS_ROWS")
 
 # P1/P2 keep P3 non-vacuous: two empty lists would compare "equal".
-if [ "$CROWS" -eq 5 ]; then
-    pass "P1-cascade-table-has-five-rows"
+if [ "$CROWS" -eq 6 ] && grep -qx 'fix-in-session=true' "$CASCADE_ROWS"; then
+    pass "P1-cascade-table-has-six-rows-with-fix-in-session-true"
 else
-    fail "P1-cascade-table-has-five-rows" "the cascade must carry a fixed 2-column same_fix table for the 5 review verdicts (parsed rows: $CROWS)"
+    fail "P1-cascade-table-has-six-rows-with-fix-in-session-true" "the cascade must carry a fixed 2-column same_fix table for the 6 review verdicts, fix-in-session = true (parsed rows: $CROWS)"
 fi
 
-if [ "$JROWS" -eq 5 ]; then
-    pass "P2-js-map-covers-five-review-verdicts"
+if [ "$JROWS" -eq 6 ] && grep -qx 'fix-in-session=true' "$JS_ROWS"; then
+    pass "P2-js-map-covers-six-review-verdicts"
 else
-    fail "P2-js-map-covers-five-review-verdicts" "SAME_FIX_BY_VERDICT must define every verdict in VERDICTS (parsed rows: $JROWS)"
+    fail "P2-js-map-covers-six-review-verdicts" "SAME_FIX_BY_VERDICT must define every verdict in VERDICTS, fix-in-session = true (parsed rows: $JROWS)"
 fi
 
-if [ "$CROWS" -eq 5 ] && [ "$JROWS" -eq 5 ] && diff -q "$CASCADE_ROWS" "$JS_ROWS" >/dev/null 2>&1; then
+if [ "$CROWS" -eq 6 ] && [ "$JROWS" -eq 6 ] && diff -q "$CASCADE_ROWS" "$JS_ROWS" >/dev/null 2>&1; then
     pass "P3-cascade-table-matches-js-map"
 else
     fail "P3-cascade-table-matches-js-map" "cascade=[$(tr '\n' ' ' < "$CASCADE_ROWS")] js=[$(tr '\n' ' ' < "$JS_ROWS")]"
@@ -425,7 +418,7 @@ fi
 # that some prose did.
 PROMPT_ROWS="$WORK/prompt-rows.txt"
 table_rows "$PROMPT" > "$PROMPT_ROWS"
-if [ "$CROWS" -eq 5 ] && diff -q "$CASCADE_ROWS" "$PROMPT_ROWS" >/dev/null 2>&1; then
+if [ "$CROWS" -eq 6 ] && diff -q "$CASCADE_ROWS" "$PROMPT_ROWS" >/dev/null 2>&1; then
     pass "R3-cascade-table-reaches-the-prompt"
 else
     fail "R3-cascade-table-reaches-the-prompt" "prompt rows=[$(tr '\n' ' ' < "$PROMPT_ROWS")] cascade rows=[$(tr '\n' ' ' < "$CASCADE_ROWS")]"
