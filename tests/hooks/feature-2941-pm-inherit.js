@@ -7,7 +7,7 @@
 // Driven through runPmWriter with the fixture of ./feature-2941-pm-writer/ (fake gh on PATH).
 // TL3 gap: the inherit running inside the live UserPromptSubmit hook process is not observed here.
 
-const { isolate } = require("../lib/harness");
+const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const { test, after } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
@@ -72,3 +72,63 @@ test("B3 an upstream table naming one issue twice is not copied: structure dupli
   assert.match(String(x.r.context), /sequence=not-copied/);
   assert.strictEqual(x.r.calls, control.r.calls, `${W.brief(x.r)} / control: ${W.brief(control.r)}`);
 });
+
+// #3152: the sequence check of an inherit reads the forge under the hook budget's check deadline; an inherit
+// has no write stage, so it asks checkDeadline({write:false}) (hookDeadlineAt - inbox).
+caseBegin("pm-inherit-check-deadline", "hooks/pm-session/inherit.js");
+test("B4 the inherit's range check runs to budget.checkDeadline({write:false})", () => {
+  let create;
+  try { create = P.load("hooks/pm-session/budget.js").createHookBudget; } catch (e) { assert.fail(`hooks/pm-session/budget.js is missing (#3152): ${e.message}`); }
+  const real = create({ startedAt: Date.now(), now: () => Date.now() });
+  const asked = [];
+  const budget = Object.assign({}, real, { checkDeadline: (o) => { const d = real.checkDeadline(o); asked.push({ o, d }); return d; } });
+  const seen = [];
+  const links = P.load("bin/lib/forge-issue-links.js");
+  const fetchAncestorChains = (refs, o) => { seen.push(o && o.deadlineAt); return links.fetchAncestorChains(refs, o); };
+  const sid = W.nextSid();
+  const tag = W.nextTag("PM-inh");
+  P.seedPm(sid, P.pm({ tag, issues: [7106], sequence: seqOf([7106]) }));
+  const down = W.nextSid();
+  P.seedState(down);
+  try {
+    const r = P.load(W.WRITER).runPmWriter({ session_id: down, hook_event_name: "UserPromptSubmit", prompt: P.wrapped("resume-session", `--from ${sid}`), cwd: W.home },
+      { now: () => Date.now(), budget, fetchAncestorChains });
+    W.assertAccepted(r || {}, "inherit", tag);
+    const noWrite = asked.filter((a) => a.o && a.o.write === false);
+    assert.ok(noWrite.length >= 1, `checkDeadline({write:false}) was not asked: ${JSON.stringify(asked)}`);
+    assert.ok(seen.length >= 1, "the range check did not read the forge");
+    assert.ok(seen.every((d) => noWrite.some((a) => a.d === d)), `deadlines ${JSON.stringify(seen)} vs ${JSON.stringify(noWrite)}`);
+  } finally {
+    W.archive(sid);
+    if (P.readPm(down)) W.archive(down);
+  }
+});
+caseEnd();
+
+// #3152: the two new forge failure reasons (a spent deadline, a gh that cannot be spawned) are unverified
+// reasons, so the table still comes over with the mark (schema.js UNVERIFIED_REASONS accepts them).
+caseBegin("pm-inherit-unverified-budget-reasons", "hooks/pm-session/inherit.js");
+for (const reason of ["budget-exhausted", "spawn-failed"]) {
+  test(`F3 a range check that fails with ${reason}: the table is copied with the unverified mark (copied-unverified)`, () => {
+    const seq = seqOf([7107]);
+    const sid = W.nextSid();
+    const tag = W.nextTag("PM-inh");
+    P.seedPm(sid, P.pm({ tag, issues: [7107], sequence: seq }));
+    const down = W.nextSid();
+    P.seedState(down);
+    try {
+      const r = P.load(W.WRITER).runPmWriter({ session_id: down, hook_event_name: "UserPromptSubmit", prompt: P.wrapped("resume-session", `--from ${sid}`), cwd: W.home },
+        { now: () => Date.now(), fetchAncestorChains: () => ({ ok: false, reason }) }) || {};
+      W.assertAccepted(r, "inherit", tag);
+      const pm = P.readPm(down);
+      assert.ok(pm, `the inherit wrote no pm (schema refusal?): ${W.brief(r)}`);
+      assert.deepStrictEqual(pm.sequence.tables, seq.tables);
+      assert.strictEqual((pm.sequence.unverified || {}).reason, reason, JSON.stringify(pm.sequence));
+      assert.match(String(r.context), /sequence=copied-unverified/);
+    } finally {
+      W.archive(sid);
+      if (P.readPm(down)) W.archive(down);
+    }
+  });
+}
+caseEnd();

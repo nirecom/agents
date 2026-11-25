@@ -12,15 +12,32 @@ const WRITER = path.join(P.ROOT, "hooks", "pm-session", "writer.js");
 const lockPath = () => path.join(process.env.WORKFLOW_STATE_DIR, "pm.lock");
 const refKey = (r) => `${r.repo || "o/r"}#${r.number}`;
 
-// field() -> an injected PM field ({write, read}) backed by an in-memory map; writes lists every write.
+// withMany(io) -> io plus the #3152 batch members, built on io's own write unless io has them:
+//   writeMany(items [{ref, value}]) -> [{ref, value, result, reason?}] in item order (one alias mutation);
+//   seedCards(cards {[refKey]: card}) records the cards the check read handed over.
+// batches lists the refs of each writeMany call; seeded lists each seedCards argument.
+function withMany(io) {
+  const batches = [];
+  const seeded = [];
+  return Object.assign(io, {
+    batches, seeded,
+    writeMany: io.writeMany || ((items) => {
+      batches.push(items.map((it) => refKey(it.ref)));
+      return items.map((it) => Object.assign({ ref: it.ref, value: it.value }, io.write(it.ref, it.value) || {}));
+    }),
+    seedCards: io.seedCards || ((cards) => { seeded.push(cards); }),
+  });
+}
+
+// field() -> an injected PM field ({write, read, writeMany, seedCards}) backed by an in-memory map; writes lists every write.
 function field(seed) {
   const values = Object.assign({}, seed || {});
   const writes = [];
-  return {
+  return withMany({
     values, writes,
     write: (ref, value) => { writes.push({ ref: refKey(ref), value }); values[refKey(ref)] = value; return { result: "ok" }; },
     read: (refs) => ({ ok: true, values: Object.fromEntries(refs.map((r) => [refKey(r), values[refKey(r)] === undefined ? null : values[refKey(r)]])) }),
-  };
+  });
 }
 
 // write(sid, prompt, deps?) -> the writer result ({block?, context?, notice?} or {threw}), with ms.
@@ -108,6 +125,6 @@ function writeBox(name, entries) {
 const notes = (sid) => (P.raw(sid).pm_notifications || []);
 
 module.exports = {
-  P, F, G: F.G, lockPath, refKey, field, write, cli, childWrite, holdLock, seqFile, table, unstatedLog,
+  P, F, G: F.G, lockPath, refKey, field, withMany, write, cli, childWrite, holdLock, seqFile, table, unstatedLog,
   notify, boxPath, readBox, writeBox, notes,
 };

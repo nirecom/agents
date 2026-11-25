@@ -7,6 +7,7 @@
 const { spawnSync } = require("child_process");
 const { buildGhSpawn, buildGitSpawn } = require("../workflow/lib/workflow-init/spawn-env");
 const { parseOriginOwnerRepo } = require("../../hooks/lib/parse-remote-url");
+const { classifyGhSpawn, BUDGET_EXHAUSTED } = require("./forge-failure");
 
 const GH_TIMEOUT_MS = 15000;
 const OWNER_REPO_RE = /^([A-Za-z0-9._-]+)\/([A-Za-z0-9._-]+)$/;
@@ -102,14 +103,15 @@ const inside = (errPath, slotPath) => Array.isArray(errPath) && errPath.length >
   && slotPath.every((k, i) => errPath[i] === k);
 
 // classifyGraphqlResult(spawnResult, slots, readNode) -> {ok:true, results: {[key]: readNode(node, key) |
-// {ok:false, reason}}} | {ok:false, reason: "timeout"|"gh_exec_failed"|"parse_failed"} (#2942).
+// {ok:false, reason}}} | {ok:false, reason: "timeout"|"spawn-failed"|"gh_exec_failed"|"parse_failed"} (#2942, #3152).
 // gh exits 1 when one aliased node of a batch is missing yet still prints `data`; only a slot an
 // errors[].type NOT_FOUND covers is issue_not_found, a slot another error covers is gh_exec_failed, and
 // every other slot is read. No data on a non-zero exit is a whole-call gh_exec_failed (network, auth).
 // A slot with any error inside its node (a partial node) is gh_exec_failed, never read, unless the
 // caller's tolerate(error) accepts every such error (#3135: the caller names them; this module knows no field).
 function classifyGraphqlResult(r, slots, readNode, tolerate) {
-  if (r.error || r.signal) return { ok: false, reason: "timeout" };
+  const spawnFailure = classifyGhSpawn(r);
+  if (spawnFailure) return { ok: false, reason: spawnFailure };
   let body;
   try { body = JSON.parse(String(r.stdout || "").trim()); } catch { body = null; }
   const data = body && body.data && typeof body.data === "object" ? body.data : null;
@@ -130,10 +132,11 @@ function classifyGraphqlResult(r, slots, readNode, tolerate) {
   return { ok: true, results };
 }
 
-// batchedGraphql(refs, {fields, readNode, keyOf?, tolerate?}, {deadlineAt?, timeoutMs?}) -> {ok:true, results: {[key]:
-// readNode(node, key) | {ok:false, reason}}} or a whole-call {ok:false, reason: "gh_exec_failed"|"timeout"|
-// "parse_failed"}. key is keyOf(repo, N) (default refKey). Refs go 50 per gh call; one deadlineAt covers
-// every call (none left -> timeout without calling gh); without it each call gets timeoutMs (15 s).
+// batchedGraphql(refs, {fields, readNode, keyOf?, tolerate?}, {deadlineAt?, timeoutMs?, minCallMs?, chunkSize?,
+// spawnSync?}) -> {ok:true, results: {[key]: readNode(node, key) | {ok:false, reason}}} or a whole-call
+// {ok:false, reason: "gh_exec_failed"|"timeout"|"spawn-failed"|"budget-exhausted"|"parse_failed"}. key is
+// keyOf(repo, N) (default refKey). Refs go chunkSize (50) per gh call; one deadlineAt covers every call (less
+// left than minCallMs -> budget-exhausted without calling gh); without it each call gets timeoutMs (15 s).
 function batchedGraphql(refs, spec, opts) {
   const o = opts || {};
   const keyOf = spec.keyOf || refKey;
@@ -148,13 +151,16 @@ function batchedGraphql(refs, spec, opts) {
     if (!valid.has(key)) valid.set(key, { key, number: ref.number, owner: m[1], name: m[2], repoKey: repo.toLowerCase() });
   }
   const list = [...valid.values()];
-  for (let i = 0; i < list.length; i += CHUNK_SIZE) {
+  const chunk = Number.isInteger(o.chunkSize) && o.chunkSize > 0 ? o.chunkSize : CHUNK_SIZE;
+  const minCallMs = Number.isFinite(o.minCallMs) ? Math.max(0, o.minCallMs) : 0;
+  const spawn = typeof o.spawnSync === "function" ? o.spawnSync : spawnSync;
+  for (let i = 0; i < list.length; i += chunk) {
     let timeoutMs = Number.isFinite(o.timeoutMs) ? o.timeoutMs : GH_TIMEOUT_MS;
     if (Number.isFinite(o.deadlineAt)) timeoutMs = Math.min(timeoutMs, o.deadlineAt - Date.now());
-    if (timeoutMs <= 0) return { ok: false, reason: "timeout" };
-    const { query, slots } = buildQuery(list.slice(i, i + CHUNK_SIZE), spec.fields);
+    if (timeoutMs <= 0 || timeoutMs < minCallMs) return { ok: false, reason: BUDGET_EXHAUSTED };
+    const { query, slots } = buildQuery(list.slice(i, i + chunk), spec.fields);
     const [cmd, args, spawnOpts] = buildGhSpawn(["api", "graphql", "--input", "-"]);
-    const r = spawnSync(cmd, args, Object.assign({}, spawnOpts, { input: JSON.stringify({ query }), timeout: timeoutMs }));
+    const r = spawn(cmd, args, Object.assign({}, spawnOpts, { input: JSON.stringify({ query }), timeout: timeoutMs }));
     const c = classifyGraphqlResult(r, slots, spec.readNode, spec.tolerate);
     if (!c.ok) return c;
     Object.assign(results, c.results);

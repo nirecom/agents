@@ -39,6 +39,7 @@ const assignCases = require(path.join(DIR, "assign-cases.js"));
 const inheritCases = require(path.join(DIR, "inherit-cases.js"));
 const scanCases = require(path.join(DIR, "scan-cases.js"));
 const homeRefCases = require(path.join(DIR, "home-ref-cases.js"));
+const nextActionCases = require(path.join(DIR, "next-action-cases.js"));
 
 caseBegin("pm-key-registered", "hooks/workflow-state/state-io/projection.js");
 scanCases.keyCases();
@@ -84,4 +85,8 @@ caseEnd();
 
 caseBegin("pm-writer-home-repo-normalization", "hooks/pm-session/writer.js");
 homeRefCases.homeRefs();
+caseEnd();
+
+caseBegin("pm-writer-refusal-next-action", "hooks/pm-session/writer.js");
+nextActionCases.nextAction();
 caseEnd();

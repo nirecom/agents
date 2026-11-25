@@ -227,6 +227,18 @@ workflow. Notes the PM could not take land in its mailbox; `pm-notify close` rep
   lock is never taken, even past `PM_LOCK_STALE_MS`; the command refuses with `HOLDER_PID` and
   `HOLDER_AGE_MS` so the user can stop the holder. Serialising forge writes wins over availability.
 
+### PM command time budget (#3152)
+
+Why: the PM writer runs inside the `UserPromptSubmit` hook; fixed per-call gh limits added up past
+the hook timeout, and a command killed by it told the user nothing.
+
+- One budget per hook run, counted from the hook process's start
+  ([hooks/pm-session/budget.js](../../hooks/pm-session/budget.js) owns the numbers): lock wait, check,
+  card creation (only with enough left), field write and inbox each get a derived deadline; the title read takes what is left.
+- The check is one composite query (field chains, sub-issue trees, cards); the writes are one aliased mutation per chunk.
+- Failure classes ([bin/lib/forge-failure.js](../../bin/lib/forge-failure.js)): `budget-exhausted` (gh not run),
+  `timeout` (gh did not answer), `spawn-failed` (gh could not start). A refusal names the class and the next action.
+
 ## 9. Verification observations
 
 Verification (a) and (b) ran on a real session on 2026-11-09; the full note is a comment on issue #2668.

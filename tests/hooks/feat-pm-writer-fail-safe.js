@@ -299,4 +299,16 @@ test("C3 fieldIoOf: a GitLab origin -> null (no forge field); no origin -> refus
   assert.strictEqual(O.fieldIoOf({ __origin: "https://gitlab.com/a/b.git" }, {}), null);
   assert.throws(() => O.fieldIoOf({ __origin: null }, {}), /origin cannot be determined/);
 });
+// #3152: the origin stage has one source, forge-kind.js ORIGIN_TIMEOUT_MS (1000); the writer's git read uses it.
+test("C4 the writer's origin read runs git with forge-kind's ORIGIN_TIMEOUT_MS (1000)", () => {
+  const K = P.load("bin/lib/pm-field/forge-kind.js");
+  assert.strictEqual(K.ORIGIN_TIMEOUT_MS, 1000, "forge-kind.js exports ORIGIN_TIMEOUT_MS = 1000 (#3152)");
+  const me = ooSeed({ tag: "PM-meC4", issues: [10341] });
+  const seen = [];
+  const deps = Object.assign({}, DEPS, { spawnSync: (cmd, args, opts) => { seen.push({ cmd: String(cmd), args: [].concat(args || []), timeout: opts && opts.timeout }); return DEPS.spawnSync(); } });
+  writer().runPmWriter({ session_id: me, prompt: P.wrapped("pm-add", "o/r#10342 reason"), cwd: tmp }, deps);
+  const git = seen.filter((c) => /(^|[\\/])git(\.exe)?$/.test(c.cmd) && c.args.includes("remote"));
+  assert.ok(git.length >= 1, `no git origin read through deps.spawnSync: ${JSON.stringify(seen)}`);
+  for (const c of git) assert.strictEqual(c.timeout, K.ORIGIN_TIMEOUT_MS, JSON.stringify(c));
+});
 caseEnd();

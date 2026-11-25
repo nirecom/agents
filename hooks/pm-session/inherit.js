@@ -8,6 +8,7 @@ const io = require("../workflow-state/state-io");
 const S = require("./schema");
 const scan = require("./scan");
 const C = require("./writer-common");
+const { budgetOf } = require("./budget");
 
 const BIN = path.join(__dirname, "..", "..", "bin", "lib", "pm-state");
 const FROM_RE = /(?:^|\s)--from\s+([A-Za-z0-9_-]+)(?=\s|$)/;
@@ -73,7 +74,7 @@ function inherit(sid, args, nowMs, input, deps) {
   if (Array.isArray(tables) && tables.length === 0) v = { sequence: Object.assign(EMPTY_SEQ(), upSeq, { tables: [] }), value: "none", reason: null };
   else {
     const { checkSequence } = require(path.join(BIN, "sequence"));
-    const r = checkSequence(tables, { tag: up.pm.tag, session_id: upSid, issues: up.pm.issues || [] }, { ancestry: C.ancestryOf(deps), homeRepo: home });
+    const r = checkSequence(tables, { tag: up.pm.tag, session_id: upSid, issues: up.pm.issues || [] }, { ancestry: C.ancestryOf(deps, budgetOf(deps).checkDeadline({ write: false })), homeRepo: home });
     v = verdictOf(r, upSeq, at);
   }
   let pm = null;

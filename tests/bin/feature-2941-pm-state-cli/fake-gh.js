@@ -57,6 +57,26 @@ if (args[0] === "project" && args[1] === "item-edit") {
   process.exit(0);
 }
 if (args[0] !== "api" || args[1] !== "graphql") process.exit(1);
+// #3152 writeMany: `mutation { m<i>: updateProjectV2ItemFieldValue(input:{…itemId:"…",…value:{text:"…"}}) | m<i>:
+// clearProjectV2ItemFieldValue(…) }` writes the store like item-edit (same EDIT_* knobs) and answers {data:{m<i>:…}}.
+if (stdinQuery && /^\s*mutation\b/.test(stdinQuery) && /ProjectV2ItemFieldValue\s*\(/.test(stdinQuery)) {
+  if (process.env.PM_FAKE_GH_EDIT_PID_FILE) fs.writeFileSync(process.env.PM_FAKE_GH_EDIT_PID_FILE, String(process.pid));
+  const editSleep = Number(process.env.PM_FAKE_GH_EDIT_SLEEP_MS || 0);
+  if (editSleep > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, editSleep);
+  if (process.env.PM_FAKE_GH_EDIT_MODE === "fail") { process.stderr.write("fake gh: mutation HTTP 502\n"); process.exit(1); }
+  if (!storePath) { process.stderr.write("fake gh: a mutation needs a store\n"); process.exit(1); }
+  const store = readStore();
+  const out = {};
+  const mre = /(m\d+)\s*:\s*(update|clear)ProjectV2ItemFieldValue\s*\(\s*input\s*:\s*\{[^}]*?itemId\s*:\s*("(?:[^"\\]|\\.)*")(?:[^}]*?value\s*:\s*\{\s*text\s*:\s*("(?:[^"\\]|\\.)*"))?/g;
+  for (let m = mre.exec(stdinQuery); m; m = mre.exec(stdinQuery)) {
+    const id = JSON.parse(m[3]);
+    store[id] = m[2] === "clear" ? null : JSON.parse(m[4]);
+    out[m[1]] = { projectV2Item: { id } };
+  }
+  fs.writeFileSync(storePath, JSON.stringify(store));
+  process.stdout.write(`${JSON.stringify({ data: out })}\n`);
+  process.exit(0);
+}
 if (process.env.PM_FAKE_GH_MODE === "fail") { process.stderr.write("fake gh: HTTP 502\n"); process.exit(1); }
 if (process.env.PM_FAKE_GH_MODE === "garbage") { process.stdout.write("<html>not json</html>\n"); process.exit(0); }
 

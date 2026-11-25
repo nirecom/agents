@@ -101,6 +101,31 @@ test("D3 a read slower than its timeout reads as {ok:false}", () => {
 });
 caseEnd();
 
+// #3152: /pm-remove and /pm-rename read the PM values and the cards in one gh call, so the write needs no readCards.
+// Assumed: readPmFieldsAndCards(refs, opts) -> {ok:true, values:{"o/r#N": tag|null}, cards:{"o/r#N": card}} | {ok:false, reason}.
+caseBegin("pm-field-read-fields-and-cards", "bin/lib/pm-field/read.js");
+test("D4 readPmFieldsAndCards answers readPmFields' values and readCards' cards from one gh call", () => {
+  assert.strictEqual(typeof R.readPmFieldsAndCards, "function", "read.js does not export readPmFieldsAndCards (#3152)");
+  G.setPmStore({ [item(9451)]: "PM-a" });
+  G.setMap({ "o/r#9452": {}, "o/r#9453": { noCard: true } });
+  const refs = [ref(9451), ref(9452), ref(9453)];
+  const before = G.calls();
+  const r = R.readPmFieldsAndCards(refs, { timeoutMs: 5000 });
+  assert.strictEqual(G.calls() - before, 1, "one gh call for values and cards");
+  assert.strictEqual(r.ok, true, JSON.stringify(r));
+  assert.deepStrictEqual(r.values, R.readPmFields(refs, { timeoutMs: 5000 }).values, JSON.stringify(r));
+  assert.deepStrictEqual(r.cards || r.results, R.readCards(refs, { timeoutMs: 5000 }).results, JSON.stringify(r));
+});
+test("D4 a forge failure fails the combined read as a whole", () => {
+  assert.strictEqual(typeof R.readPmFieldsAndCards, "function", "read.js does not export readPmFieldsAndCards (#3152)");
+  G.mode("fail");
+  let r;
+  try { r = R.readPmFieldsAndCards([ref(9454)], { timeoutMs: 1500 }); } finally { G.mode(null); }
+  assert.strictEqual(r.ok, false, JSON.stringify(r));
+  assert.ok(r.reason, JSON.stringify(r));
+});
+caseEnd();
+
 // #2942: an issue on several Projects whose pm values differ is pm-field-ambiguous (never the first value).
 const path = require("node:path");
 const LINKS = path.join(P.ROOT, "bin", "lib", "forge-issue-links.js");
@@ -206,6 +231,8 @@ function writeWith(pmField, prompt, s) {
     return run({ session_id: s, hook_event_name: "UserPromptSubmit", prompt, cwd: home }, { now: () => Date.now(), pmField }) || {};
   } catch (e) { return { threw: e.message }; }
 }
+// #3152: the writer writes through writeMany; withMany builds it on each fake's write.
+const { withMany } = require("../lib/pm-s3-fixture");
 const unknownWrite = (calls) => ({ write: (r, v) => { calls.push([r, v]); return { result: "unknown" }; } });
 const valuesOf = (refs, v) => ({ ok: true, values: Object.fromEntries(refs.map((r) => [`${r.repo || "o/r"}#${r.number}`, v])) });
 function addCase(label, read, expectAccepted, reasonRe) {
@@ -216,7 +243,7 @@ function addCase(label, read, expectAccepted, reasonRe) {
     P.seedPm(s, P.pm({ tag, issues: [9501 + n * 10] }));
     const before = P.readPm(s);
     const calls = [];
-    const r = writeWith(Object.assign(unknownWrite(calls), { read: (refs) => read(refs, tag) }), P.wrapped("pm-add", `#${9502 + n * 10} reason`), s);
+    const r = writeWith(withMany(Object.assign(unknownWrite(calls), { read: (refs) => read(refs, tag) })), P.wrapped("pm-add", `#${9502 + n * 10} reason`), s);
     assert.ok(calls.length >= 1, `the PM field was never written: ${JSON.stringify(r)}`);
     if (expectAccepted) {
       assert.ok(!r.block && !r.threw, JSON.stringify(r));
@@ -235,7 +262,7 @@ test("U4 a failed write refuses without touching the PM state", () => {
   P.seedPm(s, P.pm({ tag: `PM-u${n}`, issues: [9601] }));
   const before = P.readPm(s);
   const calls = [];
-  const r = writeWith({ write: (x, v) => { calls.push(v); return { result: "failed", reason: "HTTP 502" }; }, read: () => ({ ok: true, values: {} }) }, P.wrapped("pm-add", "#9602 reason"), s);
+  const r = writeWith(withMany({ write: (x, v) => { calls.push(v); return { result: "failed", reason: "HTTP 502" }; }, read: () => ({ ok: true, values: {} }) }), P.wrapped("pm-add", "#9602 reason"), s);
   assert.ok(calls.length >= 1, `the PM field was never written: ${JSON.stringify(r)}`);
   assert.ok(typeof r.block === "string" && r.block.length > 0, JSON.stringify(r));
   assert.deepStrictEqual(P.readPm(s), before);
@@ -370,5 +397,29 @@ test("C16 prepare: the only card is on a Project without the pm field -> ensure-
   assert.strictEqual(r.result, "failed", JSON.stringify(r));
   assert.strictEqual(since(k).filter((q) => q.startsWith("project item-edit")).length, 0, since(k).join("\n"));
   assert.deepStrictEqual(G.pmStore(), {});
+});
+caseEnd();
+
+// #3152: a board lookup that answers neither resolved nor fetch-failed fails its issues board-<status>, no card spawn.
+caseBegin("pm-field-prepare-board-unresolved", "bin/lib/pm-field/write.js");
+test("B2 resolveBoard answers no-link / ambiguous: the issue fails board-<status>, no ensure-board-card.sh, no edit", () => {
+  for (const [i, status] of ["no-link", "ambiguous"].entries()) {
+    const n = 9981 + i;
+    const orig = R.readCards;
+    let reads = 0;
+    R.readCards = (refs) => { reads++; return { ok: true, results: Object.fromEntries(refs.map((x) => [`${x.repo}#${x.number}`, { ok: false, reason: "no-card" }])) }; };
+    const spawns = [];
+    const boards = [];
+    let r;
+    try {
+      const io = W.createPmField({ budgetMs: 15000, spawnSync: (...a) => { spawns.push(a); return { status: 0, signal: null, stdout: "", stderr: "" }; }, resolveBoard: (repo) => { boards.push(repo); return { status }; } });
+      assert.deepStrictEqual(io.prepare([ref(n)]), { ok: true });
+      r = io.write(ref(n), "PM-b2");
+    } finally { R.readCards = orig; }
+    assert.deepStrictEqual(boards, ["o/r"], status);
+    assert.strictEqual(reads, 2, `${status}: prepare did not re-read`);
+    assert.deepStrictEqual(spawns, [], `${status}: a card spawn or an edit ran`);
+    assert.deepStrictEqual(r, { result: "failed", reason: `board-${status}` });
+  }
 });
 caseEnd();

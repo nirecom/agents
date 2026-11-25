@@ -8,8 +8,8 @@
 // The forge query nests MAX_ANCESTOR_DEPTH parents (GitHub allows 8 levels) and reads a deeper one as depth-cap.
 const { MAX_ANCESTOR_DEPTH } = require("../forge-issue-links");
 const MAX_FORGE_CALLS = 50;
-// Network and auth failures only (#2942): a missing issue or a malformed answer does not heal on retry.
-const RETRYABLE = new Set(["gh_exec_failed", "timeout"]);
+// Network, auth and time-out failures only (#2942, #3152): a missing issue or a malformed answer does not heal on retry.
+const { RETRYABLE } = require("../forge-failure");
 
 const keyOf = (ref) => `${String(ref.repo).toLowerCase()}#${ref.number}`;
 const hasRepo = (ref) => Boolean(ref) && typeof ref.repo === "string" && ref.repo.includes("/");

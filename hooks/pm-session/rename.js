@@ -11,6 +11,7 @@ const S = require("./schema");
 const scan = require("./scan");
 const C = require("./writer-common");
 const O = require("./ownership");
+const { nextActionOf } = require(path.join(__dirname, "..", "..", "bin", "lib", "forge-failure"));
 
 const { refuse } = C;
 
@@ -19,8 +20,11 @@ const { refuse } = C;
 // refuses (fail-closed, like ownership.ownedOnly); rename_pending stays, so retyping the command resumes.
 function pendingWrites(fio, refs, from) {
   if (!fio || typeof fio.read !== "function" || refs.length === 0) return refs;
-  const r = fio.read(refs);
-  if (!r || !r.ok) refuse(`the PM field of ${C.labels(refs)} cannot be read (${(r && r.reason) || "failed"}); no field was written. Retry the same /pm-rename when the forge is back.`);
+  const r = O.readFields(fio, refs);
+  if (!r || !r.ok) {
+    const reason = (r && r.reason) || "failed";
+    refuse(`the PM field of ${C.labels(refs)} cannot be read (${reason}); no field was written, and the same /pm-rename resumes the rename. ${nextActionOf(reason)}`);
+  }
   return refs.filter((ref) => {
     const v = r.values[`${ref.repo}#${ref.number}`];
     return v === undefined || v === null || S.sameTag(v, from);

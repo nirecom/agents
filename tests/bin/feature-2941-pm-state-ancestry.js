@@ -115,7 +115,8 @@ test("a ref without a repo is repo-unknown, not retryable", () => {
   fails(a.holdersOf({ number: 100 }, [H("PM-ar", [100])]), "repo-unknown", false);
 });
 // #2942: a parse failure does not heal on retry (the same forge answer parses the same way).
-test("gh_exec_failed and timeout are retryable; parse_failed is not", () => {
+// #3152: a deadline already passed is budget-exhausted (gh never ran), still retryable.
+test("gh_exec_failed and budget-exhausted are retryable; parse_failed is not", () => {
   const h = H("PM-ag", [100]);
   try {
     G.mode("fail");
@@ -123,7 +124,12 @@ test("gh_exec_failed and timeout are retryable; parse_failed is not", () => {
     G.mode("garbage");
     fails(holders(R(111), [h]), "parse_failed", false);
   } finally { G.mode(null); }
-  fails(holders(R(111), [h], { deadlineAt: Date.now() - 1 }), "timeout", true);
+  fails(holders(R(111), [h], { deadlineAt: Date.now() - 1 }), "budget-exhausted", true);
+});
+test("a timeout stored before #3152 still reads as retryable", () => {
+  const a = A().createAncestry({ fetchAncestorChains: () => ({ ok: false, reason: "timeout" }), now: () => Date.now() });
+  a.prefetch([R(111)]);
+  fails(a.holdersOf(R(111), [H("PM-at", [110])]), "timeout", true);
 });
 test("MAX_ANCESTOR_DEPTH stays 10", () => {
   assert.strictEqual(A().MAX_ANCESTOR_DEPTH, 10);
@@ -140,12 +146,12 @@ test("up to 50 refs are one query; a second prefetch of the same refs asks nothi
   a.prefetch(refs.slice(0, 10));
   assert.strictEqual(G.calls() - before, 1, "memoised refs were asked again");
 });
-test("a deadline already passed asks nothing and every ref reads timeout", () => {
+test("a deadline already passed asks nothing and every ref reads budget-exhausted", () => {
   const a = mk({ deadlineAt: Date.now() - 1 });
   const before = G.calls();
   a.prefetch([R(111), R(201)]);
   assert.strictEqual(G.calls() - before, 0);
-  fails(a.holdersOf(R(111), [H("PM-dl", [110])]), "timeout", true);
+  fails(a.holdersOf(R(111), [H("PM-dl", [110])]), "budget-exhausted", true);
 });
 caseEnd();
 
@@ -194,5 +200,17 @@ test("priority: overlap > unresolvable > unverified", () => {
     const v = overlap([1011], [pmA]).r;
     assert.deepStrictEqual([v.kind, v.reason], ["unverified", "gh_exec_failed"], JSON.stringify(v));
   } finally { G.mode(null); }
+});
+caseEnd();
+
+// #3152: the unverified refusal's next action comes from forge-failure.js nextActionOf (one wording source).
+caseBegin("overlap-unverified-next-action", "bin/lib/pm-state/overlap.js");
+test("an overlap check whose deadline is spent words its refusal with nextActionOf(budget-exhausted)", () => {
+  const F = P.load("bin/lib/forge-failure.js");
+  assert.strictEqual(typeof F.nextActionOf, "function", "bin/lib/forge-failure.js does not export nextActionOf (#3152)");
+  const r = O().findOverlap([R(1011)], "PM-me", [H("PM-oN", [1000])], mk({ deadlineAt: Date.now() - 1 }));
+  assert.deepStrictEqual([r.kind, r.reason], ["unverified", "budget-exhausted"], JSON.stringify(r));
+  const text = O().refusalText(r);
+  assert.ok(text.includes(F.nextActionOf("budget-exhausted")), `refusal lacks nextActionOf(budget-exhausted): ${text}`);
 });
 caseEnd();

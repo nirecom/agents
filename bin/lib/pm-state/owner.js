@@ -31,7 +31,7 @@ function ownerOfChain(c, ctx) {
 function resolveOwners(refs, ctx) {
   const read = ctx.readPmChains || readPmChains;
   const timeoutMs = Number.isFinite(ctx.timeoutMs) ? ctx.timeoutMs : DEFAULT_TIMEOUT_MS;
-  const r = read(refs, { deadlineAt: Date.now() + timeoutMs });
+  const r = read(refs, { deadlineAt: Date.now() + timeoutMs, spawnSync: ctx.spawnSync });
   if (!r.ok) return refs.map(() => ({ ok: false, reason: r.reason }));
   return refs.map((ref) => ownerOfChain(r.results[refKey(ref.repo, ref.number)], ctx));
 }

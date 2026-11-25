@@ -212,7 +212,7 @@ function overlapAndReason() {
       W.assertAccepted(r, op, tag);
       assert.strictEqual(W.lastLog(P.readPm(sid)).reason, W.UNSTATED);
       assert.match(String(r.context), /reason=unstated/);
-      if (op === "remove") assert.deepStrictEqual(W.G.queries().slice(W.G.calls() - r.calls).filter((q) => !/pm: fieldValueByName|^project item-edit /.test(q)), [], "/pm-remove asked the forge for more than the PM field (#2942)");
+      if (op === "remove") assert.deepStrictEqual(W.G.queries().slice(W.G.calls() - r.calls).filter((q) => !/pm: fieldValueByName|^api graphql --input - stdin-query=mutation \{ m0: (?:update|clear)ProjectV2ItemFieldValue\(/.test(q)), [], "/pm-remove asked the forge for more than the PM field (#2942)");
       W.archive(sid);
     });
   }

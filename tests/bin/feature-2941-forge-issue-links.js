@@ -72,10 +72,11 @@ test("a gh failure is gh_exec_failed and a non-JSON body parse_failed, never 'no
     wholeFail(fetch(refs(1, 3500)).r, "parse_failed");
   } finally { G.mode(null); }
 });
-test("a deadline already passed calls no gh and the whole result is timeout", () => {
+// #3152: a deadline that expires before gh runs is budget-exhausted, not timeout (forge-failure.js).
+test("a deadline already passed calls no gh and the whole result is budget-exhausted", () => {
   const f = fetch(refs(3, 3600), { deadlineAt: Date.now() - 1 });
   assert.strictEqual(f.calls, 0);
-  wholeFail(f.r, "timeout");
+  wholeFail(f.r, "budget-exhausted");
 });
 test("51 refs: the first chunk uses up the shared deadline, the second gh is never called", () => {
   const budget = 1500;

@@ -8,7 +8,7 @@ const { spawnSync } = require("child_process");
 const { buildGitSpawn } = require("../../workflow/lib/workflow-init/spawn-env");
 const { resolveForgeTarget } = require("../../../hooks/lib/parse-remote-url");
 
-const ORIGIN_TIMEOUT_MS = 2000;
+const ORIGIN_TIMEOUT_MS = 1000;
 
 function originOf(cwd) {
   const [cmd, args, opts] = buildGitSpawn(["remote", "get-url", "origin"]);
@@ -28,4 +28,4 @@ function forgeKindOf(opts) {
   }
 }
 
-module.exports = { forgeKindOf, originOf };
+module.exports = { forgeKindOf, originOf, ORIGIN_TIMEOUT_MS };
