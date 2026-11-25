@@ -151,7 +151,7 @@ _ebc_item_add() {
     err_file="$(mktemp)"
     new_id=$(gh project item-add "$PROJECT_NUM" --owner "$OWNER" --url "$URL" \
         --format json --jq '.id' 2>"$err_file") || rc=$?
-    if [[ "$rc" -ne 0 ]] && grep -qE 'Could not resolve to a ProjectV2|closed' "$err_file"; then
+    if [[ "$rc" -ne 0 ]] && grep -qE 'Could not resolve to a ProjectV2|ProjectV2.*closed' "$err_file"; then
         ADD_GONE=1
     fi
     rm -f "$err_file"
@@ -166,11 +166,9 @@ if [[ -z "$item_id" ]]; then
     added=0
     if _ebc_item_add; then
         added=1
-    elif [[ "$ADD_GONE" -eq 1 ]]; then
+    elif [[ "$ADD_GONE" -eq 1 ]] && [[ -n "${RESOLVED_CACHE_KEY:-}" ]]; then
         echo "info: ensure-board-card: board $PROJECT_ID is gone for #$N; re-resolving once" >&2
-        [[ -z "${RESOLVED_CACHE_KEY:-}" ]] || resolve_project_drop_cache_row "$RESOLVED_CACHE_KEY" || true
-        # A board handed down by issue-create.sh / createPmField has no cache row: drop it so the resolver queries.
-        unset _ISSUE_CREATE_INTERNAL_OWNER _ISSUE_CREATE_INTERNAL_PROJECT_NUM _ISSUE_CREATE_INTERNAL_PROJECT_ID
+        resolve_project_drop_cache_row "$RESOLVED_CACHE_KEY" || true
         if _ebc_resolve --no-cache-read && _ebc_item_add; then
             added=1
         fi

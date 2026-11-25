@@ -42,14 +42,15 @@ setup_fixture() {
     export MOCK_COUNTER="$TMPROOT/gh-mock-counter"
     : > "$MOCK_LOG"
     unset MOCK_LINKED MOCK_LINKED_QUERY_FAILS MOCK_PROJECT_LIST_JSON MOCK_LINK_FAILS MOCK_DELETE_FAILS \
-      MOCK_LINKED_OWNER 2>/dev/null || true
+      MOCK_LINKED_OWNER MOCK_PROJECT_LIST_FAILS MOCK_CREATED_OWNER 2>/dev/null || true
     if [ "$has_existing" = "1" ]; then export MOCK_HAS_EXISTING_PROJECT="1"
     else unset MOCK_HAS_EXISTING_PROJECT 2>/dev/null || true; fi
 }
 teardown_fixture() {
     rm -rf "$TMPROOT"
     unset MOCK_LOG MOCK_COUNTER MOCK_HAS_EXISTING_PROJECT MOCK_LINK_FAILS MOCK_DELETE_FAILS \
-      MOCK_LINKED MOCK_LINKED_QUERY_FAILS MOCK_PROJECT_LIST_JSON MOCK_LINKED_OWNER 2>/dev/null || true
+      MOCK_LINKED MOCK_LINKED_QUERY_FAILS MOCK_PROJECT_LIST_JSON MOCK_LINKED_OWNER MOCK_PROJECT_LIST_FAILS \
+      MOCK_CREATED_OWNER 2>/dev/null || true
     TMPROOT=""; REPO=""
 }
 # run_create — one create-project.sh run; sets _rc, stderr in $TMPROOT/err.
@@ -104,16 +105,17 @@ assert "T4 MOCK_LOG does not contain double-hyphen '--'" bash -c '! grep -qF -- 
 teardown_fixture
 case_end
 
-# T5: a same-titled board that is not linked is not matched — a new board is created and linked
+# T5: a same-titled unlinked board is never selected, and it blocks a duplicate create (exit 1, link guidance)
 case_begin "unlinked-same-title-not-matched" "bin/github-issues/migration/create-project.sh"
 setup_fixture 0
-# Both the old and the new title format are listed, so no title rule can match the board.
+# Both the old and the new title format are listed; neither may be picked as the board.
 export MOCK_PROJECT_LIST_JSON='{"projects":[{"number":77,"title":"mockowner/mockrepo — Issue Timeline","id":"PVT_kwDOsame"},{"number":77,"title":"mockrepo — Issue Timeline","id":"PVT_kwDOsame"}]}'
 run_create
-assert "T5 create-project exits 0" [ "$_rc" = "0" ]
-assert "T5 new board created despite the same title" grep -qF 'createProjectV2(input' "$MOCK_LOG"
-assert "T5 the same-titled #77 is not used" bash -c '[ "$(jq -r .project.number "$1/.migration-state.json")" != "77" ]' _ "$REPO"
-assert "T5 new board linked" grep -qF 'linkProjectV2ToRepository' "$MOCK_LOG"
+assert "T5 create-project exits 1" [ "$_rc" = "1" ]
+assert "T5 no duplicate board created" bash -c '! grep -qF "createProjectV2(input" "$1"' _ "$MOCK_LOG"
+assert "T5 the same-titled #77 is not written to state" bash -c '[ "$(jq -r ".project.number // \"none\"" "$1/.migration-state.json")" = "none" ]' _ "$REPO"
+assert "T5 the unlinked #77 is not linked silently" bash -c '! grep -qF "linkProjectV2ToRepository" "$1"' _ "$MOCK_LOG"
+assert "T5 stderr names the link to run" grep -qF 'gh project link 77 --owner mockowner --repo mockowner/mockrepo' "$TMPROOT/err"
 teardown_fixture
 case_end
 
@@ -136,6 +138,22 @@ assert "T7 create-project exits 1" [ "$_rc" = "1" ]
 assert "T7 manual link step" grep -qF 'gh project link 99 --owner mockowner --repo mockowner/mockrepo' "$TMPROOT/err"
 assert "T7 manual delete step" grep -qF 'gh project delete 99 --owner mockowner' "$TMPROOT/err"
 assert "T7 no project written to state" bash -c '[ "$(jq -r ".project.number // \"none\"" "$1/.migration-state.json")" = "none" ]' _ "$REPO"
+teardown_fixture
+case_end
+
+# T6b: the created board's owner (createProjectV2 response) differs from the repo owner → delete names it
+case_begin "link-failure-deletes-under-created-owner" "bin/github-issues/migration/create-project.sh"
+setup_fixture 0
+export MOCK_LINK_FAILS=1 MOCK_CREATED_OWNER=createdorg
+run_create
+assert "T6b create-project exits 1" [ "$_rc" = "1" ]
+assert "T6b delete names the response owner" grep -qE '^gh project delete 99 --owner createdorg( |$)' "$MOCK_LOG"
+assert "T6b delete never names the repo owner" bash -c '! grep -qE "^gh project delete .*--owner mockowner" "$1"' _ "$MOCK_LOG"
+teardown_fixture
+setup_fixture 0
+export MOCK_LINK_FAILS=1 MOCK_DELETE_FAILS=1 MOCK_CREATED_OWNER=createdorg
+run_create
+assert "T6b manual steps name the response owner" grep -qF 'gh project delete 99 --owner createdorg' "$TMPROOT/err"
 teardown_fixture
 case_end
 

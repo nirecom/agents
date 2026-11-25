@@ -3,7 +3,7 @@
 # one titled by project_board_title and link it, then ensure the "Content Date" DATE field. Persists the
 # project number, node id, and field ids into .migration-state.json for downstream scripts.
 # A new board is linked before state is written; a failed link deletes it (board-create.sh) and exits 1.
-# An ambiguous or failed board lookup exits 1 before creating anything.
+# An ambiguous or failed board lookup, or a same-titled unlinked board, exits 1 before creating anything.
 #
 # Usage:
 #   bin/github-issues/migration/create-project.sh <repo_dir> [--dry-run]
@@ -69,6 +69,7 @@ case "${RESOLVED_STATUS:-fetch-failed}/$resolve_rc" in
     fi
     ;;
   no-link/*)
+    project_board_refuse_duplicate "$OWNER" "$OWNER/$REPO_NAME" || exit 1
     owner_id=$(gh api graphql -f query="{viewer{id}}" --jq '.data.viewer.id' 2>/dev/null || \
                gh api graphql -f query="{user(login:\"$OWNER\"){id}}" --jq '.data.user.id' 2>/dev/null || \
                gh api graphql -f query="{organization(login:\"$OWNER\"){id}}" --jq '.data.organization.id')

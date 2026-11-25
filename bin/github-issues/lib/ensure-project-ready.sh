@@ -4,8 +4,8 @@
 #   EPR_CONTENT_DATE_FIELD_ID (may be empty), EPR_STATUS_FIELD_ID, EPR_{TODO,IN_PROGRESS,DONE}_OPTION_ID,
 #   EPR_SESSION_ID_FIELD_ID and EPR_PM_FIELD_ID (TEXT fields via lib/session-id-field.sh; shown in board views, best-effort).
 # The board is the repo's only open linked board (resolve-project.sh, no cache read/write), else a new linked one.
-# rc 1 + an `error:` line: bad owner/repo (checked before any gh call), missing scope, a failed or ambiguous
-#   lookup (nothing created), a graphql failure, or a failed link of a new board (it is deleted).
+# rc 1 + an `error:` line: bad owner/repo, missing scope, a failed or ambiguous lookup, a same-titled unlinked
+#   board (all: nothing created; the last prints the `gh project link` to run), a graphql failure, or a failed link (board deleted).
 # Never writes .env or the TSV cache: run-issue-setup.sh --step ensure-project does.
 
 # Idempotent — guard against double-sourcing.
@@ -147,6 +147,7 @@ ensure_project_ready() {
 _epr_create_linked_board() {
     local owner="$1" repo="$2" owner_id create_json
     _EPR_NEW_PID="" _EPR_NEW_PNUM="" _EPR_NEW_POWNER=""
+    project_board_refuse_duplicate "$owner" "$owner/$repo" || return 1
     owner_id=$(gh api graphql -f query="{viewer{id}}" --jq '.data.viewer.id' 2>/dev/null \
         || gh api graphql -f query="{user(login:\"$owner\"){id}}" --jq '.data.user.id' 2>/dev/null \
         || gh api graphql -f query="{organization(login:\"$owner\"){id}}" --jq '.data.organization.id' 2>/dev/null)

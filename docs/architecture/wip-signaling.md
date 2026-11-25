@@ -87,7 +87,7 @@ another `session-id`. Projects that large are out of scope.
 
 **Which board (#3142).** A repo's board is its only open linked Projects v2 board
 (`bin/github-issues/lib/resolve-project.sh`; Node callers use `bin/lib/project-board/resolve.js`).
-The board title never selects a board; `project_board_title` only names a board being created. The
+The board title never selects a board; `project_board_title` names a board being created and guards against a duplicate: when a repo has no linked board but its owner already has a board with that title (or the old `<repo> — Issue Timeline` form), nothing is created and the `gh project link` command to run is printed (rc 1). The
 resolve ends in one of four results: `resolved` (rc 0), `no-link`, `ambiguous` (two or more open
 linked boards, or more than one page of links) or `fetch-failed`. Only `resolved` is cached, and a
 cache hit is checked against the repo's links before use: a board that was unlinked, closed or

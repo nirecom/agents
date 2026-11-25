@@ -4,12 +4,12 @@
 
 # gh mock for migrate-repo canary tests: issue create → sequential number (101+), api → minimal JSON, else exit 0.
 # Env: MOCK_LOG (invocation log), MOCK_COUNTER (next issue number file, starts at 101).
-# MOCK_HAS_EXISTING_PROJECT=1: `gh project list` returns a matching project and the repository
-#   projectsV2 query (#3142) returns board #99 as open and linked. MOCK_LINKED=0|1|2 overrides only the
-#   linked answer (2: open #99 and #98, ambiguous); MOCK_LINKED_QUERY_FAILS=1 fails the projectsV2 query;
-#   MOCK_PROJECT_LIST_JSON overrides only the `gh project list` answer. MOCK_LINKED_OWNER: owner login of
-#   linked board #99 (default mockowner, the repo owner).
-# MOCK_LINK_FAILS=1 / MOCK_DELETE_FAILS=1: link / `gh project delete` fail. Exit 99: unexpected branch (test failure).
+# MOCK_HAS_EXISTING_PROJECT=1: `gh project list` returns a matching project and the projectsV2 query (#3142)
+#   returns #99 open and linked. MOCK_LINKED=0|1|2 overrides only the linked answer (2: open #99 and #98);
+#   MOCK_LINKED_QUERY_FAILS=1 fails that query; MOCK_LINKED_OWNER: #99's owner login (default mockowner).
+#   MOCK_PROJECT_LIST_JSON / MOCK_PROJECT_LIST_FAILS=1: the `gh project list` answer / its exit 1.
+# MOCK_CREATED_OWNER: createProjectV2's projectV2.owner.login (default: no owner field). MOCK_LINK_FAILS=1 /
+#   MOCK_DELETE_FAILS=1: link / `gh project delete` fail. Exit 99: unexpected branch (test failure).
 
 set -u
 
@@ -108,6 +108,7 @@ case "$cmd" in
         echo "gh project $sub $*" >> "$LOG"
         case "$sub" in
             list)
+                [ "${MOCK_PROJECT_LIST_FAILS:-}" = "1" ] && { echo "mock project list failure" >&2; exit 1; }
                 if [ -n "${MOCK_PROJECT_LIST_JSON:-}" ]; then
                     echo "$MOCK_PROJECT_LIST_JSON"
                 elif [ "${MOCK_HAS_EXISTING_PROJECT:-}" = "1" ]; then
@@ -176,7 +177,9 @@ case "$cmd" in
                 *createProjectV2Field*)
                     json_out='{"data":{"createProjectV2Field":{"projectV2Field":{"id":"PVTF_contentdate_mock"}}}}' ;;
                 *createProjectV2*)
-                    json_out='{"data":{"createProjectV2":{"projectV2":{"id":"PVT_kwDOmock","number":99}}}}' ;;
+                    created_owner=""
+                    [ -n "${MOCK_CREATED_OWNER:-}" ] && created_owner=",\"owner\":{\"login\":\"$MOCK_CREATED_OWNER\"}"
+                    json_out="{\"data\":{\"createProjectV2\":{\"projectV2\":{\"id\":\"PVT_kwDOmock\",\"number\":99$created_owner}}}}" ;;
                 *viewer*id*)
                     json_out='{"data":{"viewer":{"id":"MDQ6User_mock123"}}}' ;;
                 *user*login*)
