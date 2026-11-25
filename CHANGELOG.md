@@ -336,3 +336,7 @@ Changes: Projects v2 board lookup no longer depends on the board title: a repo's
 ### FEATURE: PR #3161 (2026-11-25)
 Background: feat(#3145): block PR creation while a this-pr finding is unfixed
 Changes: A PR can no longer be created while a this-pr finding is unfixed; `/issue-create` now treats the session's own closed issues as survey candidates and returns `fix-in-session` on a match.
+
+### FEATURE: PR #3160 (2026-11-25)
+Background: fix(#3150): match user-profile paths case-insensitively for every sep...
+Changes: The outbound scan now catches absolute user-profile paths such as `C:\Users\<name>` regardless of letter case or separator style (`\`, `/`, yen sign, msys form).;plan-sync scans a plan before pushing it, and a plan holding private information is no longer pushed. If the scanner cannot run, `bin/plan-sync-scan-skip` approves one push.
