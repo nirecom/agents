@@ -2,11 +2,11 @@
 # tests/bin/feature-1340-issue-setup/_mock-ensure-project-ready.sh — file-specific gh mock
 # Tests: bin/github-issues/lib/ensure-project-ready.sh
 # Tags: github-issues, issue-setup, ensure-project-ready, scope:issue-specific
-#
 # Entrypoint-private helper (file-split.md Pattern A): write_epr_gh_mock <dest> writes a gh mock.
-# Knobs: GH_MOCK_AUTH_HAS_PROJECT 0 (no 'project' scope), GH_MOCK_PROJECT_EXISTS 1,
-# GH_MOCK_PROJECT_LIST_FAIL 1, GH_MOCK_STATUS_FIELD_EXISTS 1, GH_MOCK_SESSION_ID_FIELD_EXISTS 1,
-# GH_MOCK_SESSION_ID_CREATE_FAIL 1, GH_MOCK_LINK_FAILS 1. Field lists, the TEXT create and view
+# Knobs: GH_MOCK_AUTH_HAS_PROJECT 0, GH_MOCK_PROJECT_EXISTS 1 / GH_MOCK_PROJECT_LIST_FAIL 1 (also the
+# repository projectsV2 answer, #3142), GH_MOCK_PROJECT_OWNER, GH_MOCK_LINKED_EXTRA_OPEN 1, GH_MOCK_DELETE_FAILS 1,
+# GH_MOCK_STATUS_FIELD_EXISTS 1, GH_MOCK_SESSION_ID_FIELD_EXISTS 1, GH_MOCK_SESSION_ID_CREATE_FAIL 1,
+# GH_MOCK_LINK_FAILS 1. Field lists, the TEXT create and view
 # calls go to tests/lib/gh-projectv2-fields-mock.sh, so its knobs (GH_MOCK_SID_FIELD, ...) apply.
 
 if [ -n "${_EPR_MOCK_LIB_SOURCED:-}" ]; then
@@ -46,6 +46,13 @@ case "$ARGS" in
     fi
     exit 0
     ;;
+  project\ delete*)
+    if [ "${GH_MOCK_DELETE_FAILS:-0}" = "1" ]; then
+        echo "error: gh project delete failed (simulated)" >&2
+        exit 1
+    fi
+    exit 0
+    ;;
   api\ repos/*)
     # Repo node-id lookup (`gh api repos/<o>/<r> --jq .node_id`): prints the raw extracted value.
     printf '%s\n' "R_kgDOmockrepo"
@@ -60,6 +67,26 @@ case "$ARGS" in
             exit 1
         fi
         printf '{"data":{"linkProjectV2ToRepository":{"repository":{"id":"R_kgDOmockrepo"}}}}\n'
+        exit 0
+        ;;
+      *projectsV2*)
+        # Repo-linked boards (#3142): real response JSON with --jq applied by real jq.
+        if [ "${GH_MOCK_PROJECT_LIST_FAIL:-0}" = "1" ]; then
+            echo "error: graphql projectsV2 failed (simulated)" >&2
+            exit 1
+        fi
+        po="${GH_MOCK_PROJECT_OWNER:-testowner}"
+        nodes=""
+        if [ "${GH_MOCK_PROJECT_EXISTS:-1}" = "1" ]; then
+            nodes="{\"id\":\"PVT_existing\",\"number\":1,\"closed\":false,\"owner\":{\"login\":\"$po\"}}"
+        fi
+        if [ "${GH_MOCK_LINKED_EXTRA_OPEN:-0}" = "1" ]; then
+            nodes="${nodes:+$nodes,}{\"id\":\"PVT_other\",\"number\":5,\"closed\":false,\"owner\":{\"login\":\"$po\"}}"
+        fi
+        json="{\"data\":{\"repository\":{\"projectsV2\":{\"nodes\":[$nodes],\"pageInfo\":{\"hasNextPage\":false}}}}}"
+        jqf=""; prev=""
+        for a in "$@"; do [ "$prev" = "--jq" ] && jqf="$a"; prev="$a"; done
+        if [ -n "$jqf" ]; then printf '%s' "$json" | jq -rc "$jqf" | tr -d '\r'; else printf '%s\n' "$json"; fi
         exit 0
         ;;
       *createProjectV2Field*SINGLE_SELECT*)

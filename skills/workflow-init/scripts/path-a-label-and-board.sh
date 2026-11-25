@@ -56,7 +56,8 @@ done
 ALL_ISSUES=("$FIRST_N" "${SIBLINGS[@]}")
 for i in "${!ALL_ISSUES[@]}"; do
     N="${ALL_ISSUES[$i]}"
-    if ! bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/ensure-board-card.sh" ${REPO_OF[$i]:+--repo "${REPO_OF[$i]}"} "$N"; then
+    # Its BOARD_CARD= result line goes to stderr: this script's stdout stays empty (#1616).
+    if ! bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/ensure-board-card.sh" ${REPO_OF[$i]:+--repo "${REPO_OF[$i]}"} "$N" 1>&2; then
         echo "[workflow-init: ensure-board-card.sh failed for #$N (continuing)]" >&2
     fi
 done

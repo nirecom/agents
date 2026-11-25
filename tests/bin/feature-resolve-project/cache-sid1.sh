@@ -45,17 +45,21 @@ row() {
     printf '\n'
 }
 gql_called() { grep -q "api graphql" "$MOCK_LOG" 2>/dev/null && echo 1 || echo 0; }
+# hit_confirmed — the cache hit made exactly one graphql call, the link-confirm of PVT_cached.
+hit_confirmed() { [ "$(graphql_count)" = "1" ] && [ "$(link_confirm_count PVT_cached)" = "1" ]; }
 run_rr() { OUT=$(run_with_timeout 30 bash -c "$(declare -f rr get_field); rr '$TMP/err' $*"); }
 cache_init() { CACHE_FILE="$WORKFLOW_STATE_DIR/cache/project-resolve.tsv"; mkdir -p "$(dirname "$CACHE_FILE")"; }
 
-# C1: an 11-col row tagged sid1 is a hit — no graphql, column 10 → RESOLVED_SESSION_ID_FIELD_ID.
+# C1: an 11-col row tagged sid1 is a hit — only the #3142 link-confirm graphql call, column 10 →
+# RESOLVED_SESSION_ID_FIELD_ID. The mock reports PVT_cached as the single linked board.
 setup_mock; cache_init
+export GH_MOCK_PROJECT_ID="PVT_cached"
 row PVTF_sid sid1 > "$CACHE_FILE"
 run_rr
 if [ "$(get_field "$OUT" RC)" = "0" ] && [ "$(get_field "$OUT" RESOLVED_PROJECT_ID)" = "PVT_cached" ] \
-   && [ "$(get_field "$OUT" RESOLVED_SESSION_ID_FIELD_ID)" = "PVTF_sid" ] && [ "$(gql_called)" = "0" ]; then
-    pass "C1: 11-col sid1 row → hit, session-id id from column 10, no graphql"
-else fail "C1: out=[$OUT] graphql=$(gql_called)"; fi
+   && [ "$(get_field "$OUT" RESOLVED_SESSION_ID_FIELD_ID)" = "PVTF_sid" ] && hit_confirmed; then
+    pass "C1: 11-col sid1 row → hit, session-id id from column 10, one graphql call = link-confirm"
+else fail "C1: out=[$OUT] graphql=$(graphql_count) log=[$(cat "$MOCK_LOG")]"; fi
 teardown_mock
 
 # C2: a legacy 10-col row (pre-rename fingerprint id) is a miss and is replaced by an 11-col row.
@@ -87,13 +91,14 @@ if [ "$(get_field "$OUT" RC)" = "0" ] && [ "$(gql_called)" = "1" ]; then
 else fail "C4: out=[$OUT] graphql=$(gql_called)"; fi
 teardown_mock
 
-# C5: the same row without the flag is a hit (other consumers keep their zero-call path).
+# C5: the same row without the flag is a hit (other consumers keep the fetch-free path: link-confirm only).
 setup_mock; cache_init
+export GH_MOCK_PROJECT_ID="PVT_cached"
 row "" sid1 > "$CACHE_FILE"
 run_rr
-if [ "$(get_field "$OUT" RC)" = "0" ] && [ "$(gql_called)" = "0" ] && [ "$(get_field "$OUT" RESOLVED_PROJECT_ID)" = "PVT_cached" ]; then
-    pass "C5: no flag + empty column 10 → still a hit, no graphql"
-else fail "C5: out=[$OUT] graphql=$(gql_called)"; fi
+if [ "$(get_field "$OUT" RC)" = "0" ] && hit_confirmed && [ "$(get_field "$OUT" RESOLVED_PROJECT_ID)" = "PVT_cached" ]; then
+    pass "C5: no flag + empty column 10 → still a hit, one graphql call = link-confirm"
+else fail "C5: out=[$OUT] graphql=$(graphql_count)"; fi
 teardown_mock
 
 # C6: --no-cache-read fetches even with a valid row present.

@@ -124,42 +124,34 @@ teardown_mock
 case_end
 
 # ===========================================================================
-# LNK-2: existing-project (reuse) path → board is linked to the repo too.
-# CPR-ORTH counterpart of LNK-1: both convergence paths must link.
+# LNK-2 (#3142): existing-project (reuse) path → the board was found AS a board linked
+# to the repo, so it is not linked again (no node-id lookup, no link mutation).
 # ===========================================================================
 case_begin "reuse-path-links-repo" "bin/github-issues/lib/ensure-project-ready.sh"
 setup_mock
-export GH_MOCK_PROJECT_EXISTS=1    # board exists → reuse → id PVT_existing
+export GH_MOCK_PROJECT_EXISTS=1    # repo-linked board exists → reuse → id PVT_existing
 STDERR_FILE="$TMP/lnk2-stderr.log"
 OUT=$(run_ensure 'testowner/testrepo' "$STDERR_FILE")
 RC=$(get_field "$OUT" RC)
 R_PID=$(get_field "$OUT" EPR_PROJECT_ID)
-NODE_LOOKUP=0
-grep -Fq 'gh api repos/testowner/testrepo' "$MOCK_LOG" 2>/dev/null && NODE_LOOKUP=1
+LINKED_QUERY=0
+grep -Fq 'projectsV2' "$MOCK_LOG" 2>/dev/null && LINKED_QUERY=1
 LINK_LINE="$(link_line)"
-LINK_P=0
-LINK_R=0
-[ -n "$LINK_LINE" ] && printf '%s' "$LINK_LINE" | grep -Fq -- "-f p=$R_PID" && LINK_P=1
-[ -n "$LINK_LINE" ] && printf '%s' "$LINK_LINE" | grep -Fq -- "-f r=$REPO_NODE_ID" && LINK_R=1
 if [ "$RC" = "0" ] \
    && [ "$R_PID" = "PVT_existing" ] \
-   && [ "$NODE_LOOKUP" = "1" ] \
-   && [ -n "$LINK_LINE" ] \
-   && [ "$LINK_P" = "1" ] \
-   && [ "$LINK_R" = "1" ]; then
-    pass "LNK-2: reuse path → repo node_id looked up + linkProjectV2ToRepository wired (p=$R_PID r=$REPO_NODE_ID)"
+   && [ "$LINKED_QUERY" = "1" ] \
+   && [ -z "$LINK_LINE" ]; then
+    pass "LNK-2: reuse path → board found among the repo's linked boards, no second link mutation"
 else
-    fail "LNK-2: rc=$RC pid=$R_PID node_lookup=$NODE_LOOKUP link_line='$LINK_LINE' link_p=$LINK_P link_r=$LINK_R log=$(cat "$MOCK_LOG" 2>/dev/null)"
+    fail "LNK-2: rc=$RC pid=$R_PID linked_query=$LINKED_QUERY link_line='$LINK_LINE' log=$(cat "$MOCK_LOG" 2>/dev/null)"
 fi
 teardown_mock
 case_end
 
 # ===========================================================================
-# LNK-3: link failure is NON-FATAL — ensure_project_ready still returns 0 and
-# still exports the downstream EPR_* contract.
-# The link call must be ASSERTED PRESENT as a precondition: without it, "no link
-# failure occurred" would spuriously satisfy the non-fatality claim (this case
-# has to be RED on the unfixed source too, not accidentally green).
+# LNK-3 (#3142): on the reuse path a broken link mutation cannot matter — it is never
+# issued — so rc stays 0 with the full EPR_* contract. The create path's link failure
+# (delete the new board, rc 1) is covered by feature-3142-ensure-project-ready.sh.
 # ===========================================================================
 case_begin "link-failure-non-fatal" "bin/github-issues/lib/ensure-project-ready.sh"
 setup_mock
@@ -178,7 +170,7 @@ R_DONE=$(get_field "$OUT" EPR_DONE_OPTION_ID)
 R_FINGER=$(get_field "$OUT" EPR_SESSION_ID_FIELD_ID)
 LINK_ATTEMPTED=0
 [ -n "$(link_line)" ] && LINK_ATTEMPTED=1
-if [ "$LINK_ATTEMPTED" = "1" ] \
+if [ "$LINK_ATTEMPTED" = "0" ] \
    && [ "$RC" = "0" ] \
    && [ "$R_PID" = "PVT_existing" ] \
    && [ "$R_PNUM" = "1" ] \
@@ -188,7 +180,7 @@ if [ "$LINK_ATTEMPTED" = "1" ] \
    && [ "$R_INPROG" = "opt_inprog" ] \
    && [ "$R_DONE" = "opt_done" ] \
    && [ "$R_FINGER" = "PVTF_existing_sid" ]; then
-    pass "LNK-3: link mutation attempted and failed → rc=0 and full EPR_* contract intact (non-fatal)"
+    pass "LNK-3: reuse path issues no link mutation → rc=0 and full EPR_* contract intact"
 else
     fail "LNK-3: link_attempted=$LINK_ATTEMPTED rc=$RC pid=$R_PID pnum=$R_PNUM powner=$R_POWNER status=$R_STATUS todo=$R_TODO inprog=$R_INPROG done=$R_DONE finger=$R_FINGER log=$(cat "$MOCK_LOG" 2>/dev/null)"
 fi
@@ -196,13 +188,8 @@ teardown_mock
 case_end
 
 # ===========================================================================
-# LNK-4: STATELESS — two runs issue the link mutation TWICE.
-# Deliberate INVERSION of the migration-path test's L5 ("second run skips link
-# mutation when repo_linked=true"): that contract exists only because
-# create-project.sh persists .migration-state.json. ensure-project-ready.sh was
-# extracted with all .migration-state.json dependencies removed, so it has no
-# memory of a prior link and MUST re-issue the mutation (GitHub treats the link
-# as idempotent server-side). A dedupe here would be the bug, not the fix.
+# LNK-4 (#3142): STATELESS — each run asks GitHub for the repo's linked boards again
+# (no resolver cache read or write), and a board found that way is never re-linked.
 # ===========================================================================
 case_begin "stateless-two-runs-link-twice" "bin/github-issues/lib/ensure-project-ready.sh"
 setup_mock
@@ -215,14 +202,14 @@ RC2=$(get_field "$OUT2" RC)
 # NB: `grep -c` already prints 0 on no-match (exit 1) — `|| true`, never
 # `|| echo 0`, or the variable becomes the two-line string "0\n0".
 LINK_COUNT=$(grep -cF 'linkProjectV2ToRepository' "$MOCK_LOG" 2>/dev/null || true)
-NODE_LOOKUP_COUNT=$(grep -cF 'gh api repos/testowner/testrepo' "$MOCK_LOG" 2>/dev/null || true)
+LINKED_QUERY_COUNT=$(grep -cE '^gh api graphql .*projectsV2|^ *projectsV2' "$MOCK_LOG" 2>/dev/null || true)
 if [ "$RC1" = "0" ] \
    && [ "$RC2" = "0" ] \
-   && [ "$LINK_COUNT" = "2" ] \
-   && [ "$NODE_LOOKUP_COUNT" = "2" ]; then
-    pass "LNK-4: stateless — 2 runs → 2 link mutations + 2 node-id lookups (no dedupe, by design)"
+   && [ "$LINK_COUNT" = "0" ] \
+   && [ "$LINKED_QUERY_COUNT" -ge 2 ]; then
+    pass "LNK-4: stateless — 2 runs → linked boards queried each run, 0 link mutations"
 else
-    fail "LNK-4: rc1=$RC1 rc2=$RC2 link_count=$LINK_COUNT node_lookup_count=$NODE_LOOKUP_COUNT (expected 0/0/2/2) log=$(cat "$MOCK_LOG" 2>/dev/null)"
+    fail "LNK-4: rc1=$RC1 rc2=$RC2 link_count=$LINK_COUNT linked_query_count=$LINKED_QUERY_COUNT (expected 0/0/0/>=2) log=$(cat "$MOCK_LOG" 2>/dev/null)"
 fi
 teardown_mock
 case_end

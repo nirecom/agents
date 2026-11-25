@@ -80,6 +80,15 @@ case "$ARGS" in
         fi
         exit 0
         ;;
+      *'select(.id == "'*)
+        # Cache-hit link-confirm (#3142): 1 only when the probed id is the single linked board.
+        LINK_RE='select\(\.id == "([^"]+)"'
+        [[ "$ARGS" =~ $LINK_RE ]] || { echo "MOCK GH: link-confirm without id" >&2; exit 2; }
+        if [ "$NODE_COUNT" -ge 2 ]; then echo "ambiguous"
+        elif [ "$NODE_COUNT" -eq 1 ] && [ "${BASH_REMATCH[1]}" = "$PROJ_ID" ]; then echo "1"
+        else echo "0"; fi
+        exit 0
+        ;;
       *"| length"*)
         echo "$NODE_COUNT"
         exit 0
@@ -233,6 +242,11 @@ get_field() {
     local out="$1" key="$2"
     printf '%s\n' "$out" | grep -E "^${key}=" | head -1 | cut -d= -f2-
 }
+
+# graphql_count / link_confirm_count <pid> — gh api graphql calls in MOCK_LOG; the latter only the
+# cache-hit link-confirm queries for <pid>.
+graphql_count() { grep -c "api graphql" "$MOCK_LOG" 2>/dev/null || true; }
+link_confirm_count() { grep -cF "select(.id == \"$1\")" "$MOCK_LOG" 2>/dev/null || true; }
 
 # Print results summary and exit with appropriate code.
 finish() {

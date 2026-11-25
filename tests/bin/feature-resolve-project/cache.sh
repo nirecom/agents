@@ -20,10 +20,12 @@ if [ ! -f "$TARGET" ]; then
 fi
 
 # ===========================================================================
-# T7: cache hit — pre-populate TSV, resolver returns cached values without graphql
+# T7: cache hit — pre-populate TSV, resolver returns cached values; the only graphql call is the
+# #3142 link-confirm of the cached board (the mock reports PVT_cached as the single linked board).
 # #2925: 11-column cache schema (cols 6-10: status, todo, inprog, done, session-id; col 11: tag sid1).
 # ===========================================================================
 setup_mock
+export GH_MOCK_PROJECT_ID="PVT_cached"
 CACHE_DIR="$WORKFLOW_STATE_DIR/cache"
 CACHE_FILE="$CACHE_DIR/project-resolve.tsv"
 mkdir -p "$CACHE_DIR"
@@ -35,17 +37,17 @@ R_OWNER=$(get_field "$OUT" RESOLVED_OWNER)
 R_NUM=$(get_field "$OUT" RESOLVED_PROJECT_NUM)
 R_ID=$(get_field "$OUT" RESOLVED_PROJECT_ID)
 R_FIELD=$(get_field "$OUT" RESOLVED_CONTENT_DATE_FIELD_ID)
-GRAPHQL_CALLED=0
-grep -q "api graphql" "$MOCK_LOG" 2>/dev/null && GRAPHQL_CALLED=1
+GQL_N=$(graphql_count)
+CONFIRM_N=$(link_confirm_count PVT_cached)
 if [ "$RC" = "0" ] \
    && [ "$R_OWNER" = "cached-owner" ] \
    && [ "$R_NUM" = "99" ] \
    && [ "$R_ID" = "PVT_cached" ] \
    && [ "$R_FIELD" = "PVTF_cached_field" ] \
-   && [ "$GRAPHQL_CALLED" -eq 0 ]; then
-    pass "T7: cache hit — values from TSV (11-col sid1 schema), no graphql call"
+   && [ "$GQL_N" = "1" ] && [ "$CONFIRM_N" = "1" ]; then
+    pass "T7: cache hit — values from TSV (11-col sid1 schema), one graphql call = link-confirm"
 else
-    fail "T7: rc=$RC owner=$R_OWNER num=$R_NUM id=$R_ID field=$R_FIELD graphql=$GRAPHQL_CALLED log=$(cat "$MOCK_LOG" 2>/dev/null)"
+    fail "T7: rc=$RC owner=$R_OWNER num=$R_NUM id=$R_ID field=$R_FIELD graphql=$GQL_N confirm=$CONFIRM_N log=$(cat "$MOCK_LOG" 2>/dev/null)"
 fi
 teardown_mock
 
@@ -58,6 +60,7 @@ teardown_mock
 # ===========================================================================
 setup_mock
 export GH_MOCK_OWNER_REPO="mock-owner/my.repo"
+export GH_MOCK_PROJECT_ID="PVT_correct"
 CACHE_DIR="$WORKFLOW_STATE_DIR/cache"
 CACHE_FILE="$CACHE_DIR/project-resolve.tsv"
 mkdir -p "$CACHE_DIR"
@@ -72,7 +75,8 @@ R_ID=$(get_field "$OUT" RESOLVED_PROJECT_ID)
 if [ "$RC" = "0" ] \
    && [ "$R_OWNER" = "correct-owner" ] \
    && [ "$R_NUM" = "5" ] \
-   && [ "$R_ID" = "PVT_correct" ]; then
+   && [ "$R_ID" = "PVT_correct" ] \
+   && [ "$(graphql_count)" = "1" ] && [ "$(link_confirm_count PVT_correct)" = "1" ]; then
     pass "T7b: cache lookup with '.' in the key uses fixed-string match"
 else
     fail "T7b: rc=$RC owner=$R_OWNER num=$R_NUM id=$R_ID stderr=$(cat "$STDERR_FILE" 2>/dev/null)"

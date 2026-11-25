@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Tests: bin/github-issues/migration/create-project.sh, bin/github-issues/migration/state.sh
-# Tags: github, issues, bin, shell, env, scope:issue-specific
+# Tags: github, issues, bin, shell, env, scope:issue-specific, feature-3142, projects-v2
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/harness.sh"
 STATE_SCRIPT="$REPO_ROOT/bin/github-issues/migration/state.sh"
 CREATE_SCRIPT="$REPO_ROOT/bin/github-issues/migration/create-project.sh"
 GH_MOCK="$REPO_ROOT/tests/fixtures/migration/gh-mock.sh"
@@ -43,6 +44,7 @@ ok() { PASS=$((PASS+1)); echo "PASS: $1"; }
 ng() { FAIL=$((FAIL+1)); echo "FAIL: $1"; }
 assert() { local n="$1"; shift; if "$@" >/dev/null 2>&1; then ok "$n"; else ng "$n"; fi; }
 
+case_begin "new-board-created-and-linked" "bin/github-issues/migration/create-project.sh"
 # L1: new-create path
 setup_fixture 0
 _rc=0
@@ -51,38 +53,65 @@ assert "L1 create-project exits 0" [ "$_rc" = "0" ]
 assert "L1 linkProjectV2ToRepository called on new-create" grep -qE 'linkProjectV2ToRepository' "$MOCK_LOG"
 assert "L1 repo_linked=true in state" bash -c '[ "$(jq -r .project.repo_linked "$1/.migration-state.json")" = "true" ]' _ "$REPO"
 teardown_fixture
+case_end
 
-# L2: existing-reuse path (setup_fixture 1 sets MOCK_HAS_EXISTING_PROJECT=1)
+case_begin "linked-board-reused-without-link-mutation" "bin/github-issues/migration/create-project.sh"
+# L2: existing-reuse path (#3142) — the repo's single open linked board (#99 per the mock) is reused:
+# no board created, no link mutation, repo_linked=true.
 setup_fixture 1
 _rc=0
 run_with_timeout bash "$CREATE_SCRIPT" "$REPO" >/dev/null 2>&1 || _rc=$?
 assert "L2 create-project exits 0" [ "$_rc" = "0" ]
-assert "L2 linkProjectV2ToRepository called on existing-reuse" grep -qE 'linkProjectV2ToRepository' "$MOCK_LOG"
+assert "L2 linkProjectV2ToRepository NOT called on existing-reuse" bash -c '! grep -qE linkProjectV2ToRepository "$1"' _ "$MOCK_LOG"
+assert "L2 createProjectV2 NOT called on existing-reuse" bash -c '! grep -qE "createProjectV2\(" "$1"' _ "$MOCK_LOG"
+assert "L2 linked board #99 recorded in state" bash -c '[ "$(jq -r .project.number "$1/.migration-state.json")" = "99" ]' _ "$REPO"
 assert "L2 repo_linked=true in state" bash -c '[ "$(jq -r .project.repo_linked "$1/.migration-state.json")" = "true" ]' _ "$REPO"
 teardown_fixture
+case_end
 
-# L3: link failure tolerance — migration must NOT abort, repo_linked stays false
+case_begin "link-failure-deletes-new-board" "bin/github-issues/migration/create-project.sh"
+# L3: link failure on a new board (#3142) — the unlinked board is deleted and the script exits non-zero
+# before state_set_project, so no project number reaches the state.
 setup_fixture 0
 export MOCK_LINK_FAILS=1
-run_with_timeout bash "$CREATE_SCRIPT" "$REPO" >/dev/null 2>&1 || true
-assert "L3 project still created despite link failure" bash -c '[ "$(jq -r .project.number "$1/.migration-state.json")" != "null" ]' _ "$REPO"
-assert "L3 repo_linked=false after link failure" bash -c '[ "$(jq -r .project.repo_linked "$1/.migration-state.json")" = "false" ]' _ "$REPO"
+_rc=0
+run_with_timeout bash "$CREATE_SCRIPT" "$REPO" >/dev/null 2>&1 || _rc=$?
+assert "L3 create-project exits non-zero on link failure" [ "$_rc" != "0" ]
+assert "L3 createProjectV2 called before the failed link" grep -qE 'createProjectV2\(' "$MOCK_LOG"
+assert "L3 new board #99 deleted after link failure" grep -qE '^gh project delete 99 --owner mockowner' "$MOCK_LOG"
+assert "L3 no project number in state after link failure" bash -c '[ -z "$(jq -r ".project.number // empty" "$1/.migration-state.json")" ]' _ "$REPO"
 unset MOCK_LINK_FAILS
 teardown_fixture
+case_end
 
+case_begin "dry-run-skips-link" "bin/github-issues/migration/create-project.sh"
 # L4: dry-run — no linkProjectV2ToRepository in log
 setup_fixture 0
-run_with_timeout bash "$CREATE_SCRIPT" "$REPO" --dry-run >/dev/null 2>&1 || true
+_rc=0
+run_with_timeout bash "$CREATE_SCRIPT" "$REPO" --dry-run >/dev/null 2>&1 || _rc=$?
+assert "L4 dry-run exits 0 (rc=$_rc)" [ "$_rc" = "0" ]
 assert "L4 dry-run skips link mutation" bash -c '! grep -qE linkProjectV2ToRepository "$1"' _ "$MOCK_LOG"
 teardown_fixture
+case_end
 
+case_begin "rerun-skips-link" "bin/github-issues/migration/create-project.sh"
 # L5: skip-on-already-linked — second run skips link mutation
 setup_fixture 1
-run_with_timeout bash "$CREATE_SCRIPT" "$REPO" >/dev/null 2>&1 || true
+_rc=0
+run_with_timeout bash "$CREATE_SCRIPT" "$REPO" >/dev/null 2>&1 || _rc=$?
+assert "L5 first run exits 0 (rc=$_rc)" [ "$_rc" = "0" ]
+_num_before="$(jq -r '.project.number // empty' "$REPO/.migration-state.json")"
+assert "L5 first run records board #99 (got [$_num_before])" [ "$_num_before" = "99" ]
 : > "$MOCK_LOG"
-run_with_timeout bash "$CREATE_SCRIPT" "$REPO" >/dev/null 2>&1 || true
+_rc=0
+run_with_timeout bash "$CREATE_SCRIPT" "$REPO" >/dev/null 2>&1 || _rc=$?
+assert "L5 second run exits 0 (rc=$_rc)" [ "$_rc" = "0" ]
 assert "L5 second run skips link mutation when repo_linked=true" bash -c '! grep -qE linkProjectV2ToRepository "$1"' _ "$MOCK_LOG"
+_num_after="$(jq -r '.project.number // empty' "$REPO/.migration-state.json")"
+assert "L5 second run keeps board number ($_num_before -> $_num_after)" [ "$_num_after" = "$_num_before" ]
+assert "L5 repo_linked still true after rerun" bash -c '[ "$(jq -r .project.repo_linked "$1/.migration-state.json")" = "true" ]' _ "$REPO"
 teardown_fixture
+case_end
 
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" = "0" ]

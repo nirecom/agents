@@ -3,8 +3,9 @@
 # ensure_project_ready <owner/repo> (gh with `project` scope) sets on rc 0: EPR_PROJECT_{ID,NUM,OWNER},
 #   EPR_CONTENT_DATE_FIELD_ID (may be empty), EPR_STATUS_FIELD_ID, EPR_{TODO,IN_PROGRESS,DONE}_OPTION_ID,
 #   EPR_SESSION_ID_FIELD_ID and EPR_PM_FIELD_ID (TEXT fields via lib/session-id-field.sh; shown in board views, best-effort).
-# rc 1 + an `error:` line: bad owner/repo (checked before any gh call), missing scope, a graphql or
-#   project-list failure. An unlinked board only warns (link_project_to_repo).
+# The board is the repo's only open linked board (resolve-project.sh, no cache read/write), else a new linked one.
+# rc 1 + an `error:` line: bad owner/repo (checked before any gh call), missing scope, a failed or ambiguous
+#   lookup (nothing created), a graphql failure, or a failed link of a new board (it is deleted).
 # Never writes .env or the TSV cache: run-issue-setup.sh --step ensure-project does.
 
 # Idempotent — guard against double-sourcing.
@@ -20,6 +21,10 @@ _EPR_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$_EPR_LIB_DIR/../migration/link-project.sh"
 # shellcheck source=session-id-field.sh
 . "$_EPR_LIB_DIR/session-id-field.sh"
+# shellcheck source=resolve-project.sh
+. "$_EPR_LIB_DIR/resolve-project.sh"
+# shellcheck source=board-create.sh
+. "$_EPR_LIB_DIR/board-create.sh"
 
 # Strip a trailing CR and keep the first line of gh/jq output.
 _epr_clean() { printf '%s' "$1" | tr -d '\r' | head -1; }
@@ -90,64 +95,27 @@ ensure_project_ready() {
         return 1
     fi
 
-    local project_title="$owner_repo — Issue Timeline"
-
-    # ---- Reuse-or-create the board ----
-    local list_json existing_num=""
-    if ! list_json=$(gh project list --owner "$owner" --format json 2>/dev/null); then
-        echo "error: ensure-project-ready: gh project list failed for owner '$owner'" >&2
-        return 1
-    fi
-    existing_num=$(printf '%s' "$list_json" \
-        | jq -r --arg t "$project_title" '[.projects[]? | select(.title==$t) | .number] | .[0] // empty' 2>/dev/null)
-    existing_num=$(_epr_clean "$existing_num")
-
-    local pid pnum
-    if [ -n "$existing_num" ]; then
-        pnum="$existing_num"
-        pid=$(printf '%s' "$list_json" \
-            | jq -r --arg t "$project_title" '[.projects[]? | select(.title==$t) | .id] | .[0] // empty' 2>/dev/null)
-        pid=$(_epr_clean "$pid")
-        if [ -z "$pid" ]; then
-            pid=$(gh project view "$existing_num" --owner "$owner" --format json --jq '.id' 2>/dev/null)
-            pid=$(_epr_clean "$pid")
-        fi
-    else
-        local owner_id
-        owner_id=$(gh api graphql -f query="{viewer{id}}" --jq '.data.viewer.id' 2>/dev/null \
-            || gh api graphql -f query="{user(login:\"$owner\"){id}}" --jq '.data.user.id' 2>/dev/null \
-            || gh api graphql -f query="{organization(login:\"$owner\"){id}}" --jq '.data.organization.id' 2>/dev/null)
-        owner_id=$(_epr_clean "$owner_id")
-        if [ -z "$owner_id" ]; then
-            echo "error: ensure-project-ready: could not resolve owner id for '$owner'" >&2
+    # ---- Reuse the repo's only open linked board, or create and link one (never matched by title) ----
+    local pid pnum powner rc=0
+    resolve_project_for_repo --repo "$owner_repo" --no-cache-read --no-cache-write || rc=$?
+    case "${RESOLVED_STATUS:-}" in
+        resolved)
+            [ "$rc" -eq 0 ] || return 1
+            pid="$RESOLVED_PROJECT_ID" pnum="$RESOLVED_PROJECT_NUM" powner="$RESOLVED_OWNER"
+            ;;
+        no-link)
+            _epr_create_linked_board "$owner" "$repo" || return 1
+            pid="$_EPR_NEW_PID" pnum="$_EPR_NEW_PNUM" powner="$_EPR_NEW_POWNER"
+            ;;
+        *)
+            echo "error: ensure-project-ready: no board for $owner_repo (${RESOLVED_STATUS:-fetch-failed}); nothing created" >&2
             return 1
-        fi
-        local create_json
-        if ! create_json=$(gh api graphql \
-                -f query='mutation($o:ID!,$t:String!){createProjectV2(input:{ownerId:$o,title:$t}){projectV2{id number}}}' \
-                -f o="$owner_id" -f t="$project_title" 2>/dev/null); then
-            echo "error: ensure-project-ready: createProjectV2 mutation failed" >&2
-            return 1
-        fi
-        pid=$(printf '%s' "$create_json" | jq -r '.data.createProjectV2.projectV2.id // empty' 2>/dev/null)
-        pnum=$(printf '%s' "$create_json" | jq -r '.data.createProjectV2.projectV2.number // empty' 2>/dev/null)
-        pid=$(_epr_clean "$pid")
-        pnum=$(_epr_clean "$pnum")
-        if [ -z "$pid" ] || [ -z "$pnum" ]; then
-            echo "error: ensure-project-ready: createProjectV2 returned no id/number" >&2
-            return 1
-        fi
-    fi
+            ;;
+    esac
 
     EPR_PROJECT_ID="$pid"
     EPR_PROJECT_NUM="$pnum"
-    EPR_PROJECT_OWNER="$owner"
-
-    # Unconditional on both the create and reuse paths: this function keeps no
-    # state across runs, and the mutation is idempotent server-side, so a repeat
-    # link is harmless. Non-fatal because an unlinked board must not sink the
-    # rest of /migrate-tracker — the helper already warns on stderr.
-    link_project_to_repo "$pid" "$owner" "$repo" || true
+    EPR_PROJECT_OWNER="$powner"
 
     # ---- Content Date field (best-effort ensure) ----
     _epr_ensure_content_date "$pid" || true
@@ -172,6 +140,40 @@ ensure_project_ready() {
     fi
 
     return 0
+}
+
+# _epr_create_linked_board <owner> <repo> — create the board and link it; sets _EPR_NEW_{PID,PNUM,POWNER}.
+# rc 1 when the create fails or the link fails (the new board is then discarded: board-create.sh).
+_epr_create_linked_board() {
+    local owner="$1" repo="$2" owner_id create_json
+    _EPR_NEW_PID="" _EPR_NEW_PNUM="" _EPR_NEW_POWNER=""
+    owner_id=$(gh api graphql -f query="{viewer{id}}" --jq '.data.viewer.id' 2>/dev/null \
+        || gh api graphql -f query="{user(login:\"$owner\"){id}}" --jq '.data.user.id' 2>/dev/null \
+        || gh api graphql -f query="{organization(login:\"$owner\"){id}}" --jq '.data.organization.id' 2>/dev/null)
+    owner_id=$(_epr_clean "$owner_id")
+    if [ -z "$owner_id" ]; then
+        echo "error: ensure-project-ready: could not resolve owner id for '$owner'" >&2
+        return 1
+    fi
+    if ! create_json=$(gh api graphql \
+            -f query='mutation($o:ID!,$t:String!){createProjectV2(input:{ownerId:$o,title:$t}){projectV2{id number owner{... on User{login} ... on Organization{login}}}}}' \
+            -f o="$owner_id" -f t="$(project_board_title "$owner/$repo")" 2>/dev/null); then
+        echo "error: ensure-project-ready: createProjectV2 mutation failed" >&2
+        return 1
+    fi
+    _EPR_NEW_PID=$(_epr_clean "$(printf '%s' "$create_json" | jq -r '.data.createProjectV2.projectV2.id // empty' 2>/dev/null)")
+    _EPR_NEW_PNUM=$(_epr_clean "$(printf '%s' "$create_json" | jq -r '.data.createProjectV2.projectV2.number // empty' 2>/dev/null)")
+    _EPR_NEW_POWNER=$(_epr_clean "$(printf '%s' "$create_json" | jq -r '.data.createProjectV2.projectV2.owner.login // empty' 2>/dev/null)")
+    _EPR_NEW_POWNER="${_EPR_NEW_POWNER:-$owner}"
+    if [ -z "$_EPR_NEW_PID" ] || [ -z "$_EPR_NEW_PNUM" ]; then
+        echo "error: ensure-project-ready: createProjectV2 returned no id/number" >&2
+        return 1
+    fi
+    if ! link_project_to_repo "$_EPR_NEW_PID" "$owner" "$repo"; then
+        project_board_discard_unlinked "$_EPR_NEW_POWNER" "$_EPR_NEW_PNUM" "$owner/$repo" || true
+        _EPR_NEW_PID="" _EPR_NEW_PNUM="" _EPR_NEW_POWNER=""
+        return 1
+    fi
 }
 
 # Discovery query (shared by field-ensure helpers). Same shape as cmd-setup.sh.

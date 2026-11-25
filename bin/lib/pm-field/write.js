@@ -4,15 +4,18 @@
 // resolveCard(ref) -> {ok, itemId, projectId?, fieldId?}; a card that cannot be resolved is "failed" with no
 // edit. A gh edit that outlives timeoutMs is killed and reads "unknown": it may or may not have landed,
 // so the caller settles it with a re-read. null clears the field (--clear).
-//   createPmField({deadlineAt, repoOfCwd?}) -> {prepare(refs), write(ref, value), read(refs)}: the writer's
-//     default field I/O; prepare resolves every card in one read and adds a missing card with
-//     ensure-board-card.sh (bounded) before one re-read.
+//   createPmField({deadlineAt|budgetMs, resolveBoard?}) -> {prepare(refs), write(ref, value), read(refs)}: the
+//     writer's default field I/O; prepare resolves every card in one read, resolves each missing card's board
+//     once per repo (project-board/resolve.js) and adds the card with ensure-board-card.sh under that board's
+//     internal env (bounded), then re-reads once. A no-link / ambiguous board starts nothing and its cards fail
+//     board-<status>; an unstarted card fails budget-exhausted; a fetch-failed lookup lets ensure-board-card resolve.
 
 const path = require("path");
 const { spawnSync } = require("child_process");
 const { buildGhSpawn, buildBashScriptSpawn } = require("../../workflow/lib/workflow-init/spawn-env");
 const { refKey } = require("../forge-issue-links");
 const R = require("./read");
+const RB = require("../project-board/resolve");
 
 const DEFAULT_TIMEOUT_MS = 5000;
 // One gh edit's share of the writer's 5 s write budget; the rest is the re-read of an unknown write.
@@ -53,6 +56,26 @@ function createPmField(opts) {
     return deadlineAt;
   };
   const cards = new Map();
+  const cardFailure = new Map();
+  const resolveBoard = (repo, ro) => (typeof o.resolveBoard === "function" ? o.resolveBoard : RB.resolveBoard)(repo, ro);
+  const failAll = (list, reason) => { for (const ref of list) cardFailure.set(refKey(ref.repo, ref.number), reason); };
+  function addCards(missing) {
+    const byRepo = new Map();
+    for (const ref of missing) byRepo.set(ref.repo, (byRepo.get(ref.repo) || []).concat([ref]));
+    for (const [repo, list] of byRepo) {
+      if (left(deadlineAt) <= 0) { failAll(list, "budget-exhausted"); continue; }
+      const board = resolveBoard(repo, { timeoutMs: left(deadlineAt) });
+      const status = (board && board.status) || "fetch-failed";
+      // A failed lookup may be transient: ensure-board-card then resolves the board itself, per card.
+      if (status !== "resolved" && status !== "fetch-failed") { failAll(list, `board-${status}`); continue; }
+      for (const [i, ref] of list.entries()) {
+        if (left(deadlineAt) <= 0) { failAll(list.slice(i), "budget-exhausted"); break; }
+        const [cmd, argv, spawnOpts] = buildBashScriptSpawn(ENSURE_CARD, ["--repo", ref.repo, String(ref.number)]);
+        const env = Object.assign({}, spawnOpts.env || process.env, status === "resolved" ? RB.toInternalEnv(board) : {});
+        spawnSync(cmd, argv, Object.assign({}, spawnOpts, { env, stdio: "ignore", timeout: left(deadlineAt), killSignal: "SIGKILL" }));
+      }
+    }
+  }
   function prepare(refs) {
     start();
     const r = R.readCards(refs, { deadlineAt });
@@ -66,16 +89,13 @@ function createPmField(opts) {
       else if (c && FAIL_CLOSED.has(c.reason)) cards.set(refKey(ref.repo, ref.number), c);
     }
     if (missing.length === 0) return { ok: true };
-    for (const ref of missing) {
-      if (left(deadlineAt) <= 0) break;
-      const [cmd, argv, spawnOpts] = buildBashScriptSpawn(ENSURE_CARD, ["--repo", ref.repo, String(ref.number)]);
-      spawnSync(cmd, argv, Object.assign({}, spawnOpts, { stdio: "ignore", timeout: left(deadlineAt), killSignal: "SIGKILL" }));
-    }
+    addCards(missing);
     const again = R.readCards(missing, { deadlineAt });
     if (again.ok) for (const ref of missing) { const c = again.results[refKey(ref.repo, ref.number)]; if (c && (c.ok || FAIL_CLOSED.has(c.reason))) cards.set(refKey(ref.repo, ref.number), c); }
     return { ok: true };
   }
-  const resolveCard = (ref) => cards.get(refKey(ref.repo, ref.number)) || { ok: false, reason: "no-card" };
+  const resolveCard = (ref) => cards.get(refKey(ref.repo, ref.number))
+    || { ok: false, reason: cardFailure.get(refKey(ref.repo, ref.number)) || "no-card" };
   return {
     prepare,
     write: (ref, value) => writePmField(ref, value, { timeoutMs: Math.min(WRITE_TIMEOUT_MS, left(start())), resolveCard }),

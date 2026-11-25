@@ -1,23 +1,23 @@
 # resolve-project.sh — auto-resolve Projects v2 config from the origin remote (sourced, not executed).
-# resolve_project_for_repo [--require-wip-fields] [--no-cache-read] sets RESOLVED_{OWNER (project owner,
-#   not repo owner),PROJECT_NUM,PROJECT_ID,CONTENT_DATE_FIELD_ID,STATUS_FIELD_ID,TODO/IN_PROGRESS/DONE_OPTION_ID,
-#   SESSION_ID_FIELD_ID} and RESOLVED_CACHE_KEY (owner/repo; empty on the internal short-circuit);
-#   optional ids may be empty. rc=1: gh missing, origin not a github.com owner/repo, no linked Project,
-#   or a graphql failure. --require-wip-fields: a cached row with an empty WIP column is a miss.
-#   --no-cache-read: always fetch (the cache is still rewritten).
+# resolve_project_for_repo [--repo owner/repo] [--require-wip-fields] [--no-cache-read] [--no-cache-write]
+#   sets RESOLVED_{OWNER (project owner, not repo owner),PROJECT_NUM,PROJECT_ID,CONTENT_DATE_FIELD_ID,
+#   STATUS_FIELD_ID,TODO/IN_PROGRESS/DONE_OPTION_ID,SESSION_ID_FIELD_ID}, RESOLVED_CACHE_KEY (owner/repo;
+#   empty on the internal short-circuit) and RESOLVED_STATUS: resolved (rc 0, the repo's only open linked
+#   board), no-link, ambiguous (RESOLVED_CANDIDATES "<owner>#<number>" words) or fetch-failed (rc 1).
+#   --repo replaces the origin remote. --require-wip-fields: a cached row with an empty WIP column is a miss.
 # _ISSUE_CREATE_INTERNAL_{OWNER,PROJECT_NUM,PROJECT_ID} (+ the optional *_FIELD_ID/*_OPTION_ID overrides) skip GraphQL.
-# Cache: resolve-project/cache.sh (11-column rows tagged with a schema; any other row is refetched).
+# Cache: resolve-project/cache.sh; a hit is re-checked against the open linked boards (resolve-project/linked.sh).
 # Set-safety: every external command is guarded, so a failing gh never aborts a `set -e` caller.
 
 _RESOLVE_PROJECT_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=resolve-project/cache.sh
 . "$_RESOLVE_PROJECT_LIB_DIR/resolve-project/cache.sh"
+# shellcheck source=resolve-project/linked.sh
+. "$_RESOLVE_PROJECT_LIB_DIR/resolve-project/linked.sh"
 # shellcheck source=session-id-field.sh
 . "$_RESOLVE_PROJECT_LIB_DIR/session-id-field.sh"
 
-resolve_project_for_repo() {
-    # Always clear before populating so a stale value from a prior call cannot
-    # leak through on failure.
+_resolve_project_clear_board() {
     RESOLVED_OWNER=""
     RESOLVED_PROJECT_NUM=""
     RESOLVED_PROJECT_ID=""
@@ -27,15 +27,26 @@ resolve_project_for_repo() {
     RESOLVED_IN_PROGRESS_OPTION_ID=""
     RESOLVED_DONE_OPTION_ID=""
     RESOLVED_SESSION_ID_FIELD_ID=""
-    RESOLVED_CACHE_KEY=""
+}
 
-    local require_wip=0 no_cache_read=0 arg
-    for arg in "$@"; do
-        case "$arg" in
+resolve_project_for_repo() {
+    # Always clear before populating so a stale value from a prior call cannot leak through on failure.
+    _resolve_project_clear_board
+    RESOLVED_CACHE_KEY=""
+    RESOLVED_STATUS="fetch-failed"
+    RESOLVED_CANDIDATES=""
+
+    local require_wip=0 no_cache_read=0 no_cache_write=0 repo_flag=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
             --require-wip-fields) require_wip=1 ;;
             --no-cache-read) no_cache_read=1 ;;
-            *) echo "warn: resolve-project: unknown option '$arg' ignored" >&2 ;;
+            --no-cache-write) no_cache_write=1 ;;
+            --repo) repo_flag="${2:-}"; shift ;;
+            --repo=*) repo_flag="${1#--repo=}" ;;
+            *) echo "warn: resolve-project: unknown option '$1' ignored" >&2 ;;
         esac
+        shift
     done
 
     # ---- Internal short-circuit (no cache key, no cache write) ----
@@ -51,6 +62,7 @@ resolve_project_for_repo() {
         RESOLVED_IN_PROGRESS_OPTION_ID="${_ISSUE_CREATE_INTERNAL_IN_PROGRESS_OPTION_ID:-}"
         RESOLVED_DONE_OPTION_ID="${_ISSUE_CREATE_INTERNAL_DONE_OPTION_ID:-}"
         RESOLVED_SESSION_ID_FIELD_ID="${_ISSUE_CREATE_INTERNAL_SESSION_ID_FIELD_ID:-}"
+        RESOLVED_STATUS="resolved"
         return 0
     fi
 
@@ -59,25 +71,33 @@ resolve_project_for_repo() {
         return 1
     fi
 
-    # ---- Owner/repo from the ORIGIN remote (#1899) ----
+    # ---- Owner/repo: --repo, else the ORIGIN remote (#1899) ----
     local script_dir owner_repo
     script_dir="$_RESOLVE_PROJECT_LIB_DIR"
-    # shellcheck source=board-card.sh
-    . "$script_dir/board-card.sh"
-
-    if ! owner_repo=$(resolve_owner_repo); then
-        echo "warn: resolve-project: could not resolve owner/repo from the origin remote (missing origin, or not a github.com repo)" >&2
-        return 1
-    fi
-    owner_repo=$(printf '%s' "$owner_repo" | tr -d '\r' | head -1)
-    if [ -z "$owner_repo" ]; then
-        echo "warn: resolve-project: origin remote resolved to an empty owner/repo" >&2
-        return 1
+    if [ -n "$repo_flag" ]; then
+        if [[ ! "$repo_flag" =~ ^[A-Za-z0-9_.][A-Za-z0-9_.-]*/[A-Za-z0-9_.][A-Za-z0-9_.-]*$ ]]; then
+            echo "warn: resolve-project: --repo '$repo_flag' is not owner/repo" >&2
+            return 1
+        fi
+        owner_repo="$repo_flag"
+    else
+        # shellcheck source=board-card.sh
+        . "$script_dir/board-card.sh"
+        if ! owner_repo=$(resolve_owner_repo); then
+            echo "warn: resolve-project: could not resolve owner/repo from the origin remote (missing origin, or not a github.com repo)" >&2
+            return 1
+        fi
+        owner_repo=$(printf '%s' "$owner_repo" | tr -d '\r' | head -1)
+        if [ -z "$owner_repo" ]; then
+            echo "warn: resolve-project: origin remote resolved to an empty owner/repo" >&2
+            return 1
+        fi
     fi
     RESOLVED_CACHE_KEY="$owner_repo"
+    local owner_part="${owner_repo%/*}" repo_part="${owner_repo#*/}"
 
-    # ---- Cache lookup (fixed-string key match; see resolve-project/cache.sh for hit rules) ----
-    local cache_dir cache_file cache_row
+    # ---- Cache lookup (resolve-project/cache.sh hit rules), then a link re-check of the cached board ----
+    local cache_dir cache_file cache_row check_rc
     cache_dir="$(_resolve_project_cache_dir "$script_dir")" || cache_dir=""
     cache_file="${cache_dir:+$cache_dir/project-resolve.tsv}"
     if [ "$no_cache_read" -eq 0 ] \
@@ -88,66 +108,27 @@ resolve_project_for_repo() {
             RESOLVED_CONTENT_DATE_FIELD_ID RESOLVED_STATUS_FIELD_ID RESOLVED_TODO_OPTION_ID \
             RESOLVED_IN_PROGRESS_OPTION_ID RESOLVED_DONE_OPTION_ID RESOLVED_SESSION_ID_FIELD_ID _tag \
             <<<"${cache_row//$'\t'/$'\x1f'}"
-        return 0
+        check_rc=0
+        if [[ "$RESOLVED_PROJECT_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then
+            _resolve_project_link_check "$owner_part" "$repo_part" "$RESOLVED_PROJECT_ID" || check_rc=$?
+        else
+            check_rc=2  # pid outside the id charset: never embedded in a query; treated as a failed confirmation
+        fi
+        if [ "$check_rc" -eq 2 ]; then
+            echo "warn: resolve-project: link check of cached board $RESOLVED_PROJECT_ID failed; using the cached board" >&2
+        fi
+        if [ "$check_rc" -ne 1 ]; then
+            RESOLVED_STATUS="resolved"
+            return 0
+        fi
+        echo "info: cached board $RESOLVED_PROJECT_ID is no longer the only open linked board of $owner_repo; re-resolving" >&2
+        resolve_project_drop_cache_row "$owner_repo" || true
+        _resolve_project_clear_board
     fi
 
-    # ---- Query A: count linked Projects v2 ----
-    local owner_part repo_part
-    owner_part="${owner_repo%/*}"
-    repo_part="${owner_repo#*/}"
-
-    local query_projects
-    query_projects='query($owner: String!, $repo: String!) {
-  repository(owner: $owner, name: $repo) {
-    projectsV2(first: 10) {
-      nodes { id number owner { ... on Organization { login } ... on User { login } } }
-    }
-  }
-}'
-
-    local count
-    if ! count=$(gh api graphql \
-            -F owner="$owner_part" \
-            -F repo="$repo_part" \
-            --jq '.data.repository.projectsV2.nodes | length' \
-            -f query="$query_projects" 2>/dev/null); then
-        echo "warn: resolve-project: gh api graphql (projectsV2 length) failed" >&2
-        return 1
-    fi
-    count=$(printf '%s' "$count" | tr -d '\r' | head -1)
-    if [ -z "$count" ] || [ "$count" = "0" ]; then
-        echo "warn: resolve-project: no Projects v2 linked to $owner_repo" >&2
-        return 1
-    fi
-    if [ "$count" -gt 1 ] 2>/dev/null; then
-        echo "warn: resolve-project: multiple Projects v2 linked to $owner_repo — using first" >&2
-    fi
-
-    # ---- Query A (b): first-node {id, number, ownerLogin} ----
-    local node_json
-    if ! node_json=$(gh api graphql \
-            -F owner="$owner_part" \
-            -F repo="$repo_part" \
-            --jq '.data.repository.projectsV2.nodes | if length == 0 then empty else .[0] | {id, number, ownerLogin: .owner.login} end' \
-            -f query="$query_projects" 2>/dev/null); then
-        echo "warn: resolve-project: gh api graphql (projectsV2 first-node) failed" >&2
-        return 1
-    fi
-    node_json=$(printf '%s' "$node_json" | tr -d '\r' | head -1)
-    if [ -z "$node_json" ]; then
-        echo "warn: resolve-project: gh api graphql first-node returned empty" >&2
-        return 1
-    fi
-
-    # Parse a single-line JSON object {"id":"...","number":N,"ownerLogin":"..."}.
-    local pid pnum powner
-    pid=$(printf '%s' "$node_json"   | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-    pnum=$(printf '%s' "$node_json"  | sed -n 's/.*"number"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -1)
-    powner=$(printf '%s' "$node_json" | sed -n 's/.*"ownerLogin"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-    if [ -z "$pid" ] || [ -z "$pnum" ] || [ -z "$powner" ]; then
-        echo "warn: resolve-project: could not parse project node JSON: $node_json" >&2
-        return 1
-    fi
+    # ---- Query A: the repo's open linked boards (exactly one resolves) ----
+    _resolve_project_query_linked "$owner_part" "$repo_part" || return 1
+    local pid="$_RP_LINKED_PID" pnum="$_RP_LINKED_PNUM" powner="$_RP_LINKED_POWNER"
 
     # ---- Query B: paginate fields, locate "Content Date" (DATE dataType) ----
     # Two query bodies (endCursor / field id) keep the test mock's substring dispatch unambiguous.
@@ -258,8 +239,10 @@ resolve_project_for_repo() {
     RESOLVED_DONE_OPTION_ID="$done_oid"
     RESOLVED_SESSION_ID_FIELD_ID="$sid_fid"
 
+    RESOLVED_STATUS="resolved"
+
     # ---- Cache write (best-effort) ----
-    _resolve_project_write_cache "$cache_dir" "$cache_file" "$owner_repo" \
+    [ "$no_cache_write" -eq 1 ] || _resolve_project_write_cache "$cache_dir" "$cache_file" "$owner_repo" \
         "$powner" "$pnum" "$pid" "$content_date_id" \
         "$status_fid" "$todo_oid" "$inprog_oid" "$done_oid" "$sid_fid" || true
 

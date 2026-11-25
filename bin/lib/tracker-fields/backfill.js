@@ -46,7 +46,11 @@ function run(o) {
     if (w && w.result === "ok") out.written.push({ issue, tag: hs[0] });
     else out.failed.push({ issue, reason: (w && (w.reason || w.result)) || "no answer" });
   }
-  if (out.failed.length > 0) Object.assign(out, { ok: false, reason: `${out.failed.length} write(s) failed` });
+  if (out.failed.length > 0) {
+    const k = out.failed.filter((f) => f.reason === "budget-exhausted").length;
+    const more = k > 0 ? ` (${k} budget-exhausted; re-run to continue)` : "";
+    Object.assign(out, { ok: false, reason: `${out.failed.length} write(s) failed${more}` });
+  }
   return out;
 }
 

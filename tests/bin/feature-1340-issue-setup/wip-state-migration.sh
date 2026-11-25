@@ -280,7 +280,12 @@ case "$ARGS" in
   auth\ status*) echo "Logged in to github.com"; echo "Token scopes: 'repo', 'project'"; exit 0 ;;
   repo\ view\ *--json\ owner,name*) echo "nirecom/agents"; exit 0 ;;
   api\ graphql\ *projectsV2*)
-    echo '{"id":"PVT_semi1","number":1,"ownerLogin":"example-owner"}'; exit 0 ;;
+    # #3142: the head-node query gets the board; the open-board count (and link check) gets 1.
+    case "$ARGS" in
+      *"ownerLogin"*) echo '{"id":"PVT_semi1","number":1,"ownerLogin":"example-owner"}' ;;
+      *) echo "1" ;;
+    esac
+    exit 0 ;;
   api\ graphql\ *projectItems*) exit 0 ;;
   api\ graphql\ *)
     case "$ARGS" in

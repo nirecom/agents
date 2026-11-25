@@ -14,8 +14,7 @@ set -u
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TARGET="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/ensure-board-card.sh"
 
-PASS=0
-FAIL=0
+PASS=0; FAIL=0
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -49,6 +48,10 @@ fi
 #   GH_MOCK_ARGS_LOG           append-only call log
 
 TMP="" ORIG_PATH="$PATH"
+# #3142: the state dir holds the resolver's project-resolve.tsv cache; keep both dirs off the real store.
+F3142_PIN_ROOT="$(mktemp -d)"; readonly F3142_PIN_ROOT
+trap 'rm -rf "$F3142_PIN_ROOT"' EXIT
+export WORKFLOW_STATE_DIR="$F3142_PIN_ROOT/wf-state" WORKFLOW_PLANS_DIR="$F3142_PIN_ROOT/wf-plans"
 
 setup_mock() {
     TMP="$(mktemp -d)"
@@ -139,11 +142,9 @@ MOCK_EOF
     # Required env vars (mirrors issue-create.sh / wip-state.sh conventions).
     export AGENTS_MAIN_ROOT="$TMP/agents-config"
     mkdir -p "$AGENTS_MAIN_ROOT"
-    export ISSUE_CREATE_PROJECT_ID="PVT_kwHOAMF_jc4BXf9E"
-    export ISSUE_CREATE_PROJECT_NUM="1"
-    export ISSUE_CREATE_OWNER="nirecom"
-    # Content Date field id (Projects v2 built-in field).
-    export EBC_FIELD_ID="PVTF_contentdate"
+    # #3142: the board comes from the resolver's short-circuit env, never from a developer's real cache.
+    export _ISSUE_CREATE_INTERNAL_OWNER="nirecom" _ISSUE_CREATE_INTERNAL_PROJECT_NUM="1" _ISSUE_CREATE_INTERNAL_PROJECT_ID="PVT_kwHOAMF_jc4BXf9E"
+    export _ISSUE_CREATE_INTERNAL_FIELD_ID="PVTF_contentdate" _ISSUE_CREATE_INTERNAL_STATUS_FIELD_ID="PVTF_status" _ISSUE_CREATE_INTERNAL_TODO_OPTION_ID="OPT_todo" _ISSUE_CREATE_INTERNAL_IN_PROGRESS_OPTION_ID="OPT_ip" _ISSUE_CREATE_INTERNAL_DONE_OPTION_ID="OPT_done"
 }
 
 teardown_mock() {
@@ -156,9 +157,7 @@ teardown_mock() {
           GH_MOCK_RESOLVE_AFTER_ADD GH_MOCK_RESOLVE_COUNTER_FILE \
           GH_MOCK_OWNER_REPO GH_MOCK_CARD_STATUS GH_MOCK_FAIL_STATUS_READ \
           GH_MOCK_STATUS_FIELD_ID 2>/dev/null || true
-    unset AGENTS_MAIN_ROOT ISSUE_CREATE_PROJECT_ID ISSUE_CREATE_PROJECT_NUM \
-          ISSUE_CREATE_OWNER EBC_FIELD_ID \
-          EBC_PROJECT_NUM 2>/dev/null || true
+    unset AGENTS_MAIN_ROOT EBC_STATUS_FIELD_ID "${!_ISSUE_CREATE_INTERNAL_@}" 2>/dev/null || true
 }
 
 # ===========================================================================
@@ -224,8 +223,7 @@ setup_mock
 export GH_MOCK_ITEM_ADD_ID="PVTI_newly_added"
 run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
 RC=$?
-HAS_ITEM_ADD=0
-HAS_ITEM_EDIT=0
+HAS_ITEM_ADD=0; HAS_ITEM_EDIT=0
 grep -q "project item-add" "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_ITEM_ADD=1
 grep -q "project item-edit" "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_ITEM_EDIT=1
 if [ "$RC" -eq 0 ] && [ "$HAS_ITEM_ADD" -eq 1 ] && [ "$HAS_ITEM_EDIT" -eq 1 ]; then
@@ -242,8 +240,7 @@ setup_mock
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
 RC=$?
-HAS_ITEM_ADD=0
-HAS_ITEM_EDIT=0
+HAS_ITEM_ADD=0; HAS_ITEM_EDIT=0
 grep -q "project item-add" "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_ITEM_ADD=1
 grep -q "project item-edit" "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_ITEM_EDIT=1
 if [ "$RC" -eq 0 ] && [ "$HAS_ITEM_ADD" -eq 0 ] && [ "$HAS_ITEM_EDIT" -eq 1 ]; then
@@ -376,122 +373,12 @@ else
 fi
 teardown_mock
 
-# ===========================================================================
-# Test 13: REMOVED (#641). The ISSUE_CREATE_*/EBC_* hardcoded-default fallback
-# is gone — Projects v2 config is auto-resolved from the git remote. The
-# precedence priority being tested no longer exists in the design.
-# ===========================================================================
+# Test 13 was removed in #641: the ISSUE_CREATE_*/EBC_* default fallback it pinned is gone.
 
-# ===========================================================================
-# R-integration (#641): ISSUE_CREATE_* env vars all unset, resolver runs via graphql.
-# Verify item-add called with RESOLVED_OWNER and RESOLVED_PROJECT_NUM.
-# ===========================================================================
-setup_mock
-# Drop the env-var defaults so resolver path is exercised.
-unset ISSUE_CREATE_PROJECT_ID ISSUE_CREATE_PROJECT_NUM ISSUE_CREATE_OWNER EBC_FIELD_ID 2>/dev/null
-# Replace mock with one that handles both `*projectsV2*` (resolver Query A) and
-# `*projectItems*` (resolve_item_id).
-cat > "$TMP/mock-bin/gh" <<'MOCK_EOF'
-#!/bin/bash
-ARGS="$*"
-if [ -n "${GH_MOCK_ARGS_LOG:-}" ]; then
-    printf '%s\n' "$ARGS" >> "$GH_MOCK_ARGS_LOG"
-fi
-case "$ARGS" in
-  auth\ status*)
-    echo "Token scopes: 'project', 'repo'"; exit 0 ;;
-  repo\ view\ *--json\ owner,name*|repo\ view\ *)
-    echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"; exit 0 ;;
-  api\ graphql\ *projectsV2*)
-    case "$ARGS" in
-      *"| length"*) echo "1"; exit 0 ;;
-      *) printf '{"id":"PVT_resolved","number":1,"ownerLogin":"nirecom"}\n'; exit 0 ;;
-    esac
-    ;;
-  api\ graphql\ *fields*|api\ graphql\ *projectId*)
-    case "$ARGS" in
-      *"hasNextPage"*) echo "false"; exit 0 ;;
-      *"endCursor"*)   echo ""; exit 0 ;;
-      *) echo "PVTF_resolved_content_date"; exit 0 ;;
-    esac
-    ;;
-  api\ graphql\ *projectItems*)
-    printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID:-}"; exit 0 ;;
-  api\ graphql\ *)
-    # Fallback (resolve_item_id without --jq-distinguishing token).
-    printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID:-}"; exit 0 ;;
-  project\ item-add\ *)
-    echo "${GH_MOCK_ITEM_ADD_ID:-PVTI_added}"; exit 0 ;;
-  project\ item-edit\ *) exit 0 ;;
-  issue\ view\ *--json\ createdAt*) echo "2024-01-15"; exit 0 ;;
-  issue\ view\ *--json\ url*|issue\ view\ *)
-    echo "${GH_MOCK_ISSUE_URL:-https://github.com/nirecom/agents/issues/42}"; exit 0 ;;
-  *) echo "MOCK GH: no match $ARGS" >&2; exit 2 ;;
-esac
-MOCK_EOF
-chmod +x "$TMP/mock-bin/gh"
-export WORKFLOW_PLANS_DIR="$TMP/plans"
-# GH_MOCK_PROJECT_ITEM_ID unset → triggers item-add path.
-run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
-RC=$?
-HAS_ITEM_ADD_RESOLVED=0
-HAS_GRAPHQL_RESOLVED_PROJECTID=0
-HAS_CONTENT_DATE_FIELD=0
-grep -qE "project item-add (--owner nirecom --num 1|1 --owner nirecom)" "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_ITEM_ADD_RESOLVED=1
-grep -q "PVT_resolved" "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_GRAPHQL_RESOLVED_PROJECTID=1
-grep -q "PVTF_resolved_content_date" "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_CONTENT_DATE_FIELD=1
-if [ "$RC" -eq 0 ] \
-   && [ "$HAS_ITEM_ADD_RESOLVED" -eq 1 ] \
-   && [ "$HAS_GRAPHQL_RESOLVED_PROJECTID" -eq 1 ] \
-   && [ "$HAS_CONTENT_DATE_FIELD" -eq 1 ]; then
-    pass "R-integration: resolver values reach item-add (--owner/--num) + item-edit (project_id, field_id)"
-else
-    fail "R-integration: rc=$RC item_add=$HAS_ITEM_ADD_RESOLVED project_id=$HAS_GRAPHQL_RESOLVED_PROJECTID field_id=$HAS_CONTENT_DATE_FIELD log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"
-fi
-unset WORKFLOW_PLANS_DIR
-teardown_mock
-
-# ===========================================================================
-# R-resolver-fail (#641): resolver returns 1 (0 linked) → exit 0 + warn, no item-add.
-# ===========================================================================
-setup_mock
-unset ISSUE_CREATE_PROJECT_ID ISSUE_CREATE_PROJECT_NUM ISSUE_CREATE_OWNER EBC_FIELD_ID 2>/dev/null
-cat > "$TMP/mock-bin/gh" <<'MOCK_EOF'
-#!/bin/bash
-ARGS="$*"
-if [ -n "${GH_MOCK_ARGS_LOG:-}" ]; then
-    printf '%s\n' "$ARGS" >> "$GH_MOCK_ARGS_LOG"
-fi
-case "$ARGS" in
-  auth\ status*) echo "Token scopes: 'project'"; exit 0 ;;
-  repo\ view\ *) echo "nirecom/agents"; exit 0 ;;
-  api\ graphql\ *projectsV2*)
-    case "$ARGS" in
-      *"| length"*) echo "0"; exit 0 ;;
-      *) echo ""; exit 0 ;;
-    esac
-    ;;
-  api\ graphql\ *) echo ""; exit 0 ;;
-  project\ item-add\ *) echo "PVTI_added"; exit 0 ;;
-  project\ item-edit\ *) exit 0 ;;
-  issue\ view\ *) echo "https://github.com/nirecom/agents/issues/42"; exit 0 ;;
-  *) echo "MOCK GH: no match $ARGS" >&2; exit 2 ;;
-esac
-MOCK_EOF
-chmod +x "$TMP/mock-bin/gh"
-export WORKFLOW_PLANS_DIR="$TMP/plans"
-STDERR_FILE="$TMP/r-fail-stderr.log"
-run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>"$STDERR_FILE"
-RC=$?
-HAS_ITEM_ADD=0
-grep -q "project item-add" "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_ITEM_ADD=1
-if [ "$RC" -eq 0 ] && [ "$HAS_ITEM_ADD" -eq 0 ] && [ -s "$STDERR_FILE" ]; then
-    pass "R-resolver-fail: 0 linked projects → exit 0 + warn, item-add NOT called"
-else
-    fail "R-resolver-fail: rc=$RC item_add=$HAS_ITEM_ADD stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
-fi
-unset WORKFLOW_PLANS_DIR
-teardown_mock
+# R-integration / R-resolver-fail run here, in this shell, so the order and counters stay as before.
+SECTION_DIR="$SCRIPT_CHECKOUT_ROOT/tests/agents/feature-ensure-board-card"
+# shellcheck source=feature-ensure-board-card/section-resolver.sh
+. "$SECTION_DIR/section-resolver.sh"
 
 # ===========================================================================
 # Test 14: issue OPEN + card Status=Done → Status reset item-edit called,

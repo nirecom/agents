@@ -172,9 +172,11 @@ case_bmp_8() {
     export GH_MOCK_CREATE_CURSOR="$TMP/create-cursor2"
     : >"$GH_MOCK_ARGS_LOG"
     _bmp_run 8b "$M200" "$TMP/stdin2.tsv" 200
+    # The board resolver's projectsV2(first: 100) page size is not parent #100; drop it before the check.
     if [[ "$RC" -eq 0 ]] && diff -q "$STDIN_F" "$M100" >/dev/null 2>&1 \
        && grep -q 'Other parent child' "$M200" && ! grep -q 'Other parent child' "$M100" \
-       && grep -qE '(^|[^0-9])200([^0-9]|$)' "$GH_MOCK_ARGS_LOG" && ! grep -qE '(^|[^0-9])100([^0-9]|$)' "$GH_MOCK_ARGS_LOG" \
+       && grep -qE '(^|[^0-9])200([^0-9]|$)' "$GH_MOCK_ARGS_LOG" \
+       && ! sed 's/first: 100//g' "$GH_MOCK_ARGS_LOG" | grep -qE '(^|[^0-9])100([^0-9]|$)' \
        && ! grep -qiE 'overwrit|replac' "$ERR"; then
         pass "BMP-8: distinct parent N → distinct manifests, first one untouched, no overwrite warning"
     else

@@ -4,7 +4,7 @@
 //     fields: {ok:true, nodes:[{name, dataType, options?}]} | {ok:false, reason}; holders: holders.js holdersOf;
 //     values: readPmFields' answer for the held issues ({ok, values} | {ok:false, reason}).
 //   Only a missing field is NEEDED (the board preparation creates it). type-mismatch, option-missing,
-//   unbackfilled, backfill-conflict and undecidable (a forge failure) are diagnostics, never NEEDED.
+//   unbackfilled, backfill-conflict, no-board and undecidable (a forge failure) are diagnostics, never NEEDED.
 //   judgeRepo(repo, {entries?, homeRepo?, timeoutMs?}) -> judge's answer for the repo's board, read from the forge.
 
 const { spawnSync } = require("child_process");
@@ -14,6 +14,7 @@ const { buildGhSpawn } = require("../../workflow/lib/workflow-init/spawn-env");
 const { EXPECTED_FIELDS, PM } = require("./expected");
 const { holdersOf, refsOf } = require("./holders");
 const { readPmFields } = require("../pm-field/read");
+const { resolveBoard } = require("../project-board/resolve");
 
 const FIX = "run /migrate-tracker in this repo to backfill it";
 const optName = (o) => (typeof o === "string" ? o : o && o.name);
@@ -58,6 +59,9 @@ function valueDiagnostics(holders, values) {
 function judge(input) {
   const o = input || {};
   const f = o.fields;
+  if (f && f.noBoard) {
+    return { needed: false, missing: [], diagnostics: [{ kind: "no-board", message: `the repo links no open Projects v2 board; run /migrate-tracker in this repo to create one` }] };
+  }
   if (!f || !f.ok || !Array.isArray(f.nodes)) {
     return { needed: false, missing: [], diagnostics: [{ kind: "undecidable", message: `the board fields could not be read (${(f && f.reason) || "unknown"})` }] };
   }
@@ -76,18 +80,18 @@ function gh(args, timeoutMs) {
   try { return JSON.parse(r.stdout); } catch { return { error: `gh ${args[0]}: unparsable output` }; }
 }
 
-// boardFields(repo, timeoutMs) -> {ok:true, nodes} | {ok:false, reason}. The board is the one the board
-// preparation (ensure-project-ready.sh) reuses: the owner's project titled "<repo> — Issue Timeline".
-function boardFields(repo, timeoutMs) {
-  const list = gh(["project", "list", "--owner", repo.split("/")[0], "--format", "json"], timeoutMs);
-  if (list.error) return { ok: false, reason: list.error };
-  const title = `${repo} — Issue Timeline`;
-  const board = (Array.isArray(list.projects) ? list.projects : []).find((p) => p && p.title === title);
-  if (!board || !board.id) return { ok: false, reason: `no board titled '${title}'` };
+// boardFields(repo, timeoutMs, {resolveBoard?}) -> {ok:true, nodes} | {ok:false, reason, noBoard?}. The board is
+// the one the resolver names (project-board/resolve.js); no-link is noBoard, ambiguous / fetch-failed a reason.
+function boardFields(repo, timeoutMs, opts) {
+  const resolve = (opts && opts.resolveBoard) || resolveBoard;
+  const board = resolve(repo, { timeoutMs, noCacheRead: true }) || { status: "fetch-failed" };
+  if (board.status === "no-link") return { ok: false, noBoard: true, reason: "no-link" };
+  if (board.status === "ambiguous") return { ok: false, reason: `ambiguous: ${(board.candidates || []).join(" ")}` };
+  if (board.status !== "resolved" || !board.projectId) return { ok: false, reason: board.reason || `board lookup ${board.status}` };
   const nodes = [];
   let after = null;
   for (let page = 0; page < 20; page++) {
-    const args = ["api", "graphql", "-F", `projectId=${board.id}`, "-f", `query=${FIELDS_QUERY}`];
+    const args = ["api", "graphql", "-F", `projectId=${board.projectId}`, "-f", `query=${FIELDS_QUERY}`];
     if (after) args.push("-f", `after=${after}`);
     const r = gh(args, timeoutMs);
     const f = r && r.data && r.data.node && r.data.node.fields;

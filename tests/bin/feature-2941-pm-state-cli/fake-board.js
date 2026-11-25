@@ -1,9 +1,10 @@
 "use strict";
-// #3135 board mode of fake-gh.js. With $PM_FAKE_GH_BOARD (a JSON file {title?, fields:[{id, name, dataType,
-// options?}]}) the fake answers the Projects v2 board calls of ensure-project-ready.sh and of the tracker judge:
-// auth status, project list / view, the repo node id, the repo link, a field list (any `fields(` query without an
-// `issue(`), createProjectV2Field / updateProjectV2Field (they rewrite the file), the view list (none) and viewer.
-// --jq runs through the jq on PATH. $PM_FAKE_GH_BOARD_FAIL=create fails every createProjectV2Field.
+// #3135 board mode of fake-gh.js. With $PM_FAKE_GH_BOARD (a JSON file {fields:[{id, name, dataType, options?}]})
+// the fake answers the Projects v2 board calls of ensure-project-ready.sh and of the tracker judge: auth status,
+// the repository's linked boards (#3142: board #1 open and linked; no title is matched), project view, the repo
+// node id, the repo link, a field list (any `fields(` query without an `issue(`), createProjectV2Field /
+// updateProjectV2Field (they rewrite the file), the view list (none) and viewer.
+// --jq runs through the jq on PATH, compact as gh prints it. $PM_FAKE_GH_BOARD_FAIL=create fails every createProjectV2Field.
 // A board file without a `pm` field also puts every issue's card on a board without it (fake-gh.js pmItems).
 const cp = require("node:child_process");
 const fs = require("node:fs");
@@ -26,7 +27,7 @@ function out(args, body) {
   let text = JSON.stringify(body);
   const i = args.indexOf("--jq");
   if (i >= 0) {
-    const r = cp.spawnSync("jq", ["-r", args[i + 1]], { input: text, encoding: "utf8", windowsHide: true });
+    const r = cp.spawnSync("jq", ["-rc", args[i + 1]], { input: text, encoding: "utf8", windowsHide: true });
     if (r.status !== 0) { process.stderr.write(`fake gh: jq failed: ${r.stderr}`); process.exit(1); }
     process.stdout.write(r.stdout);
   } else process.stdout.write(`${text}\n`);
@@ -62,12 +63,14 @@ function update(args, b) {
 function handle(args, query) {
   const b = boardOf();
   if (!b) return;
-  const title = b.title || "o/r — Issue Timeline";
   if (args[0] === "auth" && args[1] === "status") { process.stdout.write("Token scopes: 'gist', 'project', 'repo'\n"); process.exit(0); }
-  if (args[0] === "project" && args[1] === "list") out(args, { projects: [{ number: 1, id: "PVT_fake", title }] });
-  if (args[0] === "project" && args[1] === "view") out(args, { id: "PVT_fake", number: 1, title });
+  if (args[0] === "project" && args[1] === "view") out(args, { id: "PVT_fake", number: 1 });
   if (args[0] === "api" && /^repos\//.test(args[1] || "")) out(args, { node_id: "R_fake" });
   if (args[0] !== "api" || args[1] !== "graphql") return;
+  if (/\bprojectsV2\s*\(/.test(query)) {
+    const login = flag(args, "owner") || "o";
+    out(args, { data: { repository: { projectsV2: { nodes: [{ id: "PVT_fake", number: 1, closed: false, owner: { login } }], pageInfo: { hasNextPage: false, endCursor: null } } } } });
+  }
   if (/createProjectV2Field\b/.test(query)) create(args, query, b);
   if (/updateProjectV2Field\b/.test(query)) update(args, b);
   if (/linkProjectV2ToRepository\b/.test(query)) out(args, { data: { linkProjectV2ToRepository: { repository: { id: "R_fake" } } } });

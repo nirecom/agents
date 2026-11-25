@@ -8,6 +8,7 @@
 # S1/S2: bin/ scripts must no longer infer severity. The keyword scan
 # (grep -qwE 'abort|hang|security|leak') is deleted; severity is decided solely by
 # the /issue-create label policy and arrives via --label.
+# lang-check: ignore (the SKILL.md SSOT grep at the end matches a Japanese heading phrase)
 
 set -uo pipefail
 
@@ -19,8 +20,9 @@ PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1 — $2"; FAIL=$((FAIL + 1)); }
 
-WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+WORK="$(mktemp -d)"; readonly WORK
+# #3142: issue-create.sh reaches the board resolver; keep its state and cache out of the real store.
+trap 'rm -rf "$WORK"' EXIT; export WORKFLOW_STATE_DIR="$WORK/wf-state" WORKFLOW_PLANS_DIR="$WORK/wf-plans"
 MOCKDIR="$WORK/bin"
 mkdir -p "$MOCKDIR"
 

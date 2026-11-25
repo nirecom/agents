@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2308-ensure-board-card-gitlab.sh
 # Tests: bin/github-issues/ensure-board-card.sh
-# Tags: scope:issue-specific, gitlab, forge, ensure-board-card, board-card, TL2, dup-group-keep:size-hard-limit
+# Tags: scope:issue-specific, gitlab, forge, ensure-board-card, board-card, TL2, dup-group-keep:size-hard-limit, feature-3142, projects-v2
 # Serial: H1 — probes and removes the fixed shared path /tmp/EBC_INJECT
 # Issue #2308 — the GitLab skip path of ensure-board-card.sh. GitLab Free has no
 # Projects v2 board (status labels are the board, owned by wip-state.sh), so on a
@@ -15,22 +15,23 @@ set -u
 # - Real `node bin/detect-forge-type` resolving a live gitlab origin.
 # - Real `gh project` refusal — the mock only records that gh was never called.
 # Closest mitigation: WORKFLOW_USER_VERIFIED preflight (skill-orchestration).
+# - #3142 cases: gh is the #3142 JSON mock on PATH; a real item-add against a closed board is not run.
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EBC_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/ensure-board-card.sh"
+# shellcheck source=../lib/harness.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=tests/lib/script-checkout-fixture.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
-
-PASS=0
-FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
-
-run_with_timeout() {
-    local secs="$1"; shift
-    if command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"
-    else perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; fi
-}
+# #3142: ensure-board-card.sh reaches the board resolver; keep its state, cache and HOME out of the real store.
+F3142_PIN_ROOT="$(mktemp -d)"; readonly F3142_PIN_ROOT
+trap 'rm -rf "$F3142_PIN_ROOT"' EXIT
+export WORKFLOW_STATE_DIR="$F3142_PIN_ROOT/wf-state" WORKFLOW_PLANS_DIR="$F3142_PIN_ROOT/wf-plans"
+export HOME="$F3142_PIN_ROOT/home"
+mkdir -p "$HOME" "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
+unset CLAUDE_CODE_SESSION_ID _ISSUE_CREATE_INTERNAL_OWNER _ISSUE_CREATE_INTERNAL_PROJECT_NUM \
+  _ISSUE_CREATE_INTERNAL_PROJECT_ID GH_MOCK_FAIL GH_MOCK_SLEEP GH_MOCK_ITEM_ON GH_MOCK_ITEMADD_GONE_FILE \
+  GH_MOCK_ITEMADD_GONE_TIMES
 
 # Existence gate.
 if [ ! -f "$EBC_SCRIPT" ]; then
@@ -95,6 +96,7 @@ run_ebc() {
 
 SKIP_MSG="GitLab has no Projects v2 board"
 
+case_begin "gitlab-skip-path" "bin/github-issues/ensure-board-card.sh"
 # E1: gitlab remote -> clean skip (exit 0), skip message on stderr, gh untouched.
 setup_ebc
 SHIM_FORGE=gitlab run_ebc 42; RC=$?
@@ -171,6 +173,193 @@ else
     fail "E7: idempotency" "rc1=$RC1 rc2=$RC2 gh_log=[$(cat "$GH_LOG" 2>/dev/null)]"
 fi
 teardown_ebc
+case_end
+
+# ---- #3142 Steps 3 and 7 ----
+# ensure-board-card prints one last stdout line `BOARD_CARD=<added|existing|failed|skipped> issue=<N>
+# reason=<token>` (none on a usage error), keeps exit 0, passes --repo to the resolver, and on an item-add
+# that says the board is gone drops the cached row, re-resolves once and retries the item-add once.
+TMP_ROOT="$F3142_PIN_ROOT/f3142"; readonly TMP_ROOT
+mkdir -p "$TMP_ROOT"
+# shellcheck source=feature-3142-board-resolve/_lib.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-3142-board-resolve/_lib.sh"
+f3142_install_mock "$TMP_ROOT"
+export GH_MOCK_LOG="$TMP_ROOT/gh.log" GH_MOCK_REPO="mockowner/mockrepo"
+export GH_MOCK_LINKED_FILE="$TMP_ROOT/linked.json"
+CACHE="$(f3142_cache_file)"
+GH_REPO="$TMP_ROOT/gh-repo"
+GL_REPO="$TMP_ROOT/gl-repo"
+f3142_repo "$GH_REPO" mockowner/mockrepo
+mkdir -p "$GL_REPO"
+harness_git_init "$GL_REPO"
+git -C "$GL_REPO" remote add origin "https://gitlab.com/mockowner/mockrepo.git"
+
+# fresh — one open linked board PVT_a, no cache, empty log, every knob cleared.
+fresh() {
+  unset GH_MOCK_FAIL GH_MOCK_ITEM_ON GH_MOCK_ITEMADD_GONE_FILE GH_MOCK_ITEMADD_GONE_TIMES GH_MOCK_CARD_STATUS
+  unset WIP_STATE_STATUS_FIELD_ID WIP_STATE_IN_PROGRESS_OPTION_ID EBC_STATUS_FIELD_ID EBC_STATUS_INPROG_OPTION_ID
+  unset _ISSUE_CREATE_INTERNAL_OWNER _ISSUE_CREATE_INTERNAL_PROJECT_NUM _ISSUE_CREATE_INTERNAL_PROJECT_ID
+  rm -rf "$(dirname "$CACHE")" "$TMP_ROOT/gone"
+  f3142_linked "$GH_MOCK_LINKED_FILE" false "PVT_a:3:mockowner:false"
+  : >"$GH_MOCK_LOG"
+}
+# ebc <dir> <args...> — runs ensure-board-card.sh from <dir>; RC, OUT, LAST (last stdout line), ERR.
+ebc() {
+  local dir="$1"; shift
+  (cd "$dir" && run_with_timeout 60 bash "$EBC_SCRIPT" "$@") >"$TMP_ROOT/out" 2>"$TMP_ROOT/err"
+  RC=$?
+  OUT="$(tr -d '\r' <"$TMP_ROOT/out")"
+  LAST="$(tail -n 1 <<<"$OUT")"
+  ERR="$(cat "$TMP_ROOT/err")"
+}
+count() { grep -cE "$1" "$GH_MOCK_LOG"; }
+# expect_ok <added|existing> — rc 0 and that result for #7; the plan fixes no reason token for a clean card.
+expect_ok() {
+  if [ "$RC" = 0 ] && [[ "$LAST" =~ ^BOARD_CARD=$1\ issue=7\ reason=[^\ ]*$ ]] && [[ "$LAST" != *failed* ]]; then
+    pass "result $1 for #7"
+  else fail "result $1 for #7" "rc=$RC last=[$LAST] err=$(head -c 300 <<<"$ERR")"; fi
+}
+
+case_begin "result-added-and-existing" "bin/github-issues/ensure-board-card.sh"
+fresh
+ebc "$GH_REPO" 7
+expect_ok added
+fresh
+export GH_MOCK_ITEM_ON=PVT_a
+ebc "$GH_REPO" 7
+expect_ok existing
+case_end
+
+case_begin "result-failed-carries-the-reason" "bin/github-issues/ensure-board-card.sh"
+fresh
+f3142_linked "$GH_MOCK_LINKED_FILE" false
+ebc "$GH_REPO" 7
+assert_eq "rc=$RC last=$LAST" "rc=0 last=BOARD_CARD=failed issue=7 reason=resolve-no-link"
+fresh
+f3142_linked "$GH_MOCK_LINKED_FILE" false "PVT_a:3:mockowner:false" "PVT_b:4:mockowner:false"
+ebc "$GH_REPO" 7
+assert_eq "rc=$RC last=$LAST" "rc=0 last=BOARD_CARD=failed issue=7 reason=resolve-ambiguous"
+fresh
+export GH_MOCK_FAIL=linked
+ebc "$GH_REPO" 7
+assert_eq "rc=$RC last=$LAST" "rc=0 last=BOARD_CARD=failed issue=7 reason=resolve-fetch-failed"
+fresh
+export GH_MOCK_FAIL=issue-view
+ebc "$GH_REPO" 7
+assert_eq "rc=$RC last=$LAST" "rc=0 last=BOARD_CARD=failed issue=7 reason=issue-view"
+fresh
+export GH_MOCK_FAIL=item-add
+ebc "$GH_REPO" 7
+assert_eq "rc=$RC last=$LAST" "rc=0 last=BOARD_CARD=failed issue=7 reason=item-add"
+case_end
+
+case_begin "result-skipped-and-usage" "bin/github-issues/ensure-board-card.sh"
+fresh
+ebc "$GL_REPO" 7
+assert_eq "rc=$RC last=$LAST" "rc=0 last=BOARD_CARD=skipped issue=7 reason=gitlab"
+fresh
+ebc "$GH_REPO" not-a-number
+assert_eq "usage rc=$RC" "usage rc=2"
+if grep -q '^BOARD_CARD=' <<<"$OUT"; then fail "no result line on a usage error" "$OUT"; else pass "no result line on a usage error"; fi
+case_end
+
+case_begin "repo-option-reaches-the-resolver" "bin/github-issues/ensure-board-card.sh"
+fresh
+ebc "$GH_REPO" --repo otherowner/otherrepo 7
+q="$(grep -E 'projectsV2' "$GH_MOCK_LOG" | head -1)"
+if [[ "$q" == *"owner=otherowner"* && "$q" == *"repo=otherrepo"* ]]; then pass "board resolved for the --repo repository"
+else fail "board resolved for the --repo repository" "first projectsV2 call: ${q:-<none>}"; fi
+case_end
+
+# The issue already has a card on PVT_a, so the script goes on to read that card's Status and the read fails.
+case_begin "result-status-read-reason" "bin/github-issues/ensure-board-card.sh"
+fresh
+export GH_MOCK_ITEM_ON=PVT_a GH_MOCK_FAIL=status-read
+ebc "$GH_REPO" 7
+if [ "$(count 'fieldValueByName')" -ge 1 ]; then pass "the existing card's Status was read"
+else fail "the existing card's Status was read" "$(head -c 600 "$GH_MOCK_LOG")"; fi
+assert_eq "rc=$RC last=$LAST" "rc=0 last=BOARD_CARD=failed issue=7 reason=status-read"
+case_end
+
+# The existing card sits at Done, so the script resets it to In Progress first and that write fails.
+case_begin "result-status-reset-reason" "bin/github-issues/ensure-board-card.sh"
+fresh
+export GH_MOCK_ITEM_ON=PVT_a GH_MOCK_CARD_STATUS=Done GH_MOCK_FAIL=status-reset
+export WIP_STATE_STATUS_FIELD_ID=PVTSSF_st WIP_STATE_IN_PROGRESS_OPTION_ID=OPT_ip
+ebc "$GH_REPO" 7
+assert_eq "rc=$RC last=$LAST" "rc=0 last=BOARD_CARD=failed issue=7 reason=status-reset"
+assert_eq "no Content Date write after the failed reset: $(count ' --date ')" "no Content Date write after the failed reset: 0"
+case_end
+
+# A card exists (added or already there), so a failed Content Date write keeps that verdict.
+case_begin "result-content-date-failure-keeps-the-card-verdict" "bin/github-issues/ensure-board-card.sh"
+fresh
+export GH_MOCK_FAIL=content-date
+ebc "$GH_REPO" 7
+assert_eq "rc=$RC last=$LAST" "rc=0 last=BOARD_CARD=added issue=7 reason=content-date-failed"
+fresh
+export GH_MOCK_FAIL=content-date GH_MOCK_ITEM_ON=PVT_a
+ebc "$GH_REPO" 7
+assert_eq "rc=$RC last=$LAST" "rc=0 last=BOARD_CARD=existing issue=7 reason=content-date-failed"
+assert_eq "the Content Date write was attempted: $(count ' --date ')" "the Content Date write was attempted: 1"
+case_end
+
+case_begin "result-skipped-no-gh" "bin/github-issues/ensure-board-card.sh"
+fresh
+NOGH_PATH="$(f3142_path_without_gh "$TMP_ROOT/nogh-tools")"
+SAVED_PATH="$PATH"
+PATH="$NOGH_PATH" ebc "$GH_REPO" 7
+PATH="$SAVED_PATH"
+assert_eq "rc=$RC last=$LAST" "rc=0 last=BOARD_CARD=skipped issue=7 reason=no-gh"
+if [ -s "$GH_MOCK_LOG" ]; then fail "no gh call without gh" "$(head -c 400 "$GH_MOCK_LOG")"; else pass "no gh call without gh"; fi
+case_end
+
+# The seeded row carries PVTF_stale in its Content Date column; a re-resolve writes PVTF_cd, so a remaining
+# PVTF_stale row means the row was not dropped. gone <times> — the first <times> item-adds say the board is gone.
+stale_row() {
+  mkdir -p "$(dirname "$CACHE")"
+  printf 'mockowner/mockrepo\tmockowner\t3\tPVT_a\tPVTF_stale\tPVTSSF_st\tOPT_todo\tOPT_ip\tOPT_done\tPVTF_sid\tsid1\n' >"$CACHE"
+}
+gone() { export GH_MOCK_ITEMADD_GONE_FILE="$TMP_ROOT/gone" GH_MOCK_ITEMADD_GONE_TIMES="$1"; }
+row_kept() { [ -f "$CACHE" ] && grep -q 'PVTF_stale' "$CACHE"; }
+
+case_begin "item-add-on-a-gone-board-re-resolves-once" "bin/github-issues/ensure-board-card.sh"
+fresh; stale_row; gone 1
+ebc "$GH_REPO" 7
+expect_ok added
+assert_eq "item-add attempts: $(count '^project item-add')" "item-add attempts: 2"
+# Two projectsV2 calls at least: the cache-hit link check, then the --no-cache-read re-resolve.
+if [ "$(count 'projectsV2')" -ge 2 ]; then pass "the board was re-resolved after the gone answer"
+else fail "the board was re-resolved after the gone answer" "$(head -c 600 "$GH_MOCK_LOG")"; fi
+if row_kept; then fail "the gone board's cached row was dropped" "$(cat "$CACHE")"; else pass "the gone board's cached row was dropped"; fi
+case_end
+
+case_begin "item-add-gone-twice-fails-after-one-retry" "bin/github-issues/ensure-board-card.sh"
+fresh; stale_row; gone 5
+ebc "$GH_REPO" 7
+assert_eq "rc=$RC last=$LAST" "rc=0 last=BOARD_CARD=failed issue=7 reason=item-add"
+assert_eq "item-add attempts: $(count '^project item-add')" "item-add attempts: 2"
+if row_kept; then fail "the gone board's cached row was dropped (retry also gone)" "$(cat "$CACHE")"
+else pass "the gone board's cached row was dropped (retry also gone)"; fi
+case_end
+
+case_begin "item-add-not-gone-or-internal-board-no-re-resolve" "bin/github-issues/ensure-board-card.sh"
+fresh; stale_row
+export GH_MOCK_FAIL=item-add
+ebc "$GH_REPO" 7
+assert_eq "plain failure: rc=$RC last=$LAST adds=$(count '^project item-add')" \
+  "plain failure: rc=0 last=BOARD_CARD=failed issue=7 reason=item-add adds=1"
+# At most the cache-hit link check: a second projectsV2 call would be a re-resolve.
+if [ "$(count 'projectsV2')" -le 1 ]; then pass "a non-gone item-add failure does not re-resolve the board"
+else fail "a non-gone item-add failure does not re-resolve the board" "$(head -c 600 "$GH_MOCK_LOG")"; fi
+if row_kept; then pass "a non-gone item-add failure keeps the cached row"; else fail "a non-gone item-add failure keeps the cached row" "$(cat "$CACHE" 2>&1)"; fi
+fresh; stale_row; gone 1
+export _ISSUE_CREATE_INTERNAL_OWNER=mockowner _ISSUE_CREATE_INTERNAL_PROJECT_NUM=3 _ISSUE_CREATE_INTERNAL_PROJECT_ID=PVT_a
+ebc "$GH_REPO" 7
+assert_eq "internal board: rc=$RC last=$LAST adds=$(count '^project item-add') resolves=$(count 'projectsV2')" \
+  "internal board: rc=0 last=BOARD_CARD=failed issue=7 reason=item-add adds=1 resolves=0"
+if row_kept; then pass "the internal board's gone answer keeps the cached row"; else fail "the internal board's gone answer keeps the cached row" "$(cat "$CACHE" 2>&1)"; fi
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

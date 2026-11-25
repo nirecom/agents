@@ -85,6 +85,28 @@ cache, so no duplicate field is created. That paging stops after 20 pages and th
 listing as complete; a field beyond that point would be missed and `set` would try to create
 another `session-id`. Projects that large are out of scope.
 
+**Which board (#3142).** A repo's board is its only open linked Projects v2 board
+(`bin/github-issues/lib/resolve-project.sh`; Node callers use `bin/lib/project-board/resolve.js`).
+The board title never selects a board; `project_board_title` only names a board being created. The
+resolve ends in one of four results: `resolved` (rc 0), `no-link`, `ambiguous` (two or more open
+linked boards, or more than one page of links) or `fetch-failed`. Only `resolved` is cached, and a
+cache hit is checked against the repo's links before use: a board that was unlinked, closed or
+joined by a second open board drops the row and resolves afresh; a check that cannot run keeps the
+cached board. As a backstop, `ensure-board-card.sh` treats an `item-add` refused because the
+project is gone or closed as a stale row: it drops the row, resolves without the cache, and retries
+once. Its last stdout line, `BOARD_CARD=<added|existing|skipped|failed> issue=<N> reason=<r>`, is
+what the backfill counts.
+
+Recovery:
+
+- `ambiguous` — keep one open linked board; `close` or `unlink` each other one
+  (`gh project close <n> --owner <o>` or `gh project unlink <n> --owner <o> --repo <owner/repo>`).
+  The error lists the candidates and the two commands for each.
+- `no-link` — link the intended board (`gh project link`), or let `/issue-setup` create one.
+- A board just created whose link to the repo fails is deleted, so the next resolve does not see
+  `no-link` and create a duplicate (`lib/board-create.sh`). When the delete fails too, the error
+  prints both manual steps: keep it with `gh project link`, or discard it with `gh project delete`.
+
 ## 7. Board view visibility
 
 A text field is hidden on board views by default. After creating the field, ensure-project-ready
