@@ -328,3 +328,7 @@ Changes: Recovery of a diverged main worktree now refuses the merge shortcut whe
 ### FEATURE: PR #3156 (2026-11-25)
 Background: fix(#3147): judge a git write redirected by --git-dir/--work-tree/GIT...
 Changes: Fixed: enforce-worktree no longer lets a linked worktree write to the main repo by redirecting git with `--git-dir`, `--work-tree`, `-c core.worktree`, `--config-env`, or `GIT_DIR` / `GIT_WORK_TREE`; unresolvable redirects are blocked.
+
+### FEATURE: PR #3155 (2026-11-25)
+Background: feat(#3142): resolve the Projects v2 board from the repo's open links...
+Changes: Projects v2 board lookup no longer depends on the board title: a repo's board is its single open linked board, and two or more open boards are reported with the commands to fix them instead of being guessed.;`backfill-board-cards.sh --list-missing` lists open issues that have no card on the resolved board, ready for `--from-file`; each issue reports OK, SKIP or FAIL and any FAIL exits 1.
