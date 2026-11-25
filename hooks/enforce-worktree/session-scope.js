@@ -46,22 +46,22 @@ function getSessionRepoRoots() {
 // the cwd repo plus ENFORCE_WORKTREE_ADDITIONAL_REPOS, WITHOUT the payload-derived
 // paths. Judging an explicit -C path against a set that already contains it makes
 // every external -C target look like a session repo.
-function getNarrowedSessionRoots() {
+function getNarrowedSessionRoots(resolve = resolveRepoRoot) {
   const roots = new Set();
-  const cwdRoot = resolveRepoRoot(process.cwd());
+  const cwdRoot = resolve(process.cwd());
   if (cwdRoot) roots.add(cwdRoot);
-  addAdditionalRepoRoots(roots);
+  addAdditionalRepoRoots(roots, resolve);
   return roots;
 }
 
-function addAdditionalRepoRoots(roots) {
+function addAdditionalRepoRoots(roots, resolve = resolveRepoRoot) {
   const extra = (process.env.ENFORCE_WORKTREE_ADDITIONAL_REPOS || "")
     .split(";").map((s) => s.trim()).filter(Boolean);
   for (const dir of extra) {
     let resolved;
     try { resolved = path.resolve(dir); } catch (e) { continue; }
     if (!fs.existsSync(resolved)) continue;
-    const root = resolveRepoRoot(resolved);
+    const root = resolve(resolved);
     if (root) {
       roots.add(root);
     } else {
@@ -69,7 +69,7 @@ function addAdditionalRepoRoots(roots) {
       try {
         for (const entry of fs.readdirSync(resolved, { withFileTypes: true })) {
           if (!entry.isDirectory()) continue;
-          const sub = resolveRepoRoot(path.join(resolved, entry.name));
+          const sub = resolve(path.join(resolved, entry.name));
           if (sub) roots.add(sub);
         }
       } catch (e) { /* skip non-readable dirs */ }

@@ -199,3 +199,38 @@ scratchpad as targets reachable right now via Write/Edit/MultiEdit — turning a
 into a redirect. `early-gate-messages.js`'s `READ_TOOLS_NOTE` also dropped `Bash` from its
 "remains available" list: Bash writes are themselves gated during the early-gate block, so
 the prior wording overstated what was actually open.
+
+## Git write target resolution (#3147)
+
+A linked worktree could redirect a git write to the main repo with `--git-dir`, `--work-tree`,
+`-c core.worktree`, `--config-env`, or `GIT_DIR` / `GIT_WORK_TREE` (inline, exported earlier in
+the command, or inherited by the hook process), while the hook judged the write by the cwd
+repo. `hooks/enforce-worktree/effective-target.js` (entry; modules in `effective-target/`) now
+resolves the real target before the legacy path and judges it by the main-worktree rules.
+
+- **Pipeline**: `inputs.js` collects, per git write segment, every redirecting input (flags
+  come from `FLAGS_WITH_ARG` in `parse-git-args.js`, not a second list); `natural-git.js` and
+  `resolve.js` ask git itself (bounded probe, realpath-compared) which repo and work tree the
+  write would touch; `decide.js` maps the result to a kind and an allow / block decision.
+- **Kinds**: `none` (nothing redirected, legacy path continues), `main-checkout` and
+  `linked` (judged like a write from there), `outside-session` (a repo outside the session's
+  repos: allowed, `markerHit` still honored), `unresolvable` (blocked). Several segments:
+  the strictest wins.
+- **Fail-closed**: a value needing shell expansion, an unset or empty `GIT_DIR`, an unset
+  `--config-env` variable, a failed probe, an unparsable command that names a redirecting
+  keyword, `GIT_CONFIG_*` assignments, a segment that sets or unsets the target variables,
+  indirect builtins (`eval`, `source`, `printf`, `read`, and `command` / `builtin` wrappers)
+  that mention `GIT_DIR` / `GIT_WORK_TREE` / `GIT_CONFIG`, and a cwd move (`cd`, `pushd`,
+  `env -C`, also behind `command` / `builtin`) before a redirected write.
+- **Early allows covered**: the worktree `remove` / `prune` and branch delete early allows
+  now go through the resolver; the `remove` / `prune` allow additionally requires the
+  resolved root to be the session's main root. `worktree move` stays out of the allow list.
+- **Block message** names `ENFORCE_WORKTREE=off` as the sanctioned escape.
+
+Accepted tradeoffs: read-only commands that fail to parse are blocked when `GIT_DIR` /
+`GIT_WORK_TREE` is inherited or a redirecting keyword appears; the probe timeout is a fixed
+2000 ms. Known gaps (follow-up issues): nested shells (`bash -c`, `env -S`, `xargs git`),
+`source ./script`, `env -i`, `-c include.path`, `GIT_CONFIG_GLOBAL` / `GIT_CONFIG_SYSTEM`,
+inherited `GIT_COMMON_DIR` / `GIT_CONFIG_PARAMETERS`, output-destination options
+(`config --file`, `clone <dir>`, `archive -o`), and the `-C`-only command path, which does
+not pass through the resolver. Tests: `tests/hooks/fix-enforce-worktree-effective-target.js`.

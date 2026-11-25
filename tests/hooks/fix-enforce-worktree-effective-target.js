@@ -56,6 +56,7 @@ table([
   { id: "A3-work-tree-only", cmd: `git --work-tree=${q(MAIN)} add .`, want: "block" },
   { id: "A9", cmd: `git -C ${q(WT)} --git-dir=${q(`${ADD}/.git`)} commit -m x`, env: { ENFORCE_WORKTREE_ADDITIONAL_REPOS: ADD }, want: "block" },
   { id: "A11", cmd: `git --git-dir=${q(WT2_GITDIR)} --work-tree=${q(WT2)} commit -m x`, want: "block" },
+  { id: "R-C4-git-dir-other-linked-protected", cmd: `git --git-dir=${q(WT2_GITDIR)} --work-tree=${q(WT)} commit -m x`, want: "block", reasonHas: "protected branch" },
   { id: "A13", cwd: MAIN, cmd: `git --git-dir=${EXT_GIT} config --file ${q(`${MAIN}/.git/config`)} user.name x`, want: "block" },
 ]);
 caseEnd();
@@ -105,6 +106,12 @@ caseBegin("multi-segment-redirect-blocks", "hooks/enforce-worktree/handle-bash-w
 table([
   { id: "A10", cmd: `git -C ${q(WT)} status && git --git-dir=${MAIN_GIT} commit -m x`, want: "block" },
   { id: "A16", cmd: `cd ${q(EXT)} && git --git-dir=${MAIN_GIT} commit -m x`, want: "block" },
+  { id: "S1-cd-relative-git-dir", cmd: `cd ${q(MAIN)} && git --git-dir=.git --work-tree=. commit -m x`, want: "block" },
+  { id: "S2-env-chdir-relative", cmd: `env -C ${q(MAIN)} git --git-dir=.git --work-tree=. commit -m x`, want: "block" },
+  { id: "S3-git-config-env-count", cmd: `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.worktree GIT_CONFIG_VALUE_0=${q(MAIN)} git --git-dir=${EXT_GIT} commit -m x`, want: "block" },
+  { id: "S4-command-cd-relative", cmd: `command cd ${q(MAIN)} && git --git-dir=.git --work-tree=. commit -m x`, want: "block" },
+  { id: "S5-builtin-export-git-dir", cmd: `builtin export GIT_DIR=${MAIN_GIT}; git commit -m x`, want: "block" },
+  { id: "S6-git-config-env-alone", cmd: `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.worktree GIT_CONFIG_VALUE_0=${q(MAIN)} git commit -m x`, want: "block" },
   { id: "R-C1a-ext-then-main", cmd: `git --git-dir=${EXT_GIT} commit -m x && git --git-dir=${MAIN_GIT} commit -m x`, want: "block" },
   { id: "R-C1a-main-then-ext", cmd: `git --git-dir=${MAIN_GIT} commit -m x && git --git-dir=${EXT_GIT} commit -m x`, want: "block" },
   { id: "R-C1b-ext-then-unresolvable", cmd: `git --git-dir=${EXT_GIT} commit -m x && git --git-dir='$X' commit -m x`, want: "block" },
@@ -176,6 +183,23 @@ table([
   { id: "C7b", cwd: MAIN, cmd: `git --git-dir=${EXT_GIT} --work-tree=${q(EXT)} commit -m x`, want: "allow" },
   { id: "C8", cmd: `git --git-dir=${q(WT_GITDIR)} --work-tree=${q(WT)} commit -m x`, want: "allow" },
   { id: "C10-read-only", cmd: `git --git-dir=${MAIN_GIT} log -1`, want: "allow" },
+]);
+caseEnd();
+
+// Review gap rows (C1 env allow, C2 unresolvable per input form, C3 multi-segment linked, C5 sibling symmetry).
+caseBegin("review-gap-rows", "hooks/enforce-worktree/effective-target.js");
+table([
+  { id: "G-C1-env-ext-allow", cmd: "git commit -m x", env: { GIT_DIR: `${EXT}/.git`, GIT_WORK_TREE: EXT }, want: "allow" },
+  { id: "G-C2-inline-git-dir", cmd: "GIT_DIR='$X' git commit -m x", want: "block" },
+  { id: "G-C2-core-worktree", cmd: "git -c core.worktree='$X' commit -m x", want: "block" },
+  { id: "G-C2-work-tree-flag", cmd: "git --work-tree='$X' commit -m x", want: "block" },
+  { id: "G-C3-multi-segment-linked", cmd: `git --git-dir=${q(WT_GITDIR)} --work-tree=${q(WT)} commit -m x && git --git-dir=${q(WT2_GITDIR)} --work-tree=${q(WT2)} commit -m x`, want: "block" },
+  { id: "G-R1-C-moves-origin", cmd: `git -C ${q(MAIN)} --git-dir=.git --work-tree=. commit -m x`, want: "block" },
+  { id: "G-R2-work-tree-inside-main", cmd: `git --git-dir=${EXT_GIT} --work-tree=${q(`${MAIN}/sub`)} add .`, want: "block" },
+  { id: "G-R3-hooks-bypass-external", cmd: `git -c core.hooksPath=/dev/null --git-dir=${EXT_GIT} --work-tree=${q(EXT)} commit -m x`, want: "block" },
+  { id: "G-C5-empty-work-tree", cmd: "git commit -m x", env: { GIT_WORK_TREE: "" }, want: "block" },
+  { id: "G-C5-flag-beats-inherited-work-tree", cmd: `git --git-dir=${q(WT_GITDIR)} --work-tree=${q(WT)} commit -m x`, env: { GIT_WORK_TREE: MAIN }, want: "allow" },
+  { id: "G-C5-config-env-key-case", cmd: "git --config-env=Core.WorkTree=EWT_T commit -m x", env: { EWT_T: MAIN }, want: "block" },
 ]);
 caseEnd();
 

@@ -25,6 +25,7 @@ const { classifyGitCWrite, decideGitCWrite } = require("./git-c-write-scope");
 const { buildExtras } = require("./report-extras");
 const { scannableCommandListOf } = require("../lib/scannable-command-list");
 const { hasGhIssueCreate, resolveCrossRepoIssueCreateRoot } = require("./gh-repo-target");
+const { resolveEffectiveTarget, naturalIdentity, decideEffectiveTarget, removePruneArmsAllowed, branchDeleteVerdict, OVERRIDE_LINE } = require("./effective-target");
 
 // #838: from a linked worktree, `git -C <main> worktree remove/prune` is allowed when
 // -C names the main checkout of the SAME repo (shared git-common-dir); the same
@@ -64,7 +65,10 @@ function handleBashWrite(ctx) {
   if (!cmd) done();
   const ir = parse(cmd);
   writeDetector = detectWritePredicate(ir);
-  if (!writeDetector) done(); // read-only command — allow
+  // #3147: a redirected git write is judged by where it lands (`git --work-tree=<main> add .`
+  // is not write-detected, so it is resolved here); cwdRoot ignores inherited GIT_DIR.
+  const eff = resolveEffectiveTarget(ir, _toolCwd);
+  if (!writeDetector && eff.kind === "none") done(); // read-only command — allow
 
   // `targets` / `parseFailure` / `_markerHit` are computed HERE, ahead of EVERY
   // allow path in this function (including the `git worktree remove/prune` and
@@ -72,8 +76,8 @@ function handleBashWrite(ctx) {
   // `git worktree prune && rm .workflow-off` must not ride a marker write out
   // on an earlier branch's allow. `repoRoot` moves up with it since
   // collectBashWriteTargets needs it; the worktree-remove/prune block below
-  // still resolves its own `cwdRoot` from CWD on purpose, unaffected by this.
-  repoRoot = findRepoRootForBash(cmd, _toolCwd);
+  // resolves the cwd identity itself (naturalIdentity), unaffected by this.
+  repoRoot = eff.kind === "none" ? findRepoRootForBash(cmd, _toolCwd) : eff.cwdRoot;
   const { targets, parseFailure } = collectBashWriteTargets(ir, repoRoot);
   // #1324: another session's `<sid>.*` workflow state is never this session's to
   // write, from any checkout — block outright rather than only disabling allows.
@@ -90,24 +94,16 @@ function handleBashWrite(ctx) {
   // either arm here (which would report a worktree-shaped reason for a
   // marker-shaped cause).
   if (!_markerHit && /\bgit\b/.test(cmd) && /\bworktree\s+(?:remove|prune)\b/.test(cmd)) {
-    const cwdRoot = findRepoRootForBash("git", _toolCwd);
-    if (cwdRoot !== null) {
-      const cwd = _toolCwd || process.cwd();
-      if (isMainCheckout(cwd) === true && isAllowedWorktreeCommand(cmd, cwdRoot)) {
-        done();
-      } else if (isLinkedCwdTargetingOwnMain(cmd, cwdRoot)) {
-        done();
-      } else {
-        done({
-          block: true,
-          reason:
-            "ENFORCE_WORKTREE: git worktree remove/prune blocked.\n" +
-            "Reason: must be invoked from the main worktree (not a linked worktree),\n" +
-            "and -C (if used) must target the main repo root.\n" +
-            "Use /worktree-end to remove a linked worktree.",
-        });
-      }
-    }
+    if (removePruneArmsAllowed(cmd, eff, naturalIdentity(_toolCwd || process.cwd()), isLinkedCwdTargetingOwnMain)) done();
+    done({
+      block: true,
+      reason:
+        "ENFORCE_WORKTREE: git worktree remove/prune blocked.\n" +
+        "Reason: must be invoked from the main worktree (not a linked worktree),\n" +
+        "and -C (if used) must target the main repo root.\n" +
+        "Use /worktree-end to remove a linked worktree.\n" +
+        "Or set ENFORCE_WORKTREE=off in agents config to allow direct main work.",
+    });
   }
 
   // git branch -d/-D: gated by direct check against `git worktree list --porcelain`.
@@ -117,11 +113,13 @@ function handleBashWrite(ctx) {
   // hit it falls through to this block's own block reason instead (imprecise
   // wording, but the invariant that `_markerHit` never produces an ALLOW holds).
   if (isBranchDeleteCommand(cmd)) {
-    if (!_markerHit && !repoRoot) done(); // not in a git repo — allow (matches policy below)
-    if (!_markerHit && isAllowedBranchDeleteWhenNotCheckedOut(cmd, repoRoot)) done();
+    const _bd = _markerHit ? "block" : branchDeleteVerdict(eff, cmd);
+    if (_bd === null && !repoRoot) done(); // not in a git repo — allow (matches policy below)
+    if (_bd === "allow" || (_bd === null && isAllowedBranchDeleteWhenNotCheckedOut(cmd, repoRoot))) done();
     done({
       block: true,
       reason:
+        (eff.kind === "none" ? "" : OVERRIDE_LINE) +
         "ENFORCE_WORKTREE: git branch -d/-D blocked — target branch is still " +
         "checked out in a worktree, force-delete was issued without the " +
         "`WORKTREE_END_SKILL=1 git -C <path> branch -D <branch>` inline prefix " +
@@ -149,6 +147,9 @@ function handleBashWrite(ctx) {
         "if the bypass is intentional.",
     });
   }
+
+  const _effVerdict = decideEffectiveTarget(eff, _markerHit);
+  if (_effVerdict) done(_effVerdict.block ? _effVerdict : undefined);
 
   // isGhWriteIR() classifies the WHOLE command as gh-write as soon as ANY segment
   // matches, so `gh issue comment 1 --body hi && rm .workflow-off` could reach the
@@ -223,8 +224,9 @@ function handleBashWrite(ctx) {
   // #2649: a command made only of `git -C <path>` writes is judged by git common dir
   // against the narrowed roots (git-c-write-scope.js) and bypasses the three
   // legacy session-scope allows below, whose root set already holds the -C path.
-  const _gitC = _markerHit ? null : classifyGitCWrite(ir, _toolCwd);
+  const _gitC = _markerHit || eff.kind !== "none" ? null : classifyGitCWrite(ir, _toolCwd);
   if (_gitC) decideGitCWrite(_gitC, repoRoot, done);
+  const _scoped = Boolean(_gitC) || eff.kind !== "none";
 
   // A parse failure is treated as a marker hit for the allow paths' purposes:
   // when targets can't be extracted at all, nothing can be vouched for, so the
@@ -234,7 +236,7 @@ function handleBashWrite(ctx) {
   // Universal target-aware allow: allow if all extracted write targets are
   // outside the session scope, before shape-based predicate checks. Sequenced
   // commands and parse failures abstain (fail-closed).
-  if (!_markerHit && !_gitC) {
+  if (!_markerHit && !_scoped) {
     const _ur = checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot, ir);
     if (_ur.verdict === "allow") done();
   }
@@ -267,7 +269,7 @@ function handleBashWrite(ctx) {
         // sessionRoots can't protect non-session git repos from cross-repo writes.
         // Heredoc commands skip this broader gate and fall through to the
         // narrower #2121 block below.
-        if (!_gitC && !hasHeredoc(cmd) &&
+        if (!_scoped && !hasHeredoc(cmd) &&
             areAllBashTargetsOutsideSessionScope(targets, sessionRoots) &&
             (repoRoot !== null ||
              areAllBashTargetsUnderPlansDir(targets) ||
@@ -306,7 +308,7 @@ function handleBashWrite(ctx) {
     // bash -c, heredocs, sed -i, ...) would fall into this branch and get
     // evaluated against `isInSessionScope`, which never contains the main
     // worktree by design — silently ALLOWing every one of them from main.
-    if (!_gitC && !targets && !parseFailure && repoRoot && isGitWriteIR(ir)) {
+    if (!_scoped && !targets && !parseFailure && repoRoot && isGitWriteIR(ir)) {
       if (!isInSessionScope(repoRoot, sessionRoots)) done();
     }
     // parseFailure → fail-closed: fall through to main-checkout block below.

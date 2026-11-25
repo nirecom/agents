@@ -245,4 +245,4 @@ function decideGitCWrite(c, repoRoot, done) {
   }
 }
 
-module.exports = { classifyGitCWrite, decideGitCWrite };
+module.exports = { classifyGitCWrite, decideGitCWrite, homeDiverges, hasWriteRedirect, C_CONFINED_WRITE_SUBCOMMANDS };
