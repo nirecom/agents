@@ -445,7 +445,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/pre-tool-use-askuser-jev.js\"",
-            "timeout": 10
+            "timeout": 15
           }
         ]
       },

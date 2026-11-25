@@ -101,7 +101,8 @@ Traced by running each hook on a deny-side and a permitted-side input with every
 | `enforce-system-ops`、`block-main-audit-verdict` | allow-deny hook | なし (none) | Pattern match over the command text; no child process, no file scan |
 | `block-memory-direct`、`block-history-direct`、`block-shell-config`、`block-tests-direct`、`block-send-user-file`、`block-pm-state-write` | allow-deny hook | なし (none) | Path and command-text checks plus the session state file; no child process, no file scan |
 | `enforce-issue-close`、`block-subagent-sentinels`、`gate-plan-skip-sentinel`、`gate-plan-skill-advance` | allow-deny hook | なし (none) | Command / skill-name match plus the session state file; no child process, no file scan |
-| `block-comment-block-size`、`gate-plan-lang` | allow-deny hook | なし (none) | Reads only the content being written; no child process, no file scan |
+| `pre-tool-use-askuser-jev` | allow-deny hook | あり (with limit) | Reads the transcript and the session state file and sends one HTTP call to Jev (its own timeout); git, through the workflow session id resolver. On any error it prints nothing and the dialog reaches the user |
+| `block-post-edit-size`、`gate-plan-lang` | allow-deny hook | なし (none) | Reads only the content being written; no child process, no file scan |
 | `confirm-checkpoint` | allow-deny hook | なし (none) | Denies through `emitDeny`, so it is an allow-deny hook by definition; left out of #2676 by scope (classified only). No child process on the traced paths, except the no-receipt recovery (#2936): it reads gate state through `probesFor`, which can launch gate probes for steps other than the target, bounded by its own `CONFIRM_HOOK_TIMEOUT_MS` (15000) deadline |
 | `rtk-rewrite`、`subagent-dispatch-prompt` | non-allow-deny hook | — | Rewrites the input through `updatedInput` only |
 | `show-user-verified-context`、`jev-shadow-pre` | non-allow-deny hook | — | Displays or records only; never a permission decision |

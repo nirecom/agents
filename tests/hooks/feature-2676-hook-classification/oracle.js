@@ -14,6 +14,7 @@ const path = require("node:path");
 const fx = require("./fixture");
 const { classify } = require("../feature-2676-merged-allow-deny/fixture");
 const F2852 = require("../feature-2852-reset-allowance/fixture");
+const { runAskuserProbe } = require("./oracle-askuser");
 
 const REPO = path.resolve(__dirname, "..", "..", "..");
 const SPAWN_TIMEOUT_MS = 30000;
@@ -240,7 +241,7 @@ const ORACLE = {
     { label: "Write under tests/ with write_tests pending", want: "deny", setup: (context) => testsWrite(context, {}) },
     { label: "the same Write from a subagent", want: "approve", setup: (context) => testsWrite(context, { agent_id: "agent-f2676" }) },
   ] },
-  "block-comment-block-size": { kind: "allow-deny", probes: [
+  "block-post-edit-size": { kind: "allow-deny", probes: [
     { label: "Write a 12-line comment block", want: "deny", setup: (context) => ({
       input: call("Write", { file_path: `${context.tempDir("bcbs")}/a.js`, content: commentLines(12) }) }) },
     { label: "Write a 2-line comment block", want: "approve", setup: (context) => ({
@@ -286,6 +287,11 @@ const ORACLE = {
   "subagent-dispatch-prompt": { kind: "non-allow-deny", probes: [
     { label: "prompt without the canonical line: rewritten", want: NO_DECISION, input: call("Agent", { subagent_type: "general-purpose", prompt: "do x" }) },
     { label: "non-agent tool: pass-through", want: NO_DECISION, input: call("Read", { file_path: "a.txt" }) },
+  ] },
+  // Runs through oracle-askuser.js (mock Jev); it only allows. Its session id resolver starts `git rev-parse --show-toplevel`, so child processes are not asserted.
+  "pre-tool-use-askuser-jev": { kind: "allow-deny", run: runAskuserProbe, probes: [
+    { label: "Jev answers run-tests.calibrate", want: "allow", name: "orc-answered", conv: [0.02, { q0o1: 0.97 }], extra: { JEV_AUTO_CLARIFICATIONS: "on" } },
+    { label: "JEV=off: the dialog reaches the user", want: "none", name: "orc-off", conv: [0.02, { q0o1: 0.97 }], extra: { JEV: "off", JEV_AUTO_CLARIFICATIONS: "on" } },
   ] },
   "merged-allow-deny": { kind: "allow-deny", args: ["--matcher-group", "primary"], probes: [
     { label: "Read of a .env file", want: "deny", setup: (context) => ({ input: call("Read", { file_path: `${context.tempDir("mad")}/.env` }) }) },
@@ -333,6 +339,7 @@ function hasPermissionDecision(stdout) {
 // classify() class; an exit 2 with nothing on stdout is the host's blocking error, read as deny.
 function runProbe(hookName, probe, context) {
   const entry = ORACLE[hookName];
+  if (entry.run) return entry.run(probe, context);
   const built = probe.setup ? (probe.setup(context) || {}) : {};
   const input = built.input !== undefined ? built.input : probe.input;
   const env = { ...process.env };
