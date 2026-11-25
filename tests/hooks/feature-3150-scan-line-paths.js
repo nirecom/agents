@@ -116,6 +116,28 @@ for (const { name, line, want } of BOUNDARY_HITS) {
 }
 caseEnd();
 
+// A capitalized "Users" is reported anywhere (as the pre-#3150 scan did); the widened-case spellings
+// still need a boundary, and the boundary set also holds a backtick, "[", "<", ",", "*" and "|".
+const MARKUP_LEADS = [["backtick", "`"], ["open-bracket", "["], ["angle", "<"], ["comma", ","], ["star", "*"], ["pipe", "|"]];
+const MARKUP_HITS = [];
+for (const [leadName, lead] of MARKUP_LEADS) {
+  MARKUP_HITS.push({ name: `capital-users-after-${leadName}`, line: `x${lead}${SL}Users${SL}${NAME}${SL}x`, want: `${SL}Users${SL}${NAME}` });
+}
+MARKUP_HITS.push({ name: "lower-users-after-backtick", line: `x\`${SL}users${SL}${NAME}${SL}x`, want: `${SL}users${SL}${NAME}` });
+MARKUP_HITS.push({ name: "capital-users-in-url-path", line: `GET https:${SL}${SL}api.github.com${SL}Users${SL}${NAME}`, want: `${SL}Users${SL}${NAME}` });
+
+caseBegin("markup-boundary-and-capital-users-hits", "hooks/lib/outbound-scan/scan-line.js");
+for (const { name, line, want } of MARKUP_HITS) {
+  test(`${name}: reported`, () => {
+    assert.deepStrictEqual(pathOnly(scan(line)).map((f) => f.matched), [want], `${name}: line=${JSON.stringify(line)}`);
+  });
+}
+test("lower-users-in-url-path: api.github.com users path stays clean", () => {
+  const line = `GET https:${SL}${SL}api.github.com${SL}users${SL}${NAME}`;
+  assert.deepStrictEqual(pathOnly(scan(line)), [], `line=${JSON.stringify(line)}`);
+});
+caseEnd();
+
 const MISSES = [
   { name: "non-path-users-groups", line: `Manage Users${SL}Groups in the admin panel` },
   { name: "linuxbrew-exception", line: `export PATH=${SL}home${SL}linuxbrew${SL}.linuxbrew${SL}bin` },
@@ -202,6 +224,54 @@ caseBegin("two-paths-one-line-selection-order", "hooks/lib/outbound-scan/scan-li
 for (const { name, line, want } of TWO_PATHS) {
   test(`${name}: one path finding, users pattern first`, () => {
     assert.deepStrictEqual(pathOnly(scan(line)).map((f) => f.matched), [want], `${name}: line=${JSON.stringify(line)}`);
+  });
+}
+caseEnd();
+
+// C1: a lowercase users path directly after each markup boundary char is reported.
+caseBegin("lower-users-after-every-markup-boundary", "hooks/lib/outbound-scan/scan-line.js");
+for (const [leadName, lead] of MARKUP_LEADS) {
+  test(`lower-users-after-${leadName}: reported`, () => {
+    const line = `x${lead}${SL}users${SL}${NAME}${SL}x`;
+    assert.deepStrictEqual(pathOnly(scan(line)).map((f) => f.matched), [`${SL}users${SL}${NAME}`], `line=${JSON.stringify(line)}`);
+  });
+}
+caseEnd();
+
+// C2: only the exact spelling "Users" is exempt from the boundary; other cases after a URL host stay clean.
+caseBegin("url-embedded-non-capital-users-stays-clean", "hooks/lib/outbound-scan/scan-line.js");
+for (const users of ["USERS", "UsErS"]) {
+  test(`url-${users}: no path finding`, () => {
+    const line = `GET https:${SL}${SL}host.example${SL}${users}${SL}${NAME}`;
+    assert.deepStrictEqual(pathOnly(scan(line)), [], `line=${JSON.stringify(line)}`);
+  });
+}
+caseEnd();
+
+// C3: a drive marker preceded by a letter still counts (the letter before "C:" is the boundary).
+caseBegin("drive-marker-preceded-by-letter", "hooks/lib/outbound-scan/scan-line.js");
+test("xC-drive-lower-users: matched is the drive path", () => {
+  const line = `xC:${BS}users${BS}${NAME}${BS}p`;
+  assert.deepStrictEqual(pathOnly(scan(line)).map((f) => f.matched), [`C:${BS}users${BS}${NAME}`], `line=${JSON.stringify(line)}`);
+});
+caseEnd();
+
+// C4: a digit before ":" is not a drive letter, so the lowercase users path has no boundary.
+caseBegin("non-letter-drive-marker-misses", "hooks/lib/outbound-scan/scan-line.js");
+for (const lead of ["1:", "x9:"]) {
+  test(`${lead}-lower-users: no path finding`, () => {
+    const line = `${lead}${SL}users${SL}${NAME}`;
+    assert.deepStrictEqual(pathOnly(scan(line)), [], `line=${JSON.stringify(line)}`);
+  });
+}
+caseEnd();
+
+// C5: the home pattern is slash-only; backslash and yen separators are not reported.
+caseBegin("home-path-is-slash-only", "hooks/lib/outbound-scan/scan-line.js");
+for (const [sepName, sep] of [["backslash", BS], ["yen", String.fromCharCode(0xa5)]]) {
+  test(`home-${sepName}: no path finding`, () => {
+    const line = `cd ${sep}home${sep}${NAME}${sep}src`;
+    assert.deepStrictEqual(pathOnly(scan(line)), [], `line=${JSON.stringify(line)}`);
   });
 }
 caseEnd();

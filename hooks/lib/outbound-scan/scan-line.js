@@ -31,11 +31,15 @@ const BACK_SEP = `(${BS}${BS}|${YEN})`;
 // users: a drive form ("C:" + backslash / yen) or a drive-less form; home: slash only, any case.
 const USERS_PATH = builtin(`([A-Za-z]:${BACK_SEP}+|${SEP}+)[Uu][Ss][Ee][Rr][Ss]${SEP}+${NAME}`);
 const HOME_PATH = builtin(`${SL}[Hh][Oo][Mm][Ee]${SL}${NAME}`);
-const BOUNDARY = new Set([" ", "\t", '"', "'", "=", "("]);
+const BOUNDARY = new Set([" ", "\t", '"', "'", "=", "(", "`", "[", "<", ",", "*", "|"]);
 const isLetter = (c) => c !== undefined && /^[A-Za-z]$/.test(c);
+// The capitalized "Users" form is what the scan matched before the case widening: it is reported
+// wherever it sits, so widening the match never drops a path the old scan reported.
+const CAPITAL_USERS = /^(?:[A-Za-z]:)?[/\\¥]+Users[/\\¥]/;
 
-// A drive-less users match counts only after line start, a boundary char, or a drive marker
-// ("C:" or msys "/c"), so URL and API paths such as host/users/<name> stay clean.
+// A drive-less users match in a widened spelling (e.g. lowercase) counts only after line start, a
+// boundary char, or a drive marker ("C:" or msys "/c"), so URL and API paths such as host/users/<name>
+// stay clean.
 function atBoundary(s, i) {
   if (i === 0 || isLetter(s[i]) || BOUNDARY.has(s[i - 1])) return true;
   const prev = s[i - 1];
@@ -48,7 +52,7 @@ function usersPath(line) {
     const m = leftmostLongest(USERS_PATH, line.slice(from));
     if (!m) return null;
     const at = from + m.index;
-    if (atBoundary(line, at)) return m.text;
+    if (CAPITAL_USERS.test(m.text) || atBoundary(line, at)) return m.text;
     from = at + 1;
   }
   return null;
