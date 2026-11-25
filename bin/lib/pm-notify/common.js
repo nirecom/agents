@@ -72,21 +72,22 @@ function refOfIssue(issue) {
 const issueOf = (ref) => `${ref.repo}#${ref.number}`;
 const keyOf = (ref) => links.refKey(ref.repo, ref.number);
 
-// ownerOf(ref, timeoutMs?, entries?) -> resolveOwner's answer; a throw is an undecidable answer.
-function ownerOf(ref, timeoutMs, entries) {
+// ownerOf(ref, timeoutMs?, entries?, {spawnSync?}?) -> resolveOwner's answer; a throw is an undecidable answer.
+function ownerOf(ref, timeoutMs, entries, opts) {
+  const spawnSync = opts && typeof opts.spawnSync === "function" ? opts.spawnSync : undefined;
   try {
-    return resolveOwner(ref, { scan, entries: entries || scan.listPmFiles(), timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : OWNER_TIMEOUT_MS });
+    return resolveOwner(ref, { scan, entries: entries || scan.listPmFiles(), timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : OWNER_TIMEOUT_MS, spawnSync });
   } catch (e) {
     return { ok: false, reason: `owner-error: ${e.message}` };
   }
 }
 
-// decidedOwnerOf(ref, timeoutMs?, entries?) -> ownerOf's answer, except that a null owner it cannot trust is
+// decidedOwnerOf(ref, timeoutMs?, entries?, opts?) -> ownerOf's answer, except that a null owner it cannot trust is
 // undecidable {ok:false, reason} (#3135): the board has no pm field (fieldAbsent), or a local active PM state
 // holds the issue or an ancestor while the field is empty. Every verb that discards on no-owner uses this gate.
-function decidedOwnerOf(ref, timeoutMs, entries) {
+function decidedOwnerOf(ref, timeoutMs, entries, opts) {
   const es = entries || scan.listPmFiles();
-  const r = module.exports.ownerOf(ref, timeoutMs, es); // via exports: callers stub ownerOf there
+  const r = module.exports.ownerOf(ref, timeoutMs, es, opts); // via exports: callers stub ownerOf there
   if (!r || !r.ok || r.owner) return r;
   if (r.fieldAbsent) return { ok: false, reason: "pm-field-absent" };
   const chain = Array.isArray(r.chain) && r.chain.length > 0 ? r.chain : [ref];

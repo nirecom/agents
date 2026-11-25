@@ -12,7 +12,7 @@
 const PM_TAG_RE = /^[A-Za-z0-9-]{1,40}$/;
 const PM_OPS = Object.freeze(["init", "add", "remove", "inherit"]);
 const REASON_UNSTATED = "reason not stated";
-const UNVERIFIED_REASONS = Object.freeze(["gh_exec_failed", "timeout", "parse_failed", "removed"]);
+const UNVERIFIED_REASONS = Object.freeze(["gh_exec_failed", "timeout", "budget-exhausted", "spawn-failed", "parse_failed", "removed"]);
 const SEEN_NOTIFICATIONS_MAX = 200;
 
 function isValidPmTag(tag) {

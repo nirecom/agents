@@ -5,6 +5,8 @@
 // are never enumerated: a held issue x settles both (a meta x has its descendants under it, a plain
 // x leaves them in nobody's range). Ranges come from ancestry.holdersOf only.
 
+const { nextActionOf } = require("../forge-failure");
+
 // findOverlap(adds, myTag, others, ancestry) -> {ok:true}
 //   | {ok:false, kind:"overlap", ref, tag, session_id, direction:"up"|"down", via, held?}
 //   | {ok:false, kind:"unresolvable"|"unverified", ref, reason}.
@@ -66,7 +68,7 @@ function refusalText(r) {
   if (r.kind === "unresolvable") {
     return `cannot verify the scope of ${label(r.ref)} (${r.reason}); retrying will not fix it. ${unresolvableExit(r.reason, r.ancestor)}`;
   }
-  return `could not verify the overlap on the forge (${r.reason}). Retry, or while the forge is unavailable start with \`/pm-init\` without issues`;
+  return `could not verify the overlap on the forge (${r.reason}). ${nextActionOf(r.reason)} While the forge is unavailable, start with \`/pm-init\` without issues`;
 }
 
 module.exports = { findOverlap, refusalText, unresolvableExit, refLabelOf: label };

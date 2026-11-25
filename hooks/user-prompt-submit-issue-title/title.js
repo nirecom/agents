@@ -5,38 +5,43 @@
 // makes each name emit once, so a later /rename stays too. After a resume the first prompt gives a
 // " sid-xxxxxxxx" name again while it is still ours; candidateFor is shared with bin/session-name so the
 // CLI names a PM session as the hook does.
-// deps: {fetchTitle?(ref), now?(), spawnSync?} — test seams; fail-open, never throws.
+// deps: {fetchTitle?(ref), now?(), spawnSync?, budget?, origin?} — test seams; fail-open, never throws. budget is the
+// hook's (hooks/pm-session/budget.js): the tracker read gets min(TRACKER_TIMEOUT_MS, left) and is skipped under GH_MIN_CALL_MS.
 
 const fs = require("fs");
 const path = require("path");
 const { targetFor, refKey } = require("./target");
 const { recordSid, readRecord, writeRecord, setNewest } = require("./record");
 const SN = require("../lib/session-name");
+const { ORIGIN_TIMEOUT_MS } = require("../../bin/lib/pm-field/forge-kind");
+const { GH_MIN_CALL_MS, createHookBudget } = require("../pm-session/budget");
 
-const ORIGIN_TIMEOUT_MS = 1000;
 const TRACKER_TIMEOUT_MS = 3000;
 const MAX_ATTEMPTS = 3;
 const COOLDOWN_MS = 10 * 60 * 1000;
 const { TITLE_MAX, cleanTitle } = SN;
 
-function originOf(cwd, spawnSync) {
+// d.origin (the writer's cached input.__origin, null included) spares a second git read.
+function originOf(cwd, d) {
+  if (d && d.origin !== undefined) return d.origin;
   const { originUrl } = require("../workflow-gate/gh-detect");
-  return originUrl(cwd, { timeoutMs: ORIGIN_TIMEOUT_MS, spawnSync });
+  return originUrl(cwd, { timeoutMs: ORIGIN_TIMEOUT_MS, spawnSync: d && d.spawnSync });
 }
 
-function fetchViaForge(ref, cwd, spawnSync) {
+function fetchViaForge(ref, cwd, d, timeoutMs) {
   const fr = require("../lib/forge-router");
-  const url = originOf(cwd, spawnSync);
+  const url = originOf(cwd, d);
   if (!url) return null;
   const { type } = fr.resolveCodehostDescriptor(url, cwd);
   const tracker = fr.resolveTrackerDescriptor({ FORGE_TRACKER: fr.readTrackerConfig(cwd) }, type);
-  return tracker.issueTitle(url, ref, { timeoutMs: TRACKER_TIMEOUT_MS, projectRoot: cwd, spawnSync });
+  return tracker.issueTitle(url, ref, { timeoutMs, projectRoot: cwd, spawnSync: d.spawnSync });
 }
 
-// repoFor(cwd, spawnSync) -> the repo part of the origin URL, else the cwd basename, else null.
-function repoFor(cwd, spawnSync) {
+// repoFor(cwd, spawnSync | d) -> the repo part of the origin URL, else the cwd basename, else null.
+function repoFor(cwd, s) {
+  const d = typeof s === "function" ? { spawnSync: s } : (s || {});
   let url;
-  try { url = originOf(cwd, spawnSync); } catch (_) { url = null; }
+  try { url = originOf(cwd, d); } catch (_) { url = null; }
   return SN.repoNameOf(url) || cleanTitle(path.basename(cwd));
 }
 
@@ -49,9 +54,12 @@ function titleFor(ref, rec, d, cwd, now) {
   const attempts = fail && Number.isInteger(fail.attempts) ? fail.attempts : 0;
   if (attempts >= MAX_ATTEMPTS) return null;
   if (fail && typeof fail.last_failed_at === "number" && now - fail.last_failed_at < COOLDOWN_MS) return null;
+  const left = d.budget && typeof d.budget.left === "function" ? d.budget.left() : Infinity;
+  // Too little of the hook left for a gh call: skipped, not a failure, so the next prompt tries again.
+  if (typeof d.fetchTitle !== "function" && left < GH_MIN_CALL_MS) return null;
   let title;
   try {
-    title = cleanTitle(typeof d.fetchTitle === "function" ? d.fetchTitle(ref) : fetchViaForge(ref, cwd, d.spawnSync));
+    title = cleanTitle(typeof d.fetchTitle === "function" ? d.fetchTitle(ref) : fetchViaForge(ref, cwd, d, Math.min(TRACKER_TIMEOUT_MS, left)));
   } catch (_) {
     title = null;
   }
@@ -99,7 +107,7 @@ function candidateFor(target, rec, d, cwd, now, sid, transcriptPath) {
   if (target.kind === "none") {
     if (rec.last_emitted !== null) return null;
     if (transcriptPath && latestCustomTitle(transcriptPath) !== null) return null;
-    const repo = repoFor(cwd, d.spawnSync);
+    const repo = repoFor(cwd, d);
     return repo ? SN.composeSessionName({ kind: "none", repo, sessionId: sid }) : null;
   }
   if (target.kind === "pm") {
@@ -132,18 +140,22 @@ function writerFailure(input, e) {
 // respond(input, deps) -> {block, context, notice, title}: the PM writer (#2941) runs first so a typed
 // /pm-init names its own prompt; a writer that throws refuses a PM-command prompt and passes any other.
 // notice is the writer's one sentence for the user (the entry emits it as systemMessage).
+// One budget per hook run (#3152): the writer and run() share it through deps.budget. Without one the run starts
+// now; the hook entry hands the budget counted from its process start.
 function respond(input, deps) {
+  const d = deps && deps.budget ? deps : Object.assign({}, deps, { budget: createHookBudget({ startedAt: Date.now() }) });
   let w;
-  try { w = require("../pm-session/writer").runPmWriter(input, deps) || {}; } catch (e) { w = writerFailure(input, e); }
+  try { w = require("../pm-session/writer").runPmWriter(input, d) || {}; } catch (e) { w = writerFailure(input, e); }
   if (w.block) return { block: w.block, context: null, notice: null, title: null };
-  return { block: null, context: w.context || null, notice: w.notice || null, title: run(input, deps) };
+  return { block: null, context: w.context || null, notice: w.notice || null, title: run(input, d) };
 }
 
 function run(input, deps) {
   try {
     const { readState, SESSION_ID_VALID_RE } = require("../workflow-state");
     const { toWindowsPath } = require("../lib/branch-diff");
-    const d = deps || {};
+    const cached = input && Object.prototype.hasOwnProperty.call(input, "__origin");
+    const d = cached ? Object.assign({}, deps, { origin: input.__origin }) : (deps || {});
     const sid = input && input.session_id;
     if (typeof sid !== "string" || !SESSION_ID_VALID_RE.test(sid)) return null;
     const state = readState(sid);

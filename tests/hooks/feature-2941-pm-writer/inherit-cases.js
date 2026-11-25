@@ -156,7 +156,7 @@ function sequenceCases() {
   ]) {
     test(`F2 ${reason} in the table: not copied, no mark, the assignment comes over`, () => notCopied(run({ issues, seq: tbl(table), cwd }), [reason, String(table[0])]));
   }
-  for (const [label, arm, reason] of [["a forge failure", () => W.G.mode("fail"), "gh_exec_failed"], ["a forge timeout", () => W.G.sleep(4000), "timeout"]]) {
+  for (const [label, arm, reason] of [["a forge failure", () => W.G.mode("fail"), "gh_exec_failed"], ["a forge timeout", () => W.G.sleep(W.SLOW_FORGE_MS), "timeout"]]) {
     test(`F3 ${label}: the table is copied with the unverified mark (copied-unverified)`, () => {
       const seq = tbl([6101]);
       const x = run({ seq, before: arm });

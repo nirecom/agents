@@ -26,7 +26,9 @@ if (require.main === module) {
     if (r.kind !== "ok") {
       fs.writeSync(2, readFailOpenDiagnostic("user-prompt-submit-issue-title", r, "session title skipped") + "\n");
     } else {
-      out = JSON.stringify(outputOf(T.respond(r.input, {}))) + "\n";
+      // #3152: the hook's time budget counts from this process's start, not from respond().
+      const { createHookBudget } = require("./pm-session/budget");
+      out = JSON.stringify(outputOf(T.respond(r.input, { budget: createHookBudget() }))) + "\n";
     }
   } catch (_) { /* fail-open: never break the user's prompt */ }
   process.stdout.write(out);

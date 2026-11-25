@@ -439,7 +439,7 @@ test("RT3 an unreadable PM field refuses the rename: no field write, mailbox unm
   const { s, f } = owned("PM-rt3", [10821, 10822]);
   X.writeBox("PM-rt3", [note("n-rt3", 10821)]);
   const r = rename(s, "PM-rt3-new", unreadable(f));
-  assert.ok(typeof r.block === "string" && /cannot be read/.test(r.block) && /Retry the same \/pm-rename/.test(r.block), JSON.stringify(r));
+  assert.ok(typeof r.block === "string" && /cannot be read/.test(r.block) && /the same \/pm-rename resumes the rename/.test(r.block), JSON.stringify(r));
   assert.strictEqual(f.writes.length, 0, JSON.stringify(f.writes));
   assert.deepStrictEqual(ids("PM-rt3"), ["n-rt3"]);
   assert.deepStrictEqual(ids("PM-rt3-new"), []);

@@ -7,13 +7,20 @@ const path = require("node:path");
 const cp = require("node:child_process");
 const { test } = require("node:test");
 
+// load(F, rel) -> the module's exports, or {} when it does not load (the asserts name what is missing).
+const load = (F, rel) => { try { return require(path.join(F.ROOT, rel)); } catch (_) { return {}; } };
+// #3152: the origin read has one timeout, owned by forge-kind.js; title.js keeps no copy of its own.
+const originTimeout = (F) => load(F, "bin/lib/pm-field/forge-kind.js").ORIGIN_TIMEOUT_MS;
+
 // H4 — the constants, the settings.json registration and the real spawn path under a sleeping child.
 function budget(F) {
-  test("H4 ORIGIN_TIMEOUT_MS = 1000, TRACKER_TIMEOUT_MS = 3000, their sum < 5000", () => {
+  test("H4 ORIGIN_TIMEOUT_MS = 1000 comes from forge-kind.js, TRACKER_TIMEOUT_MS = 3000, their sum < 5000", () => {
     const c = F.constants();
-    assert.strictEqual(c.ORIGIN_TIMEOUT_MS, 1000);
+    const origin = originTimeout(F);
+    assert.strictEqual(origin, 1000, "bin/lib/pm-field/forge-kind.js does not export ORIGIN_TIMEOUT_MS = 1000");
+    assert.ok(c.ORIGIN_TIMEOUT_MS === undefined || c.ORIGIN_TIMEOUT_MS === origin, `title.js holds its own origin timeout ${c.ORIGIN_TIMEOUT_MS}`);
     assert.strictEqual(c.TRACKER_TIMEOUT_MS, 3000);
-    assert.ok(c.ORIGIN_TIMEOUT_MS + c.TRACKER_TIMEOUT_MS < 5000);
+    assert.ok(origin + c.TRACKER_TIMEOUT_MS < 5000);
   });
   test("H4 MAX_ATTEMPTS = 3, COOLDOWN_MS = 10 min", () => {
     const c = F.constants();
@@ -44,13 +51,69 @@ function budget(F) {
       assert.ok(F.quiet(r), JSON.stringify(r));
       assert.ok(ms < 4500, `${ms} ms`);
       const git = calls.find((x) => x.cmd === "git");
-      assert.ok(git && c.ORIGIN_TIMEOUT_MS !== undefined && git.timeout === c.ORIGIN_TIMEOUT_MS, `git timeout: ${JSON.stringify(calls)}`);
+      const origin = originTimeout(F);
+      assert.ok(git && origin !== undefined && git.timeout === origin, `git timeout (forge-kind ${origin}): ${JSON.stringify(calls)}`);
       if (variant.startsWith("b")) {
         const gh = calls.find((x) => x.cmd === "gh");
         assert.ok(gh && c.TRACKER_TIMEOUT_MS !== undefined && gh.timeout === c.TRACKER_TIMEOUT_MS, `gh timeout: ${JSON.stringify(calls)}`);
       }
     });
   }
+}
+
+// H4b — #3152: respond hands run() the hook's budget as deps.budget. The tracker read runs for
+// min(TRACKER_TIMEOUT_MS, budget.left()); under GH_MIN_CALL_MS left it is skipped and not counted as a
+// failure, so the next prompt tries again. The writer's origin cache (input.__origin) spares a second git read.
+const GH_ORIGIN = "https://github.com/o/r.git";
+const GH_OK = { gh: { status: 0, stdout: "GH title\n", stderr: "" } };
+// budgetAt(F, leftOf) -> {B, b, left}: a real budget on a frozen clock, set so that leftOf(B) ms remain
+// (leftOf null: the clock stays at the start). left is what b.left() reports, the value run() sees.
+function budgetAt(F, leftOf) {
+  const B = load(F, "hooks/pm-session/budget.js");
+  assert.strictEqual(typeof B.createHookBudget, "function", "hooks/pm-session/budget.js does not export createHookBudget");
+  let t = 0;
+  const b = B.createHookBudget({ startedAt: 0, now: () => t });
+  if (leftOf) t = b.hookDeadlineAt - leftOf(B);
+  return { B, b, left: b.left() };
+}
+function hookBudget(F) {
+  test("H4b under GH_MIN_CALL_MS left: no tracker read, no failure counted; the next prompt with time reads it", () => {
+    const sid = F.newSid("h4s"); F.seed(sid);
+    const short = budgetAt(F, (B) => B.GH_MIN_CALL_MS - 1);
+    assert.ok(short.left < short.B.GH_MIN_CALL_MS, `precondition: left ${short.left}`);
+    const d = F.realPath(GH_ORIGIN, GH_OK); d.budget = short.b;
+    const r = F.call(sid, "/wf-init #12", d);
+    assert.ok(F.quiet(r), JSON.stringify(r));
+    assert.strictEqual(F.spawned(d, "gh").length, 0, F.cmds(d));
+    const rec = F.readRecord(sid);
+    assert.ok(!(rec && rec.failures && Object.keys(rec.failures).length > 0), `a skip was counted: ${JSON.stringify(rec)}`);
+    const full = budgetAt(F, null);
+    const d2 = F.realPath(GH_ORIGIN, GH_OK); d2.budget = full.b;
+    assert.strictEqual(F.call(sid, "/wf-init #12", d2), "#12 GH title", F.cmds(d2));
+    const gh = F.spawned(d2, "gh");
+    assert.strictEqual(gh.length, 1, F.cmds(d2));
+    assert.strictEqual(gh[0].opts && gh[0].opts.timeout, Math.min(F.constants().TRACKER_TIMEOUT_MS, full.left), F.cmds(d2));
+  });
+  test("H4b a budget with less than TRACKER_TIMEOUT_MS left caps the tracker read at what is left", () => {
+    const sid = F.newSid("h4c"); F.seed(sid);
+    const tracker = F.constants().TRACKER_TIMEOUT_MS;
+    const mid = budgetAt(F, (B) => Math.max(B.GH_MIN_CALL_MS, tracker - 500));
+    assert.ok(mid.left >= mid.B.GH_MIN_CALL_MS && mid.left < tracker, `precondition: left ${mid.left}`);
+    const d = F.realPath(GH_ORIGIN, GH_OK); d.budget = mid.b;
+    assert.strictEqual(F.call(sid, "/wf-init #12", d), "#12 GH title", F.cmds(d));
+    const gh = F.spawned(d, "gh");
+    assert.ok(gh.length === 1 && gh[0].opts && gh[0].opts.timeout === mid.left, `want timeout ${mid.left}: ${JSON.stringify(gh.map((x) => x.opts))}`);
+  });
+  test("H4b the writer's cached origin (input.__origin) is reused: run() reads no git origin again", () => {
+    const sid = F.newSid("h4o"); F.seed(sid);
+    const d = F.realPath(GH_ORIGIN, GH_OK);
+    const inp = F.input(sid, "/wf-init #12");
+    Object.defineProperty(inp, "__origin", { value: GH_ORIGIN, enumerable: false });
+    let r;
+    try { r = require(F.ENTRY).run(inp, d); } catch (e) { r = { threw: e.message }; }
+    assert.strictEqual(r, "#12 GH title", F.cmds(d));
+    assert.strictEqual(F.spawned(d, "git").length, 0, `origin read again: ${F.cmds(d)}`);
+  });
 }
 
 // H5 — failed fetches cool down for COOLDOWN_MS and give up after MAX_ATTEMPTS; a failed or skipped
@@ -77,4 +140,4 @@ function cooldown(F) {
   });
 }
 
-module.exports = { budget, cooldown };
+module.exports = { budget, hookBudget, cooldown };

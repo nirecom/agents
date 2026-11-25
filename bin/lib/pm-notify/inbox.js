@@ -6,7 +6,7 @@
 //   2. unassigned.jsonl: own entries are taken and shown, trusted-ownerless ones dropped, the rest left and counted;
 //   3. drift (opts.drift only): an assigned issue whose PM field names another PM or none (field absent: one line);
 //   4. meta_children: a child gone from its meta parent's sub-issues is shown as a detach once per issue.
-// runInbox(sid, {budgetMs?, drift?, origin?}) -> the text to show ("" when there is nothing). Steps 2-4 read
+// runInbox(sid, {budgetMs?, drift?, origin?, spawnSync?}) -> the text to show ("" when there is nothing). Steps 2-4 read
 // the forge only when the home origin (opts.origin when given, else the cwd's) is GitHub; otherwise
 // unassigned.jsonl is left as is and no gh call is made.
 
@@ -38,14 +38,14 @@ function takeOwn(tag, seen, shown, lines, after) {
   after.push(() => box.writeBox(tag, []));
 }
 
-function takeUnassigned(tag, seen, shown, lines, left, after, forge) {
+function takeUnassigned(tag, seen, shown, lines, left, after, forge, spawnSync) {
   const entries = box.readBox("unassigned");
   if (entries.length === 0) return;
   const keep = [];
   for (const e of entries) {
     if (seen.has(e.id)) continue;
     const ref = C.refOfIssue(e.issue);
-    const r = forge && ref && left() > 0 ? C.decidedOwnerOf(ref, Math.min(C.OWNER_TIMEOUT_MS, left())) : { ok: false };
+    const r = forge && ref && left() > 0 ? C.decidedOwnerOf(ref, Math.min(C.OWNER_TIMEOUT_MS, left()), undefined, { spawnSync }) : { ok: false };
     if (r.ok && r.owner && C.S.sameTag(r.owner.tag, tag)) { seen.add(e.id); shown.add(lc(e.issue)); lines.push(lineOf(e)); continue; }
     if (r.ok && !r.owner) continue;
     keep.push(e);
@@ -54,10 +54,10 @@ function takeUnassigned(tag, seen, shown, lines, left, after, forge) {
   if (keep.length > 0) lines.push(`${P} unassigned.jsonl still holds ${keep.length} notification(s) whose PM is not decided`);
 }
 
-function checkDrift(pm, lines, deadlineAt) {
+function checkDrift(pm, lines, deadlineAt, spawnSync) {
   const refs = (Array.isArray(pm.issues) ? pm.issues : []).map((i) => C.refOfIssue(`${C.S.resolveRepo(i, C.homeRepo())}#${i.number}`)).filter(Boolean);
   if (refs.length === 0) return;
-  const r = readPmFields(refs, { deadlineAt });
+  const r = readPmFields(refs, { deadlineAt, spawnSync });
   if (!r.ok) { lines.push(`${P} drift check skipped (${r.reason}); it runs at the next PM command`); return; }
   const absent = [];
   for (const ref of refs) {
@@ -73,7 +73,7 @@ function checkDrift(pm, lines, deadlineAt) {
 // checkMeta(meta, assigned, shown, lines, deadlineAt) -> the updated meta_children, or null when unchanged/unread.
 // An assigned issue not in meta yet is read once: its children (when it has any) become the baseline, so no
 // detach is reported on the first sight; later reads compare against it.
-function checkMeta(meta, assigned, shown, lines, deadlineAt) {
+function checkMeta(meta, assigned, shown, lines, deadlineAt, spawnSync) {
   const known = Object.keys(meta);
   const keys = known.concat(assigned.filter((a) => !known.some((k) => lc(k) === lc(a))));
   const refs = keys.map(C.refOfIssue).filter(Boolean);
@@ -83,7 +83,7 @@ function checkMeta(meta, assigned, shown, lines, deadlineAt) {
     if (!s || !Array.isArray(s.nodes) || (s.pageInfo && s.pageInfo.hasNextPage)) return { ok: false, reason: "sub-issues-unread" };
     return { ok: true, kids: s.nodes.filter((c) => c && c.repository).map((c) => `${c.repository.nameWithOwner}#${c.number}`) };
   };
-  const r = batchedGraphql(refs, { fields: CHILDREN, readNode: read }, { deadlineAt });
+  const r = batchedGraphql(refs, { fields: CHILDREN, readNode: read }, { deadlineAt, spawnSync });
   if (!r.ok) {
     if (known.length > 0) lines.push(`${P} meta detach check skipped (${r.reason}); it runs at the next PM command`);
     return null;
@@ -123,6 +123,7 @@ function runInbox(sid, opts) {
   const budget = Number.isFinite(o.budgetMs) ? o.budgetMs : DEFAULT_BUDGET_MS;
   const deadlineAt = Date.now() + budget;
   const left = () => deadlineAt - Date.now();
+  const sp = typeof o.spawnSync === "function" ? o.spawnSync : undefined;
   let st;
   try { st = C.io.readRawState(sid); } catch (_) { return ""; }
   if (!C.S.hasPmMark(st) || typeof st.pm.tag !== "string") return "";
@@ -137,11 +138,11 @@ function runInbox(sid, opts) {
       const shown = new Set();
       const after = [];
       takeOwn(tag, seen, shown, lines, after);
-      takeUnassigned(tag, seen, shown, lines, left, after, forge);
-      if (forge && o.drift && !pm.archived_at && left() > 0) checkDrift(pm, lines, deadlineAt);
+      takeUnassigned(tag, seen, shown, lines, left, after, forge, sp);
+      if (forge && o.drift && !pm.archived_at && left() > 0) checkDrift(pm, lines, deadlineAt, sp);
       const assigned = pm.archived_at ? [] : (Array.isArray(pm.issues) ? pm.issues : []).map((i) => `${C.S.resolveRepo(i, C.homeRepo())}#${i.number}`);
       const meta = forge && left() > 0 && (C.isObj(pm.meta_children) || assigned.length > 0)
-        ? checkMeta(C.isObj(pm.meta_children) ? pm.meta_children : {}, assigned, shown, lines, deadlineAt) : null;
+        ? checkMeta(C.isObj(pm.meta_children) ? pm.meta_children : {}, assigned, shown, lines, deadlineAt, sp) : null;
       if (seen.size !== before || meta) {
         C.io.updateTopLevel(sid, (rec) => {
           if (!C.S.hasPmMark(rec)) return;

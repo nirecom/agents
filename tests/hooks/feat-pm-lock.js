@@ -149,14 +149,21 @@ test("L7 a lock re-created by another process (other token) between the judgment
 caseEnd();
 
 caseBegin("pm-lock-budget-invariant", "hooks/pm-session/writer-common.js");
-test("B1 PM_LOCK_STALE_MS (15000) exceeds WRITER_CHECK_BUDGET_MS + WRITER_WRITE_BUDGET_MS (3000 + 5000)", () => {
+// #3152: the fixed writer budgets are gone; the stages share hooks/pm-session/budget.js. A holder never outlives
+// the hook, so PM_LOCK_STALE_MS exceeds HOOK_TIMEOUT_MS, and the lock wait fits the stage sum.
+test("B1 the writer budget constants are gone; PM_LOCK_STALE_MS exceeds the hook timeout and the lock wait fits it", () => {
   const WC = P.load("hooks/pm-session/writer-common.js");
+  for (const k of ["WRITER_CHECK_BUDGET_MS", "WRITER_WRITE_BUDGET_MS", "WRITER_FORGE_BUDGET_MS", "ORIGIN_TIMEOUT_MS"]) {
+    assert.strictEqual(WC[k], undefined, `writer-common.js still exports ${k} (#3152)`);
+  }
+  let B;
+  try { B = Object.assign({}, P.load("hooks/pm-session/budget.js")); } catch (e) { assert.fail(`hooks/pm-session/budget.js is missing (#3152): ${e.message}`); }
   assert.strictEqual(LOCK.PM_LOCK_STALE_MS, 15000);
-  assert.strictEqual(WC.WRITER_CHECK_BUDGET_MS, 3000);
-  assert.strictEqual(WC.WRITER_WRITE_BUDGET_MS, 5000);
-  assert.ok(LOCK.PM_LOCK_STALE_MS > WC.WRITER_CHECK_BUDGET_MS + WC.WRITER_WRITE_BUDGET_MS);
-  assert.ok(1500 + WC.WRITER_CHECK_BUDGET_MS + WC.WRITER_WRITE_BUDGET_MS < 10000, "lock wait + forge budgets must fit the 10 s hook");
-  assert.strictEqual(WC.WRITER_FORGE_BUDGET_MS, undefined, "the old budget name must be gone");
+  assert.ok(Number.isFinite(B.HOOK_TIMEOUT_MS), "hooks/pm-session/budget.js HOOK_TIMEOUT_MS is missing (#3152)");
+  assert.ok(LOCK.PM_LOCK_STALE_MS > B.HOOK_TIMEOUT_MS, "a live holder is never stolen within one hook run");
+  assert.ok(Number.isFinite(LOCK.PM_LOCK_WAIT_MS), "pm-lock.PM_LOCK_WAIT_MS is the lock stage's source");
+  const reserved = B.SAFETY_MARGIN_MS + LOCK.PM_LOCK_WAIT_MS + B.WRITE_MUTATION_MS + B.WRITE_REREAD_MS + B.INBOX_MS + B.CHECK_MIN_MS;
+  assert.ok(reserved < B.HOOK_TIMEOUT_MS, `margin + lock wait + write + inbox + check minimum ${reserved} >= ${B.HOOK_TIMEOUT_MS}`);
 });
 caseEnd();
 

@@ -5,13 +5,10 @@
 const path = require("path");
 const io = require("../workflow-state/state-io");
 const S = require("./schema");
+const { GH_MIN_CALL_MS } = require("./budget");
 
-// The forge budgets of one writer run (#2942): the checks (ancestry, PM field chains, sub-issues) and
-// the PM field writes each get their own. With the 1.5 s PM lock wait they fit the hook's 10 s, and
-// together they stay under PM_LOCK_STALE_MS (pm-lock.js) so a live writer is never seen as stale.
-const WRITER_CHECK_BUDGET_MS = 3000;
-const WRITER_WRITE_BUDGET_MS = 5000;
-const ORIGIN_TIMEOUT_MS = 1000;
+const BIN = path.join(__dirname, "..", "..", "bin", "lib");
+const { ORIGIN_TIMEOUT_MS } = require(path.join(BIN, "pm-field", "forge-kind"));
 
 class Refusal extends Error {}
 const refuse = (msg) => { throw new Refusal(msg); };
@@ -73,13 +70,17 @@ function normalizeStoredRef(ref, home) {
   }
 }
 
-// ancestryOf(deps, deadlineAt?) -> a range checker over the forge, bounded by deadlineAt
-// (default: WRITER_CHECK_BUDGET_MS from now).
+// ancestryOf(deps, deadlineAt?) -> a range checker over the forge, bounded by deadlineAt (the budget's check
+// deadline; not finite: no deadline). The default fetch runs gh through deps.spawnSync.
 function ancestryOf(deps, deadlineAt) {
-  const BIN = path.join(__dirname, "..", "..", "bin", "lib");
   const { createAncestry } = require(path.join(BIN, "pm-state", "ancestry"));
-  const fetch = (deps && deps.fetchAncestorChains) || require(path.join(BIN, "forge-issue-links")).fetchAncestorChains;
-  return createAncestry({ fetchAncestorChains: fetch, deadlineAt: Number.isFinite(deadlineAt) ? deadlineAt : Date.now() + WRITER_CHECK_BUDGET_MS });
+  let fetch = deps && deps.fetchAncestorChains;
+  if (!fetch) {
+    const base = require(path.join(BIN, "forge-issue-links")).fetchAncestorChains;
+    const spawnSync = deps && typeof deps.spawnSync === "function" ? deps.spawnSync : undefined;
+    fetch = (refs, opts) => base(refs, Object.assign({}, opts, { spawnSync, minCallMs: GH_MIN_CALL_MS }));
+  }
+  return createAncestry({ fetchAncestorChains: fetch, deadlineAt: Number.isFinite(deadlineAt) ? deadlineAt : undefined });
 }
 
 // lockRefusal(e) -> the Refusal of a busy PM lock, or e itself; the writer shows it like any refusal.
@@ -103,6 +104,6 @@ function note(op, pm, extra) {
 }
 
 module.exports = {
-  WRITER_CHECK_BUDGET_MS, WRITER_WRITE_BUDGET_MS, ORIGIN_TIMEOUT_MS, Refusal, refuse, rawOf, workflowBegun, homeOriginOf, homeRepoOf,
+  Refusal, refuse, rawOf, workflowBegun, homeOriginOf, homeRepoOf,
   normalizeRef, normalizeStoredRef, ancestryOf, lockRefusal, labels, note,
 };

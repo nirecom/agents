@@ -15,7 +15,8 @@ const S = require("./schema");
 const scan = require("./scan");
 const C = require("./writer-common");
 const O = require("./ownership");
-const { withPmLock } = require("./pm-lock");
+const { withPmLock, PM_LOCK_WAIT_MS } = require("./pm-lock");
+const { budgetOf, createHookBudget } = require("./budget");
 const { inherit, wantsInherit } = require("./inherit");
 
 const { refuse, labels } = C;
@@ -46,11 +47,14 @@ function assertNoOverlap(adds, ownTag, entries, home, deps, deadlineAt) {
 }
 
 // assertAddable(adds, pm, entries, home, ctx) — every check an issue new to pm passes before any write.
+// The cards the owner check read go to the field I/O, so the write reads none of its own.
 function assertAddable(adds, pm, entries, home, ctx) {
   assertNoDirectHolder(adds, pm.tag, entries, home);
-  const deadlineAt = Date.now() + C.WRITER_CHECK_BUDGET_MS;
+  const deadlineAt = ctx.budget.checkDeadline();
   assertNoOverlap(adds, pm.tag, entries, home, ctx.deps, deadlineAt);
-  if (adds.length > 0 && ctx.io) O.assertOneOwner(adds, pm, entries, deadlineAt);
+  if (adds.length === 0 || !ctx.io) return;
+  const cards = O.assertOneOwner(adds, pm, entries, { deadlineAt, deps: ctx.deps });
+  if (typeof ctx.io.seedCards === "function") ctx.io.seedCards(cards);
 }
 
 function dedupe(refs, home) {
@@ -156,7 +160,7 @@ function dispatch(hit, sid, nowMs, input, deps) {
   // io is resolved on first use, after the refs are normalized, so repo-unresolved is refused before origin-unknown.
   let fieldIo;
   const ctx = {
-    deps, home: C.homeRepoOf(input, deps),
+    deps, budget: budgetOf(deps), home: C.homeRepoOf(input, deps),
     get io() { if (fieldIo === undefined) fieldIo = O.fieldIoOf(input, deps); return fieldIo; },
   };
   if (hit.name === "pm-init") return init(sid, hit.args, now, ctx);
@@ -174,14 +178,19 @@ function withInbox(sid, r, name, input, deps) {
   if (!r || r.block || !r.context || name === "pm-rename") return r;
   try {
     const origin = C.homeOriginOf(input, deps);
-    const text = require("../../bin/lib/pm-notify/inbox").runInbox(sid, { budgetMs: 2000, drift: false, origin });
+    const inbox = require("../../bin/lib/pm-notify/inbox");
+    const budget = budgetOf(deps);
+    const budgetMs = budget.limited ? budget.inboxMs() : inbox.DEFAULT_BUDGET_MS;
+    const text = inbox.runInbox(sid, { budgetMs, drift: false, origin, spawnSync: deps && deps.spawnSync });
     return text ? Object.assign({}, r, { context: `${r.context}\n${text}` }) : r;
   } catch (_) {
     return r;
   }
 }
 
-function runPmWriter(input, deps) {
+// A call without deps.budget is one hook run that starts now; the hook entry hands its process-start budget.
+function runPmWriter(input, given) {
+  const deps = given && given.budget ? given : Object.assign({}, given, { budget: createHookBudget({ startedAt: Date.now() }) });
   const sid = input && input.session_id;
   const c = classifyTypedSlashCommand(input && input.prompt, NAMES);
   if (c.status === "none" || typeof sid !== "string" || !io.SESSION_ID_VALID_RE.test(sid)) return {};
@@ -196,7 +205,9 @@ function runPmWriter(input, deps) {
   if (hit.name === "resume-session" && !wantsInherit(sid, hit.args)) return {};
   const nowMs = deps && typeof deps.now === "function" ? deps.now() : Date.now();
   try {
-    return withInbox(sid, withPmLock(() => dispatch(hit, sid, nowMs, input, deps), { waitMs: deps && deps.pmLockWaitMs }), hit.name, input, deps);
+    const wait = deps && Number.isFinite(deps.pmLockWaitMs) ? deps.pmLockWaitMs : PM_LOCK_WAIT_MS;
+    const waitMs = Math.min(wait, deps.budget.left());
+    return withInbox(sid, withPmLock(() => dispatch(hit, sid, nowMs, input, deps), { waitMs }), hit.name, input, deps);
   } catch (e) {
     const r = C.lockRefusal(e);
     if (r instanceof C.Refusal) return { block: `[pm-session] /${hit.name} refused: ${r.message}` };

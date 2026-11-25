@@ -113,6 +113,43 @@ test("G6 inbox drift: a PM whose issues sit on a field-less board gets one field
   const absent = lines.filter((l) => /field/i.test(l) && /(absent|missing|not exist|has no|does not have)/i.test(l));
   assert.strictEqual(absent.length, 1, `expected one field-absent line: ${text}`);
 });
+// #3152: runInbox takes opts.spawnSync and hands it to every forge read it makes (unassigned owner, drift, meta);
+// G5/G6 above run without it and keep today's real spawn. tap() delegates to the real spawn, so the fake gh on
+// PATH still answers; every gh call the fake counted must have come through tap.
+const cp = require("node:child_process");
+function tap() {
+  const seen = [];
+  // gh is spawned directly or as `bash -c 'exec "$0" "$@"' gh …` (spawn-env.js buildGhSpawn).
+  const isGh = (cmd, args) => /(^|[\\/])gh(\.exe|\.cmd)?$/i.test(String(cmd)) || (/(^|[\\/])bash(\.exe)?$/i.test(String(cmd)) && args[0] === "-c" && args[2] === "gh");
+  const spawnSync = (cmd, args, opts) => { if (isGh(cmd, [].concat(args || []))) seen.push(cmd); return cp.spawnSync(cmd, args, opts); };
+  return { spawnSync, ghCalls: () => seen.length };
+}
+test("G8 inbox with opts.spawnSync: the same outcome as G5/G6, and every gh call goes through it", () => {
+  const me = sid();
+  P.seedPm(me, P.pm({ tag: "PM-inbox-inj", issues: own([9108, 9109]) }));
+  X.writeBox("unassigned", UNTRUSTED.concat([9103]).map(entry));
+  const t = tap();
+  const before = G.calls();
+  const text = INBOX().runInbox(me, { origin: ORIGIN, budgetMs: 60000, drift: true, spawnSync: t.spawnSync });
+  const made = G.calls() - before;
+  const left = X.readBox("unassigned").map((e) => e.id);
+  for (const num of UNTRUSTED) assert.ok(left.includes(`u-${num}`), `${num} was discarded: ${left}`);
+  assert.ok(!left.includes("u-9103"), `an ownerless note with no holder stayed: ${left}`);
+  assert.ok(made >= 1, `the inbox read no forge: ${text}`);
+  assert.strictEqual(t.ghCalls(), made, `gh calls outside opts.spawnSync: fake saw ${made}, injected ${t.ghCalls()}`);
+});
+caseEnd();
+
+caseBegin("owner-gate-spawn-injected", "bin/lib/pm-notify/common.js");
+test("G9 decidedOwnerOf(ref, timeoutMs, entries, {spawnSync}) reads the owner through the injected spawn", () => {
+  const t = tap();
+  const before = G.calls();
+  const r = P.load("bin/lib/pm-notify/common.js").decidedOwnerOf(ref(9107), 60000, entries(), { spawnSync: t.spawnSync });
+  assert.deepStrictEqual([r.ok, r.owner && r.owner.tag], [true, "PM-hold"], brief(r));
+  const made = G.calls() - before;
+  assert.ok(made >= 1, brief(r));
+  assert.strictEqual(t.ghCalls(), made, `gh calls outside opts.spawnSync: fake saw ${made}, injected ${t.ghCalls()}`);
+});
 caseEnd();
 
 caseBegin("owner-gate-pm-scan", "bin/workflow/lib/workflow-init/phases/pm-scan.js");

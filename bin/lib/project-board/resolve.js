@@ -1,6 +1,6 @@
 "use strict";
 // resolve.js — node entry to the board resolver (bin/github-issues/resolve-board.sh), synchronous.
-// resolveBoard(repo, {timeoutMs, noCacheRead}) -> {status, owner, number, projectId, fieldIds, candidates, reason?};
+// resolveBoard(repo, {timeoutMs, noCacheRead, spawnSync?}) -> {status, owner, number, projectId, fieldIds, candidates, reason?};
 //   status is resolved | no-link | ambiguous | fetch-failed; any spawn failure, timeout or bad output is fetch-failed.
 // toInternalEnv(board) -> the _ISSUE_CREATE_INTERNAL_* env that short-circuits resolve-project.sh.
 
@@ -37,7 +37,8 @@ function resolveBoard(repo, opts = {}) {
   let r;
   try {
     const [cmd, argv, spawnOpts] = buildBashScriptSpawn(SCRIPT, args);
-    r = spawnSync(cmd, argv, Object.assign({}, spawnOpts, { timeout: timeoutMs, killSignal: "SIGKILL" }));
+    const spawn = typeof opts.spawnSync === "function" ? opts.spawnSync : spawnSync;
+    r = spawn(cmd, argv, Object.assign({}, spawnOpts, { timeout: timeoutMs, killSignal: "SIGKILL" }));
   } catch (e) {
     return failed(`resolver spawn threw: ${e.message}`);
   }

@@ -14,6 +14,9 @@ const P = require("../../lib/pm-state-fixture");
 const { ghEnv } = require("../../bin/feature-2941-pm-state-cli/gh-env");
 
 const WRITER = "hooks/pm-session/writer.js";
+// SLOW_FORGE_MS: a fake gh sleep that outlasts every check window of the 10 s hook. #3152 widened the check
+// window past the old fixed 3 s (it takes what lock and origin leave), so a 4 s forge no longer times out.
+const SLOW_FORGE_MS = 9000;
 const UNSTATED = "reason not stated";
 let n = 0;
 const nextSid = () => P.uuid(0x29410000 + (++n));
@@ -108,6 +111,6 @@ function alone(fn) {
 }
 
 module.exports = {
-  P, G, WRITER, UNSTATED, home, nextSid, nextTag, writer, write, blocked, firstLine, nums, lastLog, brief,
+  P, G, WRITER, UNSTATED, SLOW_FORGE_MS, home, nextSid, nextTag, writer, write, blocked, firstLine, nums, lastLog, brief,
   assertBlocked, assertAccepted, assertUntouched, archive, other, alone,
 };

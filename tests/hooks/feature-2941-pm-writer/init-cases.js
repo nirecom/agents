@@ -168,11 +168,14 @@ function overlap() {
   });
   const unverified = (b) => assert.ok(b.includes("could not verify the overlap on the forge") && b.includes("start with `/pm-init` without issues"), b);
   refusedInit("V3 a forge failure refuses: could not verify", 8401, [8400], (b) => { unverified(b); assert.ok(b.includes("gh_exec_failed"), b); }, { before: () => W.G.mode("fail") });
-  refusedInit("V3 a forge slower than the 3 s budget refuses as timeout within the budget", 8402, [8400], (b, _o, r) => {
+  // #3152: the check runs to the hook budget's check deadline; the refusal lands inside the hook timeout.
+  refusedInit("V3 a forge slower than the check window refuses as timeout within the hook budget", 8402, [8400], (b, _o, r) => {
     unverified(b);
     assert.ok(b.includes("timeout"), b);
-    assert.ok(r.ms < 6000, `took ${r.ms} ms`);
-  }, { before: () => W.G.sleep(4000) });
+    const B = Object.assign({}, P.load("hooks/pm-session/budget.js"));
+    assert.ok(Number.isFinite(B.HOOK_TIMEOUT_MS) && Number.isFinite(B.SAFETY_MARGIN_MS), "hooks/pm-session/budget.js HOOK_TIMEOUT_MS / SAFETY_MARGIN_MS are missing (#3152)");
+    assert.ok(r.ms + B.SAFETY_MARGIN_MS <= B.HOOK_TIMEOUT_MS, `took ${r.ms} ms`);
+  }, { before: () => W.G.sleep(W.SLOW_FORGE_MS) });
   const notRetry = (b, ref, reason) => assert.ok(b.includes(`#${ref}`) && b.includes(reason) && b.includes("retrying will not fix it"), b);
   refusedInit("V4 label-overflow on a held ancestor is refused with the reduce-labels exit", 8201, [8200], (b) => {
     notRetry(b, 8201, "label-overflow");
@@ -193,7 +196,7 @@ function overlap() {
       const t2 = W.nextTag("PM-solo");
       const r2 = W.write(fresh(), P.wrapped("pm-init", `${t2} #8404`));
       W.assertAccepted(r2, "init", t2);
-      assert.deepStrictEqual(W.G.queries().slice(W.G.calls() - r2.calls).filter((q) => !/pm: fieldValueByName|^project item-edit |subIssues\(/.test(q)), [], W.brief(r2)); assert.strictEqual(W.G.pmStore().PVTI_o_r_8404, t2, "the PM field names the new PM");
+      assert.deepStrictEqual(W.G.queries().slice(W.G.calls() - r2.calls).filter((q) => !/pm: fieldValueByName|^api graphql --input - stdin-query=mutation \{ m0: (?:update|clear)ProjectV2ItemFieldValue\(|subIssues\(/.test(q)), [], W.brief(r2)); assert.strictEqual(W.G.pmStore().PVTI_o_r_8404, t2, "the PM field names the new PM");
     });
   });
 }

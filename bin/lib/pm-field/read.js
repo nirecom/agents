@@ -4,6 +4,7 @@
 //   readPmChains(refs, opts) -> {ok:true, results: {[refKey]: {ok:true, chain:[{repo, number, pm}]} | {ok:false, reason}}}
 //     chain[0] is the issue itself, then its ancestors nearest first (the owner lookup and the writer's checks).
 //   readCards(refs, opts) -> {ok:true, results: {[refKey]: {ok:true, itemId, projectId, fieldId} | {ok:false, reason}}}
+//   readPmFieldsAndCards(refs, opts) -> readPmFields' answer plus cards: {[refKey]: readCards' result}, in one gh call
 // A forge failure is {ok:false}; it never reads as "unset". A card page with more cards than one read
 // holds is {ok:false, reason:"pm-field-truncated"} (a hidden card could name another PM).
 
@@ -109,4 +110,29 @@ function readPmFields(refs, opts) {
 const readPmChains = (refs, opts) => batchedGraphql(refs, { fields: chainFields(0), readNode: chainOf, tolerate: pmFieldAbsentError }, opts);
 const readCards = (refs, opts) => batchedGraphql(refs, { fields: `number ${ITEMS}`, readNode: (node) => cardOf(node), tolerate: pmFieldAbsentError }, opts);
 
-module.exports = { readPmFields, readPmChains, readCards, pmReadOf, pmFieldAbsentError, itemsOf, PM_FIELD_NAME, ITEMS };
+// readPmFieldsAndCards(refs, opts) -> readPmFields' {ok, values, fieldAbsent?} plus cards: readCards' results, from one
+// gh call per chunk (#3152: /pm-remove and /pm-rename then write with no card read of their own).
+function readPmFieldsAndCards(refs, opts) {
+  const readNode = (node) => ({ ok: true, pm: pmReadOf(node), card: cardOf(node) });
+  const r = batchedGraphql(refs, { fields: `number ${ITEMS}`, readNode, keyOf: givenKey, tolerate: pmFieldAbsentError }, opts);
+  if (!r.ok) return r;
+  const values = {};
+  const fieldAbsent = {};
+  const cards = {};
+  for (const [key, v] of Object.entries(r.results)) {
+    if (!v.ok) return { ok: false, reason: v.reason };
+    if (!v.pm.ok) return { ok: false, reason: v.pm.reason };
+    values[key] = v.pm.pm;
+    if (v.pm.fieldAbsent) fieldAbsent[key] = true;
+    const at = key.lastIndexOf("#");
+    cards[refKey(key.slice(0, at), Number(key.slice(at + 1)))] = v.card;
+  }
+  const out = { ok: true, values, cards };
+  if (Object.keys(fieldAbsent).length > 0) out.fieldAbsent = fieldAbsent;
+  return out;
+}
+
+module.exports = {
+  readPmFields, readPmChains, readCards, readPmFieldsAndCards, pmReadOf, cardOf, chainFields, chainOf, pmFieldAbsentError, itemsOf,
+  PM_FIELD_NAME, ITEMS,
+};

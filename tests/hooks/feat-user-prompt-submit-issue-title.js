@@ -1,7 +1,7 @@
 "use strict";
 // tests/hooks/feat-user-prompt-submit-issue-title.js
 // Tests: hooks/user-prompt-submit-issue-title.js, hooks/user-prompt-submit-issue-title/target.js, hooks/user-prompt-submit-issue-title/title.js, hooks/user-prompt-submit-issue-title/record.js, hooks/lib/session-name.js, bin/session-name, hooks/session-start.js
-// Tags: TL1, TL2, scope:common, user-prompt-submit, session-title, issue-title, pm-session
+// Tags: TL1, TL2, scope:common, user-prompt-submit, session-title, issue-title, pm-session, issue-3152
 // #299: a wf-init session gets "#N <issue title>" via hookSpecificOutput.sessionTitle. Assumed API:
 // run(input, deps) from the entry; deps = {fetchTitle(ref) -> string|null, now() -> ms, spawnSync};
 // without fetchTitle the hook runs originUrl + tracker.issueTitle with deps.spawnSync. Constants
@@ -48,6 +48,10 @@ caseEnd();
 
 caseBegin("H4 the real spawn path stays inside the 10 s hook budget", "hooks/user-prompt-submit-issue-title/title.js");
 budget.budget(F);
+caseEnd();
+
+caseBegin("H4b the title read takes what the hook budget leaves and reuses the writer's origin", "hooks/user-prompt-submit-issue-title/title.js");
+budget.hookBudget(F);
 caseEnd();
 
 caseBegin("H5 failed fetches cool down and give up after MAX_ATTEMPTS", "hooks/user-prompt-submit-issue-title/title.js");
