@@ -58,7 +58,7 @@ fi
 teardown_mock
 
 # ===========================================================================
-# T3: 2+ linked projects → return 0, RESOLVED_* from first node, warn on stderr
+# T3 (#3142): 2+ open linked projects → ambiguous, return 1, no board picked, no "using first"
 # ===========================================================================
 setup_mock
 export GH_MOCK_PROJECTS_NODE_COUNT=2
@@ -68,17 +68,14 @@ export GH_MOCK_PROJECT_ID="PVT_first"
 STDERR_FILE="$TMP/t3-stderr.log"
 OUT=$(run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
-R_OWNER=$(get_field "$OUT" RESOLVED_OWNER)
-R_NUM=$(get_field "$OUT" RESOLVED_PROJECT_NUM)
 R_ID=$(get_field "$OUT" RESOLVED_PROJECT_ID)
-if [ "$RC" = "0" ] \
-   && [ "$R_OWNER" = "first-owner" ] \
-   && [ "$R_NUM" = "7" ] \
-   && [ "$R_ID" = "PVT_first" ] \
-   && grep -qi "multiple Projects v2" "$STDERR_FILE" 2>/dev/null; then
-    pass "T3: 2+ linked projects → first wins + warn on stderr"
+if [ "$RC" = "1" ] \
+   && [ -z "$R_ID" ] \
+   && grep -q "refusing to pick one" "$STDERR_FILE" 2>/dev/null \
+   && ! grep -qi "using first" "$STDERR_FILE" 2>/dev/null; then
+    pass "T3: 2+ open linked projects → ambiguous (rc1), no board picked, no 'using first'"
 else
-    fail "T3: rc=$RC owner=$R_OWNER num=$R_NUM id=$R_ID stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
+    fail "T3: rc=$RC id=$R_ID stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
 fi
 teardown_mock
 

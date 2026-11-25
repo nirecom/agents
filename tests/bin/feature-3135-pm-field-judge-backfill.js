@@ -1,6 +1,6 @@
 "use strict";
 // Tests: bin/lib/tracker-fields/expected.js, bin/lib/tracker-fields/judge.js, bin/lib/tracker-fields/backfill.js, skills/migrate-tracker/scripts/repair.js, skills/migrate-tracker/scripts/needs.js
-// Tags: TL2, scope:issue-specific, pm-session, pm-field, migrate, issue-3135
+// Tags: TL2, scope:issue-specific, pm-session, pm-field, migrate, issue-3135, feature-3142, projects-v2
 // #3135 detection and repair of a board without the `pm` field. Assumed contracts (named by this test):
 //   expected.js EXPECTED_FIELDS [{name, dataType, options?}]; judge.js judge({fields, holders, values}) ->
 //   {needed, missing, diagnostics:[{kind, message}]}; backfill.js backfillPm({repo, read, write, entries?}) ->
@@ -237,5 +237,114 @@ test("R6 nothing to repair, or only an undecidable judge, touches nothing", () =
     const { calls } = run([j], true, true);
     assert.deepStrictEqual(calls, ["judge"], brief(j));
   }
+});
+caseEnd();
+
+// ---- #3142 Step 6: the judge reads the board the resolver names (resolveBoard), never one matched by title ----
+//   boardFields(repo, timeoutMs, {resolveBoard}) -> no-link {ok:false, noBoard:true}; ambiguous / fetch-failed
+//   {ok:false, reason}; resolved -> the field pages of board.projectId. judge({fields:{noBoard}}) -> no-board.
+// TL3 gap: the real resolver spawn and the live field query; resolveBoard is injected, gh is the #3142 JSON mock.
+const TMP3142 = fs.mkdtempSync(path.join(os.tmpdir(), "f3142-judge-"));
+after(() => { fs.rmSync(TMP3142, { recursive: true, force: true }); });
+const LOG3142 = path.join(TMP3142, "gh.log");
+const MOCKBIN = path.join(TMP3142, "mockbin");
+fs.mkdirSync(path.join(TMP3142, "home"));
+fs.mkdirSync(MOCKBIN);
+const mockSh = path.join(__dirname, "feature-3142-board-resolve", "_gh-mock.sh").replace(/\\/g, "/");
+fs.writeFileSync(path.join(MOCKBIN, "gh"), `#!/usr/bin/env bash\nexec bash "${mockSh}" "$@"\n`, { mode: 0o755 });
+// with3142Mock(fn) — runs fn with HOME and the #3142 gh mock pinned, then puts back every key it touched,
+// so the pm-s3 fixture's own gh mock and HOME stay as the cases above left them.
+function with3142Mock(fn, extra) {
+  const keys = ["HOME", "USERPROFILE", "PATH", "GH_MOCK_LOG", "GH_MOCK_REPO", "GH_MOCK_LINKED_FILE"];
+  const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+  const home = path.join(TMP3142, "home");
+  delete process.env.GH_MOCK_LINKED_FILE;
+  Object.assign(process.env, { HOME: home, USERPROFILE: home, PATH: MOCKBIN + path.delimiter + process.env.PATH,
+    GH_MOCK_LOG: LOG3142, GH_MOCK_REPO: "o/r" }, extra || {});
+  fs.writeFileSync(LOG3142, "");
+  try { return fn(); } finally {
+    for (const k of keys) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
+  }
+}
+// boardFieldsOf(board) -> boardFields' answer with a synchronous resolveBoard stub (as resolve.js's is) and its calls.
+// judgeRepo, and migrate-needs.js after it, call boardFields synchronously: a thenable answer is a failure.
+const notThenable = (x) => assert.ok(!x || typeof x.then !== "function", "answer is a Promise; callers are sync");
+function boardFieldsOf(board) {
+  const calls = [];
+  const resolveBoard = (repo, opts) => { calls.push({ repo, opts }); return board; };
+  const f = with3142Mock(() => JUDGE().boardFields("o/r", 5000, { resolveBoard }));
+  notThenable(f);
+  return { f, calls, log: fs.readFileSync(LOG3142, "utf8") };
+}
+const judgeFields = (f) => JUDGE().judge({ fields: f, holders: {}, values: { ok: true, values: {} } });
+const RESOLVED = { status: "resolved", owner: "o", number: 3, projectId: "PVT_x", fieldIds: {}, candidates: [] };
+
+caseBegin("no-board-diagnostic", "bin/lib/tracker-fields/judge.js");
+test("JB1 judge on a no-board answer is not NEEDED and diagnoses no-board", () => {
+  const r = judgeFields({ ok: false, noBoard: true, reason: "no-link" });
+  assert.strictEqual(r.needed, false, brief(r));
+  assert.deepStrictEqual(kinds(r), ["no-board"], brief(r));
+  assert.match(r.diagnostics[0].message, /\/migrate-tracker/, brief(r));
+});
+test("JB2 a plain field read failure stays undecidable", () => {
+  const r = judgeFields({ ok: false, reason: "boom" });
+  assert.deepStrictEqual(kinds(r), ["undecidable"], brief(r));
+});
+caseEnd();
+
+caseBegin("board-from-resolver", "bin/lib/tracker-fields/judge.js");
+test("JB3 no-link is noBoard and reaches judge as no-board", () => {
+  const { f, calls } = boardFieldsOf({ status: "no-link", candidates: [] });
+  assert.strictEqual(calls.length, 1, `resolveBoard not consulted: ${brief(f)}`);
+  assert.strictEqual(calls[0].repo, "o/r");
+  assert.strictEqual(calls[0].opts && calls[0].opts.noCacheRead, true, "the judge path must not read the cache");
+  assert.deepStrictEqual([f.ok, f.noBoard], [false, true], brief(f));
+  assert.deepStrictEqual(kinds(judgeFields(f)), ["no-board"]);
+});
+test("JB4 ambiguous is undecidable and names the candidates", () => {
+  const { f } = boardFieldsOf({ status: "ambiguous", candidates: ["o#3", "o#4"] });
+  assert.strictEqual(f.ok, false, brief(f));
+  assert.ok(!f.noBoard, brief(f));
+  assert.match(String(f.reason), /ambiguous.*o#3.*o#4/, brief(f));
+  assert.deepStrictEqual(kinds(judgeFields(f)), ["undecidable"]);
+});
+test("JB5 fetch-failed is undecidable", () => {
+  const { f, calls } = boardFieldsOf({ status: "fetch-failed", reason: "timeout", candidates: [] });
+  assert.strictEqual(calls.length, 1, `resolveBoard not consulted: ${brief(f)}`);
+  assert.strictEqual(f.ok, false, brief(f));
+  assert.ok(!f.noBoard, brief(f));
+  assert.deepStrictEqual(kinds(judgeFields(f)), ["undecidable"]);
+});
+test("JB6 resolved reads the fields of the resolved board without a title lookup", () => {
+  const { f, log } = boardFieldsOf(RESOLVED);
+  assert.strictEqual(f.ok, true, brief(f));
+  assert.deepStrictEqual(f.nodes.map((x) => x.name).sort(), ["Content Date", "Status", "session-id"], brief(f));
+  assert.ok(/projectId=PVT_x/.test(log), `field query not aimed at the resolved board: ${log.slice(0, 400)}`);
+  assert.ok(!/^project list/m.test(log), `title lookup still made: ${log.slice(0, 400)}`);
+});
+caseEnd();
+
+caseBegin("judge-repo-stays-sync", "bin/lib/tracker-fields/judge.js");
+// migrate-needs.js calls judgeRepo(repo) synchronously with no injection; the default resolver must keep it sync.
+// The mock repo links no board, so the real resolver answers no-link and the judge diagnoses no-board.
+test("JB7 judgeRepo with the default resolver returns a plain answer, not a Promise", () => {
+  const r = with3142Mock(() => JUDGE().judgeRepo("o/r", { timeoutMs: 5000, entries: [] }));
+  notThenable(r);
+  assert.strictEqual(typeof r.needed, "boolean", brief(r));
+  assert.ok(Array.isArray(r.diagnostics), brief(r));
+  assert.deepStrictEqual(kinds(r), ["no-board"], brief(r));
+});
+// The repo links one open board PVT_lnk: the real resolver (node -> bash) must name it, and the field query must aim at it.
+test("JB8 boardFields with the default resolver queries the fields of the linked board's id", () => {
+  const linked = path.join(TMP3142, "linked.json");
+  fs.writeFileSync(linked, JSON.stringify({ nodes: [{ id: "PVT_lnk", number: 5, closed: false, owner: { login: "o" } }],
+    pageInfo: { hasNextPage: false, endCursor: null } }));
+  const f = with3142Mock(() => JUDGE().boardFields("o/r", 5000), { GH_MOCK_LINKED_FILE: linked });
+  notThenable(f);
+  const log = fs.readFileSync(LOG3142, "utf8");
+  assert.ok(/projectsV2/.test(log), `the resolver did not ask for the linked boards: ${log.slice(0, 400)}`);
+  assert.strictEqual(f.ok, true, brief(f));
+  assert.ok(/fields\(/.test(log) && /projectId=PVT_lnk/.test(log), `field query not aimed at PVT_lnk: ${log.slice(0, 600)}`);
+  assert.ok(!/^project list/m.test(log), `title lookup still made: ${log.slice(0, 400)}`);
 });
 caseEnd();

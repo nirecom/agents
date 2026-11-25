@@ -29,6 +29,15 @@ case_s2_s6() {
     else
         fail "S6: final stdout line is not a GitHub URL (got='$LAST_LINE')"
     fi
+    # #3142 Step 7: ensure-board-card's BOARD_CARD= result line goes to stderr, never into the URL stdout.
+    # Its item-add trace first proves ensure-board-card ran, so a missing line is not a vacuous pass.
+    if ! grep -q 'project item-add' "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
+        fail "S6b: ensure-board-card did not run (no project item-add in $(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
+    elif grep -q '^BOARD_CARD=' "$STDOUT_OUT" 2>/dev/null; then
+        fail "S6b: BOARD_CARD= result line leaked to stdout ($(cat "$STDOUT_OUT"))"
+    else
+        pass "S6b: no BOARD_CARD= result line on stdout"
+    fi
     teardown_mock
 }
 run_case case_s2_s6

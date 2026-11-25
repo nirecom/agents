@@ -1,24 +1,13 @@
 # tests/bin/feat-1699-meta-parent-guard/label-repair-no-delete.sh
 # Tests: bin/github-issues/issue-create-dispatch.sh, bin/github-issues/issue-create.sh, bin/github-issues/sync-labels.sh
 # Tags: issue-create, dispatch, labels, sync-labels, no-delete, destructive, security, scope:issue-specific, pwsh-not-required, TL2
-# TL3 gap (what this test does NOT catch):
-# - Whether real `gh label delete --yes` is in fact irreversible on GitHub (assumed from
-#   the API docs; the mock only records that the call was made).
-# - Real remote label inventories, which are larger and repo-specific — the blast radius
-#   asserted here is one synthetic label.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
-#
-# Group R — repairing ONE missing label must not delete the repo's other labels.
-#
-# sync-labels.sh is a full reconciler: its DELETE branch removes every remote label absent
-# from `.github/labels.yml` and not `protected:`. Both issue-creation paths call it as a
-# REPAIR, so without `--no-delete` one /issue-create run silently destroys a repo's own
-# label taxonomy. Both call sites are pinned; a fix applied to one alone is the defect.
-#
-# R1/R2 assert no `gh label delete` is issued; R3 drives sync-labels.sh directly to prove
-# the DELETE branch is real and that `--no-delete` is what suppresses it — without R3 the
-# first two would pass against a flag nobody honours.
+# TL3 gap: real `gh label delete --yes` irreversibility and real label inventories (the mock records
+#   one synthetic label); checked at WORKFLOW_USER_VERIFIED preflight (category: skill-orchestration).
+# Group R — repairing ONE missing label must not delete the repo's other labels. sync-labels.sh's
+# DELETE branch removes every remote label absent from `.github/labels.yml`; both issue-creation
+# paths call it as a repair, so both must pass `--no-delete`. R1/R2 assert no `gh label delete`;
+# R3 proves the DELETE branch is real and that `--no-delete` is what suppresses it.
+
 
 R_SYNC="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh"
 R_LABELS_YML="$SCRIPT_CHECKOUT_ROOT/.github/labels.yml"
@@ -119,10 +108,25 @@ mkdir -p "$R_FIX"
 git -C "$R_FIX" init -q
 git -C "$R_FIX" config core.hooksPath /dev/null
 git -C "$R_FIX" remote add origin https://github.com/example/fixture.git
+# #3142 R2: issue-create.sh reaches the board resolver, whose cache falls back to $HOME. The real
+# cache must come out unchanged, so HOME is pinned for the dispatcher run only and the real file's
+# checksum (or `absent`) is compared before and after.
+R_REAL_HOME="$HOME"
+R_REAL_CACHE="$R_REAL_HOME/.workflow-state/cache/project-resolve.tsv"
+r_cache_sum() { if [ -f "$R_REAL_CACHE" ]; then cksum < "$R_REAL_CACHE"; else echo absent; fi; }
+R_CACHE_BEFORE="$(r_cache_sum)"
+mkdir -p "$TMP/home"
 R_CWD="$PWD"
 cd "$R_FIX" || exit 1
+export HOME="$TMP/home"
 run_dispatch --verdict none -- --title "standalone" --body "$(printf "$CANONICAL_BODY")"
+export HOME="$R_REAL_HOME"
 cd "$R_CWD" || exit 1
+if [ "$(r_cache_sum)" = "$R_CACHE_BEFORE" ]; then
+    pass "R2e-real-resolver-cache-unchanged"
+else
+    fail "R2e-real-resolver-cache-unchanged" "the run wrote the developer's real $R_REAL_CACHE (before: $R_CACHE_BEFORE, after: $(r_cache_sum))"
+fi
 if [ "$RC" -eq 0 ]; then
     pass "R2a-none-rc0"
 else

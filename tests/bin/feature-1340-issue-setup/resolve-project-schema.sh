@@ -159,8 +159,19 @@ run_resolver() {
 
 # get_field / pass / fail / __LIB_SCRIPT_CHECKOUT_ROOT provided by _lib.sh.
 
+# graphql_probe — GRAPHQL_CALLED (1: any graphql call) and CONFIRM_ONLY (1: exactly one graphql call, the
+# #3142 cache-hit link confirmation over projectsV2(first: 100); a hit never re-runs Query A/B/C).
+graphql_probe() {
+    local n
+    n="$(grep -c '^gh api graphql' "$MOCK_LOG" 2>/dev/null)" || n=0
+    GRAPHQL_CALLED=0
+    [ "$n" -gt 0 ] && GRAPHQL_CALLED=1
+    CONFIRM_ONLY=0
+    if [ "$n" = "1" ] && grep -qF 'projectsV2(first: 100)' "$MOCK_LOG"; then CONFIRM_ONLY=1; fi
+}
+
 # TSV parser / schema-guard table (C7, table-driven). Row: name | setup_kind (cache row for "nirecom/agents") | expect.
-# expect: miss → graphql called; hit:<ID> → no graphql, PROJECT_ID==<ID>; hit-emptystatus:<ID> → also STATUS empty.
+# expect: miss → graphql called; hit:<ID> → only the link-confirm graphql, PROJECT_ID==<ID>; hit-emptystatus:<ID> → also STATUS empty.
 # Contract: lookup is awk '$1==key {print; exit}' (first match wins); guard = exactly 11 fields, col 11 = sid1, AND non-empty
 # cols 2/3/4 via `[ -n ]` only — no numeric/whitespace validation, so nonnumeric-num and wsonly-owner are HITs
 # (asserting MISS would be a forever-RED fabricated contract). An EMPTY required field IS a miss (emptyid-required-miss).
@@ -217,8 +228,7 @@ while IFS='|' read -r name setup_kind expect; do
     RC=$(get_field "$OUT" RC)
     R_ID=$(get_field "$OUT" RESOLVED_PROJECT_ID)
     R_STATUS=$(get_field "$OUT" RESOLVED_STATUS_FIELD_ID)
-    GRAPHQL_CALLED=0
-    grep -q "api graphql" "$MOCK_LOG" 2>/dev/null && GRAPHQL_CALLED=1
+    graphql_probe
     case "$expect" in
       miss)
         if [ "$RC" = "0" ] && [ "$GRAPHQL_CALLED" = "1" ]; then
@@ -229,18 +239,18 @@ while IFS='|' read -r name setup_kind expect; do
         ;;
       hit:*)
         want_id="${expect#hit:}"
-        if [ "$RC" = "0" ] && [ "$GRAPHQL_CALLED" = "0" ] && [ "$R_ID" = "$want_id" ]; then
-            pass "TS-table[$name]: $setup_kind → hit id=$want_id, no graphql"
+        if [ "$RC" = "0" ] && [ "$CONFIRM_ONLY" = "1" ] && [ "$R_ID" = "$want_id" ]; then
+            pass "TS-table[$name]: $setup_kind → hit id=$want_id, only the link-confirm graphql"
         else
-            fail "TS-table[$name]: rc=$RC id=$R_ID graphql=$GRAPHQL_CALLED (expected hit id=$want_id, no graphql)"
+            fail "TS-table[$name]: rc=$RC id=$R_ID confirm_only=$CONFIRM_ONLY (expected hit id=$want_id, only the link-confirm graphql)"
         fi
         ;;
       hit-emptystatus:*)
         want_id="${expect#hit-emptystatus:}"
-        if [ "$RC" = "0" ] && [ "$GRAPHQL_CALLED" = "0" ] && [ "$R_ID" = "$want_id" ] && [ -z "$R_STATUS" ]; then
-            pass "TS-table[$name]: $setup_kind → hit id=$want_id with empty status, no graphql"
+        if [ "$RC" = "0" ] && [ "$CONFIRM_ONLY" = "1" ] && [ "$R_ID" = "$want_id" ] && [ -z "$R_STATUS" ]; then
+            pass "TS-table[$name]: $setup_kind → hit id=$want_id with empty status, only the link-confirm graphql"
         else
-            fail "TS-table[$name]: rc=$RC id=$R_ID status='$R_STATUS' graphql=$GRAPHQL_CALLED (expected hit id=$want_id, status empty, no graphql)"
+            fail "TS-table[$name]: rc=$RC id=$R_ID status='$R_STATUS' confirm_only=$CONFIRM_ONLY (expected hit id=$want_id, status empty, only the link-confirm graphql)"
         fi
         ;;
       *) fail "TS-table[$name]: unknown expect='$expect'" ;;
@@ -263,7 +273,7 @@ legacy-10col-miss      | 10col-legacy          | miss
 TABLE
 
 # ===========================================================================
-# TS-4: 11-column sid1 cache row → hit; all 5 new RESOLVED_* set; NO graphql call
+# TS-4: 11-column sid1 cache row → hit; all 5 new RESOLVED_* set; only the link-confirm graphql call
 # ===========================================================================
 setup_mock
 CACHE_DIR="$WORKFLOW_STATE_DIR/cache"
@@ -281,8 +291,7 @@ R_TODO=$(get_field "$OUT" RESOLVED_TODO_OPTION_ID)
 R_INPROG=$(get_field "$OUT" RESOLVED_IN_PROGRESS_OPTION_ID)
 R_DONE=$(get_field "$OUT" RESOLVED_DONE_OPTION_ID)
 R_FINGER=$(get_field "$OUT" RESOLVED_SESSION_ID_FIELD_ID)
-GRAPHQL_CALLED=0
-grep -q "api graphql" "$MOCK_LOG" 2>/dev/null && GRAPHQL_CALLED=1
+graphql_probe
 if [ "$RC" = "0" ] \
    && [ "$R_OWNER" = "cached-owner" ] \
    && [ "$R_NUM" = "99" ] \
@@ -291,10 +300,10 @@ if [ "$RC" = "0" ] \
    && [ "$R_INPROG" = "PVTF_inprog" ] \
    && [ "$R_DONE" = "PVTF_done" ] \
    && [ "$R_FINGER" = "PVTF_sid" ] \
-   && [ "$GRAPHQL_CALLED" = "0" ]; then
-    pass "TS-4: 11-col sid1 cache hit → all 5 new RESOLVED_* set, NO graphql call"
+   && [ "$CONFIRM_ONLY" = "1" ]; then
+    pass "TS-4: 11-col sid1 cache hit → all 5 new RESOLVED_* set, only the link-confirm graphql call"
 else
-    fail "TS-4: rc=$RC owner=$R_OWNER num=$R_NUM status=$R_STATUS todo=$R_TODO inprog=$R_INPROG done=$R_DONE finger=$R_FINGER graphql=$GRAPHQL_CALLED"
+    fail "TS-4: rc=$RC owner=$R_OWNER num=$R_NUM status=$R_STATUS todo=$R_TODO inprog=$R_INPROG done=$R_DONE finger=$R_FINGER confirm_only=$CONFIRM_ONLY"
 fi
 teardown_mock
 
@@ -389,12 +398,11 @@ STDERR_FILE="$TMP/ts7-stderr.log"
 OUT=$(run_resolver "$STDERR_FILE") || true
 RC=$(get_field "$OUT" RC)
 R_TODO=$(get_field "$OUT" RESOLVED_TODO_OPTION_ID)
-GRAPHQL_CALLED=0
-grep -q "api graphql" "$MOCK_LOG" 2>/dev/null && GRAPHQL_CALLED=1
-if [ "$RC" = "0" ] && [ "$R_TODO" = "todo_f" ] && [ "$GRAPHQL_CALLED" = "0" ]; then
+graphql_probe
+if [ "$RC" = "0" ] && [ "$R_TODO" = "todo_f" ] && [ "$CONFIRM_ONLY" = "1" ]; then
     pass "TS-7: RESOLVED_TODO_OPTION_ID = todo_f from 11-col cache (col7 retained)"
 else
-    fail "TS-7: rc=$RC todo=$R_TODO graphql=$GRAPHQL_CALLED (expected rc=0, todo=todo_f, no graphql)"
+    fail "TS-7: rc=$RC todo=$R_TODO confirm_only=$CONFIRM_ONLY (expected rc=0, todo=todo_f, only the link-confirm graphql)"
 fi
 teardown_mock
 

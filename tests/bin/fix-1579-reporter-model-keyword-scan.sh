@@ -22,8 +22,9 @@ pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1 — $2"; FAIL=$((FAIL + 1)); }
 
 # --- Test harness: mock `gh`, run issue-create.sh, capture the labels it would pass ---
-WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+WORK="$(mktemp -d)"; readonly WORK
+# #3142: issue-create.sh reaches the board resolver; keep its state and cache out of the real store.
+trap 'rm -rf "$WORK"' EXIT; export WORKFLOW_STATE_DIR="$WORK/wf-state" WORKFLOW_PLANS_DIR="$WORK/wf-plans"
 MOCKDIR="$WORK/bin"
 mkdir -p "$MOCKDIR"
 

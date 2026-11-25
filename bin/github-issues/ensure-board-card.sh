@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ensure-board-card.sh [--repo <owner/repo|repo>] <N>
-# Idempotent: ensures issue #N has a Projects v2 board card with Content Date.
-# Standalone: derives its own paths via BASH_SOURCE (no root variable dependency).
-# Best-effort: warns and exits 0 on non-fatal gh failures.
-# Exit codes: 0 success/non-fatal warn; 2 usage error.
-#
-# --repo: optional repository slug (short form "repo" or full "owner/repo").
-#         Short form is normalized via `gh repo view` to full owner/repo.
-#         Propagated to both `gh issue view` calls (URL and createdAt fetches).
+# Idempotent: ensures issue #N has a Projects v2 board card with Content Date. Paths come from BASH_SOURCE.
+# Best-effort: exit 0 on every gh failure; exit 2 on a usage error (bad N, bad or unresolvable --repo).
+# Last stdout line (none on exit 2): BOARD_CARD=<added|existing|failed|skipped> issue=<N> reason=<token>
+#   failed reasons: resolve-<no-link|ambiguous|fetch-failed>, issue-view, status-read, status-reset, item-add.
+#   skipped reasons: gitlab, no-gh. A Content Date failure keeps added/existing with reason=content-date-failed.
+# --repo: short form "repo" is normalized via `gh repo view`; the full owner/repo reaches the board resolver,
+#   the card lookup and both `gh issue view` calls. An item-add that says the board is gone drops the cached
+#   resolver row, re-resolves once (--no-cache-read) and retries the item-add once.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,15 +23,16 @@ Usage: ensure-board-card.sh [--repo <owner/repo|repo>] <N>
   <N>: positive integer issue number.
 Idempotent: when the issue already has a board card with Content Date set,
 re-running is a no-op. Best-effort — warns and exits 0 on gh failures.
+The last stdout line is BOARD_CARD=<added|existing|failed|skipped> issue=<N> reason=<token>.
 EOF
     exit 2
 }
 
 REPO_ARG=""
-while [ $# -gt 0 ]; do
+while [[ $# -gt 0 ]]; do
     case "$1" in
         --repo)
-            [ $# -lt 2 ] && { echo "Error: --repo requires a value" >&2; exit 2; }
+            [[ $# -lt 2 ]] && { echo "Error: --repo requires a value" >&2; exit 2; }
             REPO_ARG="$2"; shift 2
             ;;
         --repo=*)
@@ -46,22 +47,31 @@ N="${1:-}"
 [[ -z "$N" ]] && usage
 [[ "$N" =~ ^[0-9]+$ ]] || usage
 
-# Forge detection (#2308). GitLab Free has no Projects v2 board — status labels
-# are the board and wip-state.sh owns them. Nothing here applies, so exit 0.
-FORGE="$(node "$SCRIPT_DIR/../../bin/detect-forge-type" --repo-dir . --field type 2>/dev/null)"
-[ -z "$FORGE" ] && FORGE="unknown"
-if [ "$FORGE" = "gitlab" ]; then
-    echo "info: ensure-board-card: GitLab has no Projects v2 board — status labels are managed by wip-state.sh; skipping (exit 0)" >&2
+# _ebc_result <added|existing|failed|skipped> <reason> — the one result line, then exit 0.
+_ebc_result() {
+    printf 'BOARD_CARD=%s issue=%s reason=%s\n' "$1" "$N" "$2"
     exit 0
+}
+
+# Forge detection (#2308). GitLab Free has no Projects v2 board — status labels
+# are the board and wip-state.sh owns them. Nothing here applies.
+FORGE="$(node "$SCRIPT_DIR/../../bin/detect-forge-type" --repo-dir . --field type 2>/dev/null)"
+[[ -z "$FORGE" ]] && FORGE="unknown"
+if [[ "$FORGE" == "gitlab" ]]; then
+    echo "info: ensure-board-card: GitLab has no Projects v2 board — status labels are managed by wip-state.sh; skipping (exit 0)" >&2
+    _ebc_result skipped gitlab
 fi
 
 # Validate --repo format before any use (prevents flag-injection into gh). The
 # charset is GitHub's; gitlab already returned above, so this stays github/unknown.
-if [[ -n "$REPO_ARG" ]]; then
-    if ! [[ "$REPO_ARG" =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$ ]]; then
-        echo "Error: invalid --repo value: $REPO_ARG" >&2
-        exit 2
-    fi
+if [[ -n "$REPO_ARG" ]] && ! [[ "$REPO_ARG" =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$ ]]; then
+    echo "Error: invalid --repo value: $REPO_ARG" >&2
+    exit 2
+fi
+
+if ! command -v gh >/dev/null 2>&1; then
+    echo "warn: gh CLI not found — ensure-board-card.sh skipping (exit 0)" >&2
+    _ebc_result skipped no-gh
 fi
 
 # Normalize short-form repo (no slash) to full owner/repo (fail-closed).
@@ -70,59 +80,54 @@ if [[ -n "$REPO_ARG" ]] && [[ "$REPO_ARG" != *"/"* ]]; then
         echo "Error: failed to resolve short-form repo '$REPO_ARG'" >&2
         exit 2
     }
+    REPO_ARG=$(printf '%s' "$REPO_ARG" | tr -d '\r' | head -1)
 fi
+# resolve_item_id looks the card up in this repository instead of the cwd's origin.
+[[ -n "$REPO_ARG" ]] && export BOARD_CARD_REPO_OVERRIDE="$REPO_ARG"
 
 # Soft gh auth project-scope warn (mirror issue-create.sh).
-if command -v gh >/dev/null 2>&1; then
-    if ! gh auth status 2>&1 | grep -q "'project'"; then
-        echo "warn: gh auth lacks 'project' scope — Projects v2 attach may fail." >&2
-        echo "warn: Run 'gh auth refresh -s project' to add it (browser-based OAuth)." >&2
-    fi
-else
-    echo "warn: gh CLI not found — ensure-board-card.sh skipping (exit 0)" >&2
-    exit 0
+if ! gh auth status 2>&1 | grep -q "'project'"; then
+    echo "warn: gh auth lacks 'project' scope — Projects v2 attach may fail." >&2
+    echo "warn: Run 'gh auth refresh -s project' to add it (browser-based OAuth)." >&2
 fi
 
-# Auto-resolve Projects v2 config from the git remote (#641). Internal env
-# vars from the issue-create.sh call chain short-circuit GraphQL via the
-# resolver's _ISSUE_CREATE_INTERNAL_* check. Resolver failure is non-fatal —
-# warn and exit 0 (the caller's downstream work continues without a board
-# card).
-if ! resolve_project_for_repo; then
-    echo "warn: ensure-board-card: Projects v2 auto-resolve failed for #$N — skipping (exit 0)" >&2
-    exit 0
-fi
-OWNER="$RESOLVED_OWNER"
-PROJECT_NUM="$RESOLVED_PROJECT_NUM"
-PROJECT_ID="$RESOLVED_PROJECT_ID"
-FIELD_ID="$RESOLVED_CONTENT_DATE_FIELD_ID"
+# _ebc_resolve [resolver flags] — the board for --repo (else the origin remote) into OWNER/PROJECT_*/FIELD_ID.
+# _ISSUE_CREATE_INTERNAL_* from the issue-create.sh chain short-circuit the resolver.
+_ebc_resolve() {
+    resolve_project_for_repo ${REPO_ARG:+--repo "$REPO_ARG"} "$@" || return 1
+    OWNER="$RESOLVED_OWNER"
+    PROJECT_NUM="$RESOLVED_PROJECT_NUM"
+    PROJECT_ID="$RESOLVED_PROJECT_ID"
+    FIELD_ID="$RESOLVED_CONTENT_DATE_FIELD_ID"
+}
 
-# resolve_item_id reads $PROJECT_ID from caller scope — set above before use.
+if ! _ebc_resolve; then
+    echo "warn: ensure-board-card: Projects v2 auto-resolve failed for #$N ($RESOLVED_STATUS) — skipping (exit 0)" >&2
+    _ebc_result failed "resolve-$RESOLVED_STATUS"
+fi
 
 # 1. Resolve URL.
 if ! URL=$(gh issue view "$N" ${REPO_ARG:+--repo "$REPO_ARG"} --json url --jq '.url' 2>/dev/null); then
     echo "warn: gh issue view #$N failed — skipping (exit 0)" >&2
-    exit 0
+    _ebc_result failed issue-view
 fi
 URL=$(printf '%s' "$URL" | tr -d '\r' | head -1)
 if [[ -z "$URL" ]]; then
     echo "warn: gh issue view returned empty URL for #$N — skipping (exit 0)" >&2
-    exit 0
+    _ebc_result failed issue-view
 fi
 
-# 2. Resolve existing item id.
+# 2. Resolve existing item id (resolve_item_id reads $PROJECT_ID).
 item_id=$(resolve_item_id "$N") || item_id=""
+CARD_STATE="existing"
 
-# 2.5. Status reset (#579): if the card already exists and its board Status is
-# "Done", reset Status to "In Progress" before any other board mutation. This
-# prevents the Projects v2 `Done → auto-close` loop on reopened issues. Any gh
-# failure inside this block warns and exits 0, skipping ALL remaining board
-# mutations (item-add and Content Date edit) to avoid mutating a card that is
-# still at Status=Done. Callers must only invoke this script for OPEN issues.
+# 2.5. Status reset (#579): an existing card at Status "Done" is reset to "In Progress" before any
+# other board mutation, preventing the Projects v2 `Done → auto-close` loop on reopened issues. A gh
+# failure here skips ALL remaining mutations. Callers must only invoke this script for OPEN issues.
 if [[ -n "$item_id" ]]; then
     if ! card_status=$(gh api graphql -f query="{ node(id: \"$item_id\") { ... on ProjectV2Item { fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } }" --jq '.data.node.fieldValueByName.name // empty' 2>/dev/null); then
         echo "warn: ensure-board-card: Status read failed for #$N — skipping board mutations (exit 0)" >&2
-        exit 0
+        _ebc_result failed status-read
     fi
     card_status=$(printf '%s' "$card_status" | tr -d '\r' | head -1)
 
@@ -134,52 +139,69 @@ if [[ -n "$item_id" ]]; then
         if ! gh project item-edit --id "$item_id" --field-id "$status_field_id" \
                 --project-id "$PROJECT_ID" --single-select-option-id "$inprog_opt_id" >/dev/null 2>&1; then
             echo "warn: ensure-board-card: Status reset failed for #$N — skipping board mutations (exit 0)" >&2
-            exit 0
+            _ebc_result failed status-reset
         fi
     fi
 fi
 
-# 3. If absent, add to project. Retry resolve_item_id on failure for concurrent-add race.
+# _ebc_item_add — one item-add; sets new_id, and ADD_GONE=1 when gh says the board no longer exists.
+_ebc_item_add() {
+    local err_file rc=0
+    ADD_GONE=0
+    err_file="$(mktemp)"
+    new_id=$(gh project item-add "$PROJECT_NUM" --owner "$OWNER" --url "$URL" \
+        --format json --jq '.id' 2>"$err_file") || rc=$?
+    if [[ "$rc" -ne 0 ]] && grep -qE 'Could not resolve to a ProjectV2|ProjectV2.*closed' "$err_file"; then
+        ADD_GONE=1
+    fi
+    rm -f "$err_file"
+    new_id=$(printf '%s' "$new_id" | tr -d '\r' | head -1)
+    return "$rc"
+}
+
+# 3. If absent, add to project. A board that is gone is re-resolved once (not the internal board, which
+#    has no cache row); any other failure re-reads the card in case of a concurrent-add race.
 if [[ -z "$item_id" ]]; then
-    if new_id=$(gh project item-add "$PROJECT_NUM" --owner "$OWNER" --url "$URL" \
-            --format json --jq '.id' 2>/dev/null); then
-        new_id=$(printf '%s' "$new_id" | tr -d '\r' | head -1)
-        if [[ -n "$new_id" ]]; then
-            item_id="$new_id"
-        else
-            # item-add succeeded but returned empty id — re-resolve.
-            item_id=$(resolve_item_id "$N") || item_id=""
+    CARD_STATE="added"
+    added=0
+    if _ebc_item_add; then
+        added=1
+    elif [[ "$ADD_GONE" -eq 1 ]] && [[ -n "${RESOLVED_CACHE_KEY:-}" ]]; then
+        echo "info: ensure-board-card: board $PROJECT_ID is gone for #$N; re-resolving once" >&2
+        resolve_project_drop_cache_row "$RESOLVED_CACHE_KEY" || true
+        if _ebc_resolve --no-cache-read && _ebc_item_add; then
+            added=1
         fi
+    fi
+    if [[ "$added" -eq 1 ]] && [[ -n "$new_id" ]]; then
+        item_id="$new_id"
     else
-        # item-add failed — retry resolve in case of concurrent-add race.
         item_id=$(resolve_item_id "$N") || item_id=""
     fi
     if [[ -z "$item_id" ]]; then
         echo "warn: ensure-board-card: item-add and refetch both empty for #$N — skipping (exit 0)" >&2
-        exit 0
+        _ebc_result failed item-add
     fi
 fi
 
-# 4. Content Date — only attempt when the resolver found a Content Date field
-#    in this project. Some projects intentionally lack the field; that is not
-#    an error.
+# 4. Content Date — only when the resolver found a Content Date field (some projects lack it by design).
 if [[ -n "$FIELD_ID" ]]; then
     if ! CREATED_DATE=$(gh issue view "$N" ${REPO_ARG:+--repo "$REPO_ARG"} --json createdAt --jq '.createdAt[:10]' 2>/dev/null); then
         echo "warn: ensure-board-card: gh issue view createdAt failed for #$N — Content Date not set (exit 0)" >&2
-        exit 0
+        _ebc_result "$CARD_STATE" content-date-failed
     fi
     CREATED_DATE=$(printf '%s' "$CREATED_DATE" | tr -d '\r' | head -1)
     if [[ -z "$CREATED_DATE" ]]; then
         echo "warn: ensure-board-card: empty createdAt for #$N — Content Date not set (exit 0)" >&2
-        exit 0
+        _ebc_result "$CARD_STATE" content-date-failed
     fi
 
     # 5. Set Content Date.
     if ! gh project item-edit --id "$item_id" --field-id "$FIELD_ID" \
             --project-id "$PROJECT_ID" --date "$CREATED_DATE" >/dev/null 2>&1; then
         echo "warn: ensure-board-card: Content Date set failed for #$N (exit 0)" >&2
-        exit 0
+        _ebc_result "$CARD_STATE" content-date-failed
     fi
 fi
 
-exit 0
+_ebc_result "$CARD_STATE" "$CARD_STATE"

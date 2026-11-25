@@ -38,19 +38,19 @@ To close an issue as `status:migrated` or `status:cancelled` (uses `--reason "no
 
 ### Backfill Projects v2 board cards (catch-up) — *Migration (catch-up)*
 
-For sessions that pre-date #548 where related issues never received a
-Projects v2 board card / Content Date, backfill them:
+Open issues with no card (or Content Date) on the repo's resolved board — list, then backfill them:
 
 ```bash
+bash bin/github-issues/migration/backfill-board-cards.sh --list-missing > missing.txt && bash bin/github-issues/migration/backfill-board-cards.sh --from-file missing.txt
+# or by number, or --from-file <path> (one #N per line; blank/# lines skipped):
 bash bin/github-issues/migration/backfill-board-cards.sh <N1> <N2> ...
-# or, with a file (one #N per line; blank/# lines skipped):
-bash bin/github-issues/migration/backfill-board-cards.sh --from-file related-issues.txt
-# or, via stdin:
-echo -e "123\n456\n789" | bash bin/github-issues/migration/backfill-board-cards.sh
 ```
 
-Safe to re-run — `ensure-board-card.sh` is idempotent (no-op when the card
-and Content Date are already present).
+Each issue prints `[backfill] OK|SKIP #N`, or `[backfill] FAIL #N (<reason>)` on stderr, from
+`ensure-board-card.sh`'s `BOARD_CARD=` line; any FAIL exits 1. `--list-missing` reports on stderr
+as `unknown` an issue with more than 20 project items — add those by hand. Board not resolved
+(`no-link` / `ambiguous`): fix the link first (docs/architecture/wip-signaling.md §6).
+Safe to re-run — an issue already on the board reads `existing`.
 
 ### Recover from out-of-band closes — *Operations / Migration (catch-up)*
 

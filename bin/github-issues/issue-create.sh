@@ -242,12 +242,13 @@ fi
 
 ISSUE_NUM=$(printf '%s' "$URL" | grep -oE '[0-9]+$')
 # The resolved config reaches ensure-board-card.sh through _ISSUE_CREATE_INTERNAL_*; no resolve, no attach.
+# Its stdout (the BOARD_CARD= line) goes to stderr: the URL must stay the last stdout line.
 if [ "$RESOLVER_OK" -eq 1 ]; then
     if ! _ISSUE_CREATE_INTERNAL_OWNER="$RESOLVED_OWNER" \
          _ISSUE_CREATE_INTERNAL_PROJECT_NUM="$RESOLVED_PROJECT_NUM" \
          _ISSUE_CREATE_INTERNAL_PROJECT_ID="$RESOLVED_PROJECT_ID" \
          _ISSUE_CREATE_INTERNAL_FIELD_ID="$RESOLVED_CONTENT_DATE_FIELD_ID" \
-         bash "$(cd "$(dirname "$0")" && pwd)/ensure-board-card.sh" "$ISSUE_NUM"; then
+         bash "$(cd "$(dirname "$0")" && pwd)/ensure-board-card.sh" "$ISSUE_NUM" 1>&2; then
         echo "warn: ensure-board-card.sh failed for #$ISSUE_NUM (continuing)" >&2
     fi
 else
