@@ -188,7 +188,7 @@ function lastFetchWasFastForward(repoRoot, ref) {
   } catch { return false; }
 }
 
-const MID_OP_SUBCOMMANDS =new Set(["merge", "rebase", "cherry-pick", "revert"]);
+const MID_OP_SUBCOMMANDS = new Set(["merge", "rebase", "cherry-pick", "revert"]);
 const MID_OP_ACTIONS = new Set(["--abort", "--continue", "--skip"]);
 
 /**
