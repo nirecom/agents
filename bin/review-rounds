@@ -52,7 +52,7 @@ function pmReviewAppend(o) {
   if (o.request === true) {
     const j = W.judgeRequestWrite({ callerSid: caller, targetSid: o.session, pmSid: o["pm-sid"], pr: o.pr === undefined ? "" : o.pr });
     if (!j.ok) refused(/^cap-reached/.test(j.reason) ? EXIT_PM_REVIEW_CAP : 2, j.reason);
-    const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: process.cwd(), encoding: "utf8", timeout: 10000 });
+    const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: process.cwd(), encoding: "utf8", timeout: 10000, windowsHide: true });
     const fp = head.status === 0 ? String(head.stdout).trim() : "";
     if (!W.FP_RE.test(fp)) refused(2, "the HEAD SHA of the current directory cannot be read");
     const row = store.appendRow(Object.assign(rowBase, {

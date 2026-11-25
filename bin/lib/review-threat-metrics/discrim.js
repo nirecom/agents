@@ -15,7 +15,7 @@ let latin1Fold = null;
 function foldsLatin1() {
   if (latin1Fold === null) {
     const r = spawnSync("bash", ["-c", "LC_ALL=C; x=$(printf '\\303'); y=${x,,}; [ \"$x\" = \"$y\" ] && echo ascii || echo latin1"],
-      { encoding: "utf8" });
+      { encoding: "utf8", windowsHide: true });
     latin1Fold = r.status === 0 && String(r.stdout).trim() === "latin1";
   }
   return latin1Fold;

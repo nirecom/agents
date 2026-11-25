@@ -121,15 +121,34 @@ function withEnv(e, fn) {
   }
 }
 
-// which(tool, env) — the tool's path on env's PATH (tool, .exe or .cmd), or null.
-function which(tool, e = env()) {
+const REAL_FS = { platform: undefined, lstat: (p) => fs.lstatSync(p), readlink: (p) => fs.readlinkSync(p), stat: (p) => fs.statSync(p) };
+
+// resolveAlias(abs, deps) — a Store App Execution Alias (win32 symlink into a WindowsApps directory)
+// becomes its versioned real exe, since spawning the alias ignores windowsHide (#3149). Any other
+// path, or any failure to resolve, returns abs unchanged.
+function resolveAlias(abs, deps) {
+  try {
+    if (deps.platform !== "win32" || !deps.lstat(abs).isSymbolicLink()) return abs;
+    const target = String(deps.readlink(abs));
+    if (!path.win32.isAbsolute(target)) return abs;
+    if (!target.split(/[\\/]/).some((el) => el.toLowerCase() === "windowsapps")) return abs;
+    return deps.stat(target).isFile() ? target : abs;
+  } catch {
+    return abs;
+  }
+}
+
+// which(tool, env, deps) — the tool's path on env's PATH (tool, .exe or .cmd), or null; an App
+// Execution Alias is returned as its real exe. deps (platform, lstat, readlink, stat) is for tests.
+function which(tool, e = env(), deps = {}) {
+  const d = { ...REAL_FS, ...deps, platform: deps.platform || process.platform };
   const dirs = String((e || {})[pathKey(e)] || "").split(path.delimiter).filter(Boolean);
-  const names = process.platform === "win32" ? [`${tool}.exe`, `${tool}.cmd`, tool] : [tool];
+  const names = d.platform === "win32" ? [`${tool}.exe`, `${tool}.cmd`, tool] : [tool];
   for (const dir of dirs) {
     for (const n of names) {
       const abs = path.join(dir, n);
       try {
-        if (fs.statSync(abs).isFile()) return abs;
+        if (d.stat(abs).isFile()) return resolveAlias(abs, d);
       } catch {
         // next
       }

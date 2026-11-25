@@ -1,5 +1,5 @@
 "use strict";
-// Tests: bin/workflow/lib/workflow-init/spawn-env.js
+// Tests: bin/workflow/lib/workflow-init/spawn-env.js, bin/codegraph-lifecycle/process-identity.js
 // Tags: TL1, scope:issue-specific, windows, spawn, hooks
 // #3127 spawn-env builders return windowsHide: true, and every child_process call under hooks/** and bin/**
 // (scan: tests/lib/windows-hide-scan.js) guarantees it or is counted in ALLOWLIST. detect-issues.js:24 (node) is
@@ -29,7 +29,6 @@ const CALLERS = [
 ];
 // Reviewed exits: file-level counts, no line numbers (they move on every edit).
 const ALLOWLIST = [
-  { file: "bin/codegraph-lifecycle/process-identity.js", count: 1, reason: "cmd is a variable; the symptom belongs to #2456" },
   { file: "bin/lib/test-wrappers/node.js", count: 1, reason: "foreground CLI with stdio: inherit" },
   { file: "bin/vscode-cc-repair/patch/apply.js", count: 2, reason: "repair CLI run by hand" },
   { file: "bin/run-eslint.d/provision.js", count: 2, reason: "CLI run by hand" },
@@ -146,6 +145,16 @@ test("every child_process call under hooks/** and bin/** guarantees windowsHide:
   const { violations, stale } = scan.applyAllowlist(scan.scanTree(ROOT), ALLOWLIST);
   const lines = [...violations.map(scan.formatViolation), ...stale];
   assert.strictEqual(lines.length, 0, `${lines.length} windowsHide violation(s):\n${lines.join("\n")}\n${FIX}`);
+});
+caseEnd();
+
+caseBegin("process-identity-windowshide", "bin/codegraph-lifecycle/process-identity.js");
+test("#3149 process-identity.js: its spawnSync carries windowsHide: true, with no ALLOWLIST entry", () => {
+  const rel = "bin/codegraph-lifecycle/process-identity.js";
+  const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
+  assert.ok(/\bspawnSync\(/.test(src), rel + ": no spawnSync call found");
+  assert.deepStrictEqual(scan.scanSource(rel, src).map(scan.formatViolation), [], rel);
+  assert.ok(!ALLOWLIST.some((a) => a.file === rel), "ALLOWLIST still exempts " + rel);
 });
 caseEnd();
 

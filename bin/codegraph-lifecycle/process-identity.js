@@ -185,7 +185,7 @@ function readCommandLineString(pid) {
     }
     : { command: "ps", args: ["-ww", "-o", "args=", "-p", id] };
 
-  const result = spawnSync(query.command, query.args, { encoding: "utf8", timeout: QUERY_TIMEOUT_MS });
+  const result = spawnSync(query.command, query.args, { encoding: "utf8", timeout: QUERY_TIMEOUT_MS, windowsHide: true });
   if (result.error || result.status !== 0) return null;
   const text = String(result.stdout || "").trim();
   return text.length > 0 ? text : null;

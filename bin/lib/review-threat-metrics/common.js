@@ -75,7 +75,7 @@ function boundaryAt() {
     if (!Number.isNaN(t)) return t;
   }
   const r = spawnSync("git", ["-C", ROOT, "log", "--reverse", "--format=%cI", "-S## Threat boundary", "--", CRITERIA_REL],
-    { encoding: "utf8" });
+    { encoding: "utf8", windowsHide: true });
   const first = r.status === 0 ? (r.stdout || "").split(/\r?\n/).find(Boolean) : "";
   const t = first ? Date.parse(first) : NaN;
   return Number.isNaN(t) ? null : t;
@@ -221,7 +221,7 @@ function criteriaHash() {
   const fwd = (p) => p.replace(/\\/g, "/");
   try {
     spawnSync("bash", [fwd(path.join(ROOT, "bin", "review-criteria-block"))],
-      { env: { ...process.env, REVIEW_CRITERIA_HASH_OUT: fwd(out) }, stdio: "ignore" });
+      { env: { ...process.env, REVIEW_CRITERIA_HASH_OUT: fwd(out) }, stdio: "ignore", windowsHide: true });
     const h = readLines(out)[0] || "";
     return /^[0-9a-f]{12}$/.test(h) ? h : "unknown";
   } finally {
