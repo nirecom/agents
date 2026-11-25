@@ -316,3 +316,7 @@ Changes: Hardened the in-repo worktree base check: a symlinked or junctioned `.c
 ### FEATURE: PR #3148 (2026-11-24)
 Background: feat(#2020): declare the threat-model boundary to codex reviews and measure its effect
 Changes: Security reviews now follow an explicit threat boundary: threats outside it, or with no input path, are reported as `[NOT-CONCERN]` markers rather than blocking concerns. New `bin/review-threat-metrics` compares review results before and after each boundary version.
+
+### FEATURE: PR #3153 (2026-11-25)
+Background: feat(#3144): route the plan-stage pre-confirm audit to the assigned PM
+Changes: Plan-stage pre-confirm audit and the pre-release review are routed to the assigned PM, with a user choice when the PM does not answer (#3144, #2991).
