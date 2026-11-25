@@ -320,3 +320,7 @@ Changes: Security reviews now follow an explicit threat boundary: threats outsid
 ### FEATURE: PR #3153 (2026-11-25)
 Background: feat(#3144): route the plan-stage pre-confirm audit to the assigned PM
 Changes: Plan-stage pre-confirm audit and the pre-release review are routed to the assigned PM, with a user choice when the PM does not answer (#3144, #2991).
+
+### FEATURE: PR #3154 (2026-11-25)
+Background: fix(#3151): refuse the diverged-main merge shortcut when the remote h...
+Changes: Recovery of a diverged main worktree now refuses the merge shortcut when the remote history was force-updated, and points to rebase --onto instead.
