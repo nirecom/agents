@@ -15,7 +15,7 @@ Before presenting any command for the user to run, work through this checklist i
 
 `rules/ops.md` is on-demand-only and never auto-injected: Read it every time a row here, a rule below, or the precedence table points at it.
 
-**Diverged main worktree:** `git merge --no-edit origin/<branch>` is sanctioned — Claude executes it directly (Rule 1); `git rebase` and `git reset --hard origin/<branch>` take the `rules/ops.md` decision path first. SSOT: `rules/ops.md` "Diverged Main Worktree Recovery".
+**Diverged main worktree:** follow `rules/ops.md` "Diverged Main Worktree Recovery"; Rule 1 autonomy covers only the commands it marks sanctioned.
 
 ## Rule 1 — Autonomy-First
 

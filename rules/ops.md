@@ -23,7 +23,15 @@ this automatically — see the hook source for the exact command set per categor
 
 ## Diverged Main Worktree Recovery
 
-When the main worktree branch has diverged from its remote (ahead AND behind), pick in this order:
+When the main worktree branch has diverged from its remote (ahead AND behind), first run `git merge-base --is-ancestor origin/<branch>@{1} origin/<branch>`.
+
+Exception — the check fails or cannot resolve `@{1}` (reflog missing): treat the remote history as rewritten and never merge (merge re-introduces the old history).
+- First choice: `git rebase --onto origin/<branch> origin/<branch>@{1} <branch>` — replays only the commits made on top of the pre-rewrite remote position; **user escalation required** (`rules/user-escalation.md`). Reflog missing: ask the user for the pre-rewrite remote commit and use it as `<old>` in place of `origin/<branch>@{1}`; with none, stop and report.
+- `git reset --hard origin/<branch>` only when no local commit exists; **user escalation required** (pre-flight below).
+- Show `git cherry` / `git range-diff` to the user as supporting information only; their patch-id match misses a rewrite that changes trees.
+- `hooks/enforce-worktree/main-worktree-allows/standard.js` runs the same check and asks instead of allowing the merge.
+
+When the check succeeds, pick in this order:
 
 1. `git merge --no-edit origin/<branch>` — **sanctioned** (allowlisted): non-destructive, preserves local commits as a merge commit; Claude runs it directly.
 2. `git rebase origin/<branch>` — **user escalation required** (`rules/user-escalation.md`): rewrites local history; safe only when no other device holds the same local commits.
