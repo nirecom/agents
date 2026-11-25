@@ -237,6 +237,8 @@
       "Bash(echo \"<<WORKFLOW_PM_REVIEW_ACCEPTED: *>>\")",
       "Bash(echo \"<<WORKFLOW_THIS_PR_FINDING_ACCEPTED: *>>\")",
       "Bash(uv run bin/doc-rotate.py *)",
+      "Bash(node *bin/plan-sync-scan-skip*)",
+      "Bash(node *\\bin\\plan-sync-scan-skip*)",
       "Bash(*aws * create*)",
       "Bash(*aws * put*)",
       "Bash(*aws * update*)",

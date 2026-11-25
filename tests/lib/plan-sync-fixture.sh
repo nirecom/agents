@@ -46,6 +46,11 @@ psf_setup() {
   export AGENTS_MAIN_ROOT="$PSF_ROOT/cfg"
   export CLAUDE_TRANSCRIPT_BASE_DIR="$PSF_ROOT/transcripts"
   export PLAN_SYNC_REMOTE_URL=""
+  # #3150: a hook run as a child process (psf_hook, node "$SPL") gets no deps.scanEntry, so its scan gate
+  # would read the developer's real blocklist. The preload redirects that launch to a synthetic-list copy
+  # built on first use under $PSF_ROOT (see tests/lib/plan-sync-scan-preload.js).
+  export PS_SCAN_BOX="$PSF_ROOT/scan-box"
+  export NODE_OPTIONS="--require \"$(psf_np "$PSF_AGENTS_DIR/tests/lib/plan-sync-scan-preload.js")\""
   # Host verdicts never inherit the developer's GitLab settings or project dir.
   unset GITLAB_HOSTNAME GITLAB_SSH_HOSTNAME CLAUDE_PROJECT_DIR PLAN_SYNC_INIT_ASSUME_TTY 2>/dev/null || true
   export PSF_LIB_PATH; PSF_LIB_PATH="$(psf_np "$PSF_LIB")"
@@ -96,8 +101,24 @@ let ps;
 try { ps = require(process.env.PSF_LIB_PATH); }
 catch (e) { console.log('NOT_IMPLEMENTED: ' + (e.code || e.message)); process.exit(3); }
 const fs = require('fs'); const path = require('path');
-const allowLocal = { isAllowedRemoteUrl: (u) => ps.isAllowedRemoteUrl(u) || path.isAbsolute(u) };
+const allowLocal = { isAllowedRemoteUrl: (u) => ps.isAllowedRemoteUrl(u) || path.isAbsolute(u),
+  ...(process.env.PSF_SCAN_ENTRY ? { scanEntry: process.env.PSF_SCAN_ENTRY } : {}) };
 $js" "$@"
+}
+
+# psf_scan_sandbox <dir> <blocklist-text|-> — a scan-outbound copy outside any git repo, so its
+# list anchor is <dir> and it reads only the synthetic list written here ("-" = no blocklist,
+# the scanner's rc 4). Prints the entry path for deps.scanEntry / PSF_SCAN_ENTRY (#3150).
+psf_scan_sandbox() {
+  local d="$1" rel
+  for rel in bin/scan-outbound.sh bin/scan-outbound.d bin/lib hooks/lib; do
+    [ -e "$PSF_AGENTS_DIR/$rel" ] || continue
+    mkdir -p "$d/${rel%/*}" || return 1
+    cp -R "$PSF_AGENTS_DIR/$rel" "$d/$rel" || return 1
+  done
+  rm -f "$d/.private-info-blocklist" "$d/.private-info-allowlist"
+  [ "$2" = "-" ] || printf '%s\n' "$2" > "$d/.private-info-blocklist"
+  psf_np "$d/bin/scan-outbound.sh"
 }
 
 psf_make_bare() {

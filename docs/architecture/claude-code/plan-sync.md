@@ -145,6 +145,19 @@ reason, with a hint to run `bin/plan-sync-init`.
   trusted only after that attempt fetched the tip, so a stale `origin/main` cannot hide a
   revision that never reached the remote. Remote files are only ever added or
   overwritten, never deleted.
+- **Push-before-scan (#3150).** The push goes out over a plain `git push`, so the commit-time
+  outbound scan never sees it. Before each push, plan-sync runs `bin/scan-outbound.sh
+  --manifest` once over the plan and every carried local entry, with the file boundaries in
+  the stdin. A finding stops the push with `scan-blocked`; a scanner that cannot finish gives
+  `scan-unavailable`, and one that runs past the shared budget gives `scan-timeout`. Nothing
+  is pushed in any of these cases, and the breadcrumb shows `rel:line [kind]` per finding,
+  never the matched text. `scan-blocked` is cleared by fixing the lines or adding a pattern
+  to `.private-info-allowlist`. For the other two reasons the user can approve one push
+  without the scan with `bin/plan-sync-scan-skip <plan> --reason <text>` (an `ask` row in
+  `settings.json`). The approval is stored in the plans repo's git config, binds to the
+  plan's content (blob), and is spent by the first push that uses it. It covers only that
+  plan: carried entries go unscanned in that push, an accepted tradeoff of a one-shot,
+  user-approved exit.
 - **One commit per turn.** Within one user prompt, plan-sync replaces its own commit of that
   prompt with a force-with-lease push instead of stacking another one; a remote that refuses the
   forced update gets an append and a turn-diff link instead. Turn ids, trailers, the replacement
@@ -184,7 +197,7 @@ reason, with a hint to run `bin/plan-sync-init`.
 
 Code: `hooks/lib/plan-sync.js` (dispatch) and `hooks/lib/plan-sync/{remote-url,
 allowlist,provision,git,commit-push,local-file,project-host,init-interactive,turn-trailer,
-turn-commit,lease-push,remote-state}.js`; link resolution `hooks/lib/plan-link.js`.
+turn-commit,lease-push,remote-state,scan-gate}.js`; breadcrumb `hooks/show-plan-link/scan-breadcrumb.js`; link resolution `hooks/lib/plan-link.js`.
 
 ## Visibility policy
 

@@ -68,8 +68,30 @@ function recordAuthBackoff(plansDir, pushUrl, until) {
 }
 
 // clearRemoteState(plansDir) — key by key: remove-section would also drop plansync.version.
+// The scan-skip approval is a user decision, not a learned fact, so it survives a clear.
 function clearRemoteState(plansDir) {
   for (const k of [KEYS.url, KEYS.force, KEYS.until]) unsetKey(plansDir, k);
 }
 
-module.exports = { AUTH_BACKOFF_MS, readRemoteState, recordForceRejected, recordAuthBackoff, clearRemoteState };
+const SKIP_KEYS = Object.freeze({ blob: "plansync.scanSkipBlob", reason: "plansync.scanSkipReason" });
+
+// recordScanSkip(plansDir, blob, reason) -> boolean stored; a new approval replaces the old.
+// Unlike the facts above, the result is reported: the CLI must not claim an approval it did not store.
+function recordScanSkip(plansDir, blob, reason) {
+  const set = (key, value) => G.runGit(plansDir, ["config", "--local", "--replace-all", key, String(value)]).status === 0;
+  return set(SKIP_KEYS.blob, blob) && set(SKIP_KEYS.reason, reason);
+}
+
+// takeScanSkip(plansDir, blob) -> true when the stored approval is for blob; it is consumed then.
+function takeScanSkip(plansDir, blob) {
+  const stored = readAll(plansDir)[SKIP_KEYS.blob.toLowerCase()];
+  if (typeof blob !== "string" || !blob || stored !== blob) return false;
+  unsetKey(plansDir, SKIP_KEYS.blob);
+  unsetKey(plansDir, SKIP_KEYS.reason);
+  return true;
+}
+
+module.exports = {
+  AUTH_BACKOFF_MS, readRemoteState, recordForceRejected, recordAuthBackoff, clearRemoteState,
+  recordScanSkip, takeScanSkip,
+};

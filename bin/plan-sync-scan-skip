@@ -1,0 +1,55 @@
+#!/usr/bin/env node
+// bin/plan-sync-scan-skip <abs plan path> --reason <text>
+// Approves one plan-sync push of this exact plan content without the outbound scan, for when
+// the scan cannot run (scan-unavailable / scan-timeout breadcrumb). The approval is bound to the
+// plan's blob id, kept in the plans repo's local git config, and consumed by the next push;
+// an edit to the plan voids it. A scan-blocked plan is never let through by it.
+// The permission dialog (settings.json ask) is the human check of every run.
+// Exit: 0 recorded; 1 refused (not a sync target, not a regular file, reason missing or < 3 chars).
+"use strict";
+const path = require("path");
+
+const LIB = path.join(__dirname, "..", "hooks", "lib");
+const { getWorkflowPlansDir } = require(path.join(LIB, "workflow-plans-dir.js"));
+const { isSyncTarget } = require(path.join(LIB, "plan-sync", "allowlist.js"));
+const { readVerifiedRegularFile } = require(path.join(LIB, "plan-sync", "local-file.js"));
+const G = require(path.join(LIB, "plan-sync", "git.js"));
+const RS = require(path.join(LIB, "plan-sync", "remote-state.js"));
+
+const MIN_REASON = 3;
+
+function die(msg) {
+  process.stderr.write(`plan-sync-scan-skip: ${msg}\n`);
+  process.exit(1);
+}
+
+function parseArgs(argv) {
+  const out = { plan: undefined, reason: undefined };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--reason") {
+      if (i + 1 >= argv.length) die("--reason needs a value");
+      if (out.reason !== undefined) die("--reason given more than once");
+      out.reason = argv[++i];
+    } else if (a.startsWith("--") || out.plan !== undefined) {
+      die(`unknown argument: ${a}`);
+    } else {
+      out.plan = a;
+    }
+  }
+  if (out.plan === undefined) die("usage: plan-sync-scan-skip <abs plan path> --reason <text>");
+  if (out.reason === undefined) die("--reason <text> is required");
+  if (out.reason.trim().length < MIN_REASON) die(`--reason needs at least ${MIN_REASON} characters`);
+  return out;
+}
+
+const args = parseArgs(process.argv.slice(2));
+const plansDir = getWorkflowPlansDir();
+const absPath = path.resolve(args.plan);
+if (!isSyncTarget(plansDir, absPath)) die("not a plan-sync target in the plans dir");
+const bytes = readVerifiedRegularFile(absPath);
+if (!bytes) die("not a regular file");
+const blob = G.hashBytes(plansDir, bytes);
+if (!blob) die("cannot hash the plan");
+if (!RS.recordScanSkip(plansDir, blob, args.reason.trim())) die("cannot record the approval");
+process.stdout.write(`plan-sync-scan-skip: blob ${blob.slice(0, 8)} of ${path.basename(absPath)} skips the outbound scan once, only when the scanner cannot run; carried plans go unscanned then\n`);

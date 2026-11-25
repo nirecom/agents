@@ -14,6 +14,7 @@ const { formatTurnMessage } = require("./turn-trailer");
 const { turnBaseOf, turnStartOf, turnRange } = require("./turn-commit");
 const { pushMainWithLease, classifyLeasePush } = require("./lease-push");
 const RS = require("./remote-state");
+const { createScanGate } = require("./scan-gate");
 
 const DEFAULT_BUDGET_MS = 20000;
 
@@ -53,7 +54,7 @@ function publishOnRemoteTip(plansDir, target, deadline, pred, turnOpts) {
     throw new Error("publishOnRemoteTip: send predicate required");
   }
   const t = Object.assign({ turn: null, forceRejected: false, remoteRejected: false }, turnOpts);
-  const done = (r) => Object.assign(r, { remoteRejected: t.remoteRejected });
+  const done = (r) => Object.assign(r, { remoteRejected: t.remoteRejected, scanSkipped: Boolean(t.scanSkipped) });
   let last = { status: 1, stderr: "cas-conflict", timedOut: false };
   let maxAttempts = MAX_ATTEMPTS;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -67,6 +68,11 @@ function publishOnRemoteTip(plansDir, target, deadline, pred, turnOpts) {
     }
     const L = G.revParse(plansDir, G.MAIN_REF, { deadline });
     const carried = pred.keepCarried(G.carriedEntries(plansDir, R, L, pred.isSendable, { deadline }));
+    if (t.scan) {
+      const g = t.scan(carried);
+      if (!g.ok) return done({ push: { status: 1, stderr: "scan-gate", timedOut: false }, commit: null, scan: g });
+      if (g.scanSkipped) t.scanSkipped = true;
+    }
     const entries = G.mergeEntries([target], carried);
     const plan = commitPlan(plansDir, R, target, t, deadline);
     const c = G.overlayCommit(plansDir, R, entries, { deadline, parent: plan.parent, message: plan.message });
@@ -139,7 +145,8 @@ function turnLinksFor(plansDir, target, commit, turn, deadline) {
 const VALID_TURN = (t) => Boolean(t && typeof t.sid === "string" && t.sid && typeof t.turnId === "string" && /^[0-9a-f]{32}$/.test(t.turnId));
 
 // syncPlanFile(plansDir, absPath, {budgetMs, deps, turn, now}) ->
-//   {status: "pushed"|"off"|"not-provisioned"|"skipped"|"failed", url?, reason?, turnLinks?}
+//   {status: "pushed"|"off"|"not-provisioned"|"skipped"|"failed", url?, reason?, turnLinks?, findings?, scanSkipped?}
+// Every push is gated by the outbound scan (scan-gate.js); a scan-* failure carries findings.
 // turn {sid, turnId} folds the writes of one user prompt into one commit (turn-commit.js).
 function syncPlanFile(plansDir, absPath, opts) {
   const o = opts || {};
@@ -169,10 +176,12 @@ function syncPlanFile(plansDir, absPath, opts) {
   const blob = G.hashBytes(plansDir, bytes, { deadline });
   if (!blob) return failed("hash-failed");
   const target = { rel, blob };
+  const gate = createScanGate(plansDir, { rel, bytes, blob }, { deadline, deps: o.deps });
 
   const pub = publishOnRemoteTip(plansDir, target, deadline, sendPredicate(plansDir, cp.pushUrl),
-    { turn, forceRejected: state.forceRejected });
+    { turn, forceRejected: state.forceRejected, scan: gate.check });
   const { push, commit } = pub;
+  if (pub.scan) return { status: "failed", reason: pub.scan.reason, findings: pub.scan.findings || [] };
   if (pub.reason) return failed(pub.reason, push.stderr);
   if (push.status !== 0 || !commit) {
     const reason = push.stderr === "cas-conflict" ? "cas-conflict" : G.classifyFailure(push);
@@ -191,8 +200,10 @@ function syncPlanFile(plansDir, absPath, opts) {
   const forge = remoteUrl.resolveRemoteTarget(cp.pushUrl);
   let result;
   if (url) result = { status: "pushed", url };
-  else if (forge.type === "unknown") return { status: "pushed", reason: "unknown-forge" };
+  else if (forge.type === "unknown") result = { status: "pushed", reason: "unknown-forge" };
   else return failed("verify-failed", "origin/main does not hold the written content");
+  if (pub.scanSkipped) result.scanSkipped = true;
+  if (!url) return result;
   if (forceRejected && turn) {
     const links = turnLinksFor(plansDir, forge, commit, turn, deadline);
     if (links) result.turnLinks = links;
