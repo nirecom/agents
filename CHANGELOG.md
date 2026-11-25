@@ -344,3 +344,7 @@ Changes: The outbound scan now catches absolute user-profile paths such as `C:\U
 ### FEATURE: PR #3164 (2026-11-25)
 Background: fix(#3149): resolve the Store pwsh App Execution Alias so windowsHide...
 Changes: Fixed a console window flashing when the test gates launched a Microsoft Store PowerShell through its App Execution Alias on Windows.
+
+### FEATURE: PR #3167 (2026-11-26)
+Background: fix(#3152): keep /pm-add and the other PM commands inside the hook time budget
+Changes: Fixed: `/pm-add` and the other PM commands are no longer rejected with a timeout when several issues are checked at once; the forge check is one batched request within a shared time budget, and a refusal says which kind of failure it was and what to do next.
