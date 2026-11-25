@@ -340,3 +340,7 @@ Changes: A PR can no longer be created while a this-pr finding is unfixed; `/iss
 ### FEATURE: PR #3160 (2026-11-25)
 Background: fix(#3150): match user-profile paths case-insensitively for every sep...
 Changes: The outbound scan now catches absolute user-profile paths such as `C:\Users\<name>` regardless of letter case or separator style (`\`, `/`, yen sign, msys form).;plan-sync scans a plan before pushing it, and a plan holding private information is no longer pushed. If the scanner cannot run, `bin/plan-sync-scan-skip` approves one push.
+
+### FEATURE: PR #3164 (2026-11-25)
+Background: fix(#3149): resolve the Store pwsh App Execution Alias so windowsHide...
+Changes: Fixed a console window flashing when the test gates launched a Microsoft Store PowerShell through its App Execution Alias on Windows.
