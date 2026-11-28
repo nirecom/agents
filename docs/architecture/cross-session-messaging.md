@@ -188,7 +188,7 @@ plan-stage confirmation and the PR before `USER_VERIFIED`, in place of the super
   fingerprint); the PM answers with one row per round (`source=pm`, `OK` / `NOT_OK`, `--high`
   turning a capped `NOT_OK` into the one `AUTO_EXTEND`). Rounds stop at the cap of 2 plus one
   extension; a refused request row goes to the user.
-- The user's `WORKFLOW_PM_REVIEW_ACCEPTED: PR#<n>` (ask-gated) writes a `source=user` row, or
+- The user's `WORKFLOW_CONVENTIONAL_AUDIT_CHOSEN: PR#<n>` (ask-gated) writes a `source=user` row, or
   `user-pr-unconfirmed` when the forge does not answer and the last request named that PR; the
   TR5 audit then runs as before.
 - `hooks/workflow-gate/user-verified-pm-review.js` passes `USER_VERIFIED` only on the PM's `OK`

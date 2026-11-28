@@ -14,7 +14,7 @@ const scan = require(path.join(HOOKS, "pm-session", "scan"));
 const W = require(path.join(HOOKS, "pm-session", "writer-common"));
 const { parseIssueToken, parseIssueFlagValue } = require(path.join(HOOKS, "lib", "parse-closes-issues"));
 const links = require("../forge-issue-links");
-const { resolveOwner } = require("../pm-state/owner");
+const { resolveOwnersBatch } = require("../pm-state/owner");
 
 const OWNER_TIMEOUT_MS = 2000;
 const OPEN_RESULTS = ["pending", "undelivered", "sending"];
@@ -72,32 +72,51 @@ function refOfIssue(issue) {
 const issueOf = (ref) => `${ref.repo}#${ref.number}`;
 const keyOf = (ref) => links.refKey(ref.repo, ref.number);
 
-// ownerOf(ref, timeoutMs?, entries?, {spawnSync?}?) -> resolveOwner's answer; a throw is an undecidable answer.
-function ownerOf(ref, timeoutMs, entries, opts) {
+// ownersOf(refs, timeoutMs?, entries?, {spawnSync?}?) -> resolveOwnersBatch's answer: {ok:true, answers} from one
+// batched lookup, or {ok:false, reason} when it failed as a whole; a throw is the whole failure owner-error.
+function ownersOf(refs, timeoutMs, entries, opts) {
   const spawnSync = opts && typeof opts.spawnSync === "function" ? opts.spawnSync : undefined;
   try {
-    return resolveOwner(ref, { scan, entries: entries || scan.listPmFiles(), timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : OWNER_TIMEOUT_MS, spawnSync });
-  } catch (e) {
-    return { ok: false, reason: `owner-error: ${e.message}` };
+    return resolveOwnersBatch(refs, { scan, entries: entries || scan.listPmFiles(), timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : OWNER_TIMEOUT_MS, spawnSync });
+  } catch {
+    return { ok: false, reason: "owner-error" };
   }
 }
 
-// decidedOwnerOf(ref, timeoutMs?, entries?, opts?) -> ownerOf's answer, except that a null owner it cannot trust is
-// undecidable {ok:false, reason} (#3135): the board has no pm field (fieldAbsent), or a local active PM state
-// holds the issue or an ancestor while the field is empty. Every verb that discards on no-owner uses this gate.
-function decidedOwnerOf(ref, timeoutMs, entries, opts) {
-  const es = entries || scan.listPmFiles();
-  const r = module.exports.ownerOf(ref, timeoutMs, es, opts); // via exports: callers stub ownerOf there
+// ownerOf(ref, timeoutMs?, entries?, opts?) -> the one-ref ownersOf: its answer, or the whole failure {ok:false, reason}.
+function ownerOf(ref, timeoutMs, entries, opts) {
+  const b = module.exports.ownersOf([ref], timeoutMs, entries, opts);
+  return b && b.ok ? b.answers[0] : { ok: false, reason: (b && b.reason) || "no answer" };
+}
+
+// trustOf(ref, r, entries) -> r, except that a null owner it cannot trust is undecidable {ok:false, reason} (#3135):
+// the board has no pm field (fieldAbsent), or a local active PM state holds the issue or an ancestor while the
+// field is empty. Every verb that discards on no-owner reaches this gate through decidedOwner(s)Of.
+function trustOf(ref, r, entries) {
   if (!r || !r.ok || r.owner) return r;
   if (r.fieldAbsent) return { ok: false, reason: "pm-field-absent" };
   const chain = Array.isArray(r.chain) && r.chain.length > 0 ? r.chain : [ref];
   const tags = [];
   for (const c of chain) {
-    for (const h of scan.directHoldersOf(c, { entries: es, homeRepo: homeRepo() })) {
+    for (const h of scan.directHoldersOf(c, { entries, homeRepo: homeRepo() })) {
       if (!tags.some((t) => S.sameTag(t, h.tag))) tags.push(h.tag);
     }
   }
   return tags.length > 0 ? { ok: false, reason: `pm-field-unset-held: ${tags.join(",")}` } : r;
+}
+
+// decidedOwnersOf(refs, timeoutMs?, entries?, opts?) -> {ok:true, answers:[trustOf answer per ref]} | {ok:false, reason}.
+function decidedOwnersOf(refs, timeoutMs, entries, opts) {
+  const es = entries || scan.listPmFiles();
+  const b = module.exports.ownersOf(refs, timeoutMs, es, opts); // via exports: callers stub ownersOf there
+  if (!b || !b.ok) return { ok: false, reason: (b && b.reason) || "no answer" };
+  return { ok: true, answers: refs.map((ref, i) => trustOf(ref, b.answers[i], es)) };
+}
+
+// decidedOwnerOf(ref, timeoutMs?, entries?, opts?) -> the one-ref decidedOwnersOf, or its whole failure.
+function decidedOwnerOf(ref, timeoutMs, entries, opts) {
+  const b = decidedOwnersOf([ref], timeoutMs, entries, opts);
+  return b.ok ? b.answers[0] : { ok: false, reason: b.reason };
 }
 
 // renamedTo(tag, entries?) -> the current tag of the PM when tag is one of its retired tags, else null.
@@ -153,5 +172,5 @@ function boxEntry(note, reason) {
 
 module.exports = {
   S, W, HOOKS, scan, io, OWNER_TIMEOUT_MS, OPEN_RESULTS, Exit, fail, isObj, parseFlags, sessionOf, homeRepo, refOf, refOfIssue,
-  issueOf, keyOf, ownerOf, decidedOwnerOf, renamedTo, refuseRenamed, readNotes, updateNotes, patchNote, newNote, boxEntry,
+  issueOf, keyOf, ownersOf, ownerOf, decidedOwnersOf, decidedOwnerOf, renamedTo, refuseRenamed, readNotes, updateNotes, patchNote, newNote, boxEntry,
 };

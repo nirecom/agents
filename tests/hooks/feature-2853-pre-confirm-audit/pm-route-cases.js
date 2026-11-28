@@ -1,7 +1,8 @@
 "use strict";
 // #3144 C2 cases of ../feature-2853-pre-confirm-audit.js: the gate decides the destination before it arms (S2-1/S2-2),
-// `--audit-route pm[:<tag>]` (S2-3) and the plan form of WORKFLOW_PM_REVIEW_ACCEPTED (S2-4). The gate child loads
-// owner-stub-preload.js, so the stub decides the assigned PM. The caller owns the case markers.
+// `--audit-route pm[:<tag>]` (S2-3) and the plan form of WORKFLOW_CONVENTIONAL_AUDIT_CHOSEN (S2-4, renamed by #3168).
+// The gate child loads owner-stub-preload.js, so the stub decides the assigned PM. The caller owns the case markers.
+// The helpers (gateAt, session, mark, ...) are also exported for tests/hooks/feature-3168-pm-audit-route/cases.js.
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
@@ -13,7 +14,7 @@ let FX = null;
 const fx = () => FX || (FX = P.make(fs.mkdtempSync(path.join(X.F.STATE_DIR, "pm3144-"))));
 const pmEnv = () => Object.assign({ NODE_OPTIONS: X.nodeOptions([P.PRELOAD]) }, fx().env());
 const LAUNCH_RE = /launch the supervisor-audit subagent|agents\/supervisor-audit\.md as a subagent/i;
-const SENTINEL = "WORKFLOW_PM_REVIEW_ACCEPTED";
+const SENTINEL = "WORKFLOW_CONVENTIONAL_AUDIT_CHOSEN";
 
 // gateAt(sid, args) -> parseGate(...) + {rc, out, err} of `next-step --gate --session sid ...args` under the stub.
 function gateAt(sid, args) {
@@ -97,7 +98,9 @@ function lookupScope(check) {
   const sid = session([3901]);
   F.clearLog();
   const g = gateAt(sid);
-  check("R2 the arm branch asks the owner", F.ownerCalls().some((c) => c.fn === "ownerOf"), D.show(F.ownerCalls()));
+  // #3168: the owner lookup is one batched ownersOf call, and its ns carries the issue.
+  const asked = F.ownerCalls().filter((c) => c.fn === "ownersOf");
+  check("R2 the arm branch asks the owner in one ownersOf call", asked.length === 1 && (asked[0].ns || []).includes("3901"), D.show(F.ownerCalls()));
   try { D.S.finalize(sid, runOf(g), "CONTINUE"); } catch (e) { check("R2 fixture: settle the pm run", false, e.message); }
   F.clearLog();
   const g2 = gateAt(sid);
@@ -255,4 +258,7 @@ function sentinel(check) {
   check("R6 sentinel at the cap: no fallback finding", !F.findings(sid).some((f) => f && f.reporter === "user:pm-review-fallback"), D.show(F.findings(sid)));
 }
 
-module.exports = { routes, lookupScope, replace, capNoReplace, auditRoute, sentinel };
+module.exports = {
+  routes, lookupScope, replace, capNoReplace, auditRoute, sentinel,
+  fx, pmEnv, gateAt, session, findingsOf, destNames, ledgerLen, tr2, runOf, mark, verdictHook, LAUNCH_RE,
+};

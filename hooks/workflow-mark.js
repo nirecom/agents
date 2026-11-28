@@ -41,7 +41,7 @@ const workflowAbortHandler = require("./workflow-mark/workflow-abort-handler");
 const thisPrAcceptHandler = require("./workflow-mark/this-pr-accept-handler");
 const enforceOverrideHandlers = require("./workflow-mark/enforce-override-handlers");
 const supervisorBlockOverrideHandler = require("./workflow-mark/supervisor-block-override-handler");
-const pmReviewAcceptedHandler = require("./workflow-mark/pm-review-accepted-handler");
+const conventionalAuditChosenHandler = require("./workflow-mark/conventional-audit-chosen-handler");
 const resetHandler = require("./workflow-mark/reset-handler");
 
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
@@ -66,7 +66,7 @@ const HANDLERS = [
   // this-pr-accept before mark-step: a chained "ACCEPTED && MARK_STEP write_code" settles the key first.
   reviewTestsHandler, runTestsAcceptHandler, runTestsBaselineUnobservedHandler, glossaryAcceptHandler, workflowAbortHandler,
   thisPrAcceptHandler, markStepHandler,
-  enforceOverrideHandlers, supervisorBlockOverrideHandler, pmReviewAcceptedHandler, resetHandler,
+  enforceOverrideHandlers, supervisorBlockOverrideHandler, conventionalAuditChosenHandler, resetHandler,
 ];
 
 if (require.main === module) {

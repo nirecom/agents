@@ -1,7 +1,7 @@
 "use strict";
 // hooks/workflow-gate/user-verified-pm-review.js — #3144 S4-1, the PM review in front of <<WORKFLOW_USER_VERIFIED>>.
 // With an assigned PM the sentinel passes only on the PM's OK in the last requested round, or on the user's
-// row (WORKFLOW_PM_REVIEW_ACCEPTED), each tied to the current HEAD and PR, so an OK on an older commit or a
+// row (the PR form of the conventional-audit choice sentinel), each tied to the current HEAD and PR, so an OK on an older commit or a
 // recreated PR never approves the release. A forge that does not answer passes only the user-pr-unconfirmed
 // row tied to the last request's PR. Passing means "go on to the TR5 audit": approveFn is never called here.
 // Record shapes and the round reader are owned by hooks/lib/pm-review-writer.js.
@@ -9,8 +9,12 @@
 const { spawnSync } = require("../lib/limited-child-process");
 const { withConvLang } = require("../lib/conv-lang");
 
+const { CONVENTIONAL_AUDIT_CHOSEN_NAME: SENTINEL } = require("../lib/sentinel-patterns");
+
 const W = () => require("../lib/pm-review-writer");
-const SENTINEL = "WORKFLOW_PM_REVIEW_ACCEPTED";
+const C = () => require("../../bin/lib/pm-notify/common");
+const ECHO = `echo "<<${SENTINEL}: PR#<n> <reason>>>"`;
+const BY_DIALOG = "via Bash; the user approves it in the permission dialog";
 const REQUEST = "skills/_shared/pm-pre-pr-contact.md `## Review request`";
 
 function headOf(cwd) {
@@ -39,7 +43,7 @@ function blockReason(why) {
   return withConvLang([
     `[EM Supervisor] user_verification PM review: ${why}`,
     `Send the PR to the assigned PM by ${REQUEST} and re-issue the sentinel once the PM's OK is recorded for the current HEAD and PR,`,
-    `or, with the user's explicit choice, have the user run echo "<<${SENTINEL}: PR#<n> <reason>>>" for the conventional audit.`,
+    `or, with the user's explicit choice of the conventional audit, run ${ECHO} ${BY_DIALOG}.`,
   ].join("\n"));
 }
 
@@ -49,7 +53,7 @@ function unconfirmedReason(lastReq) {
     "[EM Supervisor] user_verification PM review: the forge did not answer, so the current PR cannot be confirmed.",
     `Show the user the PR URL sent in the Review request${pr ? ` (PR #${pr})` : ""} and ask with AskUserQuestion ` +
       "(metadata.source=pm-review.pr-unconfirmed): retry later, or, after checking that PR, " +
-      `run echo "<<${SENTINEL}: PR#<n> <reason>>>".`,
+      `run ${ECHO} ${BY_DIALOG}.`,
   ].join("\n"));
 }
 
@@ -85,7 +89,7 @@ function checkUserVerifiedPmReview(sessionId, cwd, opts) {
   const stop = (msg) => { blockFn(msg); return { ok: false, reason: msg }; };
   if (!sessionId) return { ok: true, route: "unknown-session" };
   let pc;
-  try { pc = W().pmCandidatesOf(sessionId); } catch (e) { pc = { decided: false, cands: [], reason: e.message }; }
+  try { pc = W().pmCandidatesOf(sessionId, { timeoutMs: C().OWNER_TIMEOUT_MS }); } catch (e) { pc = { decided: false, cands: [], reason: e.message }; }
   if (pc.decided && pc.cands.length === 0) return { ok: true, route: "subagent" };
   let rows;
   try { rows = W().readPmRows(sessionId); } catch (e) {

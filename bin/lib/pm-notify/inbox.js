@@ -41,11 +41,12 @@ function takeOwn(tag, seen, shown, lines, after) {
 function takeUnassigned(tag, seen, shown, lines, left, after, forge, spawnSync) {
   const entries = box.readBox("unassigned");
   if (entries.length === 0) return;
+  const fresh = entries.filter((e) => !seen.has(e.id)).map((e) => ({ e, ref: C.refOfIssue(e.issue) }));
+  const refs = fresh.filter((x) => x.ref).map((x) => x.ref);
+  const b = forge && refs.length > 0 && left() > 0 ? C.decidedOwnersOf(refs, left(), undefined, { spawnSync }) : { ok: false };
   const keep = [];
-  for (const e of entries) {
-    if (seen.has(e.id)) continue;
-    const ref = C.refOfIssue(e.issue);
-    const r = forge && ref && left() > 0 ? C.decidedOwnerOf(ref, Math.min(C.OWNER_TIMEOUT_MS, left()), undefined, { spawnSync }) : { ok: false };
+  for (const { e, ref } of fresh) {
+    const r = b.ok && ref ? b.answers[refs.indexOf(ref)] : { ok: false };
     if (r.ok && r.owner && C.S.sameTag(r.owner.tag, tag)) { seen.add(e.id); shown.add(lc(e.issue)); lines.push(lineOf(e)); continue; }
     if (r.ok && !r.owner) continue;
     keep.push(e);

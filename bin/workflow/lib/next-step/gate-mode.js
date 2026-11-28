@@ -144,7 +144,7 @@ function armBranch(base, j, action, deps, step, sid) {
   const tag = d.route ? ", pm-route:" + d.route : "";
   if (d.route === "ask") {
     const AR = require("./pm-audit-route");
-    return Object.assign(base, { action: "audit-wait", runId: null, reason: base.reason + tag, hint: AR.askHint(step, d.reason, d.pms) });
+    return Object.assign(base, { action: "audit-wait", runId: null, reason: base.reason + tag, hint: AR.askHint(step, d.reason, d.pms, d.failure) });
   }
   const arm = d.arm || {};
   const runId = arm.audit_run_id || arm.run_id;

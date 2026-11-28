@@ -1,9 +1,11 @@
 "use strict";
 // Test-only preload for #3144: answers the PM owner lookup and the current-PR lookup from env so a test decides
 // who the assigned PM is and which PR the branch has, without a forge. Child: NODE_OPTIONS --require; in process: install().
-// PM3144_OWNER_STUB: JSON file {"<issue no>": ownerOf answer | {"throw": msg}, "__holders": {"<no>": [{tag, session_id}]}};
-// a number not in the file answers {ok:true, owner:null}. PM3144_PR_STUB: JSON {state, number} for prForBranch.
-// PM3144_OWNER_LOG / PM3144_FORGE_LOG: one JSON line per stubbed call. decidedOwnerOf keeps its real undecidable rule.
+// PM3144_OWNER_STUB: JSON file {"<issue no>": per-ref answer | {"throw": msg}, "__holders": {"<no>": [{tag, session_id}]},
+// "__batch": "<reason>"}; a number not in the file answers {ok:true, owner:null}. PM3144_PR_STUB: JSON {state, number}.
+// #3168: the stub point is the batched common.ownersOf (ownerOf / decidedOwner(s)Of reach it through the exports).
+// __batch makes the whole call fail ({ok:false, reason}); a per-ref throw throws the whole call.
+// PM3144_OWNER_LOG / PM3144_FORGE_LOG: one JSON line per stubbed call. decidedOwnersOf keeps its real undecidable rule.
 const fs = require("fs");
 const path = require("path");
 
@@ -25,14 +27,19 @@ function issueNo(ref) {
   return m ? m[1] : String(ref);
 }
 
-function stubOwnerOf(ref) {
-  const n = issueNo(ref);
-  log("PM3144_OWNER_LOG", { fn: "ownerOf", n });
+// stubOwnersOf(refs, timeoutMs) -> {ok:true, answers:[per-ref answer]} | {ok:false, reason}, as common.ownersOf.
+function stubOwnersOf(refs, timeoutMs) {
+  const ns = (Array.isArray(refs) ? refs : []).map(issueNo);
+  log("PM3144_OWNER_LOG", { fn: "ownersOf", ns, timeoutMs });
   const cfg = readJson(process.env.PM3144_OWNER_STUB) || {};
-  const a = cfg[n];
-  if (!a) return { ok: true, owner: null };
-  if (a.throw) throw new Error(a.throw);
-  return JSON.parse(JSON.stringify(a));
+  if (typeof cfg.__batch === "string" && cfg.__batch !== "") return { ok: false, reason: cfg.__batch };
+  const answers = ns.map((n) => {
+    const a = cfg[n];
+    if (!a) return { ok: true, owner: null };
+    if (a.throw) throw new Error(a.throw);
+    return JSON.parse(JSON.stringify(a));
+  });
+  return { ok: true, answers };
 }
 
 function stubHolders(ref) {
@@ -54,7 +61,7 @@ function install() {
   if (installed) return;
   installed = true;
   const common = require(path.join(ROOT, "bin", "lib", "pm-notify", "common.js"));
-  common.ownerOf = stubOwnerOf;
+  common.ownersOf = stubOwnersOf;
   if (common.scan && typeof common.scan === "object") common.scan.directHoldersOf = stubHolders;
   try {
     require(path.join(ROOT, "hooks", "pm-session", "scan.js")).directHoldersOf = stubHolders;

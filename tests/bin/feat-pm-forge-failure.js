@@ -1,7 +1,7 @@
 "use strict";
 // tests/bin/feat-pm-forge-failure.js
-// Tests: bin/lib/forge-issue-links.js, bin/lib/pm-state/ancestry.js
-// Tags: TL2, scope:common, issue-2942, pm-session, forge, graphql, retry
+// Tests: bin/lib/forge-issue-links.js, bin/lib/pm-state/ancestry.js, bin/lib/forge-failure.js
+// Tags: TL2, scope:common, issue-2942, issue-3168, pm-session, forge, graphql, retry
 // #2942 S3: gh api graphql exits 1 when one issue of a batch does not exist but still prints data
 // plus errors[].type NOT_FOUND. runChunk reads data on exit 1, marks only that slot issue_not_found
 // and resolves the rest (classifyGraphqlResult); RETRYABLE holds only network and auth failures.
@@ -251,6 +251,12 @@ test("nextActionOf: an unknown reason gets today's wording, never undefined; the
 });
 test("nextActionOf(null) gets the default wording", () => {
   assert.match(String(FF().nextActionOf(null)), DEFAULT_ACTION);
+});
+// #3168: the gate (outside the hook) also emits budget-exhausted, so the sentence takes a neutral form without the hook as subject.
+test("nextActionOf(budget-exhausted) does not name the hook (a neutral sentence that reads for both gate and hook)", () => {
+  const t = String(FF().nextActionOf("budget-exhausted"));
+  assert.doesNotMatch(t, /\bhook\b/i, `the budget-exhausted action names the hook: ${t}`);
+  assert.match(t, /fewer|smaller|reduce/i, t);
 });
 caseEnd();
 

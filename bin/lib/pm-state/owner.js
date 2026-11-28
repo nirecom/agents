@@ -27,16 +27,23 @@ function ownerOfChain(c, ctx) {
   return { ok: true, owner: { tag: g.pm.tag, session_id: g.session_id } };
 }
 
-// resolveOwners(refs, ctx) -> [resolveOwner's answer per ref, in input order], from one batched chain read.
-function resolveOwners(refs, ctx) {
+// resolveOwnersBatch(refs, ctx) -> {ok:true, answers:[resolveOwner's answer per ref, in input order]} from one
+// batched chain read, or {ok:false, reason} when that read failed as a whole (timeout, spawn-failed, ...).
+function resolveOwnersBatch(refs, ctx) {
   const read = ctx.readPmChains || readPmChains;
   const timeoutMs = Number.isFinite(ctx.timeoutMs) ? ctx.timeoutMs : DEFAULT_TIMEOUT_MS;
   const r = read(refs, { deadlineAt: Date.now() + timeoutMs, spawnSync: ctx.spawnSync });
-  if (!r.ok) return refs.map(() => ({ ok: false, reason: r.reason }));
-  return refs.map((ref) => ownerOfChain(r.results[refKey(ref.repo, ref.number)], ctx));
+  if (!r.ok) return { ok: false, reason: r.reason };
+  return { ok: true, answers: refs.map((ref) => ownerOfChain(r.results[refKey(ref.repo, ref.number)], ctx)) };
+}
+
+// resolveOwners(refs, ctx) -> resolveOwnersBatch flattened: a whole failure gives every ref the same answer.
+function resolveOwners(refs, ctx) {
+  const b = resolveOwnersBatch(refs, ctx);
+  return b.ok ? b.answers : refs.map(() => ({ ok: false, reason: b.reason }));
 }
 
 // resolveOwner(ref, ctx) — ctx: {scan, entries, timeoutMs?, readPmChains?}; ref is repo-resolved.
 const resolveOwner = (ref, ctx) => resolveOwners([ref], ctx)[0];
 
-module.exports = { resolveOwner, resolveOwners };
+module.exports = { resolveOwner, resolveOwners, resolveOwnersBatch };

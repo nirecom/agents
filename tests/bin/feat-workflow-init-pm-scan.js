@@ -1,12 +1,13 @@
 "use strict";
 // Tests: bin/workflow/lib/workflow-init/phases/pm-scan.js, bin/workflow/workflow-init-driver
-// Tags: TL2, scope:common, workflow-init, pm-session, pm-scan, issue-2942
-// #2942 S13: the pm-scan phase (between wip-check and route-decision) asks `owner --timeout-ms 2000` for each
-// issue, keeps the answer as the first record, blocks with multi-pm when two or more PMs own the issues
-// (recording a notification to each), and carries on past an undecidable issue as undelivered.
+// Tags: TL2, scope:common, workflow-init, pm-session, pm-scan, issue-2942, issue-3168
+// #2942 S13 / #3168: the pm-scan phase (between wip-check and route-decision) asks the owners of every issue in
+// one batched lookup bounded by the 10 s scan budget, keeps the answer as the first record, blocks with multi-pm
+// when two or more PMs own the issues (recording a notification to each), and carries on past an undecidable
+// issue as undelivered.
 // TL3 gap (what this test does NOT catch):
 // - a full /workflow-init run through the skill, with the BLOCKED directive rendered to the user;
-// - the 10 s overall budget against a real slow GitHub (only the per-issue bound is timed here).
+// - the 10 s budget against a real slow GitHub (a fake gh hang stands in for it here).
 const { test, after } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
@@ -37,6 +38,20 @@ function scan(nums) {
   return { r, s, ms: Date.now() - t0 };
 }
 const recordText = (s) => JSON.stringify(P.raw(s));
+
+// #2942: a failed notes write must not turn a known multi-pm into a pass. pm-scan reads C.updateNotes and (#3168)
+// the batched C.ownersOf (through decidedOwnersOf) off the shared pm-notify/common exports at call time, so the
+// cases swap them there and restore them.
+const COMMON = require(path.join(P.ROOT, "bin", "lib", "pm-notify", "common"));
+function scanWith(stubs, nums) {
+  const saved = {};
+  for (const k of Object.keys(stubs)) { saved[k] = COMMON[k]; COMMON[k] = stubs[k]; }
+  try { return scan(nums); } finally { Object.assign(COMMON, saved); }
+}
+const ownersBy = (tags) => (refs) => ({ ok: true, answers: refs.map((ref) => ({ ok: true, owner: { tag: tags[ref.number], session_id: null } })) });
+const notesFail = () => { throw new Error("notes write failed"); };
+// The scan budget bound: wider than the retired 2000 ms per-issue cap, never past SCAN_BUDGET_MS (10000 ms).
+const assertScanBudget = (ms) => assert.ok(ms > 2000 && ms <= 10000, `ownersOf timeoutMs ${ms} is not the 10 s scan budget`);
 
 caseBegin("pm-scan-phase", "bin/workflow/lib/workflow-init/phases/pm-scan.js");
 test("P1 one PM over every issue continues and keeps owner's answer as the first record", () => {
@@ -72,13 +87,18 @@ test("P4 no PM anywhere continues and records no notification", () => {
   assert.ok(!r.blocked && !r.ask, JSON.stringify(r));
   assert.deepStrictEqual(X.notes(s), []);
 });
-test("P5 a hung forge read is bounded per issue (owner --timeout-ms 2000) and counted as undelivered", () => {
+test("P5 a hung forge read is bounded by the 10 s scan budget and counted as undelivered", () => {
   G.setMap({ "o/r#11141": { pm: "PM-x" } });
-  G.sleep(6000);
+  const real = COMMON.ownersOf;
+  const passed = [];
+  const spy = (refs, timeoutMs, ...rest) => { passed.push(timeoutMs); return real(refs, timeoutMs, ...rest); };
+  G.sleep(15000);
   let res;
-  try { res = scan([11141]); } finally { G.sleep(null); }
+  try { res = scanWith({ ownersOf: spy }, [11141]); } finally { G.sleep(null); }
+  assert.strictEqual(passed.length, 1, `ownersOf calls: ${JSON.stringify(passed)}`);
+  assertScanBudget(passed[0]);
   assert.ok(!res.r.blocked, JSON.stringify(res.r));
-  assert.ok(res.ms < 4500, `pm-scan waited ${res.ms} ms on one issue`);
+  assert.ok(res.ms > 2500 && res.ms < 13000, `pm-scan waited ${res.ms} ms on a forge read hung for 15 s`);
   const e = X.notes(res.s).find((x) => /11141/.test(String(x.issue)));
   assert.ok(e && e.result === "undelivered", JSON.stringify(X.notes(res.s)));
 });
@@ -134,29 +154,48 @@ test("P8 a rerun of the blocked scan in the same session adds no second note per
 });
 caseEnd();
 
-// #2942: a failed notes write must not turn a known multi-pm into a pass. pm-scan reads C.ownerOf / C.updateNotes
-// off the shared pm-notify/common exports at call time, so the case swaps them there and restores them.
-const COMMON = require(path.join(P.ROOT, "bin", "lib", "pm-notify", "common"));
-function scanWith(stubs, nums) {
-  const saved = {};
-  for (const k of Object.keys(stubs)) { saved[k] = COMMON[k]; COMMON[k] = stubs[k]; }
-  try { return scan(nums); } finally { Object.assign(COMMON, saved); }
-}
-const ownersBy = (tags) => (ref) => ({ ok: true, owner: { tag: tags[ref.number], session_id: null } });
-const notesFail = () => { throw new Error("notes write failed"); };
 caseBegin("pm-scan-multi-pm-survives-notes-failure", "bin/workflow/lib/workflow-init/phases/pm-scan.js");
 test("C17 two owners and updateNotes throws -> still blocked multi-pm, the hint naming both tags", () => {
-  const { r } = scanWith({ ownerOf: ownersBy({ 11181: "PM-c17a", 11182: "PM-c17b" }), updateNotes: notesFail }, [11181, 11182]);
+  const { r } = scanWith({ ownersOf: ownersBy({ 11181: "PM-c17a", 11182: "PM-c17b" }), updateNotes: notesFail }, [11181, 11182]);
   assert.strictEqual(r.blocked, true, `a notes failure hid multi-pm: ${JSON.stringify(r)}`);
   assert.strictEqual(r.reason, "multi-pm", JSON.stringify(r));
   for (const want of ["PM-c17a", "PM-c17b"]) assert.ok(String(r.hint).includes(want), `hint lacks ${want}: ${r.hint}`);
 });
 test("C17 one owner and updateNotes throws -> fail-open {done:false}", () => {
-  const { r } = scanWith({ ownerOf: ownersBy({ 11183: "PM-c17c", 11184: "PM-c17c" }), updateNotes: notesFail }, [11183, 11184]);
+  const { r } = scanWith({ ownersOf: ownersBy({ 11183: "PM-c17c", 11184: "PM-c17c" }), updateNotes: notesFail }, [11183, 11184]);
   assert.deepStrictEqual(r, { done: false });
 });
 test("C17 an error before the owners are known (owner lookup throws) -> fail-open {done:false}", () => {
-  const { r } = scanWith({ ownerOf: () => { throw new Error("ask failed"); } }, [11185, 11186]);
+  const { r } = scanWith({ ownersOf: () => { throw new Error("ask failed"); } }, [11185, 11186]);
   assert.deepStrictEqual(r, { done: false });
+});
+caseEnd();
+
+// #3168: pm-scan calls ownersOf exactly once regardless of the issue count, carrying every issue in that one call.
+// A whole failure ({ok:false, reason}) is not thrown; every ref flows through the current path as {ref, r:{ok:false, reason}}.
+caseBegin("pm-scan-one-batched-owner-call", "bin/workflow/lib/workflow-init/phases/pm-scan.js");
+test("P9 three issues are asked in one ownersOf call carrying every issue, bounded by the scan budget", () => {
+  const calls = [];
+  const spy = (refs, timeoutMs) => { calls.push({ nums: refs.map((x) => x.number), timeoutMs }); return ownersBy({ 11191: "PM-p9", 11192: "PM-p9", 11193: "PM-p9" })(refs); };
+  const { r } = scanWith({ ownersOf: spy }, [11191, 11192, 11193]);
+  assert.ok(!r.blocked, JSON.stringify(r));
+  assert.strictEqual(calls.length, 1, `ownersOf calls: ${JSON.stringify(calls)}`);
+  assert.deepStrictEqual([...calls[0].nums].sort(), [11191, 11192, 11193], JSON.stringify(calls));
+  assertScanBudget(calls[0].timeoutMs);
+});
+test("P10 ownersOf whole failure (timeout): records every issue as undelivered with reason timeout, does not stop on multi-pm", () => {
+  // The forge (fake gh) answers 2 PMs. A path that bypasses the stubbed ownersOf blocks on multi-pm, so it goes red.
+  seed({ tag: "PM-p10a", issues: [11194] });
+  seed({ tag: "PM-p10b", issues: [11195] });
+  G.setMap({ "o/r#11194": { pm: "PM-p10a" }, "o/r#11195": { pm: "PM-p10b" } });
+  const calls = [];
+  const fail = (refs) => { calls.push(refs.map((x) => x.number)); return { ok: false, reason: "timeout" }; };
+  const { r, s } = scanWith({ ownersOf: fail }, [11194, 11195]);
+  assert.strictEqual(calls.length, 1, `ownersOf calls: ${JSON.stringify(calls)}`);
+  assert.ok(!r.blocked && !r.ask, `a whole failure blocked the scan: ${JSON.stringify(r)}`);
+  for (const num of [11194, 11195]) {
+    const e = X.notes(s).find((x) => new RegExp(String(num)).test(String(x.issue)));
+    assert.ok(e && e.result === "undelivered" && e.reason === "timeout", `${num} is not an undelivered timeout: ${JSON.stringify(X.notes(s))}`);
+  }
 });
 caseEnd();

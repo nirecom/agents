@@ -1,18 +1,18 @@
 "use strict";
-// #3144 S2-4 / S4-2 — WORKFLOW_PM_REVIEW_ACCEPTED (plan form and PR form).
-//
-//   echo "<<WORKFLOW_PM_REVIEW_ACCEPTED: <intent|outline|detail|PR#<n>> <reason>>>"
+// #3144 S2-4 / S4-2, #3168 — the conventional-audit choice sentinel (plan form and PR form); FORM shows its shape.
 // The user sends a plan stage's audit to the conventional supervisor audit instead of the assigned PM.
 // settings.json `ask` puts every emission through the permission dialog. The handler arms a new counted
 // run carrying the fallback finding (the in-flight run is replaced), so the gate gives it the subagent
 // launch and the PM's verdict write on it is refused. At the cap nothing is armed and the stage's
 // in-flight run is released, as the gate's own cap procedure does. The PR form writes the user's pm-review row.
 
-const { PM_REVIEW_ACCEPTED_RE_DQ, PM_REVIEW_ACCEPTED_LOOKSLIKE_RE } = require("../lib/sentinel-patterns");
+const {
+  CONVENTIONAL_AUDIT_CHOSEN_NAME, PLAN_AUDIT_STAGES, CONVENTIONAL_AUDIT_CHOSEN_RE_DQ, CONVENTIONAL_AUDIT_CHOSEN_LOOKSLIKE_RE,
+} = require("../lib/sentinel-patterns");
 const { sanitizeLine } = require("../lib/output-sanitize");
 
-const LABEL = "WORKFLOW_PM_REVIEW_ACCEPTED";
-const FORM = `echo "<<${LABEL}: <intent|outline|detail|PR#<n>> <reason>>>"`;
+const LABEL = CONVENTIONAL_AUDIT_CHOSEN_NAME;
+const FORM = `echo "<<${LABEL}: <${PLAN_AUDIT_STAGES.join("|")}|PR#<n>> <reason>>>"`;
 // The verdict of the user's pm-review row; the gate reads the row by its source, never by this value.
 const VERDICT_USER = "ACCEPTED";
 
@@ -80,7 +80,7 @@ function acceptPr(ctx, n, reason) {
 
 function handle(ctx) {
   const { cmd, sessionId, pushUnapplied } = ctx;
-  const m = cmd.match(PM_REVIEW_ACCEPTED_RE_DQ);
+  const m = cmd.match(CONVENTIONAL_AUDIT_CHOSEN_RE_DQ);
   if (m) {
     if (!sessionId) {
       pushUnapplied(`workflow-mark: could not resolve session_id — ${LABEL} NOT recorded.`);
@@ -95,7 +95,7 @@ function handle(ctx) {
     armFallback(ctx, target, reason);
     return true;
   }
-  if (PM_REVIEW_ACCEPTED_LOOKSLIKE_RE.test(cmd)) {
+  if (CONVENTIONAL_AUDIT_CHOSEN_LOOKSLIKE_RE.test(cmd)) {
     pushUnapplied(`workflow-mark: malformed ${LABEL} — expected: ${FORM}. NOT applied.`);
     return true;
   }

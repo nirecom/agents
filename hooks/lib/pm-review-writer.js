@@ -4,7 +4,8 @@
 // on a pre-confirm audit run (kind=audit) or on a pm-review round of the PR (kind=pm-review). A PM writes
 // only while it is the decided owner now AND the destination the session recorded for that run / round,
 // so a stale owner, a local holder or a candidate the user did not pick never writes. Every judge fails
-// closed: an unreadable record, an undecidable owner or a malformed argument is a refusal with a reason.
+// closed: an unreadable record, a caller no decided owner answer names or a malformed argument is a refusal
+// with a reason.
 // The record shapes below are the one place the C2 / C4 writers and readers take them from.
 
 const path = require("path");
@@ -60,41 +61,56 @@ function destOfRun(findings, runId) {
 const isFallbackRun = (findings, runId) => (Array.isArray(findings) ? findings : [])
   .some((f) => f && f.reporter === REPORTER_FALLBACK && runTokenOf(f.detail) === runId);
 
-// pmCandidatesOf(targetSid, opts?) -> {decided, cands:[{tag, session_id}], reason}. Asks the decided owner of
-// every closed issue (no short circuit, so each ref is looked up now); any undecidable ref empties the list.
+// pmCandidatesOf(targetSid, opts?) -> {decided, cands:[{tag, session_id}], undecided:[{ref, reason}], reason}.
+// Asks the decided owner of every closed issue in one batched lookup bounded by opts.timeoutMs (default: the
+// hook-path C.OWNER_TIMEOUT_MS). A whole failure gives no candidate and its class as the reason; a partial
+// failure keeps the decided candidates but stays undecided (owner-undecidable: <ref>=<reason>, ...).
 function pmCandidatesOf(targetSid, opts) {
   const C = common();
+  const o = opts || {};
   let refs;
   try {
-    refs = require("../workflow-state/session-facts").getClosesIssues(targetSid, opts && opts.plansDir ? { plansDir: opts.plansDir } : undefined);
+    refs = require("../workflow-state/session-facts").getClosesIssues(targetSid, o.plansDir ? { plansDir: o.plansDir } : undefined);
   } catch (e) {
-    return { decided: false, cands: [], reason: `closes-issues-unreadable: ${e.message}` };
+    return { decided: false, cands: [], undecided: [], reason: `closes-issues-unreadable: ${e.message}` };
   }
-  const deadline = Date.now() + C.OWNER_TIMEOUT_MS;
-  const cands = [];
-  const undecided = [];
   let entries;
-  try { entries = C.scan.listPmFiles(); } catch (e) { return { decided: false, cands: [], reason: `pm-files-unreadable: ${e.message}` }; }
+  try { entries = C.scan.listPmFiles(); } catch (e) { return { decided: false, cands: [], undecided: [], reason: `pm-files-unreadable: ${e.message}` }; }
+  const valid = [];
+  const undecided = [];
   for (const raw of Array.isArray(refs) ? refs : []) {
-    let ref;
-    try { ref = C.W.normalizeRef(raw, raw && raw.repo ? null : C.homeRepo()); } catch (e) {
+    try { valid.push(C.W.normalizeRef(raw, raw && raw.repo ? null : C.homeRepo())); } catch {
       // A ref with no resolvable repo has no board to ask; with no PM state file registered either, no
       // PM can own it, so it has no owner. With a PM registered it stays undecidable (asked, never guessed).
-      if (Array.isArray(entries) && entries.length === 0) continue;
-      undecided.push(`#${raw && raw.number}: ${e.message}`);
-      continue;
+      if (!(Array.isArray(entries) && entries.length === 0)) undecided.push({ ref: `#${raw && raw.number}`, reason: "ref-unparsable" });
     }
-    let r;
-    try { r = C.decidedOwnerOf(ref, Math.max(1, Math.min(C.OWNER_TIMEOUT_MS, deadline - Date.now())), entries); } catch (e) {
-      r = { ok: false, reason: `owner-error: ${e.message}` };
-    }
-    if (!r || r.ok !== true) { undecided.push(`${ref.repo}#${ref.number}: ${(r && r.reason) || "no answer"}`); continue; }
-    const o = r.owner;
-    if (o && isSid(o.session_id) && !cands.some((c) => c.session_id === o.session_id)) cands.push({ tag: o.tag, session_id: o.session_id });
   }
-  if (undecided.length > 0) return { decided: false, cands: [], reason: `owner-undecidable: ${undecided.join("; ")}` };
-  return { decided: true, cands, reason: cands.length > 0 ? "" : "no-owner" };
+  const timeoutMs = Number.isFinite(o.timeoutMs) && o.timeoutMs > 0 ? o.timeoutMs : C.OWNER_TIMEOUT_MS;
+  let b = { ok: true, answers: [] };
+  if (valid.length > 0) {
+    try { b = C.decidedOwnersOf(valid, timeoutMs, entries); } catch { b = { ok: false, reason: "owner-error" }; }
+  }
+  const refName = (ref) => `${ref.repo}#${ref.number}`;
+  if (!b || !b.ok) {
+    const reason = (b && b.reason) || "no answer";
+    return { decided: false, cands: [], undecided: undecided.concat(valid.map((ref) => ({ ref: refName(ref), reason }))), reason };
+  }
+  const cands = [];
+  valid.forEach((ref, i) => {
+    const r = b.answers[i];
+    if (!r || r.ok !== true) { undecided.push({ ref: refName(ref), reason: (r && r.reason) || "no answer" }); return; }
+    const ow = r.owner;
+    if (ow && isSid(ow.session_id) && !cands.some((c) => c.session_id === ow.session_id)) cands.push({ tag: ow.tag, session_id: ow.session_id });
+  });
+  if (undecided.length > 0) {
+    return { decided: false, cands, undecided, reason: `owner-undecidable: ${undecided.map((u) => `${u.ref}=${u.reason}`).join(", ")}` };
+  }
+  return { decided: true, cands, undecided, reason: cands.length > 0 ? "" : "no-owner" };
 }
+
+// callerIsCandidate(pc, sid) -> whether sid is one of the decided candidates, whatever pc.decided says.
+const callerIsCandidate = (pc, sid) => Array.isArray(pc.cands) && pc.cands.some((c) => c.session_id === sid);
+const undecidedNote = (pc) => (pc.decided ? "" : ` (${pc.reason})`);
 
 // readPmRows(sid) -> the pm-review rows of the session chain; throws when the record cannot be read.
 const readPmRows = (sid) => store().readRows(sid, FORMAT, { strict: true }).parsed.filter((r) => r && typeof r === "object");
@@ -130,9 +146,7 @@ const posInt = (v) => (typeof v === "number" && Number.isInteger(v) && v > 0) ||
 
 function candidateRefusal(callerSid, targetSid) {
   const pc = pmCandidatesOf(targetSid);
-  if (!pc.decided) return `owner-undecidable: ${pc.reason}`;
-  if (!pc.cands.some((c) => c.session_id === callerSid)) return "caller-not-candidate: the caller is not the current assigned PM";
-  return null;
+  return callerIsCandidate(pc, callerSid) ? null : `caller-not-candidate: the caller is not the current assigned PM${undecidedNote(pc)}`;
 }
 
 function judgeAudit(callerSid, targetSid, runId) {
@@ -191,8 +205,7 @@ function judgeRequestWrite(input) {
   if (callerSid !== targetSid) return refuse("not-self: only the workflow session writes its own request row");
   if (pr !== undefined && pr !== null && !posInt(pr)) return refuse("invalid-pr: --pr must be a positive integer");
   const pc = pmCandidatesOf(targetSid);
-  if (!pc.decided) return refuse(`owner-undecidable: ${pc.reason}`);
-  if (!pc.cands.some((c) => c.session_id === pmSid)) return refuse("pm-not-candidate: --pm-sid is not a current assigned PM");
+  if (!callerIsCandidate(pc, pmSid)) return refuse(`pm-not-candidate: --pm-sid is not a current assigned PM${undecidedNote(pc)}`);
   let rows;
   try { rows = readPmRows(targetSid); } catch (e) { return refuse(`record-unreadable: ${e.message}`); }
   const n = nextRoundAllowed(rows);

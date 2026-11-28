@@ -81,7 +81,7 @@
 
 ### Before user verification
 
-- Have the assigned PM review the PR at its current HEAD before `USER_VERIFIED`; the gate passes only the PM's OK or the user's `WORKFLOW_PM_REVIEW_ACCEPTED`.
+- Have the assigned PM review the PR at its current HEAD before `USER_VERIFIED`; the gate passes only the PM's OK or the user's `WORKFLOW_CONVENTIONAL_AUDIT_CHOSEN`.
 - `/get-release-approval` runs `skills/_shared/pm-pre-pr-contact.md` `## Review request` for it.
 
 ### After Final Report

@@ -1,6 +1,6 @@
 "use strict";
 // Tests: bin/lib/pm-state/owner.js, bin/lib/pm-notify/common.js, bin/lib/pm-notify/next.js, bin/lib/pm-notify/settle.js, bin/lib/pm-notify/inbox.js, bin/workflow/lib/workflow-init/phases/pm-scan.js
-// Tags: TL2, scope:issue-specific, pm-session, pm-notify, pm-field, issue-3135
+// Tags: TL2, scope:issue-specific, pm-session, pm-notify, pm-field, issue-3135, issue-3168, batched-owner
 // #3135: the notification layer never discards on an owner answer it cannot trust. resolveOwner adds
 // fieldAbsent:true to {ok:true, owner:null} when the chain's board has no `pm` field; the owner gate makes that,
 // and "owner null while a local active PM state holds the issue or an ancestor", undecidable for every verb
@@ -169,4 +169,21 @@ test("G7 pm-scan writes no ownerless record for an untrusted owner null, so the 
   for (const num of UNTRUSTED) assert.ok(started.includes(at(num)), `${num} lost its start notification: ${started}`);
   assert.ok(!started.includes(at(9103)), `an ownerless issue got a start notification: ${started}`);
 });
+caseEnd();
+
+// #3168: the owner lookup becomes batched. resolveOwnersBatch returns a whole failure as {ok:false, reason} (distinguishable
+// from per-ref failures), and common.ownersOf / decidedOwnersOf stand on top of it. The single-ref versions are one-ref batched calls
+// sharing #3135's judgment (trustOf). Case bodies: feature-3135-pm-owner-gate/batched-cases.js.
+const B = require("./feature-3135-pm-owner-gate/batched-cases");
+const bctx = { test, assert, P, ref, brief, entries, scan, owner };
+caseBegin("owner-batched-resolve", "bin/lib/pm-state/owner.js");
+B.registerOwner(bctx);
+caseEnd();
+
+caseBegin("owner-batched-common", "bin/lib/pm-notify/common.js");
+B.registerCommon(bctx);
+caseEnd();
+
+caseBegin("owner-batched-inbox", "bin/lib/pm-notify/inbox.js");
+B.registerInbox(Object.assign({ X, INBOX, sid, ORIGIN }, bctx));
 caseEnd();

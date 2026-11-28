@@ -1,9 +1,9 @@
 "use strict";
-// Tests: hooks/workflow-gate/user-verified-pm-review.js, hooks/workflow-gate.js, hooks/workflow-mark/pm-review-accepted-handler.js
-// Tags: TL2, scope:issue-specific, pm-session, pm-review, user-verified, workflow-gate, sentinel, security, fail-closed
+// Tests: hooks/workflow-gate/user-verified-pm-review.js, hooks/workflow-gate.js, hooks/workflow-mark/conventional-audit-chosen-handler.js
+// Tags: TL2, scope:issue-specific, issue-3168, pm-session, pm-review, user-verified, workflow-gate, sentinel, security, fail-closed
 // #3144 C4 (S4): with an assigned PM, <<WORKFLOW_USER_VERIFIED>> passes only on the destination PM's OK in the last
 // requested round for the current HEAD and PR, or on the user's row; a forge that does not answer passes only the
-// user-pr-unconfirmed row tied to the last request's PR. The PR form of WORKFLOW_PM_REVIEW_ACCEPTED writes that row.
+// user-pr-unconfirmed row tied to the last request's PR. The PR form of WORKFLOW_CONVENTIONAL_AUDIT_CHOSEN writes that row.
 // The owner lookup and prForBranch are stubbed (owner-stub-preload.js); the rows are written straight from the S1-1 shapes.
 // TL3 gap (what this test does NOT catch):
 // - a real forge answering prForBranch, and the owner + PR lookups summed inside the real workflow-gate hook timeout
@@ -49,7 +49,7 @@ const HEAD = git("rev-parse", "HEAD").stdout.trim();
 const OLD = X.FP.a;
 const OPEN = (n) => ({ state: "OPEN", number: String(n) });
 const UNKNOWN = { state: "UNKNOWN", number: "" };
-const SENTINEL = "WORKFLOW_PM_REVIEW_ACCEPTED";
+const SENTINEL = "WORKFLOW_CONVENTIONAL_AUDIT_CHOSEN";
 const forgeCalls = () => { try { return fs.readFileSync(FORGE_LOG, "utf8").split("\n").filter(Boolean).length; } catch (_) { return 0; } };
 
 // judge(sid, pr) -> {pass, blocked, approved, forge}: the S4-1 check, run in process with prForBranch answering pr.
@@ -123,6 +123,9 @@ test("3144 C4: the block message names the Review request and the PM review sent
   const r = judge(w.sid, OPEN(12));
   blocks(r, "no rows");
   assert.ok(/Review request/.test(r.blocked) && r.blocked.includes(SENTINEL), r.blocked);
+  // #3168: the model echoes the sentinel via Bash and the user permits it in the permission dialog; no text asks the user to run it.
+  assert.doesNotMatch(r.blocked, /the user runs?\b|have the user run/i, r.blocked);
+  assert.match(r.blocked, /permission/i, `blockReason names the permission dialog: ${r.blocked}`);
 });
 caseEnd();
 
@@ -145,6 +148,9 @@ test("3144 C4: forge UNKNOWN -> PM OK and user rows block; user-pr-unconfirmed p
   const r = judge(w.sid, UNKNOWN);
   blocks(r, "UNKNOWN with no answer");
   assert.ok(r.blocked.includes("pm-review.pr-unconfirmed"), `the UNKNOWN block names the AskUserQuestion source: ${r.blocked}`);
+  // #3168: unconfirmedReason also shows the new name, in the form where the model echoes and the user permits in the permission dialog.
+  assert.ok(r.blocked.includes(SENTINEL), `unconfirmedReason names ${SENTINEL}: ${r.blocked}`);
+  assert.match(r.blocked, /permission/i, `unconfirmedReason names the permission dialog: ${r.blocked}`);
 });
 test("3144 C4: forge answers -> a user-pr-unconfirmed row must also match the current PR", () => {
   const w = world(false);
@@ -195,7 +201,7 @@ function requestCli(sid, pm, pr) {
 }
 const last = (sid) => F.readRows(sid).slice(-1)[0] || {};
 
-caseBegin("3144 C4 PR-form sentinel handler writes the user row", "hooks/workflow-mark/pm-review-accepted-handler.js");
+caseBegin("3144 C4 PR-form sentinel handler writes the user row", "hooks/workflow-mark/conventional-audit-chosen-handler.js");
 test("3144 C4 handler: PR match -> source=user at round+1 with HEAD and pr:<n>; the gate then passes", () => {
   const w = world(false);
   F.addRows(w.sid, [req(1, w.A, 12), pmr(1, "NOT_OK", w.A, 12)]);

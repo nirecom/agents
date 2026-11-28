@@ -7,7 +7,7 @@
 // pre-confirm run (audit) or on the round / HEAD / PR of the last request row (pm-review); judgeRequestWrite
 // admits the workflow session's own request while the round cap (CAP 2, one extension) allows it.
 // TL3 gap (what this test does NOT catch):
-// - a real forge answering the owner lookup (decidedOwnerOf's ownerOf is stubbed by owner-stub-preload.js)
+// - a real forge answering the owner lookup (common.ownersOf is stubbed by owner-stub-preload.js)
 // - a real PM session writing through the CLIs; tests/bin/feature-3144-pm-review-cli.js drives those
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const { test, after } = require("node:test");
@@ -50,7 +50,8 @@ test("C1 constants: reporters, row sources and the PR run-id prefix", () => {
 caseEnd();
 
 caseBegin("C1 pmCandidatesOf truth table", "hooks/lib/pm-review-writer.js");
-test("C1 pmCandidatesOf: decided owners only; any ok:false ref empties the candidates", () => {
+// #3168: decided candidates survive a partial failure (still decided:false). A whole failure (throw) gives 0 candidates. One ownersOf call.
+test("C1 pmCandidatesOf: decided owners only; a partial failure keeps the decided candidates undecided", () => {
   const A = F.pm("pm-a");
   const B = F.pm("pm-b");
   const H = F.pm("pm-held");
@@ -59,7 +60,7 @@ test("C1 pmCandidatesOf: decided owners only; any ok:false ref empties the candi
     { name: "two refs, owners A and B", refs: [3901, 3902], owners: { 3901: A, 3902: B }, decided: true, cands: [A, B] },
     { name: "two refs, both A", refs: [3901, 3902], owners: { 3901: A, 3902: A }, decided: true, cands: [A] },
     { name: "no owner anywhere", refs: [3901], owners: { 3901: null }, decided: true, cands: [] },
-    { name: "A plus a timeout", refs: [3901, 3902], owners: { 3901: A, 3902: "timeout" }, decided: false, cands: [] },
+    { name: "A plus a timeout", refs: [3901, 3902], owners: { 3901: A, 3902: "timeout" }, decided: false, cands: [A] },
     { name: "board has no pm field", refs: [3901], owners: { 3901: "absent" }, decided: false, cands: [] },
     { name: "owner lookup throws", refs: [3901, 3902], owners: { 3901: A, 3902: "throw" }, decided: false, cands: [] },
     { name: "field unset, a local holder", refs: [3901], owners: { 3901: null }, holders: { 3901: [H] }, decided: false, cands: [] },
@@ -73,8 +74,9 @@ test("C1 pmCandidatesOf: decided owners only; any ok:false ref empties the candi
     assert.deepStrictEqual(sids(got), [...new Set(r.cands.map((c) => c.session_id))].sort(), `${r.name}: cands ${show(got)}`);
     if (!r.decided) assert.ok(typeof got.reason === "string" && got.reason !== "", `${r.name}: a reason is given`);
     assert.ok(!sids(got).includes(H.session_id), `${r.name}: a local holder is never a candidate`);
-    const owned = F.ownerCalls().filter((c) => c.fn === "ownerOf").map((c) => c.n).sort();
-    assert.deepStrictEqual([...new Set(owned)], r.refs.map(String).sort(), `${r.name}: ownerOf asked for each ref`);
+    const calls = F.batchCalls();
+    assert.strictEqual(calls.length, 1, `${r.name}: one ownersOf call for every ref: ${show(F.ownerCalls())}`);
+    assert.deepStrictEqual([...calls[0].ns].sort(), r.refs.map(String).sort(), `${r.name}: the call carries each ref`);
   }
 });
 caseEnd();
@@ -188,6 +190,10 @@ test("C1 judgeRequestWrite: the session itself, a decided candidate, and a round
   t.push(["pmSid with shell metacharacters", req(w, w.sid, `${w.A.session_id};rm -rf /`), false]);
   w = review(() => [], () => ({ 3920: "timeout", 3921: null }));
   t.push(["undecidable owner", req(w, w.sid, w.A.session_id), false]);
+  // #3168: even on a partial failure (3920=A, 3921=timeout) a request to the decided candidate A is accepted; B, not a candidate, is refused.
+  w = review(() => [], (A) => ({ 3920: A, 3921: "timeout" }));
+  t.push(["partial candidates, request to the decided A", req(w, w.sid, w.A.session_id), true]);
+  t.push(["partial candidates, request to B (not decided)", req(w, w.sid, w.B.session_id), false]);
   w = review((A) => [F.reqRow(1, A.session_id, 12, X.FP.a)]);
   t.push(["round 1 -> 2 (below CAP)", req(w, w.sid, w.A.session_id), true]);
   w = review((A) => [F.reqRow(1, A.session_id, 12, X.FP.a), F.reqRow(2, A.session_id, 12, X.FP.b), F.pmRow(2, "NOT_OK", A.session_id, 12, X.FP.b)]);
