@@ -352,3 +352,7 @@ Changes: Fixed: `/pm-add` and the other PM commands are no longer rejected with 
 ### FEATURE: PR #3173 (2026-11-28)
 Background: fix(#3043, #1889, #2843): make Final Report reflect recorded closes
 Changes: The Final Report now lists only issues recorded as closed, and says when issue outcomes are not recorded yet. (#3043);Closing a session's issues with --from-session now acts only on issues GitHub reports as closed. Open or unverifiable issues are listed so each can be closed separately. (#3043);Issues from other repositories keep their owner/repo prefix in the Final Report, and malformed outcome records are skipped with a count instead of being shown. (#1889);Stop-time checks now find the session transcript after leaving a worktree moves it, so a check that used to pass silently can now block. (#2843)
+
+### FEATURE: PR #3174 (2026-11-28)
+Background: fix(#3168): batch PM audit route owner lookup, rename its sentinel
+Changes: PM audit route: asking issue owners is far less likely to time out when a session closes several issues, the ask hint now says who runs the command, and the conventional-audit sentinel is now `WORKFLOW_CONVENTIONAL_AUDIT_CHOSEN` and works at the intent stage.
