@@ -348,3 +348,7 @@ Changes: Fixed a console window flashing when the test gates launched a Microsof
 ### FEATURE: PR #3167 (2026-11-26)
 Background: fix(#3152): keep /pm-add and the other PM commands inside the hook time budget
 Changes: Fixed: `/pm-add` and the other PM commands are no longer rejected with a timeout when several issues are checked at once; the forge check is one batched request within a shared time budget, and a refusal says which kind of failure it was and what to do next.
+
+### FEATURE: PR #3173 (2026-11-28)
+Background: fix(#3043, #1889, #2843): make Final Report reflect recorded closes
+Changes: The Final Report now lists only issues recorded as closed, and says when issue outcomes are not recorded yet. (#3043);Closing a session's issues with --from-session now acts only on issues GitHub reports as closed. Open or unverifiable issues are listed so each can be closed separately. (#3043);Issues from other repositories keep their owner/repo prefix in the Final Report, and malformed outcome records are skipped with a count instead of being shown. (#1889);Stop-time checks now find the session transcript after leaving a worktree moves it, so a check that used to pass silently can now block. (#2843)
