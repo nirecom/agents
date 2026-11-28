@@ -475,7 +475,7 @@ transcript is read only when a block is already a candidate.
 using a schema-derived skeleton (`hooks/lib/final-report-schema.renderSkeleton`).
 The LLM reads four input files (env JSON, outcome JSON, intent.md, WORKTREE_NOTES.md
 backup) and substitutes `<PLACEHOLDER>` tokens. It emits the substituted text
-verbatim into its reply, then runs `echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"`.
+verbatim into its reply, then runs `echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"`. Its issue sections list only recorded outcome entries, one per (repo, N); a sibling issue is recorded as `subsumed` only when gh reports it CLOSED (#3043, #1889).
 
 `stop-final-report-guard.js` blocks the turn if any of the 10 headings from
 `getSectionHeadings(sid)` is absent after the last `## Final Report — <sid>` line

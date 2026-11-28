@@ -86,7 +86,7 @@ A session may close multiple issues in a single PR. Quick reference:
 - One `Closes #<N>` line and one `<!-- issue-close-pr-of: <N> -->` marker
   per closed issue in the PR body.
 - Phase 1 (`/issue-close-stage <N>`) runs once per N from the linked worktree.
-- Phase 2 (`/issue-close-finalize --from-session`) iterates automatically.
+- Phase 2 (`/issue-close-finalize --from-session`) iterates automatically over the issues gh reports CLOSED. Open or unverifiable ones are only listed; run `/issue-close-finalize <N>` for each.
 - Path A multi-N: all issues are labeled `intent:clarified` by
   workflow-init Path A2 (fail-closed). If A2 aborts due to a gh
   failure, fix the gh failure and re-run /workflow-init — A2 is idempotent.

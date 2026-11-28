@@ -195,15 +195,39 @@ function decisionValue(env, requiredKey, reasonKey) {
   return "not_required";
 }
 
-function closedIssueOutcomeLines(outcome) {
+const NOT_RECORDED = "- (not recorded yet — /session-close writes issue outcomes)";
+
+// outcomeEntries(outcome, homeRepo) -> {entries, malformed}: valid entries, one per outcomeKey (last wins,
+// at the position of its first occurrence), and the count isValidOutcomeEntry rejected.
+function outcomeEntries(outcome, homeRepo) {
+  const { isValidOutcomeEntry, outcomeKey } = require("./issue-identity");
   const issues = outcome && Array.isArray(outcome.issues) ? outcome.issues : [];
-  if (issues.length === 0) return "- (outcome data not found — investigate)";
-  return issues
-    .map((it) => {
-      const state = it.state === "skipped_wf_meta" ? "kept open (planning session)" : it.state;
-      return `- #${it.issueNumber}: ${state} (history: ${it.historyEntry}, closed: ${it.issueClosed}, sentinels: ${it.sentinelsPosted}, wip: ${it.wipCleared})`;
-    })
-    .join("\n");
+  const byKey = new Map();
+  let malformed = 0;
+  for (const e of issues) {
+    if (!isValidOutcomeEntry(e)) { malformed++; continue; }
+    byKey.set(outcomeKey(e, homeRepo), e);
+  }
+  return { entries: [...byKey.values()], malformed };
+}
+
+const oneLine = (v) => String(v).replace(/[\r\n]/g, " ").replace(/<([A-Z][A-Z0-9_]+)>/g, "&lt;$1&gt;");
+
+function closedIssueOutcomeLines(outcome, homeRepo) {
+  const { outcomeLabel } = require("./issue-identity");
+  const { entries, malformed } = outcomeEntries(outcome, homeRepo);
+  const lines = entries.map((it) => {
+    const state = it.state === "skipped_wf_meta" ? "kept open (planning session)" : it.state;
+    return oneLine(`- ${outcomeLabel(it, homeRepo)}: ${state} (history: ${it.historyEntry}, closed: ${it.issueClosed}, sentinels: ${it.sentinelsPosted}, wip: ${it.wipCleared})`);
+  });
+  if (malformed > 0) lines.push(`- (${malformed} malformed outcome entr${malformed === 1 ? "y" : "ies"} skipped)`);
+  return lines.length === 0 ? NOT_RECORDED : lines.join("\n");
+}
+
+function closedIssuesList(outcome, homeRepo) {
+  const { CLOSED_STATES, outcomeLabel } = require("./issue-identity");
+  const closed = outcomeEntries(outcome, homeRepo).entries.filter((e) => CLOSED_STATES.includes(e.state));
+  return closed.length === 0 ? "- (none)" : closed.map((e) => `- ${outcomeLabel(e, homeRepo)}`).join("\n");
 }
 
 function supervisorAlertSummary(supervisorState) {
@@ -241,11 +265,9 @@ function renderFinalReport(sessionId, inputs) {
   if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
     throw new Error(`renderFinalReport: invalid sessionId "${sessionId}"`);
   }
-  const { env, outcome, closesIssues, notesSections, supervisorState } = inputs;
-
-  const closedIssuesList = Array.isArray(closesIssues) && closesIssues.length > 0
-    ? closesIssues.map((n) => `- #${n}`).join("\n")
-    : "- (none)";
+  const { env, outcome, notesSections, supervisorState } = inputs;
+  const { normalizeHome } = require("./issue-identity");
+  const homeRepo = normalizeHome(inputs.homeRepo);
 
   const substitutions = {
     "<PR_NUMBER>": fieldOrNone(env, "PR_NUMBER"),
@@ -257,8 +279,8 @@ function renderFinalReport(sessionId, inputs) {
     "<CREATED_DATE>": fieldOrNone(env, "CREATED_DATE"),
     "<BACKUP_MANIFEST_PATH>": fieldOrNone(env, "BACKUP_MANIFEST_PATH"),
     "<BRANCH_DELETED>": fieldOrNone(env, "BRANCH_DELETED"),
-    "<CLOSED_ISSUES_LIST>": closedIssuesList,
-    "<CLOSED_ISSUE_OUTCOMES>": closedIssueOutcomeLines(outcome),
+    "<CLOSED_ISSUES_LIST>": closedIssuesList(outcome, homeRepo),
+    "<CLOSED_ISSUE_OUTCOMES>": closedIssueOutcomeLines(outcome, homeRepo),
     "<CC_RESTART_REQUIRED_DECISION>": decisionValue(env, "CC_RESTART_REQUIRED", "CC_RESTART_REASON"),
     "<VSCODE_RELOAD_REQUIRED_DECISION>": decisionValue(env, "VSCODE_RELOAD_REQUIRED", "VSCODE_RELOAD_REASON"),
     "<INSTALLER_RERUN_REQUIRED_DECISION>": decisionValue(env, "INSTALLER_RERUN_REQUIRED", "INSTALLER_RERUN_REASON"),

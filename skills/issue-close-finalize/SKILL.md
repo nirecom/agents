@@ -7,19 +7,19 @@ user-invocable: false
 Triage routes to the correct subset of in-skill steps; each is idempotent and resumable. Read `rules/github-issues.md` first — on-demand-only, never auto-injected; its "Session model" defines per-session N. Usage: `/issue-close-finalize <N>` or `/issue-close-finalize --from-session`.
 Read `rules/coding.md` before the first close comment or parent-body update — on-demand-only, never auto-injected; its Public GitHub Rules govern that outbound text.
 
-`--from-session` resolves `<N>` from `node "$AGENTS_MAIN_ROOT/bin/parse-closes-issues" --session <session-id>` (the session's owner-resolved intent `## Issues`). Zero → skip; one → continue; multiple → run sequentially; missing intent → one-line warn + skip. The merge commit is resolved from the PR in ICF-B, not from a flag.
+`--from-session` resolves its targets after Pre-flight with `bash "$AGENTS_MAIN_ROOT/skills/issue-close-finalize/scripts/from-session-targets.sh" --session <session-id> --owner-repo "<OWNER_REPO>"` — one standalone call. The merge commit is resolved from the PR in ICF-B, not from a flag.
 
-### `--from-session` per-N dispatch obligations
+### `--from-session` dispatch obligations
 
-Enumerate every N in `closes_issues` via `parse-closes-issues.js` — the `## Issues` block lists all values, including subsumed siblings. For each N in insertion order:
-- **Open sub-issue gate (#417)**: before dispatching the pipeline, if the issue is OPEN, run `bash "$AGENTS_MAIN_ROOT/bin/github-issues/parent-all-closed-check.sh" "<OWNER_REPO>" <N>`. On exit 1 (open sub-issues): emit `Warning: issue #<N> has open sub-issues — skipping close pipeline. Close sub-issues first.`, write a `skipped_open_sub_issues` outcome entry via `bin/issue-close-write-outcome.js`, and skip the pipeline for this N.
-- **All-N outcome entries (#695)**: after the pipeline completes or is skipped, ensure EVERY enumerated N has an outcome entry — including subsumed siblings that never ran a pipeline. Write missing entries with the appropriate skip state before the End report.
+- Run the pipeline only for each `TARGET <ref>` line (the CLOSED-by-merge issues), sequentially in printed order; `<N>` is the ref's number and its `owner/repo` prefix, when present, is `issue_repo`.
+- Relay each `GUIDANCE` line verbatim and write no outcome entry for its ref; a standalone `/issue-close-finalize <ref>` closes it.
+- On `NO_TARGETS` (outcome bag already settled) or a non-zero exit (warn in one line), skip the pipeline.
+- **Target outcome entries (#695)**: every TARGET ref has an outcome entry before the End report; write a missing one with the appropriate skip state.
 - **Early-return outcome entries (#827)**: at any early-return path — `meta_pending_subs` early return, or a terminal-phase early return when triage reports the issue is already in its terminal state — write an outcome entry for that N before returning (states: `skipped_meta_pending_subs`, `already_closed`, `skipped_open_sub_issues`, as fits the branch).
 
 <!-- Phase 2 renumber (remove in follow-up cleanup commit): old Step A=ICF-A, A.5=ICF-B, B=ICF-C, G=ICF-D, G.5-1=ICF-E, G.5-2=ICF-F, G.5-3=ICF-G, H=ICF-H, J=ICF-I, K=ICF-J, L=ICF-K. Step E removed in #690. Pre-flight is a gate (no ICF-letter). -->
 
 ## Procedure
-
 When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 
 ### Pre-flight (gate)

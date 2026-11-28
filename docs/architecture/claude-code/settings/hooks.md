@@ -288,6 +288,11 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
     (fail-open).
   `stop-premature-stop-guard.js` delegates to this hook rather than competing with it: when
   next-step reports `pre_final_report_gate`, it exits 0 and lets lane B own the message.
+  - **Transcript lookup (#2843)** — `ExitWorktree` can move the transcript, so when the given
+    path yields no usable lines the shared reader (`hooks/lib/transcript-reader.js`) looks the
+    file up once more by session id: the cwd's project dir first, then a bounded one-level scan
+    (`transcript-reader/locate.js`). When this hook still fails open on the transcript, it names
+    the reason and path on stderr.
 - `check-cross-platform.js` (PreToolUse, matcher: `Bash`) — blocks `git commit` when
   platform-specific files (`install/win/` ↔ `install/linux/`) are staged without counterpart
   changes. Skip mechanisms: `.cross-platform-skiplist` (permanent, base tool names) and

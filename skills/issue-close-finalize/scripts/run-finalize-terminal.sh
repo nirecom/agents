@@ -58,6 +58,7 @@ if (s.schema_version !== w.SCHEMA_VERSION) { console.log(w.schemaVersionMismatch
 const one = (v) => String(v).split(/[\r\n]/)[0];
 console.log('CURRENT_ISSUE_NUMBER=' + one(s.current_issue_number));
 console.log('OWNER_REPO=' + one(s.owner_repo));
+console.log('ISSUE_REPO=' + one(s.issue_repo || ''));
 console.log('TRIAGE_ACTION=' + one(s.triage_action));
 console.log('MERGE_COMMIT=' + one(s.merge_commit || ''));
 " "$STATE_FILE_PATH" "$STATE_WRITER"
@@ -72,8 +73,8 @@ elif [[ "$rc" -ne 0 ]]; then
     printf 'STATUS=failed\nSUMMARY=state file read failed\n'
     exit 0
 fi
-CURRENT_ISSUE_NUMBER="" OWNER_REPO="" TRIAGE_ACTION="" MERGE_COMMIT=""
-kv_read "$STATE_KV" CURRENT_ISSUE_NUMBER OWNER_REPO TRIAGE_ACTION MERGE_COMMIT
+CURRENT_ISSUE_NUMBER="" OWNER_REPO="" ISSUE_REPO="" TRIAGE_ACTION="" MERGE_COMMIT=""
+kv_read "$STATE_KV" CURRENT_ISSUE_NUMBER OWNER_REPO ISSUE_REPO TRIAGE_ACTION MERGE_COMMIT
 
 # ICF-H: close issue (skipped when triage_action=resume_j — issue already closed)
 ICF_H_STATUS=succeeded
@@ -103,9 +104,15 @@ case "$TRIAGE_ACTION" in
     *)                 HISTORY_ENTRY_STATUS=written_by_step_6h ;;
 esac
 
+REPO_FLAGS=(--owner-repo "$OWNER_REPO")
+if [[ -n "$ISSUE_REPO" ]]; then
+    REPO_FLAGS+=(--issue-repo "$ISSUE_REPO")
+fi
+
 node "$SCRIPT_CHECKOUT_ROOT/bin/issue-close-write-outcome.js" \
     --session-id "$SESSION_ID" \
     --out-file "$OUTCOME_FILE_PATH" \
+    "${REPO_FLAGS[@]}" \
     "$CURRENT_ISSUE_NUMBER" \
     "succeeded" \
     "$HISTORY_ENTRY_STATUS" \

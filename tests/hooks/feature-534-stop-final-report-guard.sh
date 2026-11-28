@@ -2,7 +2,7 @@
 # tests/hooks/feature-534-stop-final-report-guard.sh
 # Tests: hooks/stop-final-report-guard.js, hooks/lib/final-report-schema.js, skills/session-close/SKILL.md, hooks/stop-premature-stop-guard.js, bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: settings, config, hook, tests, scope:issue-specific, TL2
-# #534/#626/#771/#1114/#1611: Stop hook contract (env-file absent → 系統B next-step trigger; present → 13-heading
+# #534/#626/#771/#1114/#1611: Stop hook contract (env-file absent → path-B next-step trigger; present → 13-heading
 # + residual-token validation; malformed/stop_hook_active → fail-open). Contract owner: hooks/stop-final-report-guard.js.
 # Layer: L2 (real node subprocess + JSONL fixtures). L3 gap: real Claude Code Stop event (rules/test/claude-e2e.md).
 
@@ -36,8 +36,9 @@ console.log(d);
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 # #2434: env-file control files live under the pinned workflow dir; per-call WORKFLOW_PLANS_DIR overrides remain.
 export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow"
-export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
-mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
+# #2843: a missing transcript is re-located by sid under the transcript base; pin it to an empty dir.
+export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans" CLAUDE_TRANSCRIPT_BASE_DIR="$TMPDIR_BASE/transcript-base"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
 
 run_with_timeout() {
     local secs="$1"; shift

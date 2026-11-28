@@ -11,6 +11,7 @@ const fs = require("fs");
 const { run: spawnRun } = require("../spawn");
 const { tryWriteLog } = require("../worker-log");
 const { controlPath } = require("../../../hooks/workflow-state/state-io/control-dir");
+const { isValidOutcomeEntry, normalizeHome, outcomeLabel } = require("../../../hooks/lib/issue-identity");
 
 const REPORT_TIMEOUT_MS = 30000;
 const PHASE_TIMEOUT_MS = 600000;
@@ -53,11 +54,15 @@ function severityFor(value) {
 // SC-4: derive one observation per non-clean field across all issue entries.
 function scanOutcome(outcome) {
   const issues = outcome && Array.isArray(outcome.issues) ? outcome.issues : [];
+  const homeRepo = normalizeHome(outcome && outcome.homeRepo);
   const found = [];
+  let malformed = 0;
   for (const entry of issues) {
-    if (!entry || typeof entry !== "object") continue;
-    const num = Number.isInteger(entry.issueNumber) ? entry.issueNumber : null;
-    const label = num === null ? "(issue number missing)" : `#${num}`;
+    if (!isValidOutcomeEntry(entry)) {
+      malformed++;
+      continue;
+    }
+    const label = outcomeLabel(entry, homeRepo);
     for (const field of OUTCOME_FIELDS) {
       const severity = severityFor(entry[field]);
       if (severity === null) continue;
@@ -66,6 +71,9 @@ function scanOutcome(outcome) {
         detail: `issue-close outcome ${label}: ${field}=${entry[field]}`,
       });
     }
+  }
+  if (malformed > 0) {
+    found.push({ severity: "warning", detail: `issue-close outcome: ${malformed} malformed entr${malformed === 1 ? "y" : "ies"} (invalid issueNumber or issueRepo) skipped` });
   }
   return found;
 }

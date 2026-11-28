@@ -41,8 +41,9 @@ fi
 setup_tmp() {
     TMP="$(mktemp -d)"
     # WORKFLOW_PLANS_DIR must point at TMP so write-outcome.js resolves
-    # "testsid-intent.md" when looking up subsumed issues in the session.
-    export WORKFLOW_PLANS_DIR="$TMP"
+    # "testsid-intent.md" when looking up subsumed issues in the session. #3043: a sibling is
+    # written as subsumed only when gh reports it CLOSED, so a per-issue gh stub answers #702.
+    export WORKFLOW_PLANS_DIR="$TMP" GH_STUB_MAP='{"702":"CLOSED"}' PATH="$TMP/stub:$PATH" NODE_OPTIONS="$(node -e 'const s = require(process.argv[1]).makeGhStub(process.argv[2]); console.log(`--require "${s.dir.replace(/\\/g, "/")}/gh-stub-preload.js"`)' "$SCRIPT_CHECKOUT_ROOT/tests/lib/gh-state-stub.js" "$TMP/stub")"
     INTENT="$TMP/testsid-intent.md"
     cat > "$INTENT" <<'EOF'
 # Intent
@@ -58,7 +59,7 @@ teardown_tmp() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset WORKFLOW_PLANS_DIR
+    unset WORKFLOW_PLANS_DIR GH_STUB_MAP NODE_OPTIONS
 }
 
 # ============================================================================
