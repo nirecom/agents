@@ -234,7 +234,7 @@
       "Bash(echo \"<<WORKFLOW_GLOSSARY_ACCEPTED: *>>\")",
       "Bash(echo \"<<WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED: *>>\")",
       "Bash(echo \"<<WORKFLOW_ABORT_ACCEPTED: *>>\")",
-      "Bash(echo \"<<WORKFLOW_PM_REVIEW_ACCEPTED: *>>\")",
+      "Bash(echo \"<<WORKFLOW_CONVENTIONAL_AUDIT_CHOSEN: *>>\")",
       "Bash(echo \"<<WORKFLOW_THIS_PR_FINDING_ACCEPTED: *>>\")",
       "Bash(uv run bin/doc-rotate.py *)",
       "Bash(node *bin/plan-sync-scan-skip*)",

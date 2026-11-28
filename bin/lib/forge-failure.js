@@ -25,7 +25,7 @@ function classifyGhSpawn(r) {
 
 const DEFAULT_ACTION = "Retry when the forge is back.";
 const ACTIONS = {
-  [BUDGET_EXHAUSTED]: "The hook ran out of time before asking the forge; retry with fewer issues in one command.",
+  [BUDGET_EXHAUSTED]: "No time was left to ask the forge; retry with fewer issues, or run the command again later.",
   [TIMEOUT]: "The forge did not answer in time; wait a moment and run the same command again.",
   [SPAWN_FAILED]: "gh could not be started; check that gh is installed, on PATH, and logged in (`gh auth status`), then run the command again.",
   gh_exec_failed: DEFAULT_ACTION,

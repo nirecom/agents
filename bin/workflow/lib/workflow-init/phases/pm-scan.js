@@ -1,6 +1,6 @@
 "use strict";
-// pm-scan phase (#2942 S13): runs between wip-check and route-decision. Asks owner (per-issue bound 2000 ms,
-// 10 s overall) for each selected issue, keeps the answer as the issue's first owner record, records an
+// pm-scan phase (#2942 S13): runs between wip-check and route-decision. Asks owner for the selected issues in
+// one batched lookup (10 s bound), keeps the answer as the issue's first owner record, records an
 // undecidable issue as an undelivered start notification, and blocks with multi-pm when two or more PMs own
 // the issues (one notification per PM). Fail-open: any error lets the init continue.
 
@@ -26,14 +26,11 @@ function refsOf(state, unresolved) {
   return refs;
 }
 
+// ask(refs) -> [{ref, r}] from one batched owner lookup; a whole failure gives every ref its reason.
 function ask(refs) {
-  const entries = C.scan.listPmFiles();
-  const deadline = Date.now() + SCAN_BUDGET_MS;
-  return refs.map((ref) => {
-    const left = deadline - Date.now();
-    if (left <= 0) return { ref, r: { ok: false, reason: "timeout" } };
-    return { ref, r: C.decidedOwnerOf(ref, Math.min(C.OWNER_TIMEOUT_MS, left), entries) };
-  });
+  if (refs.length === 0) return [];
+  const b = C.decidedOwnersOf(refs, SCAN_BUDGET_MS, C.scan.listPmFiles());
+  return refs.map((ref, i) => ({ ref, r: b.ok ? b.answers[i] : { ok: false, reason: b.reason } }));
 }
 
 function pmScan(state, sid) {

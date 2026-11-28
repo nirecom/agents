@@ -15,7 +15,7 @@ GA-1. **Confirm the step:** run `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step"
    `REASON=` `web-merge-pending` or `web-merge-not-ready` → continue to GA-2; its preflight decides the wait.
    Any other `REASON=` than `user_verification` → do not emit; follow its `ACTION` instead.
 
-   **PM review** (part of GA-1): when `skills/_shared/pm-pre-pr-contact.md` PPC-1 finds an assigned PM, run its `## Review request` (user_verified) before GA-2, on the web-merge path too; continue only after the PM's OK or the user's `WORKFLOW_PM_REVIEW_ACCEPTED`.
+   **PM review** (part of GA-1): when `skills/_shared/pm-pre-pr-contact.md` PPC-1 finds an assigned PM, run its `## Review request` (user_verified) before GA-2, on the web-merge path too; continue only after the PM's OK or the user's `WORKFLOW_CONVENTIONAL_AUDIT_CHOSEN`.
 
 GA-2. **Preflight:** run `bash "$AGENTS_MAIN_ROOT/skills/get-release-approval/scripts/preflight.sh" --session "<session-id>"` as one standalone call.
    Handle `RUN_TL4=`, `GATE_RC=`, and the `CATEGORY:` lines per `skills/_shared/user-verified.md` "Preflight".

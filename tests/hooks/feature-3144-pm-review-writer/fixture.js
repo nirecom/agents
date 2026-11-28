@@ -46,9 +46,20 @@ function make(tmp) {
     }
     fs.writeFileSync(stubFile, JSON.stringify(cfg));
   }
+  // setBatchFailure(reason) -> the next ownersOf call fails as a whole ({ok:false, reason}); setOwners clears it.
+  function setBatchFailure(reason) {
+    let cfg = {};
+    try { cfg = JSON.parse(fs.readFileSync(stubFile, "utf8")) || {}; } catch (_) { cfg = {}; }
+    cfg.__batch = reason;
+    fs.writeFileSync(stubFile, JSON.stringify(cfg));
+  }
+  // ownerCalls() -> the logged calls ({fn:"ownersOf", ns, timeoutMs} | {fn:"directHoldersOf", n});
+  // askedNs() -> the issue numbers of every ownersOf call, flattened in call order.
   const ownerCalls = () => {
     try { return fs.readFileSync(ownerLog, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)); } catch (_) { return []; }
   };
+  const batchCalls = () => ownerCalls().filter((c) => c.fn === "ownersOf");
+  const askedNs = () => batchCalls().flatMap((c) => (Array.isArray(c.ns) ? c.ns : []));
   const clearLog = () => { try { fs.rmSync(ownerLog, { force: true }); } catch (_) { /* absent */ } };
 
   // target(issueNos, opts) -> a workflow session id whose intent closes owner/repo#<n> for each n.
@@ -103,7 +114,7 @@ function make(tmp) {
     return t.split(/\r?\n/).filter(Boolean).map((l) => { try { return JSON.parse(l); } catch (_) { return null; } }).filter(Boolean);
   }
 
-  return { stubFile, ownerLog, env, pm, setOwners, ownerCalls, clearLog, target, arm, settle, addFindings, dest, fallback,
+  return { stubFile, ownerLog, env, pm, setOwners, setBatchFailure, ownerCalls, batchCalls, askedNs, clearLog, target, arm, settle, addFindings, dest, fallback,
     findings, reqRow, pmRow, userRow, addRows, readRows };
 }
 
