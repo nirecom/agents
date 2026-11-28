@@ -199,3 +199,27 @@ test("real repair: a run-id that no longer matches fails writeAudit and leaves a
   assert.notStrictEqual(out.after.audit_phase, "done", `the re-armed run must not be repaired to done; ${JSON.stringify(out.after)}`);
   assert.ok(repairWarnings(out).length >= 1, `no persisted warning finding; findings=${JSON.stringify(out.findings)}`);
 });
+
+// #1889 / #3043 (D4): SC-4 labels an outcome entry through the shared identity — `#N` for the
+// bag's homeRepo (or an unknown home), `owner/repo#N` for another repo — and flags a malformed entry.
+const failedEntry = (extra) => Object.assign({ issueNumber: 42, state: "succeeded", historyEntry: "failed",
+  issueClosed: "succeeded", sentinelsPosted: "succeeded", wipCleared: "succeeded" }, extra);
+const details = (outcome) => gate.scanOutcome(outcome).map((f) => f.detail);
+
+test("scanOutcome labels an entry of another repo owner/repo#N and one of the home repo #N", () => {
+  const got = details({ homeRepo: "o/r", issues: [failedEntry({ issueRepo: "x/y" }), failedEntry({ issueNumber: 43, issueRepo: "O/R" })] });
+  assert.ok(got.some((d) => d.includes("issue-close outcome x/y#42: historyEntry=failed")), JSON.stringify(got));
+  assert.ok(got.some((d) => d.includes("issue-close outcome #43: historyEntry=failed")), JSON.stringify(got));
+});
+
+test("scanOutcome without a homeRepo keeps a bare entry #N and a repo entry owner/repo#N", () => {
+  const got = details({ issues: [failedEntry(), failedEntry({ issueNumber: 43, issueRepo: "o/r" })] });
+  assert.ok(got.some((d) => d.includes("issue-close outcome #42: historyEntry=failed")), JSON.stringify(got));
+  assert.ok(got.some((d) => d.includes("issue-close outcome o/r#43: historyEntry=failed")), JSON.stringify(got));
+});
+
+test("scanOutcome reports a malformed entry instead of labelling it as an issue", () => {
+  const got = details({ homeRepo: "o/r", issues: [failedEntry({ issueNumber: "12" }), failedEntry({ issueNumber: 7, issueRepo: "" })] });
+  assert.ok(got.some((d) => /malformed|invalid/i.test(d)), `a malformed entry must be named as such; ${JSON.stringify(got)}`);
+  assert.ok(!got.some((d) => /#12\b|#7\b/.test(d)), `a malformed entry is not labelled as an issue; ${JSON.stringify(got)}`);
+});

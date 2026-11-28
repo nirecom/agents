@@ -80,8 +80,11 @@ if (inv.intentArg) {
 }
 if (intentPlansDir !== null) {
   const { getClosesIssues } = require(path.resolve(__dirname, "../hooks/workflow-state/session-facts.js"));
-  closesIssues = getClosesIssues(sessionId, { plansDir: intentPlansDir }).map((e) => e.number);
+  closesIssues = getClosesIssues(sessionId, { plansDir: intentPlansDir }).map((e) => (e.repo ? { number: e.number, repo: e.repo } : { number: e.number }));
 }
+
+const { normalizeHome } = require(path.resolve(__dirname, "../hooks/lib/issue-identity"));
+const homeRepo = normalizeHome(outcome && outcome.homeRepo);
 
 // Fail-open: an unreadable or absent notes backup yields the "(none)" triple
 // rather than blocking the report.
@@ -110,7 +113,7 @@ const runTestsNote = readCompletionNote(sessionId);
 
 try {
   const { renderFinalReport } = require(path.resolve(__dirname, "../hooks/lib/final-report-schema"));
-  const result = renderFinalReport(sessionId, { env, outcome, closesIssues, notesSections, supervisorState, runTestsNote });
+  const result = renderFinalReport(sessionId, { env, outcome, closesIssues, homeRepo, notesSections, supervisorState, runTestsNote });
   process.stdout.write(result);
 } catch (err) {
   fail(`render-final-report: ${err.message}\n`);

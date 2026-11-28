@@ -172,7 +172,7 @@ by the RC-4 lint below.
 | Accept residual HIGH after exit 6 | `bin/accept-exit6-residual --session <sid> --format <security-code\|security-plan\|test-review> --reason <text>` |
 | Raise a planner risk signal | `bin/record-risk-signal --session <sid> --planner <outline\|detail> --reason <one line>` (write-once) |
 | Publish a worker payload | `bin/worker-dispatch-payload --session <sid> --worker <name> [--seq <n>] --draft <path>` (write-once) |
-| Record an empty issue-close outcome | `bin/issue-close-write-outcome.js --session <sid> --empty` |
+| Record an empty issue-close outcome (a bag that already holds entries is kept) | `bin/issue-close-write-outcome.js --session <sid> --empty` |
 
 ## Guard classes
 

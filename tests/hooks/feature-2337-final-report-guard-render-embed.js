@@ -62,8 +62,9 @@ caseEnd();
 caseBegin("no-heading-block-survives-renderer-failure", "hooks/stop-final-report-guard.js");
 test("no-heading-block-survives-renderer-failure", () => {
   const sid = "r-broken";
-  G.writeEnv(sid);
-  G.writeControl(sid, "issue-close-outcome.json", { issues: [null] });
+  // A malformed outcome entry no longer fails the render (#1889: it is skipped), so the failure comes
+  // from an env value no string conversion accepts: the renderer's render step throws on it.
+  G.writeControl(sid, "final-report-env.json", Object.assign({}, G.DEFAULT_ENV, { PR_TITLE: { toString: 1 } }));
   assert.notStrictEqual(G.runRenderer(sid, SB).rc, 0, "fixture: the renderer must fail here");
   const r = G.runGuard(sid, G.writeTranscript(TRANSCRIPTS, sid, "Done."), SB);
   assert.strictEqual(r.rc, 2, `stdout: ${r.out}`);

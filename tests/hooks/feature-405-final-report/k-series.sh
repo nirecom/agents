@@ -149,10 +149,10 @@ $out"
 
 test_K5_skill_md_outcome_absent_fallback() {
     require_session_close_skill "K5_skill_md_outcome_absent_fallback" || return
-    if grep -qF "outcome data not found — investigate" "${_HELPERS_SCRIPT_CHECKOUT_ROOT}/hooks/lib/final-report-schema.js"; then
-        pass "K5: final-report-schema.js contains outcome-absent fallback text"
+    if grep -qF "not recorded yet — /session-close writes issue outcomes" "${_HELPERS_SCRIPT_CHECKOUT_ROOT}/hooks/lib/final-report-schema.js"; then
+        pass "K5: final-report-schema.js contains outcome-absent fallback text (#3043 wording)"
     else
-        fail "K5: final-report-schema.js missing 'outcome data not found — investigate' fallback"
+        fail "K5: final-report-schema.js missing 'not recorded yet — /session-close writes issue outcomes' fallback (#3043)"
     fi
 }
 

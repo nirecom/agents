@@ -49,7 +49,8 @@ PLANS_DIR_N="$(nrm "$PLANS_DIR")"
 WORKFLOW_DIR_N="$(nrm "$WORKFLOW_DIR")"
 unset CLAUDE_CODE_SESSION_ID
 export HOME="$TMPDIR_BASE/home"; mkdir -p "$HOME" "$TMPDIR_BASE/tx"
-export CLAUDE_TRANSCRIPT_BASE_DIR="$(nrm "$TMPDIR_BASE/tx")"
+# #3043: a sibling is written as subsumed only when gh says CLOSED; the per-issue stub answers #1655.
+export CLAUDE_TRANSCRIPT_BASE_DIR="$(nrm "$TMPDIR_BASE/tx")" GH_STUB_MAP='{"1655":"CLOSED"}' PATH="$TMPDIR_BASE/stub:$PATH" NODE_OPTIONS="$(node -e 'const s = require(process.argv[1]).makeGhStub(process.argv[2]); console.log(`--require "${s.dir.replace(/\\/g, "/")}/gh-stub-preload.js"`)' "$SCRIPT_CHECKOUT_ROOT_N/tests/lib/gh-state-stub.js" "$(nrm "$TMPDIR_BASE/stub")")"
 
 # issue-close-write-outcome.js resolves session-facts.js under AGENTS_MAIN_ROOT,
 # so it must point at the worktree under test (an isolated empty dir would make
@@ -88,12 +89,13 @@ ENV_BODY='{"PR_NUMBER":"1900","BRANCH":"feature/roundtrip-reduction"}'
 # ctl <sid> <name> -> the derived control path (#2434), Node-normalized.
 ctl() { printf '%s' "$WORKFLOW_DIR_N/$1.control/$2"; }
 
-# seed_control <sid> [env-json]: env + empty outcome at the derived control paths.
+# seed_control <sid> [env-json]: env + outcome at the derived control paths. #3043: Closed Issues
+# follow the outcome, so each `#N` already in <sid>-intent.md gets a succeeded entry (none: empty bag).
 seed_control() {
   local sid="$1" body="${2:-$ENV_BODY}"
   mkdir -p "$WORKFLOW_DIR/$sid.control"
   printf '%s' "$body" > "$WORKFLOW_DIR/$sid.control/final-report-env.json"
-  printf '%s' '{"issues":[]}' > "$WORKFLOW_DIR/$sid.control/issue-close-outcome.json"
+  node -e 'const fs = require("fs"); let t = ""; try { t = fs.readFileSync(process.argv[1], "utf8"); } catch (_) { /* no intent: empty bag */ } const ok = "succeeded"; fs.writeFileSync(process.argv[2], JSON.stringify({ issues: [...t.matchAll(/#(\d+)/g)].map((m) => ({ issueNumber: Number(m[1]), state: ok, historyEntry: ok, issueClosed: ok, sentinelsPosted: ok, wipCleared: ok })) }))' "$PLANS_DIR_N/$sid-intent.md" "$WORKFLOW_DIR_N/$sid.control/issue-close-outcome.json"
 }
 
 # --- consumer drivers --------------------------------------------------------
@@ -227,7 +229,7 @@ render6() {  # argv... -> sets R6_RC / R6_OUT
 }
 
 # --session reads env/outcome from <sid>.control and intent from PLANS.
-S6A="c96sess"; seed_control "$S6A" "$R6_ENV"; write_intent "$S6A" "#1644"
+S6A="c96sess"; write_intent "$S6A" "#1644"; seed_control "$S6A" "$R6_ENV"
 render6 --session "$S6A"
 check "C9-6a: --session exits 0" "0" "$R6_RC"
 check_contains "C9-6a: --session renders the derived env PR line" "- PR #2434: Derived title" "$R6_OUT"
@@ -235,7 +237,7 @@ check_contains "C9-6a: --session renders the PLANS intent issue" "- #1644" "$R6_
 
 # #2654 original symptom: state held 4 issues, intent.md narrowed to 2, the report showed 4.
 S6S="c96stale"; seed_state "$S6S" '[{"number":1644},{"number":1655},{"number":1700},{"number":1701}]'
-seed_control "$S6S" "$R6_ENV"; write_intent "$S6S" "#1644" "#1655"
+write_intent "$S6S" "#1644" "#1655"; seed_control "$S6S" "$R6_ENV"
 render6 --session "$S6S"
 check "C9-6i: --session with stale state exits 0" "0" "$R6_RC"
 S6S_NUMS="$(printf '%s' "$R6_OUT" | grep -oE '^- #[^ ]+$' | sed 's/^- #//' | tr '\n' ',' | sed 's/,$//')"

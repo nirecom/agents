@@ -34,6 +34,14 @@ function withConvLang(reason) {
   }
 }
 
+// #2843: a fail-open names its reason and the transcript it read.
+function failOpen(reason, transcriptPath) {
+  try {
+    fs.writeSync(2, `stop-final-report-guard: fail-open (${reason}) transcript=${transcriptPath || "(none)"}\n`);
+  } catch (_) { /* stderr is best-effort */ }
+  process.exit(0);
+}
+
 function block(reason) {
   process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
   process.exit(2);
@@ -141,8 +149,9 @@ if (require.main === module) {
   // #1192: the shared exits end every lane-A block, the shape checks below included.
   if (shouldYieldOrBypass(sid).exit) process.exit(0);
 
-  const transcriptPath = input.transcript_path;
-  if (!transcriptPath) process.exit(0);
+  if (!input.transcript_path && !input.session_id) {
+    failOpen("no-transcript-path-or-sid", "");
+  }
 
   const headings = schema.getSectionHeadings(sid);
   const h2Header = `## Final Report — ${sid}`;
@@ -154,7 +163,8 @@ if (require.main === module) {
     const TR = require("./lib/transcript-reader");
     const holdsHeading = (e) => e && e.type === "assistant" && TR.textItemsOf(e).join("\n").includes(h2Header);
     const tail = TR.readTurnTail({ input, reachedBy: holdsHeading });
-    if (tail.undecidable || tail.lines.length === 0) process.exit(0);
+    if (tail.undecidable) failOpen("undecidable", tail.transcriptPath);
+    if (tail.lines.length === 0) failOpen("no-lines", tail.transcriptPath);
     const lines = tail.lines;
     for (let i = lines.length - 1; i >= 0; i--) {
       const line = lines[i];

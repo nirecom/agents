@@ -8,6 +8,7 @@
 
 const fs = require("fs");
 const TW = require("./transcript-reader/tail-window");
+const LOC = require("./transcript-reader/locate");
 
 const FLUSH_STEP_MS = 50;
 const FLUSH_STEPS = 10;
@@ -17,14 +18,22 @@ function sleep(ms) {
   Atomics.wait(waitCell, 0, 0, ms);
 }
 
-// readTranscriptLines(path) -> the non-empty JSONL lines, read once; [] when unreadable.
-function readTranscriptLines(transcriptPath) {
+function readLinesOnce(transcriptPath) {
   try {
     if (typeof transcriptPath !== "string" || !transcriptPath) return [];
     return fs.readFileSync(transcriptPath, "utf8").split("\n").filter((l) => l.trim() !== "");
   } catch (_) {
     return [];
   }
+}
+
+// readTranscriptLines(path) -> the non-empty JSONL lines, read once; [] when unreadable. No lines
+// re-locates the transcript once by the basename sid (#2843).
+function readTranscriptLines(transcriptPath) {
+  const lines = readLinesOnce(transcriptPath);
+  if (lines.length > 0 || typeof transcriptPath !== "string" || !transcriptPath) return lines;
+  const found = LOC.relocate({ transcript_path: transcriptPath }, transcriptPath);
+  return found ? readLinesOnce(found) : lines;
 }
 
 function parseLines(lines) {
@@ -117,31 +126,50 @@ function tailFrom(win, message) {
 // end holding `turns` real prompts (default 1: the current turn) and an entry satisfying reachedBy,
 // or all of it. A new caller that needs more than the current turn passes that boundary. Without
 // last_assistant_message (older Claude Code) there is no wait; deadlineAt (epoch ms) stops growth
-// and the wait, which reads as undecidable.
+// and the wait, which reads as undecidable. No lines, or an undecidable turn with time left,
+// re-locates the transcript once by sid (#2843); tail.transcriptPath names the file read and
+// tail.located marks that the one search is spent.
 function readTurnTail({ input, turns = 1, reachedBy, deadlineAt } = {}) {
   const i = input && typeof input === "object" ? input : {};
   const message = messageOf(i);
   const want = { deadlineAt, boundary: boundaryOf(turns, reachedBy) };
-  let win = TW.readWindow(i.transcript_path, want) || EMPTY_WINDOW;
+  const given = typeof i.transcript_path === "string" ? i.transcript_path : "";
+  const tail = settledTail(given, message, want, deadlineAt);
+  if (tail.lines.length > 0 && (!tail.undecidable || spent(deadlineAt))) return tail;
+  const found = LOC.relocate(i, given);
+  const out = found ? settledTail(found, message, want, deadlineAt) : tail;
+  return Object.assign(out, { located: true });
+}
+
+function settledTail(file, message, want, deadlineAt) {
+  let win = TW.readWindow(file, want) || EMPTY_WINDOW;
   for (let attempt = 0; ; attempt++) {
-    const tail = tailFrom(win, message);
+    const tail = Object.assign(tailFrom(win, message), { transcriptPath: file });
     if (!tail.undecidable || !win.complete || attempt >= FLUSH_STEPS || spent(deadlineAt)) return tail;
     sleep(FLUSH_STEP_MS);
-    win = TW.appendWindow(i.transcript_path, win, want) || win;
+    win = TW.appendWindow(file, win, want) || win;
   }
 }
 
 // refreshTurnTail(tail, {input, deadlineAt}) -> tail extended by what was appended after it (a
-// rewritten transcript is read again), with no wait. Never throws: a spent deadline or an
-// unreadable transcript returns tail marked undecidable.
+// rewritten transcript is read again), with no wait, from tail.transcriptPath. Never throws: a
+// spent deadline or an unreadable transcript returns tail marked undecidable. A tail not yet
+// located re-locates once, as readTurnTail does.
 function refreshTurnTail(tail, { input, deadlineAt } = {}) {
   const t = tail && typeof tail === "object" ? tail : {};
   try {
     const i = input && typeof input === "object" ? input : {};
     if (spent(deadlineAt) || !Array.isArray(t.lines) || !Array.isArray(t.entries)) return Object.assign({}, t, { undecidable: true });
-    const win = TW.appendWindow(i.transcript_path, t, { deadlineAt, boundary: boundaryOf(1) });
-    if (!win) return Object.assign({}, t, { undecidable: true });
-    return tailFrom(win, messageOf(i));
+    const file = typeof t.transcriptPath === "string" && t.transcriptPath ? t.transcriptPath : i.transcript_path;
+    const want = { deadlineAt, boundary: boundaryOf(1) };
+    const win = TW.appendWindow(file, t, want);
+    const located = t.located === true;
+    const next = win ? Object.assign(tailFrom(win, messageOf(i)), { transcriptPath: file, located }) : null;
+    if ((next && !next.undecidable) || located) return next || Object.assign({}, t, { undecidable: true });
+    const found = LOC.relocate(Object.assign({}, i, { transcript_path: file }), file);
+    const moved = found ? TW.readWindow(found, want) : null;
+    if (moved) return Object.assign(tailFrom(moved, messageOf(i)), { transcriptPath: found, located: true });
+    return Object.assign(next || Object.assign({}, t, { undecidable: true }), { located: true });
   } catch (_) {
     return Object.assign({}, t, { undecidable: true });
   }

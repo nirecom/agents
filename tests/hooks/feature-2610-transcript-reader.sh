@@ -36,12 +36,16 @@ TR_TDIR="$(np "$TR_TMP/cases")"
 PL_PREFIX='[confirm-plan] plan-link:'
 L2_PREFIX='[confirm-plan] Layer 2/follow-up:'
 
-# tr_report <driver-output> — one pass/fail per PASS|name / FAIL|name|detail line.
+# tr_report <driver-output> — one pass/fail per PASS|name / FAIL|name|detail line. The drivers
+# capture stderr, so the reader's one-line diagnostic for a transcript it cannot re-locate (#2843)
+# is skipped; any other line still fails.
+TR_UNREADABLE_RE='^transcript-reader: unreadable .* \(sid .*\)$'
 tr_report() {
   local line rest name
   [ -z "$1" ] && { fail "driver produced no assertions"; return; }
   while IFS= read -r line; do
     [ -z "$line" ] && continue
+    [[ "${line%$'\r'}" =~ $TR_UNREADABLE_RE ]] && continue
     rest="${line#*|}"; name="${rest%%|*}"
     case "$line" in
       PASS\|*) pass "$name" ;;

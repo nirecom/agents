@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # tests/bin/finalize-version-mismatch-recovery.sh
 # Tests: bin/worker-dispatch/workers/issue-close-finalize/state.js, skills/issue-close-finalize/scripts/run-finalize-terminal.sh
-# Tags: issue-close-finalize, state-file, schema-version, recovery-message, scope:issue-specific, TL2
+# Tags: issue-close-finalize, state-file, schema-version, recovery-message, scope:issue-specific, TL2, feature-1889
 # lang-check: ignore -- the recovery-sentence match accepts the Japanese wording of the state.js message.
 # #2561: a state file written under another schema version is refused by both readers, and
 # both messages carry ONE recovery sentence (delete the state file, redo the initial phase).
 # The sentence is taken from the state.js message (the segment naming the initial phase) and
 # must appear verbatim in the run-finalize-terminal.sh output.
+# #1889 (added): ICF-K passes owner_repo / issue_repo from the state to write-outcome.
 
 set -uo pipefail
 
@@ -69,6 +70,79 @@ elif ! printf '%s' "$OUT" | grep -qF -- "$RECOVERY"; then
   fail "run-finalize-terminal.sh carries the state.js recovery sentence verbatim" "want '$RECOVERY' in: $OUT"
 else
   pass "run-finalize-terminal.sh carries the same recovery sentence as state.js"
+fi
+case_end
+
+# #1889: ICF-K hands the state's owner_repo to write-outcome as --owner-repo (always) and the
+# state's issue_repo as --issue-repo (only when set). Driven on a copy whose close-chain tools are
+# stubs; the copy's write-outcome entrypoint logs its argv, then runs the worktree's real writer.
+# TL3 gap: a real close chain (gh issue close, sentinel comments) is not exercised here.
+SCRIPTS_REL="skills/issue-close-finalize/scripts"
+CO="$TMP_ROOT/co"
+mkdir -p "$CO/skills/issue-close-finalize" "$CO/bin/github-issues"
+cp -r "$SCRIPT_CHECKOUT_ROOT/$SCRIPTS_REL" "$CO/$SCRIPTS_REL"
+cp -r "$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch" "$CO/bin/worker-dispatch"
+cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$CO/hooks"
+for s in close-completed.sh post-close-sentinels.sh wip-state.sh; do
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$CO/bin/github-issues/$s"
+done
+ARGV_LOG="$TMP_ROOT/write-outcome-argv.log"
+REAL_WRITER="$SCRIPT_CHECKOUT_ROOT/bin/issue-close-write-outcome.js"
+if command -v cygpath >/dev/null 2>&1; then
+  ARGV_LOG="$(cygpath -m "$ARGV_LOG")"; REAL_WRITER="$(cygpath -m "$REAL_WRITER")"
+fi
+printf 'require("fs").appendFileSync(%s, JSON.stringify(process.argv.slice(2)) + "\\n");\nrequire(%s);\n' \
+  "\"$ARGV_LOG\"" "\"$REAL_WRITER\"" >"$CO/bin/issue-close-write-outcome.js"
+
+# write-state.js <state.js> <state-file> [<issue_repo>] — a current-version state for #42 in o/r.
+cat >"$TMP_ROOT/write-state.js" <<'JS'
+const s = require(process.argv[2]);
+const st = { schema_version: s.SCHEMA_VERSION, root_issue_number: 42, current_issue_number: 42,
+  owner_repo: "o/r", phase: "init_done", triage_action: "resume_e",
+  g5_loop_iteration: 0, proposal_counters: { accepted: 0, declined: 0, skipped: 0 } };
+if (process.argv[4]) st.issue_repo = process.argv[4];
+require("fs").writeFileSync(process.argv[3], JSON.stringify(st));
+JS
+
+# check.js <outcome-file> <argv-log> — prints "flag-owner|flag-issue|homeRepo|entries|entryRepo" for #42.
+cat >"$TMP_ROOT/check.js" <<'JS'
+const fs = require("fs");
+let argv = []; try { argv = JSON.parse(fs.readFileSync(process.argv[3], "utf8").trim().split("\n")[0]); } catch (_) {}
+let bag = { issues: [] }; try { bag = JSON.parse(fs.readFileSync(process.argv[2], "utf8")); } catch (_) {}
+const val = (f) => (argv.includes(f) ? argv[argv.indexOf(f) + 1] : "-");
+const e = (bag.issues || []).filter((x) => x && x.issueNumber === 42);
+console.log([val("--owner-repo"), val("--issue-repo"), bag.homeRepo || "-", e.length, (e[0] && e[0].issueRepo) || "-"].join("|"));
+JS
+
+# finalize <name> [<issue_repo>] — one terminal pass; leaves $TMP_ROOT/<name>.out and the result line.
+finalize() {
+  local name="$1"; shift
+  rm -f "$ARGV_LOG"
+  node "$TMP_ROOT/write-state.js" "$CO/bin/worker-dispatch/workers/issue-close-finalize/state.js" "$TMP_ROOT/$name-state.json" "$@"
+  run_with_timeout 60 bash "$CO/$SCRIPTS_REL/run-finalize-terminal.sh" "$TMP_ROOT/$name-state.json" "sid-$name" \
+    "$TMP_ROOT/$name-outcome.json" >"$TMP_ROOT/$name.out" 2>&1
+  node "$TMP_ROOT/check.js" "$TMP_ROOT/$name-outcome.json" "$ARGV_LOG"
+}
+
+case_begin "finalize-terminal-passes-issue-repo-and-owner-repo" "skills/issue-close-finalize/scripts/run-finalize-terminal.sh"
+got="$(finalize fin1 x/y)"
+if ! grep -q '^STATUS=terminal$' "$TMP_ROOT/fin1.out"; then
+  fail "issue_repo and owner_repo reach the outcome" "finalize did not complete: $(head -3 "$TMP_ROOT/fin1.out")"
+elif [ "$got" != "o/r|x/y|o/r|1|x/y" ]; then
+  fail "issue_repo and owner_repo reach the outcome" "want o/r|x/y|o/r|1|x/y (owner|issue flag|homeRepo|entries|issueRepo), got $got"
+else
+  pass "issue_repo reaches the entry, owner_repo reaches the bag homeRepo"
+fi
+case_end
+
+case_begin "finalize-terminal-omits-empty-issue-repo" "skills/issue-close-finalize/scripts/run-finalize-terminal.sh"
+got="$(finalize fin2)"
+if ! grep -q '^STATUS=terminal$' "$TMP_ROOT/fin2.out"; then
+  fail "no issue_repo passes no --issue-repo" "finalize did not complete: $(head -3 "$TMP_ROOT/fin2.out")"
+elif [ "$got" != "o/r|-|o/r|1|-" ]; then
+  fail "no issue_repo passes no --issue-repo" "want o/r|-|o/r|1|- (owner|issue flag|homeRepo|entries|issueRepo), got $got"
+else
+  pass "without issue_repo only --owner-repo is passed and the entry carries no repo"
 fi
 case_end
 

@@ -73,11 +73,15 @@ if [ "$RC" -eq 0 ] && [[ "$OUT" == *4242* ]]; then pass "parse-closes-issues --s
 else fail "parse-closes-issues --session D returns U's #4242" "rc=$RC out=$OUT err=$ERR"; fi
 case_end
 
-case_begin "render-final-report-closes-follow-upstream" "bin/render-final-report.js"
+# #3043: Closed Issues lists only issue-close outcome entries; the intent's ## Issues (here U's #4242)
+# is no longer a source, so a downstream D without outcome entries lists nothing.
+case_begin "render-final-report-closed-issues-ignore-intent" "bin/render-final-report.js"
 node "$ROOT_N/tests/lib/workflow-state-tool.js" "$ROOT_N" ctl "$D" final-report-env.json '{}' >/dev/null
 run_cap node "$BIN/render-final-report.js" --session "$D"
-if [ "$RC" -eq 0 ] && [[ "$OUT" == *"#4242"* ]]; then pass "render-final-report --session D lists U's #4242"
-else fail "render-final-report --session D lists U's #4242" "rc=$RC err=$ERR out=$(printf '%s' "$OUT" | grep -i -A2 'close' | head -n 3 | tr '\n' ' ')"; fi
+CLOSED_SECTION="$(printf '%s\n' "$OUT" | awk '/^### Closed Issues$/ { on = 1; next } /^### / { on = 0 } on')"
+if [ "$RC" -eq 0 ] && [[ "$OUT" == *"### Closed Issues"* ]] && [[ "$OUT" != *"#4242"* ]] && [[ "$CLOSED_SECTION" == *"- (none)"* ]]; then
+  pass "render-final-report --session D does not list the intent's #4242 under Closed Issues"
+else fail "render-final-report --session D does not list the intent's #4242 under Closed Issues" "rc=$RC err=$ERR closed=$(printf '%s' "$CLOSED_SECTION" | tr '\n' ' ')"; fi
 case_end
 
 case_begin "issue-close-write-outcome-fallback-follows-upstream" "bin/issue-close-write-outcome.js"

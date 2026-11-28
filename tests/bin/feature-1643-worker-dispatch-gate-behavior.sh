@@ -125,7 +125,8 @@ process.stdout.write(f.length+"|"+f.map((x)=>x.severity).join(",")+"|"+f.map((x)
     assert_eq "scan/absent-outcome-is-zero-findings" "0" "$got"
     got="$(node -e 'process.stdout.write(require(process.argv[1]).scanOutcome({issues:[{state:"failed"}]}).map((x)=>x.detail).join(""));' \
         "$WORKER_M")"
-    assert_has "scan/missing-issue-number-still-reported" "(issue number missing)" "$got"
+    # #1889 D4: an entry isValidOutcomeEntry rejects is reported as malformed, not under a made-up label.
+    case "$got" in *[Mm]alformed*|*[Ii]nvalid*) pass "scan/missing-issue-number-reported-as-malformed" ;; *) fail "scan/missing-issue-number-reported-as-malformed" "want malformed|invalid in '$got'" ;; esac
 }
 
 # Group 2 (TL1) — the SC-5 / SC-5b decision tables, every row

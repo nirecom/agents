@@ -70,6 +70,12 @@ function writeLaneBState(sid) {
 function runGuard(sid, transcript, cwd) {
   const env = Object.assign({}, process.env, { CLAUDE_PROJECT_DIR: stateDir() });
   delete env.CONV_LANG;
+  // #2843: an unreadable transcript_path is re-located by sid under the transcript base; an empty
+  // fixture base keeps that lookup from reaching a live session's transcript in ~/.claude/projects.
+  if (!env.CLAUDE_TRANSCRIPT_BASE_DIR) {
+    env.CLAUDE_TRANSCRIPT_BASE_DIR = path.join(stateDir(), "transcript-base-empty");
+    fs.mkdirSync(env.CLAUDE_TRANSCRIPT_BASE_DIR, { recursive: true });
+  }
   const r = F.runNode([GUARD], {
     cwd, env, timeout: 110000, input: JSON.stringify({ session_id: sid, transcript_path: transcript }),
   });
